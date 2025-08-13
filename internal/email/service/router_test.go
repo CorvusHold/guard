@@ -21,6 +21,9 @@ func (m mockSettings) GetString(ctx context.Context, key string, tenantID *uuid.
 func (m mockSettings) GetDuration(ctx context.Context, key string, tenantID *uuid.UUID, def time.Duration) (time.Duration, error) {
 	return def, nil
 }
+func (m mockSettings) GetInt(ctx context.Context, key string, tenantID *uuid.UUID, def int) (int, error) {
+	return def, nil
+}
 
 var _ sdomain.Service = (*mockSettings)(nil)
 

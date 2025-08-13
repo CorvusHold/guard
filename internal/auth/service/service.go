@@ -11,6 +11,7 @@ import (
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
+	"github.com/corvusHold/guard/internal/metrics"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
@@ -28,67 +29,76 @@ type Service struct {
 }
 
 // VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
-func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (domain.AccessTokens, error) {
-    if in.ChallengeToken == "" || in.Method == "" || in.Code == "" {
-        return domain.AccessTokens{}, errors.New("challenge_token, method and code are required")
-    }
-    // First decode without verification to extract tenant/user
-    tok, _ := jwt.ParseWithClaims(in.ChallengeToken, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
-        return []byte(""), nil
-    }, jwt.WithoutClaimsValidation())
-    if tok == nil {
-        return domain.AccessTokens{}, errors.New("invalid challenge token")
-    }
-    claims, ok := tok.Claims.(jwt.MapClaims)
-    if !ok {
-        return domain.AccessTokens{}, errors.New("invalid challenge claims")
-    }
-    tenStr, _ := claims["ten"].(string)
-    subStr, _ := claims["sub"].(string)
-    uid, err := uuid.Parse(subStr)
-    if err != nil { return domain.AccessTokens{}, errors.New("invalid subject in challenge") }
-    tid, err := uuid.Parse(tenStr)
-    if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant in challenge") }
-    // Verify signature and expiry with tenant signing key
-    signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
-    parsed, err := jwt.Parse(in.ChallengeToken, func(t *jwt.Token) (interface{}, error) {
-        if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, errors.New("unexpected signing method")
-        }
-        return []byte(signingKey), nil
-    })
-    if err != nil || !parsed.Valid {
-        return domain.AccessTokens{}, errors.New("invalid or expired challenge token")
-    }
-    // Validate method
-    switch in.Method {
-    case "totp":
-        ms, err := s.repo.GetMFASecret(ctx, uid)
-        if err != nil || !ms.Enabled {
-            return domain.AccessTokens{}, errors.New("mfa not enabled")
-        }
-        if !totp.Validate(in.Code, ms.Secret) {
-            return domain.AccessTokens{}, errors.New("invalid totp code")
-        }
-    case "backup_code":
-        ok, err := s.ConsumeBackupCode(ctx, uid, in.Code)
-        if err != nil { return domain.AccessTokens{}, err }
-        if !ok { return domain.AccessTokens{}, errors.New("invalid backup code") }
-    default:
-        return domain.AccessTokens{}, errors.New("unsupported method")
-    }
-    // Issue tokens and publish login success audit event
-    toks, err := s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil)
-    if err != nil { return domain.AccessTokens{}, err }
-    _ = s.repo.UpdateUserLoginAt(ctx, uid)
-    _ = s.pub.Publish(ctx, evdomain.Event{
-        Type:     "auth.password.login.success",
-        TenantID: tid,
-        UserID:   uid,
-        Meta:     map[string]string{"provider": "password", "mfa": "true", "ip": in.IP, "user_agent": in.UserAgent},
-        Time:     time.Now(),
-    })
-    return toks, nil
+func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks domain.AccessTokens, err error) {
+	defer func() {
+		if err == nil {
+			metrics.IncAuthOutcome("mfa", "success")
+			metrics.IncMFAOutcome(in.Method, "success")
+		} else {
+			metrics.IncAuthOutcome("mfa", "failure")
+			metrics.IncMFAOutcome(in.Method, "failure")
+		}
+	}()
+	if in.ChallengeToken == "" || in.Method == "" || in.Code == "" {
+		return domain.AccessTokens{}, errors.New("challenge_token, method and code are required")
+	}
+	// First decode without verification to extract tenant/user
+	tok, _ := jwt.ParseWithClaims(in.ChallengeToken, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(""), nil
+	}, jwt.WithoutClaimsValidation())
+	if tok == nil {
+		return domain.AccessTokens{}, errors.New("invalid challenge token")
+	}
+	claims, ok := tok.Claims.(jwt.MapClaims)
+	if !ok {
+		return domain.AccessTokens{}, errors.New("invalid challenge claims")
+	}
+	tenStr, _ := claims["ten"].(string)
+	subStr, _ := claims["sub"].(string)
+	uid, err := uuid.Parse(subStr)
+	if err != nil { return domain.AccessTokens{}, errors.New("invalid subject in challenge") }
+	tid, err := uuid.Parse(tenStr)
+	if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant in challenge") }
+	// Verify signature and expiry with tenant signing key
+	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+	parsed, err := jwt.Parse(in.ChallengeToken, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(signingKey), nil
+	})
+	if err != nil || !parsed.Valid {
+		return domain.AccessTokens{}, errors.New("invalid or expired challenge token")
+	}
+	// Validate method
+	switch in.Method {
+	case "totp":
+		ms, err := s.repo.GetMFASecret(ctx, uid)
+		if err != nil || !ms.Enabled {
+			return domain.AccessTokens{}, errors.New("mfa not enabled")
+		}
+		if !totp.Validate(in.Code, ms.Secret) {
+			return domain.AccessTokens{}, errors.New("invalid totp code")
+		}
+	case "backup_code":
+		ok, err := s.ConsumeBackupCode(ctx, uid, in.Code)
+		if err != nil { return domain.AccessTokens{}, err }
+		if !ok { return domain.AccessTokens{}, errors.New("invalid backup code") }
+	default:
+		return domain.AccessTokens{}, errors.New("unsupported method")
+	}
+	// Issue tokens and publish login success audit event
+	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil)
+	if err != nil { return domain.AccessTokens{}, err }
+	_ = s.repo.UpdateUserLoginAt(ctx, uid)
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.login.success",
+		TenantID: tid,
+		UserID:   uid,
+		Meta:     map[string]string{"provider": "password", "mfa": "true", "ip": in.IP, "user_agent": in.UserAgent},
+		Time:     time.Now(),
+	})
+	return toks, nil
 }
 
 func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *Service {
@@ -127,9 +137,11 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	}
 	ai, err := s.repo.GetAuthIdentityByEmailTenant(ctx, in.TenantID, in.Email)
 	if err != nil {
+		metrics.IncAuthOutcome("password", "failure")
 		return domain.AccessTokens{}, err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(ai.PasswordHash), []byte(in.Password)); err != nil {
+		metrics.IncAuthOutcome("password", "failure")
 		return domain.AccessTokens{}, errors.New("invalid credentials")
 	}
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
@@ -163,6 +175,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		Meta:     map[string]string{"provider": "password", "ip": in.IP, "user_agent": in.UserAgent, "email": in.Email},
 		Time:     time.Now(),
 	})
+	metrics.IncAuthOutcome("password", "success")
 	return toks, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	repo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	emailsvc "github.com/corvusHold/guard/internal/email/service"
+	rl "github.com/corvusHold/guard/internal/platform/ratelimit"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
 )
@@ -23,6 +24,6 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	emailSender := emailsvc.NewRouter(settings, cfg)
 	magic := svc.NewMagic(r, cfg, settings, emailSender)
 	sso := svc.NewSSO(r, cfg, settings)
-	c := ctrl.New(s, magic, sso)
+	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rl.NewRedisStore(cfg))
 	c.Register(e)
 }

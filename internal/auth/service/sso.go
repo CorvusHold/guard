@@ -11,6 +11,7 @@ import (
 
     "github.com/corvusHold/guard/internal/auth/domain"
     "github.com/corvusHold/guard/internal/config"
+    "github.com/corvusHold/guard/internal/metrics"
     sdomain "github.com/corvusHold/guard/internal/settings/domain"
     evdomain "github.com/corvusHold/guard/internal/events/domain"
     evsvc "github.com/corvusHold/guard/internal/events/service"
@@ -49,6 +50,31 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
     baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
     signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &in.TenantID, s.cfg.JWTSigningKey)
 
+    // Enforce redirect allowlist if configured
+    if in.RedirectURL != "" {
+        allowlist, _ := s.settings.GetString(ctx, sdomain.KeySSORedirectAllowlist, &in.TenantID, "")
+        if strings.TrimSpace(allowlist) != "" {
+            allowed := false
+            for _, p := range strings.Split(allowlist, ",") {
+                p = strings.TrimSpace(p)
+                if p == "" { continue }
+                if strings.HasPrefix(in.RedirectURL, p) { allowed = true; break }
+            }
+            if !allowed {
+                // publish start failure for observability
+                _ = s.pub.Publish(ctx, evdomain.Event{
+                    Type:     "auth.sso.start.failure",
+                    TenantID: in.TenantID,
+                    Meta:     map[string]string{"provider": in.Provider, "reason": "redirect_disallowed", "redirect_url": in.RedirectURL},
+                    Time:     time.Now(),
+                })
+                metrics.IncAuthOutcome("sso", "failure")
+                metrics.IncSSOOutcome(in.Provider, "failure")
+                return "", errors.New("redirect_url not allowed")
+            }
+        }
+    }
+
     // Issue short-lived code JWT containing provider, tenant and redirect
     claims := jwt.MapClaims{
         "ten": in.TenantID.String(),
@@ -74,7 +100,41 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 }
 
 // Callback verifies the code, finds/creates a user, and issues tokens.
-func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (domain.AccessTokens, error) {
+func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks domain.AccessTokens, err error) {
+    defer func() {
+        if err == nil {
+            metrics.IncAuthOutcome("sso", "success")
+            metrics.IncSSOOutcome(in.Provider, "success")
+        } else {
+            metrics.IncAuthOutcome("sso", "failure")
+            metrics.IncSSOOutcome(in.Provider, "failure")
+        }
+    }()
+    // Enforce state only for non-dev flows. If the incoming 'code' is our dev JWT,
+    // skip state checks entirely. Otherwise, publish missing/invalid state for observability.
+    stVals := in.Query["state"]
+    codeVals := in.Query["code"]
+    isDevCode := false
+    if len(codeVals) > 0 && codeVals[0] != "" {
+        if tok, _ := jwt.ParseWithClaims(codeVals[0], jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+            return []byte(""), nil
+        }, jwt.WithoutClaimsValidation()); tok != nil {
+            isDevCode = true
+        }
+    }
+    if len(stVals) == 0 || stVals[0] == "" {
+        if !isDevCode {
+            _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: uuid.Nil, Meta: map[string]string{"provider": in.Provider, "reason": "missing_state", "ip": in.IP, "user_agent": in.UserAgent}, Time: time.Now()})
+            return domain.AccessTokens{}, errors.New("missing state")
+        }
+    } else {
+        if tenStr, err := s.redis.Get(ctx, "sso:state:"+stVals[0]).Result(); err != nil || tenStr == "" {
+            if !isDevCode {
+                _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: uuid.Nil, Meta: map[string]string{"provider": in.Provider, "reason": "invalid_state", "ip": in.IP, "user_agent": in.UserAgent}, Time: time.Now()})
+                return domain.AccessTokens{}, errors.New("invalid state")
+            }
+        }
+    }
     // Prefer tenant-scoped adapter selection using state->tenant mapping (WorkOS flow)
     if stVals := in.Query["state"]; len(stVals) > 0 && stVals[0] != "" {
         if tenStr, err := s.redis.Get(ctx, "sso:state:"+stVals[0]).Result(); err == nil && tenStr != "" {
@@ -88,6 +148,13 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (domain.
     }
     vals := in.Query["code"]
     if len(vals) == 0 || vals[0] == "" {
+        // publish failure when code is missing
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: uuid.Nil,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "code_required", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
         return domain.AccessTokens{}, errors.New("code required")
     }
     code := vals[0]
@@ -99,26 +166,63 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (domain.
         return []byte(""), nil
     }, jwt.WithoutClaimsValidation())
     if token == nil {
+        // publish failure when code cannot be parsed
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: uuid.Nil,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_code", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
         return domain.AccessTokens{}, errors.New("invalid code")
     }
     if mc, ok := token.Claims.(jwt.MapClaims); ok {
         claims = mc
     } else {
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: uuid.Nil,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_code_claims", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
         return domain.AccessTokens{}, errors.New("invalid code claims")
     }
 
     tenStr, _ := claims["ten"].(string)
     prov, _ := claims["prov"].(string)
-    if prov == "" || prov != in.Provider { return domain.AccessTokens{}, errors.New("invalid provider") }
+    if prov == "" || prov != in.Provider {
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: uuid.Nil,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_provider", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
+        return domain.AccessTokens{}, errors.New("invalid provider")
+    }
     tenantID, err := uuid.Parse(tenStr)
-    if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant in code") }
+    if err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: uuid.Nil,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_tenant", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
+        return domain.AccessTokens{}, errors.New("invalid tenant in code")
+    }
 
     // Verify signature with tenant's signing key
     signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
     _, err = jwt.ParseWithClaims(code, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
         return []byte(signingKey), nil
     })
-    if err != nil { return domain.AccessTokens{}, errors.New("invalid code signature") }
+    if err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{
+            Type:     "auth.sso.login.failure",
+            TenantID: tenantID,
+            Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_code_signature", "ip": in.IP, "user_agent": in.UserAgent},
+            Time:     time.Now(),
+        })
+        return domain.AccessTokens{}, errors.New("invalid code signature")
+    }
 
     // Determine dev email: allow optional ?email= in callback, else synthesize
     email := ""

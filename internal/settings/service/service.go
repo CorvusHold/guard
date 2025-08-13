@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,4 +32,15 @@ func (s *Service) GetDuration(ctx context.Context, key string, tenantID *uuid.UU
 	d, err := time.ParseDuration(v)
 	if err != nil { return def, nil }
 	return d, nil
+}
+
+func (s *Service) GetInt(ctx context.Context, key string, tenantID *uuid.UUID, def int) (int, error) {
+	v, ok, err := s.repo.Get(ctx, key, tenantID)
+	if err != nil { return def, err }
+	if !ok { return def, nil }
+	v = strings.TrimSpace(v)
+	if v == "" { return def, nil }
+	n, err := strconv.Atoi(v)
+	if err != nil { return def, nil }
+	return n, nil
 }

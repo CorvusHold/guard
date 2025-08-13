@@ -11,6 +11,7 @@ import (
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
+	"github.com/corvusHold/guard/internal/metrics"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
@@ -72,7 +73,14 @@ func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 	return m.email.Send(ctx, in.TenantID, in.Email, subject, body)
 }
 
-func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (domain.AccessTokens, error) {
+func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks domain.AccessTokens, err error) {
+	defer func() {
+		if err == nil {
+			metrics.IncAuthOutcome("magic", "success")
+		} else {
+			metrics.IncAuthOutcome("magic", "failure")
+		}
+	}()
 	if in.Token == "" { return domain.AccessTokens{}, errors.New("token required") }
 	h := sha256.Sum256([]byte(in.Token))
 	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])

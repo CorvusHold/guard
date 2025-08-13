@@ -31,6 +31,155 @@ import (
 
 type noopValidatorWorkOS struct{}
 
+func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
+    if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
+        t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
+    }
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil { t.Fatalf("db connect: %v", err) }
+    defer pool.Close()
+
+    tr := trepo.New(pool)
+    tenantID := uuid.New()
+    _ = tr.Create(ctx, tenantID, "http-sso-workos-replay-"+tenantID.String())
+    time.Sleep(25 * time.Millisecond)
+    sr := srepo.New(pool)
+    _ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
+    _ = sr.Upsert(ctx, "sso.workos.client_id", &tenantID, "client", true)
+    _ = sr.Upsert(ctx, "sso.workos.client_secret", &tenantID, "secret", true)
+
+    repo := authrepo.New(pool)
+    cfg, _ := config.Load()
+    settings := ssvc.New(sr)
+    e := echo.New()
+    e.Validator = noopValidatorWorkOS{}
+    // capture audit events
+    events := make([]evdomain.Event, 0, 3)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error {
+        events = append(events, e)
+        return nil
+    }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
+    c.Register(e)
+
+    // Start to get valid state
+    qs := url.Values{}
+    qs.Set("tenant_id", tenantID.String())
+    reqStart := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+    recStart := httptest.NewRecorder()
+    e.ServeHTTP(recStart, reqStart)
+    if recStart.Code != http.StatusFound { t.Fatalf("start not 302: %d", recStart.Code) }
+    loc := recStart.Header().Get("Location")
+    u, _ := url.Parse(loc)
+    state := u.Query().Get("state")
+    if state == "" { t.Fatalf("expected state from start") }
+
+    // Mock WorkOS success once
+    httpmock.Activate()
+    httpmock.RegisterResponder("POST", "https://api.workos.com/sso/token",
+        func(r *http.Request) (*http.Response, error) {
+            resp := httpmock.NewStringResponse(200, `{
+                "access_token": "tok_workos_test",
+                "profile": { "id": "prof_123", "email": "replay@example.com", "first_name": "A", "last_name": "B" }
+            }`)
+            return resp, nil
+        },
+    )
+
+    // First callback succeeds
+    cbQS := url.Values{}
+    cbQS.Set("code", "code1")
+    cbQS.Set("state", state)
+    req1 := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
+    rec1 := httptest.NewRecorder()
+    e.ServeHTTP(rec1, req1)
+    if rec1.Code != http.StatusOK { t.Fatalf("expected 200, got %d: %s", rec1.Code, rec1.Body.String()) }
+
+    httpmock.DeactivateAndReset()
+
+    // Second callback with same state must fail (state consumed)
+    req2 := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
+    rec2 := httptest.NewRecorder()
+    e.ServeHTTP(rec2, req2)
+    if rec2.Code != http.StatusUnauthorized {
+        t.Fatalf("expected 401, got %d: %s", rec2.Code, rec2.Body.String())
+    }
+    // assert failure audit for invalid_state on replay
+    seen := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "invalid_state" {
+            seen = true
+        }
+    }
+    if !seen { t.Fatalf("expected auth.sso.login.failure invalid_state on replay") }
+}
+
+func TestHTTP_SSO_WorkOS_StateExpiry_401(t *testing.T) {
+    if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
+        t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
+    }
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil { t.Fatalf("db connect: %v", err) }
+    defer pool.Close()
+
+    tr := trepo.New(pool)
+    tenantID := uuid.New()
+    _ = tr.Create(ctx, tenantID, "http-sso-workos-expiry-"+tenantID.String())
+    time.Sleep(25 * time.Millisecond)
+    sr := srepo.New(pool)
+    _ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
+    _ = sr.Upsert(ctx, "sso.workos.client_id", &tenantID, "client", true)
+    _ = sr.Upsert(ctx, "sso.workos.client_secret", &tenantID, "secret", true)
+    // state TTL to 1s
+    _ = sr.Upsert(ctx, "sso.state_ttl", &tenantID, "1s", false)
+
+    repo := authrepo.New(pool)
+    cfg, _ := config.Load()
+    settings := ssvc.New(sr)
+    e := echo.New()
+    e.Validator = noopValidatorWorkOS{}
+    events := make([]evdomain.Event, 0, 2)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
+    c.Register(e)
+
+    // Start to get state
+    qs := url.Values{}
+    qs.Set("tenant_id", tenantID.String())
+    reqStart := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+    recStart := httptest.NewRecorder()
+    e.ServeHTTP(recStart, reqStart)
+    if recStart.Code != http.StatusFound { t.Fatalf("start not 302: %d", recStart.Code) }
+    loc := recStart.Header().Get("Location")
+    u, _ := url.Parse(loc)
+    state := u.Query().Get("state")
+    if state == "" { t.Fatalf("expected state from start") }
+
+    // Wait for TTL to expire
+    time.Sleep(2 * time.Second)
+
+    // Callback should now fail with invalid/expired state
+    cbQS := url.Values{}
+    cbQS.Set("code", "code-any")
+    cbQS.Set("state", state)
+    req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
+    rec := httptest.NewRecorder()
+    e.ServeHTTP(rec, req)
+    if rec.Code != http.StatusUnauthorized {
+        t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+    }
+    // assert invalid_state due to expiry
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "invalid_state" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure invalid_state after expiry") }
+}
+
 func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
     if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
         t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
@@ -55,7 +204,10 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Missing state entirely
@@ -65,6 +217,12 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert missing_state failure audit
+    found := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "missing_state" { found = true }
+    }
+    if !found { t.Fatalf("expected auth.sso.login.failure missing_state") }
 }
 
 func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
@@ -90,7 +248,11 @@ func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Call start to create a valid state in Redis
@@ -112,6 +274,12 @@ func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert code_required failure audit
+    found := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "code_required" { found = true }
+    }
+    if !found { t.Fatalf("expected auth.sso.login.failure code_required") }
 }
 
 func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
@@ -137,7 +305,11 @@ func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Start to get state
@@ -171,6 +343,12 @@ func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert token_exchange_failed audit
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "token_exchange_failed" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure token_exchange_failed") }
 }
 func (noopValidatorWorkOS) Validate(i interface{}) error { return nil }
 
@@ -378,7 +556,11 @@ func TestHTTP_SSO_WorkOS_TokenExchange_Unauthorized_401(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Start to get state
@@ -406,6 +588,12 @@ func TestHTTP_SSO_WorkOS_TokenExchange_Unauthorized_401(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert token_exchange_failed audit
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "token_exchange_failed" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure token_exchange_failed") }
 }
 
 func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
@@ -431,7 +619,11 @@ func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Start to get state
@@ -459,6 +651,12 @@ func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert token_exchange_failed audit
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "token_exchange_failed" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure token_exchange_failed") }
 }
 
 func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
@@ -484,7 +682,11 @@ func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Start to get state
@@ -512,6 +714,12 @@ func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert token_exchange_transport_error audit
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "token_exchange_transport_error" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure token_exchange_transport_error") }
 }
 
 func TestHTTP_SSO_WorkOS_Callback_InvalidState_401(t *testing.T) {
@@ -537,7 +745,11 @@ func TestHTTP_SSO_WorkOS_Callback_InvalidState_401(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Random state (not present in Redis)
@@ -547,6 +759,12 @@ func TestHTTP_SSO_WorkOS_Callback_InvalidState_401(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert invalid_state failure audit
+    seen := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "invalid_state" { seen = true }
+    }
+    if !seen { t.Fatalf("expected auth.sso.login.failure invalid_state") }
 }
 
 func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
@@ -572,7 +790,14 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
     settings := ssvc.New(sr)
     e := echo.New()
     e.Validator = noopValidatorWorkOS{}
-    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), svc.NewSSO(repo, cfg, settings))
+    // capture audit events
+    events := make([]evdomain.Event, 0, 1)
+    sso := svc.NewSSO(repo, cfg, settings)
+    sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error {
+        events = append(events, e)
+        return nil
+    }))
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
     c.Register(e)
 
     // Start to get state
@@ -609,4 +834,10 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
     if rec.Code != http.StatusUnauthorized {
         t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
     }
+    // assert profile_missing_email audit
+    ok := false
+    for _, ev := range events {
+        if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "profile_missing_email" { ok = true }
+    }
+    if !ok { t.Fatalf("expected auth.sso.login.failure profile_missing_email") }
 }

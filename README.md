@@ -48,6 +48,117 @@ make sqlc
 make test
 ```
 
+## Observability
+- Prometheus metrics are exposed at `/metrics` from `./cmd/api`.
+- Liveness and readiness endpoints: `/livez` and `/readyz`.
+- Optionally restrict access to `/metrics` to specific CIDRs via `METRICS_ALLOW_CIDRS` (comma-separated CIDRs).
+
+Metrics included:
+
+- Auth outcomes
+  - `guard_auth_outcomes_total{action="password|magic|mfa|sso", result="success|failure"}`
+  - `guard_auth_mfa_outcomes_total{method="totp|backup_code|unknown", result="success|failure"}`
+  - `guard_auth_sso_outcomes_total{provider="dev|workos|other", result="success|failure"}`
+
+- Database (Postgres)
+  - `guard_db_up` (1=up, 0=down)
+  - `guard_db_ping_seconds` (histogram)
+
+- Cache (Redis/Valkey)
+  - `guard_redis_up` (1=up, 0=down)
+  - `guard_redis_ping_seconds` (histogram)
+
+- HTTP server
+  - `guard_http_requests_total{method, route, status}`
+  - `guard_http_request_duration_seconds{method, route, status}` (histogram)
+  - `guard_http_rate_limit_exceeded_total{endpoint, source}` (HTTP 429s)
+
+Notes:
+
+- Background collectors ping Postgres and Redis every 10s to update `*_up` gauges and `*_ping_seconds` histograms.
+- Metrics endpoint can be ACL-restricted via `METRICS_ALLOW_CIDRS` (comma-separated CIDRs) and client IP extraction can be proxy-aware via `TRUST_PROXY`/`TRUST_PROXY_CIDRS`.
+
+Profiling (pprof):
+
+- Available at `/debug/pprof/*` in non-production environments (enabled when `APP_ENV` is not `prod`/`production`).
+- Endpoints: `/`, `/cmdline`, `/profile`, `/symbol`, `/trace`, `/heap`, `/goroutine`, `/allocs`, `/mutex`, `/block`, `/threadcreate`.
+
+See also: [Rate limiting documentation](docs/rate-limiting.md) for tenant-aware limits and overrides.
+
+Prometheus setup examples:
+
+- Sample Prometheus config and alerts live in `ops/prometheus/`:
+  - `ops/prometheus/prometheus.yml` (scrape config)
+  - `ops/prometheus/alerts.yml` (alerting rules)
+
+## k6 smoke test
+
+Run a lightweight smoke against health and Swagger endpoints:
+
+```bash
+docker compose run --rm k6 k6 run /scripts/smoke.js
+```
+
+Environment variables:
+
+- `K6_BASE_URL` (default: `http://localhost:8080`)
+
+Example override:
+
+```bash
+K6_BASE_URL=http://api:8080 docker compose run --rm k6 k6 run /scripts/smoke.js
+```
+
+## Client IP behind proxies/CDN (Cloudflare)
+
+If you deploy behind Cloudflare or another proxy, configure Echo to extract the real client IP from proxy headers so that rate limiting keys and logs attribute correctly.
+
+Example (prefer Cloudflare's `CF-Connecting-IP`, then `X-Forwarded-For`, then `X-Real-IP`, then `RemoteAddr`):
+
+```go
+// in cmd/api/main.go, after creating `e := echo.New()`
+e.IPExtractor = func(r *http.Request) string {
+    if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+        return ip
+    }
+    // Fallback to X-Forwarded-For (left-most value)
+    if xff := r.Header.Get(echo.HeaderXForwardedFor); xff != "" {
+        if i := strings.IndexByte(xff, ','); i >= 0 {
+            return strings.TrimSpace(xff[:i])
+        }
+        return strings.TrimSpace(xff)
+    }
+    if ip := r.Header.Get(echo.HeaderXRealIP); ip != "" {
+        return ip
+    }
+    host, _, _ := net.SplitHostPort(r.RemoteAddr)
+    return host
+}
+```
+
+Security notes:
+
+- Only enable proxy header trust when your app is actually behind that proxy/CDN; otherwise headers can be spoofed by clients.
+- For stricter security, restrict trust by verifying `r.RemoteAddr` is a known proxy IP (e.g., Cloudflare’s published IP ranges) before using headers.
+
+Enable this behavior by setting an environment variable when running behind a proxy/CDN:
+
+```bash
+export TRUST_PROXY=true
+# then start the API
+go run ./cmd/api
+```
+
+Optionally restrict trusted proxies via CIDRs (recommended):
+
+```bash
+export TRUST_PROXY=true
+export TRUST_PROXY_CIDRS="173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22"
+# IPv6 ranges are also available from Cloudflare docs
+```
+
+Cloudflare IP ranges: https://www.cloudflare.com/ips/
+
 ## Notes
 - `.env` is gitignored; use `.env.example` for defaults.
 - Postgres and Valkey are defined in `docker-compose.yml`.

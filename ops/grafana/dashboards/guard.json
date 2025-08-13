@@ -1,0 +1,95 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "type": "dashboard",
+        "name": "Annotations & Alerts",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "DB Up",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "orientation": "horizontal", "textMode": "value"},
+      "targets": [{"expr": "guard_db_up"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Redis Up",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "orientation": "horizontal", "textMode": "value"},
+      "targets": [{"expr": "guard_redis_up"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "DB Ping p95 (s)",
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, rate(guard_db_ping_seconds_bucket[5m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis Ping p95 (s)",
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, rate(guard_redis_ping_seconds_bucket[5m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests by status",
+      "targets": [{"expr": "sum by (status) (rate(guard_http_requests_total[1m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP p95 latency (s) by route",
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (route, le) (rate(guard_http_request_duration_seconds_bucket[5m])))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth outcomes by action/result",
+      "targets": [{"expr": "sum by (action, result) (rate(guard_auth_outcomes_total[1m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate limit exceeded by endpoint",
+      "targets": [{"expr": "sum by (endpoint) (rate(guard_http_rate_limit_exceeded_total[1m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20}
+    },
+    {
+      "type": "timeseries",
+      "title": "MFA outcomes by method/result",
+      "targets": [{"expr": "sum by (method, result) (rate(guard_auth_mfa_outcomes_total[1m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+    },
+    {
+      "type": "timeseries",
+      "title": "SSO outcomes by provider/result",
+      "targets": [{"expr": "sum by (provider, result) (rate(guard_auth_sso_outcomes_total[1m]))"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28}
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["guard"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timepicker": {},
+  "title": "Guard Overview",
+  "version": 1
+}

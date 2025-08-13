@@ -1,0 +1,89 @@
+groups:
+  - name: guard-core
+    rules:
+      # Availability
+      - alert: GuardDatabaseDown
+        expr: min_over_time(guard_db_up[1m]) == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: guard
+        annotations:
+          summary: Database is down
+          description: Last DB ping failed for at least 1 minute.
+
+      - alert: GuardRedisDown
+        expr: min_over_time(guard_redis_up[1m]) == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: guard
+        annotations:
+          summary: Redis/Valkey is down
+          description: Last Redis ping failed for at least 1 minute.
+
+      # Latency (p95)
+      - alert: GuardDBLatencyHigh
+        expr: histogram_quantile(0.95, rate(guard_db_ping_seconds_bucket[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          service: guard
+        annotations:
+          summary: High DB ping latency (p95)
+          description: p95 of DB ping latency > 300ms over 5m.
+
+      - alert: GuardRedisLatencyHigh
+        expr: histogram_quantile(0.95, rate(guard_redis_ping_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: guard
+        annotations:
+          summary: High Redis ping latency (p95)
+          description: p95 of Redis ping latency > 200ms over 5m.
+
+      # Auth outcomes
+      - alert: GuardAuthFailuresSpike
+        expr: sum by (action) (increase(guard_auth_outcomes_total{result="failure"}[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: guard
+        annotations:
+          summary: Spike in auth failures
+          description: More than 50 {{ $labels.action }} failures in the last 5 minutes.
+
+      - alert: GuardAuthFailureRatioHigh
+        expr: |
+          (sum by (action) (increase(guard_auth_outcomes_total{result="failure"}[10m])))
+            /
+          clamp_min(sum by (action) (increase(guard_auth_outcomes_total[10m])), 1) > 0.5
+        for: 10m
+        labels:
+          severity: critical
+          service: guard
+        annotations:
+          summary: High {{ $labels.action }} auth failure ratio
+          description: Failure ratio for {{ $labels.action }} > 50% over 10m.
+
+      # HTTP errors and rate limiting
+      - alert: GuardHTTP5xxSpike
+        expr: sum by (route) (increase(guard_http_requests_total{status=~"5.."}[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: guard
+        annotations:
+          summary: HTTP 5xx spike
+          description: More than 50 5xx responses for {{ $labels.route }} over 5m.
+
+      - alert: GuardRateLimitSpike
+        expr: sum(increase(guard_http_rate_limit_exceeded_total[5m])) > 100
+        for: 5m
+        labels:
+          severity: info
+          service: guard
+        annotations:
+          summary: Rate limiting activity spike
+          description: More than 100 requests rate-limited across endpoints in 5m.

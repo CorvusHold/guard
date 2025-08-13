@@ -40,8 +40,8 @@ func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string,
 		if _, err := rand.Read(buf); err != nil { return "", err }
 		state = base64.RawURLEncoding.EncodeToString(buf)
 	}
-	// Store tenant relation in state for callback
-	if err := s.redis.Set(ctx, "sso:state:"+state, in.TenantID.String(), 10*time.Minute).Err(); err != nil {
+	stateTTL, _ := s.settings.GetDuration(ctx, sdomain.KeySSOStateTTL, &in.TenantID, 10*time.Minute)
+	if err := s.redis.Set(ctx, "sso:state:"+state, in.TenantID.String(), stateTTL).Err(); err != nil {
 		return "", err
 	}
 
@@ -65,13 +65,30 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	// Validate state
 	stVals := in.Query["state"]
 	if len(stVals) == 0 || stVals[0] == "" {
+		// publish failure (no tenant identified)
+		_ = s.pub.Publish(ctx, evdomain.Event{
+			Type:     "auth.sso.login.failure",
+			TenantID: uuid.Nil,
+			Meta:     map[string]string{"provider": in.Provider, "reason": "missing_state", "ip": in.IP, "user_agent": in.UserAgent},
+			Time:     time.Now(),
+		})
 		return domain.AccessTokens{}, errors.New("missing state")
 	}
 	state := stVals[0]
-	tenStr, err := s.redis.Get(ctx, "sso:state:"+state).Result()
-	if err != nil { return domain.AccessTokens{}, errors.New("invalid state") }
-	// Consume state
-	_ = s.redis.Del(ctx, "sso:state:"+state).Err()
+	// Atomically GET and DEL state to prevent race/replay
+	key := "sso:state:" + state
+	script := "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]) end; return v"
+	res, err := s.redis.Eval(ctx, script, []string{key}).Result()
+	if err != nil || res == nil {
+		_ = s.pub.Publish(ctx, evdomain.Event{
+			Type:     "auth.sso.login.failure",
+			TenantID: uuid.Nil,
+			Meta:     map[string]string{"provider": in.Provider, "reason": "invalid_state", "ip": in.IP, "user_agent": in.UserAgent},
+			Time:     time.Now(),
+		})
+		return domain.AccessTokens{}, errors.New("invalid state")
+	}
+	tenStr, _ := res.(string)
 
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant for state") }
@@ -79,19 +96,31 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	// Extract authorization code
 	cv := in.Query["code"]
 	if len(cv) == 0 || strings.TrimSpace(cv[0]) == "" {
+		_ = s.pub.Publish(ctx, evdomain.Event{
+			Type:     "auth.sso.login.failure",
+			TenantID: tenantID,
+			Meta:     map[string]string{"provider": in.Provider, "reason": "code_required", "ip": in.IP, "user_agent": in.UserAgent},
+			Time:     time.Now(),
+		})
 		return domain.AccessTokens{}, errors.New("code required")
 	}
 	code := strings.TrimSpace(cv[0])
 
 	// Load WorkOS credentials
 	clientID, err := s.settings.GetString(ctx, sdomain.KeyWorkOSClientID, &tenantID, "")
-	if err != nil || clientID == "" { return domain.AccessTokens{}, errors.New("workos client_id missing") }
+	if err != nil || clientID == "" {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "workos_client_id_missing"}, Time: time.Now()})
+		return domain.AccessTokens{}, errors.New("workos client_id missing")
+	}
 	clientSecret, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSClientSecret, &tenantID, "")
 	if clientSecret == "" {
 		// fallback to API key if client_secret not set
 		clientSecret, _ = s.settings.GetString(ctx, sdomain.KeyWorkOSAPIKey, &tenantID, "")
 	}
-	if clientSecret == "" { return domain.AccessTokens{}, errors.New("workos client_secret missing") }
+	if clientSecret == "" {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "workos_client_secret_missing"}, Time: time.Now()})
+		return domain.AccessTokens{}, errors.New("workos client_secret missing")
+	}
 
 	// Reconstruct redirect_uri to match startWorkOS
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
@@ -109,14 +138,21 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	form.Set("redirect_uri", redirectURI)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.workos.com/sso/token", strings.NewReader(form.Encode()))
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_build_error"}, Time: time.Now()})
+		return domain.AccessTokens{}, err
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	resp, err := httpClient.Do(req)
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_transport_error"}, Time: time.Now()})
+		return domain.AccessTokens{}, err
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_failed", "status": resp.Status}, Time: time.Now()})
 		return domain.AccessTokens{}, errors.New("workos token exchange failed")
 	}
 
@@ -130,10 +166,12 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		} `json:"profile"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_decode_error"}, Time: time.Now()})
 		return domain.AccessTokens{}, err
 	}
 	email := strings.TrimSpace(tokenResp.Profile.Email)
 	if email == "" {
+		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "profile_missing_email"}, Time: time.Now()})
 		return domain.AccessTokens{}, errors.New("workos profile missing email")
 	}
 

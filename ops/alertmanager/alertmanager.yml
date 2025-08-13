@@ -1,0 +1,12 @@
+route:
+  receiver: dev-webhook
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: dev-webhook
+    webhook_configs:
+      - url: "http://am-receiver:8080/"
+        max_alerts: 20
+        send_resolved: true

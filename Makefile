@@ -5,7 +5,8 @@ SHELL := /bin/bash
 .PHONY: compose-up compose-down compose-up-test compose-down-test dev \
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
-        swagger
+        swagger obsv-up obsv-down k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        grafana-url prometheus-url alertmanager-url
 
 compose-up:
 	docker compose up -d
@@ -76,3 +77,45 @@ db-wait-test:
 
 redis-test-ping:
 	valkey-cli -p 6481 ping || true
+
+# ---- Observability stack helpers ----
+
+obsv-up:
+	docker compose up -d db valkey api prometheus grafana alertmanager am-receiver
+
+obsv-down:
+	docker compose down -v
+
+grafana-url:
+	@echo "Grafana: http://localhost:3000 (admin/admin)"
+
+prometheus-url:
+	@echo "Prometheus: http://localhost:9090"
+
+alertmanager-url:
+	@echo "Alertmanager: http://localhost:9093"
+
+# ---- k6 scenarios (via compose service 'k6') ----
+
+k6-smoke:
+	docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"
+
+k6-login-stress:
+	docker compose run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$(TENANT_ID)" \
+		-e K6_EMAIL="$(EMAIL)" \
+		-e K6_PASSWORD="$(PASSWORD)" \
+		k6 "k6 run /scripts/login_stress.js"
+
+k6-rate-limit-login:
+	docker compose run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$(TENANT_ID)" \
+		-e K6_EMAIL="$(EMAIL)" \
+		-e K6_PASSWORD="$(PASSWORD)" \
+		-e K6_ITERATIONS=300 \
+		k6 "k6 run /scripts/rate_limit_login.js"
+
+k6-mfa-invalid:
+	docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"

@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
+	sdomain "github.com/corvusHold/guard/internal/settings/domain"
+	"github.com/corvusHold/guard/internal/platform/ratelimit"
 	"github.com/corvusHold/guard/internal/platform/validation"
 )
 
@@ -17,46 +20,93 @@ type Controller struct {
 	svc   domain.Service
 	magic domain.MagicLinkService
 	sso   domain.SSOService
+	// optional rate limit dependencies
+	settings sdomain.Service
+	rl       ratelimit.Store
 }
 
 func New(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService) *Controller {
 	return &Controller{svc: svc, magic: magic, sso: sso}
 }
 
+// WithRateLimit enables tenant-aware, store-backed rate limiting when provided.
+func (h *Controller) WithRateLimit(settings sdomain.Service, store ratelimit.Store) *Controller {
+	h.settings = settings
+	h.rl = store
+	return h
+}
+
 // Register mounts all auth routes under /v1/auth with multi-method structure.
 func (h *Controller) Register(e *echo.Echo) {
 	g := e.Group("/v1/auth")
 
+	// Rate limits (fixed-window, per-tenant-or-IP)
+	mkPolicy := func(prefix string, limKey, winKey string, defLim int, defWin time.Duration) ratelimit.Policy {
+		p := ratelimit.Policy{Window: defWin, Limit: defLim, Key: ratelimit.KeyTenantOrIP(prefix)}
+		p.Name = prefix
+		if h.settings != nil {
+			p.WindowFunc = func(c echo.Context) time.Duration {
+				// extract tenant_id from query
+				var tid *uuid.UUID
+				if v := c.QueryParam("tenant_id"); v != "" {
+					if id, err := uuid.Parse(v); err == nil { tid = &id }
+				}
+				d, _ := h.settings.GetDuration(c.Request().Context(), winKey, tid, defWin)
+				return d
+			}
+			p.LimitFunc = func(c echo.Context) int {
+				var tid *uuid.UUID
+				if v := c.QueryParam("tenant_id"); v != "" {
+					if id, err := uuid.Parse(v); err == nil { tid = &id }
+				}
+				n, _ := h.settings.GetInt(c.Request().Context(), limKey, tid, defLim)
+				return n
+			}
+		}
+		return p
+	}
+	mkMW := func(p ratelimit.Policy) echo.MiddlewareFunc {
+		if h.rl != nil { return ratelimit.MiddlewareWithStore(p, h.rl) }
+		return ratelimit.Middleware(p)
+	}
+
+	rlSignup := mkMW(mkPolicy("auth:signup", sdomain.KeyRLSignupLimit, sdomain.KeyRLSignupWindow, 2, time.Minute))
+	rlLogin := mkMW(mkPolicy("auth:login", sdomain.KeyRLLoginLimit, sdomain.KeyRLLoginWindow, 2, time.Minute))
+	rlMagic := mkMW(mkPolicy("auth:magic", sdomain.KeyRLMagicLimit, sdomain.KeyRLMagicWindow, 5, time.Minute))
+	rlToken := mkMW(mkPolicy("auth:token", sdomain.KeyRLTokenLimit, sdomain.KeyRLTokenWindow, 10, time.Minute))
+	rlMFA := mkMW(mkPolicy("auth:mfa", sdomain.KeyRLMFALimit, sdomain.KeyRLMFAWindow, 10, time.Minute))
+	rlSSO := mkMW(mkPolicy("auth:sso", sdomain.KeyRLSsoLimit, sdomain.KeyRLSsoWindow, 10, time.Minute))
+
 	// Password-based auth
-	g.POST("/password/signup", h.signup)
-	g.POST("/password/login", h.login)
+	g.POST("/password/signup", h.signup, rlSignup)
+	g.POST("/password/login", h.login, rlLogin)
 	g.POST("/password/reset/request", h.resetPasswordRequest)
 	g.POST("/password/reset/confirm", h.resetPasswordConfirm)
 
 	// Magic-link auth
-	g.POST("/magic/send", h.sendMagic)
-	g.POST("/magic/verify", h.verifyMagic)
-	g.GET("/magic/verify", h.verifyMagic)
+	g.POST("/magic/send", h.sendMagic, rlMagic)
+	g.POST("/magic/verify", h.verifyMagic, rlMagic)
+	g.GET("/magic/verify", h.verifyMagic, rlMagic)
 
 	// SSO / Social providers
-	g.GET("/sso/:provider/start", h.ssoStart)
-	g.GET("/sso/:provider/callback", h.ssoCallback)
+	g.GET("/sso/:provider/start", h.ssoStart, rlSSO)
+	g.GET("/sso/:provider/callback", h.ssoCallback, rlSSO)
 
 	// Token lifecycle
-	g.POST("/refresh", h.refresh)
-	g.POST("/logout", h.logout)
-	g.GET("/me", h.me)
-	g.POST("/introspect", h.introspect)
-	g.POST("/revoke", h.revoke)
+	g.POST("/refresh", h.refresh, rlToken)
+	g.POST("/logout", h.logout, rlToken)
+	g.GET("/me", h.me, rlToken)
+	g.POST("/introspect", h.introspect, rlToken)
+	g.POST("/revoke", h.revoke, rlToken)
 
 	// MFA: TOTP + Backup codes
-	g.POST("/mfa/totp/start", h.totpStart)
-	g.POST("/mfa/totp/activate", h.totpActivate)
-	g.POST("/mfa/totp/disable", h.totpDisable)
-	g.POST("/mfa/backup/generate", h.backupGenerate)
-	g.POST("/mfa/backup/consume", h.backupConsume)
-	g.GET("/mfa/backup/count", h.backupCount)
-	g.POST("/mfa/verify", h.verifyMFA)
+	g.POST("/mfa/totp/start", h.totpStart, rlMFA)
+	g.POST("/mfa/totp/activate", h.totpActivate, rlMFA)
+	g.POST("/mfa/totp/disable", h.totpDisable, rlMFA)
+	g.POST("/mfa/backup/generate", h.backupGenerate, rlMFA)
+	g.POST("/mfa/backup/consume", h.backupConsume, rlMFA)
+	g.GET("/mfa/backup/count", h.backupCount, rlMFA)
+	g.POST("/mfa/verify", h.verifyMFA, rlMFA)
 }
 
 type signupReq struct {
@@ -183,6 +233,7 @@ func (h *Controller) signup(c echo.Context) error {
 // @Success      202   {object}  mfaChallengeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/password/login [post]
 func (h *Controller) login(c echo.Context) error {
 	var req loginReq
@@ -254,6 +305,7 @@ func (h *Controller) logout(c echo.Context) error {
 // @Produce      json
 // @Success      200  {object}  map[string]interface{}
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/me [get]
 func (h *Controller) me(c echo.Context) error {
 	tok := bearerToken(c)
@@ -281,6 +333,7 @@ func (h *Controller) me(c echo.Context) error {
 // @Success      200    {object}  map[string]interface{}
 // @Failure      400    {object}  map[string]string
 // @Failure      401    {object}  map[string]string
+// @Failure      429    {object}  map[string]string
 // @Router       /v1/auth/introspect [post]
 func (h *Controller) introspect(c echo.Context) error {
 	var req introspectReq
@@ -308,6 +361,7 @@ func (h *Controller) introspect(c echo.Context) error {
 // @Param        body  body  revokeReq  true  "token and token_type=refresh"
 // @Success      204
 // @Failure      400  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/revoke [post]
 func (h *Controller) revoke(c echo.Context) error {
 	var req revokeReq
@@ -455,6 +509,7 @@ func (h *Controller) totpStart(c echo.Context) error {
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/mfa/totp/activate [post]
 func (h *Controller) totpActivate(c echo.Context) error {
 	var req mfaTOTPActivateReq
@@ -477,6 +532,7 @@ func (h *Controller) totpActivate(c echo.Context) error {
 // @Security     BearerAuth
 // @Success      204
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/mfa/totp/disable [post]
 func (h *Controller) totpDisable(c echo.Context) error {
 	tok := bearerToken(c)
@@ -502,6 +558,7 @@ func (h *Controller) totpDisable(c echo.Context) error {
 // @Success      200  {object}  mfaBackupGenerateResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/mfa/backup/generate [post]
 func (h *Controller) backupGenerate(c echo.Context) error {
 	var req mfaBackupGenerateReq
@@ -528,6 +585,7 @@ func (h *Controller) backupGenerate(c echo.Context) error {
 // @Success      200  {object}  map[string]bool
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/mfa/backup/consume [post]
 func (h *Controller) backupConsume(c echo.Context) error {
 	var req mfaBackupConsumeReq
@@ -550,6 +608,7 @@ func (h *Controller) backupConsume(c echo.Context) error {
 // @Produce      json
 // @Success      200  {object}  mfaBackupCountResp
 // @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/mfa/backup/count [get]
 func (h *Controller) backupCount(c echo.Context) error {
 	tok := bearerToken(c)
@@ -573,6 +632,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 // @Success      200   {object}  tokensResp
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/mfa/verify [post]
 func (h *Controller) verifyMFA(c echo.Context) error {
 	var req mfaVerifyReq

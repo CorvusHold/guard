@@ -11,6 +11,7 @@ import (
 type Service interface {
 	GetString(ctx context.Context, key string, tenantID *uuid.UUID, def string) (string, error)
 	GetDuration(ctx context.Context, key string, tenantID *uuid.UUID, def time.Duration) (time.Duration, error)
+	GetInt(ctx context.Context, key string, tenantID *uuid.UUID, def int) (int, error)
 }
 
 // Repository abstracts storage of app settings.
@@ -42,4 +43,25 @@ const (
 	KeyWorkOSAPIKey    = "sso.workos.api_key"
 	KeyWorkOSClientID  = "sso.workos.client_id"
 	KeyWorkOSClientSecret = "sso.workos.client_secret"
+    // SSO hardening
+    // KeySSOStateTTL controls the TTL for SSO OAuth state values stored in Redis (e.g., "10m").
+    KeySSOStateTTL     = "sso.state_ttl"
+    // KeySSORedirectAllowlist is a comma-separated list of allowed redirect URL prefixes for SSO start requests.
+    // Example: "https://app.example.com,https://staging.example.com"
+    KeySSORedirectAllowlist = "sso.redirect_allowlist"
+
+    // Rate limiting keys (per-endpoint). All are optional and support tenant overrides.
+    // Windows use Go duration strings (e.g., "1m", "10s"). Limits are integers.
+    KeyRLSignupLimit  = "auth.ratelimit.signup.limit"
+    KeyRLSignupWindow = "auth.ratelimit.signup.window"
+    KeyRLLoginLimit  = "auth.ratelimit.login.limit"
+    KeyRLLoginWindow = "auth.ratelimit.login.window"
+    KeyRLMagicLimit  = "auth.ratelimit.magic.limit"
+    KeyRLMagicWindow = "auth.ratelimit.magic.window"
+    KeyRLSsoLimit    = "auth.ratelimit.sso.limit"
+    KeyRLSsoWindow   = "auth.ratelimit.sso.window"
+    KeyRLTokenLimit  = "auth.ratelimit.token.limit"
+    KeyRLTokenWindow = "auth.ratelimit.token.window"
+    KeyRLMFALimit    = "auth.ratelimit.mfa.limit"
+    KeyRLMFAWindow   = "auth.ratelimit.mfa.window"
 )
