@@ -1,0 +1,34 @@
+services:
+  db_test:
+    image: postgres:17
+    container_name: guard_postgres_test
+    environment:
+      POSTGRES_USER: "guard"
+      POSTGRES_PASSWORD: "guard"
+      POSTGRES_DB: "guard_test"
+    ports:
+      - "5544:5432"
+    volumes:
+      - db_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey_test:
+    image: valkey/valkey:7.2
+    container_name: guard_valkey_test
+    ports:
+      - "6481:6379"
+    volumes:
+      - valkey_test_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_test_data:
+  valkey_test_data:

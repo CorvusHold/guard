@@ -1,0 +1,9 @@
+# macOS finder artifacts
+.DS_Store
+
+# Local env file
+.env
+
+# Build artifacts
+bin
+tmp
