@@ -1,0 +1,230 @@
+package domain
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// AccessTokens represents the issued tokens payload.
+type AccessTokens struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// ErrMFARequired signals that an MFA verification step is required to complete login.
+type ErrMFARequired struct {
+	ChallengeToken string
+	Methods        []string
+}
+
+func (e ErrMFARequired) Error() string { return "mfa_required" }
+
+// MFASecret reflects the mfa_secrets table record.
+type MFASecret struct {
+	UserID    uuid.UUID
+	Secret    string
+	Enabled   bool
+	CreatedAt time.Time
+}
+
+type SignupInput struct {
+	TenantID   uuid.UUID
+	Email      string
+	Password   string
+	FirstName  string
+	LastName   string
+}
+
+type LoginInput struct {
+	TenantID uuid.UUID
+	Email    string
+	Password string
+	UserAgent string
+	IP        string
+}
+
+type RefreshInput struct {
+	RefreshToken string
+	UserAgent    string
+	IP           string
+}
+
+type Service interface {
+	Signup(ctx context.Context, in SignupInput) (AccessTokens, error)
+	Login(ctx context.Context, in LoginInput) (AccessTokens, error)
+	Refresh(ctx context.Context, in RefreshInput) (AccessTokens, error)
+	Logout(ctx context.Context, refreshToken string) error
+	// Me returns the current user's profile within a tenant context.
+	Me(ctx context.Context, userID, tenantID uuid.UUID) (UserProfile, error)
+	// Introspect validates a JWT and returns token/user claims.
+	Introspect(ctx context.Context, token string) (Introspection, error)
+	// Revoke invalidates a token. Currently supports refresh tokens.
+	Revoke(ctx context.Context, token string, tokenType string) error
+
+	// MFA (TOTP + backup codes)
+	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
+	StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (secret string, otpauthURL string, err error)
+	// ActivateTOTP verifies a TOTP code for the stored secret and marks MFA as enabled.
+	ActivateTOTP(ctx context.Context, userID uuid.UUID, code string) error
+	// DisableTOTP disables TOTP for the user (keeps secret for potential reactivation).
+	DisableTOTP(ctx context.Context, userID uuid.UUID) error
+	// GenerateBackupCodes creates N backup codes, stores their hashes, and returns the plaintext codes.
+	GenerateBackupCodes(ctx context.Context, userID uuid.UUID, count int) ([]string, error)
+	// ConsumeBackupCode attempts to consume a backup code; returns true if it was valid and unused.
+	ConsumeBackupCode(ctx context.Context, userID uuid.UUID, code string) (bool, error)
+	// CountRemainingBackupCodes returns the number of unused backup codes.
+	CountRemainingBackupCodes(ctx context.Context, userID uuid.UUID) (int64, error)
+
+	// VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
+	VerifyMFA(ctx context.Context, in MFAVerifyInput) (AccessTokens, error)
+}
+
+// Magic-link inputs
+type MagicSendInput struct {
+	TenantID    uuid.UUID
+	Email       string
+	RedirectURL string
+}
+
+type MagicVerifyInput struct {
+	Token     string
+	UserAgent string
+	IP        string
+}
+
+// MFAVerifyInput is the payload for verifying MFA after a password login challenge.
+type MFAVerifyInput struct {
+	ChallengeToken string
+	Code           string
+	Method         string // "totp" | "backup_code"
+	UserAgent      string
+	IP             string
+}
+
+// MagicLinkService defines the contract for magic-link flows.
+type MagicLinkService interface {
+	Send(ctx context.Context, in MagicSendInput) error
+	Verify(ctx context.Context, in MagicVerifyInput) (AccessTokens, error)
+}
+
+// SSO inputs
+type SSOStartInput struct {
+	Provider    string
+	TenantID    uuid.UUID
+	RedirectURL string
+	State       string
+	ConnectionID string
+	OrganizationID string
+}
+
+type SSOCallbackInput struct {
+	Provider  string
+	Query     map[string][]string
+	UserAgent string
+	IP        string
+}
+
+// SSOService defines the contract for SSO/Social login flows.
+type SSOService interface {
+	Start(ctx context.Context, in SSOStartInput) (authURL string, err error)
+	Callback(ctx context.Context, in SSOCallbackInput) (AccessTokens, error)
+}
+
+// Repository abstracts data access needed by the auth service.
+type Repository interface {
+	CreateUser(ctx context.Context, id uuid.UUID, firstName, lastName string, roles []string) error
+	CreateAuthIdentity(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, passwordHash string) error
+	GetAuthIdentityByEmailTenant(ctx context.Context, tenantID uuid.UUID, email string) (AuthIdentity, error)
+	UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error
+	AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error
+
+	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
+	RevokeTokenChain(ctx context.Context, id uuid.UUID) error
+
+	// Magic link operations
+	CreateMagicLink(ctx context.Context, id uuid.UUID, userID *uuid.UUID, tenantID uuid.UUID, email, tokenHash, redirectURL string, expiresAt time.Time) error
+	GetMagicLinkByHash(ctx context.Context, tokenHash string) (MagicLink, error)
+	ConsumeMagicLink(ctx context.Context, tokenHash string) error
+
+	// User/profile lookups
+	GetUserByID(ctx context.Context, userID uuid.UUID) (User, error)
+	GetAuthIdentitiesByUser(ctx context.Context, userID uuid.UUID) ([]AuthIdentity, error)
+
+	// MFA persistence
+	UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret string, enabled bool) error
+	GetMFASecret(ctx context.Context, userID uuid.UUID) (MFASecret, error)
+	InsertMFABackupCode(ctx context.Context, id uuid.UUID, userID uuid.UUID, codeHash string) error
+	CountRemainingMFABackupCodes(ctx context.Context, userID uuid.UUID) (int64, error)
+	// ConsumeMFABackupCode returns true when a code was valid and consumed.
+	ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, codeHash string) (bool, error)
+}
+
+type AuthIdentity struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TenantID  uuid.UUID
+	Email     string
+	PasswordHash string
+}
+
+type RefreshToken struct {
+	ID       uuid.UUID
+	UserID   uuid.UUID
+	TenantID uuid.UUID
+	Revoked  bool
+	ExpiresAt time.Time
+}
+
+type MagicLink struct {
+	ID         uuid.UUID
+	UserID     *uuid.UUID
+	TenantID   uuid.UUID
+	Email      string
+	TokenHash  string
+	RedirectURL string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+}
+
+// User reflects the users table record.
+type User struct {
+	ID           uuid.UUID
+	EmailVerified bool
+	IsActive     bool
+	FirstName    string
+	LastName     string
+	Roles        []string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	LastLoginAt  *time.Time
+}
+
+// UserProfile is returned by the Me endpoint.
+type UserProfile struct {
+	ID           uuid.UUID `json:"id"`
+	TenantID     uuid.UUID `json:"tenant_id"`
+	Email        string    `json:"email"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	Roles        []string  `json:"roles"`
+	MFAEnabled   bool      `json:"mfa_enabled"`
+	EmailVerified bool     `json:"email_verified"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+}
+
+// Introspection is the response for /auth/introspect.
+type Introspection struct {
+	Active       bool       `json:"active"`
+	UserID       uuid.UUID  `json:"user_id"`
+	TenantID     uuid.UUID  `json:"tenant_id"`
+	Email        string     `json:"email"`
+	Roles        []string   `json:"roles"`
+	MFAVerified  bool       `json:"mfa_verified"`
+	EmailVerified bool      `json:"email_verified"`
+	Exp          int64      `json:"exp"`
+	Iat          int64      `json:"iat"`
+}

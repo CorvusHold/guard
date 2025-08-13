@@ -1,0 +1,598 @@
+package controller
+
+import (
+	"errors"
+	"net/http"
+	"net/url"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+
+	domain "github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/corvusHold/guard/internal/platform/validation"
+)
+
+type Controller struct {
+	svc   domain.Service
+	magic domain.MagicLinkService
+	sso   domain.SSOService
+}
+
+func New(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService) *Controller {
+	return &Controller{svc: svc, magic: magic, sso: sso}
+}
+
+// Register mounts all auth routes under /v1/auth with multi-method structure.
+func (h *Controller) Register(e *echo.Echo) {
+	g := e.Group("/v1/auth")
+
+	// Password-based auth
+	g.POST("/password/signup", h.signup)
+	g.POST("/password/login", h.login)
+	g.POST("/password/reset/request", h.resetPasswordRequest)
+	g.POST("/password/reset/confirm", h.resetPasswordConfirm)
+
+	// Magic-link auth
+	g.POST("/magic/send", h.sendMagic)
+	g.POST("/magic/verify", h.verifyMagic)
+	g.GET("/magic/verify", h.verifyMagic)
+
+	// SSO / Social providers
+	g.GET("/sso/:provider/start", h.ssoStart)
+	g.GET("/sso/:provider/callback", h.ssoCallback)
+
+	// Token lifecycle
+	g.POST("/refresh", h.refresh)
+	g.POST("/logout", h.logout)
+	g.GET("/me", h.me)
+	g.POST("/introspect", h.introspect)
+	g.POST("/revoke", h.revoke)
+
+	// MFA: TOTP + Backup codes
+	g.POST("/mfa/totp/start", h.totpStart)
+	g.POST("/mfa/totp/activate", h.totpActivate)
+	g.POST("/mfa/totp/disable", h.totpDisable)
+	g.POST("/mfa/backup/generate", h.backupGenerate)
+	g.POST("/mfa/backup/consume", h.backupConsume)
+	g.GET("/mfa/backup/count", h.backupCount)
+	g.POST("/mfa/verify", h.verifyMFA)
+}
+
+type signupReq struct {
+	TenantID  string `json:"tenant_id" validate:"required,uuid4"`
+	Email     string `json:"email" validate:"required,email"`
+	Password  string `json:"password" validate:"required,min=8"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type loginReq struct {
+	TenantID string `json:"tenant_id" validate:"required,uuid4"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}
+
+type refreshReq struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type tokensResp struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type introspectReq struct {
+	Token string `json:"token" validate:"omitempty"`
+}
+
+type revokeReq struct {
+	Token     string `json:"token" validate:"required"`
+	TokenType string `json:"token_type" validate:"required"`
+}
+
+type magicSendReq struct {
+	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+	Email       string `json:"email" validate:"required,email"`
+	RedirectURL string `json:"redirect_url" validate:"omitempty,url"`
+}
+
+type magicVerifyReq struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type mfaTOTPStartResp struct {
+	Secret     string `json:"secret"`
+	OtpauthURL string `json:"otpauth_url"`
+}
+
+type mfaTOTPActivateReq struct {
+	Code string `json:"code" validate:"required"`
+}
+
+type mfaBackupGenerateReq struct {
+	Count int `json:"count" validate:"omitempty,min=1,max=20"`
+}
+
+type mfaBackupGenerateResp struct {
+	Codes []string `json:"codes"`
+}
+
+type mfaBackupConsumeReq struct {
+	Code string `json:"code" validate:"required"`
+}
+
+type mfaBackupCountResp struct {
+	Count int64 `json:"count"`
+}
+
+type mfaChallengeResp struct {
+	ChallengeToken string   `json:"challenge_token"`
+	Methods        []string `json:"methods"`
+}
+
+type mfaVerifyReq struct {
+	ChallengeToken string `json:"challenge_token" validate:"required"`
+	Code           string `json:"code" validate:"required"`
+	Method         string `json:"method" validate:"required,oneof=totp backup_code"`
+}
+
+func bearerToken(c echo.Context) string {
+	h := c.Request().Header.Get("Authorization")
+	if h == "" { return "" }
+	parts := strings.SplitN(h, " ", 2)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return parts[1]
+	}
+	return ""
+}
+
+func (h *Controller) signup(c echo.Context) error {
+	var req signupReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	tenID, err := uuid.Parse(req.TenantID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	tok, err := h.svc.Signup(c.Request().Context(), domain.SignupInput{
+		TenantID:  tenID,
+		Email:     req.Email,
+		Password:  req.Password,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+	})
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusCreated, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+}
+
+// Password Login godoc
+// @Summary      Password login
+// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  loginReq  true  "email/password"
+// @Success      200   {object}  tokensResp
+// @Success      202   {object}  mfaChallengeResp
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /v1/auth/password/login [post]
+func (h *Controller) login(c echo.Context) error {
+	var req loginReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	tenID, err := uuid.Parse(req.TenantID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	ua := c.Request().UserAgent()
+	ip := c.RealIP()
+	tok, err := h.svc.Login(c.Request().Context(), domain.LoginInput{
+		TenantID:  tenID,
+		Email:     req.Email,
+		Password:  req.Password,
+		UserAgent: ua,
+		IP:        ip,
+	})
+	if err != nil {
+		var mfaErr domain.ErrMFARequired
+		if errors.As(err, &mfaErr) {
+			return c.JSON(http.StatusAccepted, mfaChallengeResp{ChallengeToken: mfaErr.ChallengeToken, Methods: mfaErr.Methods})
+		}
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+}
+
+func (h *Controller) refresh(c echo.Context) error {
+	var req refreshReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	ua := c.Request().UserAgent()
+	ip := c.RealIP()
+	tok, err := h.svc.Refresh(c.Request().Context(), domain.RefreshInput{RefreshToken: req.RefreshToken, UserAgent: ua, IP: ip})
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+}
+
+func (h *Controller) logout(c echo.Context) error {
+	var req refreshReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if req.RefreshToken == "" {
+		return c.NoContent(http.StatusNoContent)
+	}
+	if err := h.svc.Logout(c.Request().Context(), req.RefreshToken); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// Me godoc
+// @Summary      Get current user's profile
+// @Description  Returns the authenticated user's profile derived from the access token
+// @Tags         auth
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/me [get]
+func (h *Controller) me(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+	}
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+	prof, err := h.svc.Me(c.Request().Context(), in.UserID, in.TenantID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, prof)
+}
+
+// Introspect godoc
+// @Summary      Introspect access token
+// @Description  Validate and parse JWT token either from Authorization header or request body
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        token  body      introspectReq  false  "Token in body; otherwise uses Authorization Bearer"
+// @Success      200    {object}  map[string]interface{}
+// @Failure      400    {object}  map[string]string
+// @Failure      401    {object}  map[string]string
+// @Router       /v1/auth/introspect [post]
+func (h *Controller) introspect(c echo.Context) error {
+	var req introspectReq
+	_ = c.Bind(&req) // optional body
+	tok := req.Token
+	if tok == "" {
+		tok = bearerToken(c)
+	}
+	if tok == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required"})
+	}
+	out, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil {
+		// return inactive with error message for clarity
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// Revoke godoc
+// @Summary      Revoke token
+// @Description  Revoke a token; currently supports token_type="refresh"
+// @Tags         auth
+// @Accept       json
+// @Param        body  body  revokeReq  true  "token and token_type=refresh"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Router       /v1/auth/revoke [post]
+func (h *Controller) revoke(c echo.Context) error {
+	var req revokeReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	if err := h.svc.Revoke(c.Request().Context(), req.Token, req.TokenType); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ---- Password reset (stubs) ----
+func (h *Controller) resetPasswordRequest(c echo.Context) error {
+	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "password reset request not implemented"})
+}
+
+func (h *Controller) resetPasswordConfirm(c echo.Context) error {
+	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "password reset confirm not implemented"})
+}
+
+// ---- Magic link ----
+func (h *Controller) sendMagic(c echo.Context) error {
+	var req magicSendReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	tenID, err := uuid.Parse(req.TenantID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if err := h.magic.Send(c.Request().Context(), domain.MagicSendInput{
+		TenantID: tenID,
+		Email:    req.Email,
+		RedirectURL: req.RedirectURL,
+	}); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusAccepted)
+}
+
+func (h *Controller) verifyMagic(c echo.Context) error {
+	// accept ?token=... or JSON body
+	token := c.QueryParam("token")
+	if token == "" {
+		var req magicVerifyReq
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		}
+		if err := c.Validate(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+		}
+		token = req.Token
+	}
+	ua := c.Request().UserAgent()
+	ip := c.RealIP()
+	toks, err := h.magic.Verify(c.Request().Context(), domain.MagicVerifyInput{Token: token, UserAgent: ua, IP: ip})
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+}
+
+// ---- SSO/Social (stubs) ----
+var allowedProviders = map[string]struct{}{
+	"google":   {},
+	"github":   {},
+	"azuread":  {},
+}
+
+func (h *Controller) ssoStart(c echo.Context) error {
+	p := c.Param("provider")
+	if _, ok := allowedProviders[p]; !ok {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
+	}
+	// Query: tenant_id, redirect_url, state(optional), connection_id(optional), organization_id(optional)
+	tenIDStr := c.QueryParam("tenant_id")
+	redir := c.QueryParam("redirect_url")
+	state := c.QueryParam("state")
+	connID := c.QueryParam("connection_id")
+	orgID := c.QueryParam("organization_id")
+	// Ensure redirect is absolute if provided
+	if redir != "" {
+		if _, err := url.ParseRequestURI(redir); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect_url"})
+		}
+	}
+	tenID, err := uuid.Parse(tenIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	authURL, err := h.sso.Start(c.Request().Context(), domain.SSOStartInput{Provider: p, TenantID: tenID, RedirectURL: redir, State: state, ConnectionID: connID, OrganizationID: orgID})
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.Redirect(http.StatusFound, authURL)
+}
+
+func (h *Controller) ssoCallback(c echo.Context) error {
+	p := c.Param("provider")
+	if _, ok := allowedProviders[p]; !ok {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
+	}
+	toks, err := h.sso.Callback(c.Request().Context(), domain.SSOCallbackInput{Provider: p, Query: c.QueryParams(), UserAgent: c.Request().UserAgent(), IP: c.RealIP()})
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+}
+
+// ---- MFA: TOTP ----
+
+// TOTP Start godoc
+// @Summary      Start TOTP enrollment
+// @Description  Generates and stores a TOTP secret (disabled) and returns the secret and otpauth URL
+// @Tags         auth
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  mfaTOTPStartResp
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/totp/start [post]
+func (h *Controller) totpStart(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	secret, url, err := h.svc.StartTOTPEnrollment(c.Request().Context(), in.UserID, in.TenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, mfaTOTPStartResp{Secret: secret, OtpauthURL: url})
+}
+
+// TOTP Activate godoc
+// @Summary      Activate TOTP
+// @Description  Verifies a TOTP code for the stored secret and enables MFA
+// @Tags         auth
+// @Security     BearerAuth
+// @Accept       json
+// @Param        body  body  mfaTOTPActivateReq  true  "TOTP code"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/totp/activate [post]
+func (h *Controller) totpActivate(c echo.Context) error {
+	var req mfaTOTPActivateReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	if err := h.svc.ActivateTOTP(c.Request().Context(), in.UserID, req.Code); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// TOTP Disable godoc
+// @Summary      Disable TOTP
+// @Description  Disables TOTP for the user
+// @Tags         auth
+// @Security     BearerAuth
+// @Success      204
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/totp/disable [post]
+func (h *Controller) totpDisable(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	if err := h.svc.DisableTOTP(c.Request().Context(), in.UserID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ---- MFA: Backup Codes ----
+
+// Backup Generate godoc
+// @Summary      Generate MFA backup codes
+// @Description  Generates backup codes, stores their hashes, and returns the codes
+// @Tags         auth
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  mfaBackupGenerateReq  false  "count (default 10, max 20)"
+// @Success      200  {object}  mfaBackupGenerateResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/backup/generate [post]
+func (h *Controller) backupGenerate(c echo.Context) error {
+	var req mfaBackupGenerateReq
+	_ = c.Bind(&req) // optional body
+	if req.Count == 0 { req.Count = 10 }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	codes, err := h.svc.GenerateBackupCodes(c.Request().Context(), in.UserID, req.Count)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, mfaBackupGenerateResp{Codes: codes})
+}
+
+// Backup Consume godoc
+// @Summary      Consume an MFA backup code
+// @Description  Consumes a single-use backup code
+// @Tags         auth
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  mfaBackupConsumeReq  true  "backup code"
+// @Success      200  {object}  map[string]bool
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/backup/consume [post]
+func (h *Controller) backupConsume(c echo.Context) error {
+	var req mfaBackupConsumeReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	ok, err := h.svc.ConsumeBackupCode(c.Request().Context(), in.UserID, req.Code)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, map[string]bool{"consumed": ok})
+}
+
+// Backup Count godoc
+// @Summary      Count remaining MFA backup codes
+// @Description  Returns number of unused backup codes
+// @Tags         auth
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  mfaBackupCountResp
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/mfa/backup/count [get]
+func (h *Controller) backupCount(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	n, err := h.svc.CountRemainingBackupCodes(c.Request().Context(), in.UserID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, mfaBackupCountResp{Count: n})
+}
+
+// ---- MFA: Challenge Verify ----
+
+// Verify MFA godoc
+// @Summary      Verify MFA challenge
+// @Description  Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  mfaVerifyReq  true  "challenge_token, method, and code"
+// @Success      200   {object}  tokensResp
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /v1/auth/mfa/verify [post]
+func (h *Controller) verifyMFA(c echo.Context) error {
+	var req mfaVerifyReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	ua := c.Request().UserAgent()
+	ip := c.RealIP()
+	toks, err := h.svc.VerifyMFA(c.Request().Context(), domain.MFAVerifyInput{
+		ChallengeToken: req.ChallengeToken,
+		Method:         req.Method,
+		Code:           req.Code,
+		UserAgent:      ua,
+		IP:             ip,
+	})
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+}
