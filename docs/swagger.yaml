@@ -1,0 +1,437 @@
+basePath: /
+definitions:
+  controller.introspectReq:
+    properties:
+      token:
+        type: string
+    type: object
+  controller.loginReq:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - email
+    - password
+    - tenant_id
+    type: object
+  controller.mfaBackupConsumeReq:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  controller.mfaBackupCountResp:
+    properties:
+      count:
+        type: integer
+    type: object
+  controller.mfaBackupGenerateReq:
+    properties:
+      count:
+        maximum: 20
+        minimum: 1
+        type: integer
+    type: object
+  controller.mfaBackupGenerateResp:
+    properties:
+      codes:
+        items:
+          type: string
+        type: array
+    type: object
+  controller.mfaChallengeResp:
+    properties:
+      challenge_token:
+        type: string
+      methods:
+        items:
+          type: string
+        type: array
+    type: object
+  controller.mfaTOTPActivateReq:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  controller.mfaTOTPStartResp:
+    properties:
+      otpauth_url:
+        type: string
+      secret:
+        type: string
+    type: object
+  controller.mfaVerifyReq:
+    properties:
+      challenge_token:
+        type: string
+      code:
+        type: string
+      method:
+        enum:
+        - totp
+        - backup_code
+        type: string
+    required:
+    - challenge_token
+    - code
+    - method
+    type: object
+  controller.revokeReq:
+    properties:
+      token:
+        type: string
+      token_type:
+        type: string
+    required:
+    - token
+    - token_type
+    type: object
+  controller.tokensResp:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Central Authentication Service for multi-tenant identity management.
+  title: Guard CAS API
+  version: "1.0"
+paths:
+  /v1/auth/introspect:
+    post:
+      consumes:
+      - application/json
+      description: Validate and parse JWT token either from Authorization header or
+        request body
+      parameters:
+      - description: Token in body; otherwise uses Authorization Bearer
+        in: body
+        name: token
+        schema:
+          $ref: '#/definitions/controller.introspectReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Introspect access token
+      tags:
+      - auth
+  /v1/auth/me:
+    get:
+      description: Returns the authenticated user's profile derived from the access
+        token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get current user's profile
+      tags:
+      - auth
+  /v1/auth/mfa/backup/consume:
+    post:
+      consumes:
+      - application/json
+      description: Consumes a single-use backup code
+      parameters:
+      - description: backup code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.mfaBackupConsumeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Consume an MFA backup code
+      tags:
+      - auth
+  /v1/auth/mfa/backup/count:
+    get:
+      description: Returns number of unused backup codes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.mfaBackupCountResp'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Count remaining MFA backup codes
+      tags:
+      - auth
+  /v1/auth/mfa/backup/generate:
+    post:
+      consumes:
+      - application/json
+      description: Generates backup codes, stores their hashes, and returns the codes
+      parameters:
+      - description: count (default 10, max 20)
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/controller.mfaBackupGenerateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.mfaBackupGenerateResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate MFA backup codes
+      tags:
+      - auth
+  /v1/auth/mfa/totp/activate:
+    post:
+      consumes:
+      - application/json
+      description: Verifies a TOTP code for the stored secret and enables MFA
+      parameters:
+      - description: TOTP code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.mfaTOTPActivateReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Activate TOTP
+      tags:
+      - auth
+  /v1/auth/mfa/totp/disable:
+    post:
+      description: Disables TOTP for the user
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Disable TOTP
+      tags:
+      - auth
+  /v1/auth/mfa/totp/start:
+    post:
+      description: Generates and stores a TOTP secret (disabled) and returns the secret
+        and otpauth URL
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.mfaTOTPStartResp'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Start TOTP enrollment
+      tags:
+      - auth
+  /v1/auth/mfa/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies a TOTP or backup code against a challenge token and returns
+        access/refresh tokens.
+      parameters:
+      - description: challenge_token, method, and code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.mfaVerifyReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.tokensResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify MFA challenge
+      tags:
+      - auth
+  /v1/auth/password/login:
+    post:
+      consumes:
+      - application/json
+      description: Logs in with email/password. If MFA is enabled for the user, responds
+        202 with a challenge to complete via /v1/auth/mfa/verify.
+      parameters:
+      - description: email/password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.loginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.tokensResp'
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/controller.mfaChallengeResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Password login
+      tags:
+      - auth
+  /v1/auth/revoke:
+    post:
+      consumes:
+      - application/json
+      description: Revoke a token; currently supports token_type="refresh"
+      parameters:
+      - description: token and token_type=refresh
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.revokeReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Revoke token
+      tags:
+      - auth
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
