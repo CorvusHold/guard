@@ -75,3 +75,65 @@ jobs:
           DOCKER_CLI_HINTS: enabled
         run: |
           make test-e2e
+
+  perf:
+    name: Performance (k6)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Start API stack (db, valkey, api)
+        run: |
+          docker compose up -d db valkey api
+
+      - name: Wait for API readiness
+        run: |
+          for i in {1..120}; do \
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz || true); \
+            if [ "$code" = "200" ]; then echo "API ready"; break; fi; \
+            echo "Waiting for API... ($i)"; sleep 1; \
+            if [ "$i" -eq 120 ]; then echo "API not ready" >&2; exit 1; fi; \
+          done
+
+      - name: Seed test data for k6 (.env.k6)
+        env:
+          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
+          REDIS_ADDR: localhost:6380
+        run: |
+          make seed-test
+
+      - name: k6 smoke
+        run: |
+          make k6-smoke
+
+      - name: k6 rate limit (short)
+        env:
+          K6_ITERATIONS: '120'
+        run: |
+          make k6-rate-limit-login
+
+      - name: Tear down stack
+        if: always()
+        run: |
+          docker compose down -v

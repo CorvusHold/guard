@@ -10,7 +10,8 @@ export const options = {
   thresholds: {
     // Ensure we actually hit rate limiting at least once
     rate_limited: ['count>0'],
-    http_req_failed: ['rate<0.05'],
+    // Accept 200/202/429 as success for this scenario
+    'checks{check:status is 200/202/429}': ['rate>0.99'],
   },
 };
 

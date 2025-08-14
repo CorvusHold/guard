@@ -109,6 +109,22 @@ Example override:
 K6_BASE_URL=http://api:8080 docker compose run --rm k6 k6 run /scripts/smoke.js
 ```
 
+### Seeding for k6 scenarios
+
+Prepare a default tenant/user and write credentials to `.env.k6` used by k6 Make targets:
+
+```bash
+make seed-test            # creates/reuses tenant+user and writes K6_* vars to .env.k6
+make k6-login-stress      # uses .env.k6 automatically
+make k6-rate-limit-login  # uses .env.k6 automatically
+```
+
+You can override defaults:
+
+```bash
+TENANT_NAME=my-tenant EMAIL=dev@example.com PASSWORD='Password123!' make seed-test
+```
+
 ## Client IP behind proxies/CDN (Cloudflare)
 
 If you deploy behind Cloudflare or another proxy, configure Echo to extract the real client IP from proxy headers so that rate limiting keys and logs attribute correctly.

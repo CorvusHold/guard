@@ -1,8 +1,10 @@
 # macOS finder artifacts
 .DS_Store
+todo
 
 # Local env file
 .env
+.env.k6
 
 # Build artifacts
 bin

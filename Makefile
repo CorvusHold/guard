@@ -5,7 +5,7 @@ SHELL := /bin/bash
 .PHONY: compose-up compose-down compose-up-test compose-down-test dev \
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
-        swagger obsv-up obsv-down k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         grafana-url prometheus-url alertmanager-url
 
 compose-up:
@@ -98,24 +98,29 @@ alertmanager-url:
 # ---- k6 scenarios (via compose service 'k6') ----
 
 k6-smoke:
-	docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"'
 
 k6-login-stress:
-	docker compose run --rm \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm \
 		-e K6_BASE_URL=http://api:8080 \
-		-e K6_TENANT_ID="$(TENANT_ID)" \
-		-e K6_EMAIL="$(EMAIL)" \
-		-e K6_PASSWORD="$(PASSWORD)" \
-		k6 "k6 run /scripts/login_stress.js"
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
+		k6 "k6 run /scripts/login_stress.js"'
 
 k6-rate-limit-login:
-	docker compose run --rm \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose run --rm \
 		-e K6_BASE_URL=http://api:8080 \
-		-e K6_TENANT_ID="$(TENANT_ID)" \
-		-e K6_EMAIL="$(EMAIL)" \
-		-e K6_PASSWORD="$(PASSWORD)" \
-		-e K6_ITERATIONS=300 \
-		k6 "k6 run /scripts/rate_limit_login.js"
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
+		-e K6_ITERATIONS="$$K6_ITERATIONS" \
+		k6 "k6 run /scripts/rate_limit_login.js"'
 
 k6-mfa-invalid:
-	docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
+
+# ---- Seeding helpers ----
+
+# Seed default tenant/user and write credentials into .env.k6
+# Variables you can override: TENANT_NAME, EMAIL, PASSWORD, ENABLE_MFA=1
+seed-test:
+	bash -lc 'set -a; [ -f .env ] && source .env; set +a; \
+	go run ./cmd/seed default --tenant-name "$$TENANT_NAME" --email "$$EMAIL" --password "$$PASSWORD" | tee .env.k6 >/dev/null; \
+	echo "Wrote k6 env to .env.k6"'
