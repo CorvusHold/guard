@@ -91,10 +91,7 @@ func TestHTTP_MFA_TOTP_Enrollment_Activate_Disable(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("totp start expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var startResp struct{ 
-        Secret     string `json:"secret"`
-        OtpauthURL string `json:"otpauth_url"`
-    }
+	var startResp mfaTOTPStartResp
 	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&startResp); err != nil {
 		t.Fatalf("decode start: %v", err)
 	}
@@ -138,7 +135,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("backup generate expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var genResp struct{ Codes []string }
+	var genResp mfaBackupGenerateResp
 	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&genResp); err != nil {
 		t.Fatalf("decode generate: %v", err)
 	}
@@ -150,7 +147,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	recC := httptest.NewRecorder()
 	e.ServeHTTP(recC, reqC)
 	if recC.Code != http.StatusOK { t.Fatalf("count expected 200, got %d: %s", recC.Code, recC.Body.String()) }
-	var cntResp struct{ Count int64 }
+	var cntResp mfaBackupCountResp
 	if err := json.NewDecoder(bytes.NewReader(recC.Body.Bytes())).Decode(&cntResp); err != nil {
 		t.Fatalf("decode count: %v", err)
 	}
@@ -164,11 +161,11 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK { t.Fatalf("consume expected 200, got %d: %s", rec2.Code, rec2.Body.String()) }
-	var consResp map[string]bool
+	var consResp mfaBackupConsumeResp
 	if err := json.NewDecoder(bytes.NewReader(rec2.Body.Bytes())).Decode(&consResp); err != nil {
 		t.Fatalf("decode consume: %v", err)
 	}
-	if !consResp["consumed"] { t.Fatalf("expected consumed true") }
+	if !consResp.Consumed { t.Fatalf("expected consumed true") }
 
 	// consume again -> false
 	req2b := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
@@ -177,17 +174,17 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	rec3 := httptest.NewRecorder()
 	e.ServeHTTP(rec3, req2b)
 	if rec3.Code != http.StatusOK { t.Fatalf("re-consume expected 200, got %d: %s", rec3.Code, rec3.Body.String()) }
-	var consResp2 map[string]bool
+	var consResp2 mfaBackupConsumeResp
 	if err := json.NewDecoder(bytes.NewReader(rec3.Body.Bytes())).Decode(&consResp2); err != nil {
 		t.Fatalf("decode re-consume: %v", err)
 	}
-	if consResp2["consumed"] { t.Fatalf("expected consumed false on second attempt") }
+	if consResp2.Consumed { t.Fatalf("expected consumed false on second attempt") }
 
 	// count -> 4
 	rec4 := httptest.NewRecorder()
 	e.ServeHTTP(rec4, reqC)
 	if rec4.Code != http.StatusOK { t.Fatalf("count2 expected 200, got %d: %s", rec4.Code, rec4.Body.String()) }
-	var cntResp2 struct{ Count int64 }
+	var cntResp2 mfaBackupCountResp
 	if err := json.NewDecoder(bytes.NewReader(rec4.Body.Bytes())).Decode(&cntResp2); err != nil {
 		t.Fatalf("decode count2: %v", err)
 	}

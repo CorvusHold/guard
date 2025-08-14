@@ -61,6 +61,8 @@ lint:
 swagger:
 	# Install swag if missing: go install github.com/swaggo/swag/cmd/swag@latest
 	bash -lc 'swag init -g cmd/api/main.go -o docs'
+	bash -lc 'cp docs/swagger.json sdk/spec/openapi.json'
+	bash -lc 'cp docs/swagger.yaml sdk/spec/openapi.yaml'
 
 # Quick checks for local services
 db-check:

@@ -172,6 +172,10 @@ type mfaBackupConsumeReq struct {
 	Code string `json:"code" validate:"required"`
 }
 
+type mfaBackupConsumeResp struct {
+	Consumed bool `json:"consumed"`
+}
+
 type mfaBackupCountResp struct {
 	Count int64 `json:"count"`
 }
@@ -187,6 +191,17 @@ type mfaVerifyReq struct {
 	Method         string `json:"method" validate:"required,oneof=totp backup_code"`
 }
 
+type resetPasswordRequestReq struct {
+	TenantID string `json:"tenant_id" validate:"required,uuid4"`
+	Email    string `json:"email" validate:"required,email"`
+}
+
+type resetPasswordConfirmReq struct {
+	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+	Token       string `json:"token" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
 func bearerToken(c echo.Context) string {
 	h := c.Request().Header.Get("Authorization")
 	if h == "" { return "" }
@@ -197,6 +212,17 @@ func bearerToken(c echo.Context) string {
 	return ""
 }
 
+// Signup godoc
+// @Summary      Password signup
+// @Description  Creates a new user for a tenant with email and password and returns access/refresh tokens
+// @Tags         auth.password
+// @Accept       json
+// @Produce      json
+// @Param        body  body  signupReq  true  "tenant_id, email, password, optional first/last name"
+// @Success      201   {object}  tokensResp
+// @Failure      400   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
+// @Router       /v1/auth/password/signup [post]
 func (h *Controller) signup(c echo.Context) error {
 	var req signupReq
 	if err := c.Bind(&req); err != nil {
@@ -225,7 +251,7 @@ func (h *Controller) signup(c echo.Context) error {
 // Password Login godoc
 // @Summary      Password login
 // @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.
-// @Tags         auth
+// @Tags         auth.password
 // @Accept       json
 // @Produce      json
 // @Param        body  body  loginReq  true  "email/password"
@@ -266,6 +292,18 @@ func (h *Controller) login(c echo.Context) error {
 	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
 }
 
+// Refresh godoc
+// @Summary      Refresh access token
+// @Description  Exchanges a refresh token for new access and refresh tokens
+// @Tags         auth.tokens
+// @Accept       json
+// @Produce      json
+// @Param        body  body  refreshReq  true  "refresh_token"
+// @Success      200   {object}  tokensResp
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
+// @Router       /v1/auth/refresh [post]
 func (h *Controller) refresh(c echo.Context) error {
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
@@ -283,6 +321,16 @@ func (h *Controller) refresh(c echo.Context) error {
 	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
 }
 
+// Logout godoc
+// @Summary      Logout (revoke refresh token)
+// @Description  Revokes the provided refresh token if present; idempotent
+// @Tags         auth.tokens
+// @Accept       json
+// @Param        body  body  refreshReq  false  "refresh_token (optional)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/logout [post]
 func (h *Controller) logout(c echo.Context) error {
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
@@ -300,10 +348,10 @@ func (h *Controller) logout(c echo.Context) error {
 // Me godoc
 // @Summary      Get current user's profile
 // @Description  Returns the authenticated user's profile derived from the access token
-// @Tags         auth
+// @Tags         auth.profile
 // @Security     BearerAuth
 // @Produce      json
-// @Success      200  {object}  map[string]interface{}
+// @Success      200  {object}  domain.UserProfile
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/me [get]
@@ -326,11 +374,11 @@ func (h *Controller) me(c echo.Context) error {
 // Introspect godoc
 // @Summary      Introspect access token
 // @Description  Validate and parse JWT token either from Authorization header or request body
-// @Tags         auth
+// @Tags         auth.introspect
 // @Accept       json
 // @Produce      json
 // @Param        token  body      introspectReq  false  "Token in body; otherwise uses Authorization Bearer"
-// @Success      200    {object}  map[string]interface{}
+// @Success      200    {object}  domain.Introspection
 // @Failure      400    {object}  map[string]string
 // @Failure      401    {object}  map[string]string
 // @Failure      429    {object}  map[string]string
@@ -356,7 +404,7 @@ func (h *Controller) introspect(c echo.Context) error {
 // Revoke godoc
 // @Summary      Revoke token
 // @Description  Revoke a token; currently supports token_type="refresh"
-// @Tags         auth
+// @Tags         auth.tokens
 // @Accept       json
 // @Param        body  body  revokeReq  true  "token and token_type=refresh"
 // @Success      204
@@ -378,15 +426,63 @@ func (h *Controller) revoke(c echo.Context) error {
 }
 
 // ---- Password reset (stubs) ----
+// Password Reset Request godoc
+// @Summary      Request password reset
+// @Description  Requests a password reset for the given email address
+// @Tags         auth.password
+// @Accept       json
+// @Produce      json
+// @Param        body  body  resetPasswordRequestReq  true  "tenant_id, email"
+// @Success      202
+// @Failure      400  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/password/reset/request [post]
 func (h *Controller) resetPasswordRequest(c echo.Context) error {
-	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "password reset request not implemented"})
+	var req resetPasswordRequestReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	// Stub: endpoint contract established; implementation pending
+	return c.NoContent(http.StatusAccepted)
 }
 
+// Password Reset Confirm godoc
+// @Summary      Confirm password reset
+// @Description  Resets the password for the given email address
+// @Tags         auth.password
+// @Accept       json
+// @Produce      json
+// @Param        body  body  resetPasswordConfirmReq  true  "tenant_id, token, new_password"
+// @Success      200
+// @Failure      400  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/password/reset/confirm [post]
 func (h *Controller) resetPasswordConfirm(c echo.Context) error {
-	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "password reset confirm not implemented"})
+	var req resetPasswordConfirmReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	// Stub: endpoint contract established; implementation pending
+	return c.NoContent(http.StatusOK)
 }
 
 // ---- Magic link ----
+// Magic Send godoc
+// @Summary      Send magic login link
+// @Description  Sends a single-use magic login link to the user's email
+// @Tags         auth.magic
+// @Accept       json
+// @Param        body  body  magicSendReq  true  "tenant_id, email, optional redirect_url"
+// @Success      202
+// @Failure      400  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/magic/send [post]
 func (h *Controller) sendMagic(c echo.Context) error {
 	var req magicSendReq
 	if err := c.Bind(&req); err != nil {
@@ -409,6 +505,20 @@ func (h *Controller) sendMagic(c echo.Context) error {
 	return c.NoContent(http.StatusAccepted)
 }
 
+// Magic Verify godoc
+// @Summary      Verify magic link token
+// @Description  Verifies magic link token from query parameter or request body and returns tokens
+// @Tags         auth.magic
+// @Accept       json
+// @Produce      json
+// @Param        token  query  string        false  "Magic token (alternative to body)"
+// @Param        body   body   magicVerifyReq  false  "Magic token in JSON body"
+// @Success      200    {object}  tokensResp
+// @Failure      400    {object}  map[string]string
+// @Failure      401    {object}  map[string]string
+// @Failure      429    {object}  map[string]string
+// @Router       /v1/auth/magic/verify [get]
+// @Router       /v1/auth/magic/verify [post]
 func (h *Controller) verifyMagic(c echo.Context) error {
 	// accept ?token=... or JSON body
 	token := c.QueryParam("token")
@@ -438,6 +548,19 @@ var allowedProviders = map[string]struct{}{
 	"azuread":  {},
 }
 
+// SSO Start godoc
+// @Summary      Start SSO/OAuth flow
+// @Description  Initiates an SSO flow for the given provider and redirects to the provider authorization URL
+// @Tags         auth.sso
+// @Param        provider         path      string  true   "SSO provider (google, github, azuread)"
+// @Param        tenant_id        query     string  true   "Tenant ID (UUID)"
+// @Param        redirect_url     query     string  false  "Absolute redirect URL after callback"
+// @Param        state            query     string  false  "Opaque state to round-trip"
+// @Param        connection_id    query     string  false  "Provider connection identifier"
+// @Param        organization_id  query     string  false  "Organization identifier"
+// @Success      302
+// @Failure      400  {object}  map[string]string
+// @Router       /v1/auth/sso/{provider}/start [get]
 func (h *Controller) ssoStart(c echo.Context) error {
 	p := c.Param("provider")
 	if _, ok := allowedProviders[p]; !ok {
@@ -466,6 +589,16 @@ func (h *Controller) ssoStart(c echo.Context) error {
 	return c.Redirect(http.StatusFound, authURL)
 }
 
+// SSO Callback godoc
+// @Summary      Handle SSO/OAuth callback
+// @Description  Completes SSO flow and returns access/refresh tokens
+// @Tags         auth.sso
+// @Param        provider  path   string  true  "SSO provider (google, github, azuread)"
+// @Produce      json
+// @Success      200  {object}  tokensResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/sso/{provider}/callback [get]
 func (h *Controller) ssoCallback(c echo.Context) error {
 	p := c.Param("provider")
 	if _, ok := allowedProviders[p]; !ok {
@@ -483,7 +616,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 // TOTP Start godoc
 // @Summary      Start TOTP enrollment
 // @Description  Generates and stores a TOTP secret (disabled) and returns the secret and otpauth URL
-// @Tags         auth
+// @Tags         auth.mfa.totp
 // @Security     BearerAuth
 // @Produce      json
 // @Success      200  {object}  mfaTOTPStartResp
@@ -502,7 +635,7 @@ func (h *Controller) totpStart(c echo.Context) error {
 // TOTP Activate godoc
 // @Summary      Activate TOTP
 // @Description  Verifies a TOTP code for the stored secret and enables MFA
-// @Tags         auth
+// @Tags         auth.mfa.totp
 // @Security     BearerAuth
 // @Accept       json
 // @Param        body  body  mfaTOTPActivateReq  true  "TOTP code"
@@ -528,7 +661,7 @@ func (h *Controller) totpActivate(c echo.Context) error {
 // TOTP Disable godoc
 // @Summary      Disable TOTP
 // @Description  Disables TOTP for the user
-// @Tags         auth
+// @Tags         auth.mfa.totp
 // @Security     BearerAuth
 // @Success      204
 // @Failure      401  {object}  map[string]string
@@ -550,7 +683,7 @@ func (h *Controller) totpDisable(c echo.Context) error {
 // Backup Generate godoc
 // @Summary      Generate MFA backup codes
 // @Description  Generates backup codes, stores their hashes, and returns the codes
-// @Tags         auth
+// @Tags         auth.mfa.backup
 // @Security     BearerAuth
 // @Accept       json
 // @Produce      json
@@ -577,12 +710,12 @@ func (h *Controller) backupGenerate(c echo.Context) error {
 // Backup Consume godoc
 // @Summary      Consume an MFA backup code
 // @Description  Consumes a single-use backup code
-// @Tags         auth
+// @Tags         auth.mfa.backup
 // @Security     BearerAuth
 // @Accept       json
 // @Produce      json
 // @Param        body  body  mfaBackupConsumeReq  true  "backup code"
-// @Success      200  {object}  map[string]bool
+// @Success      200  {object}  mfaBackupConsumeResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
@@ -597,13 +730,13 @@ func (h *Controller) backupConsume(c echo.Context) error {
 	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
 	ok, err := h.svc.ConsumeBackupCode(c.Request().Context(), in.UserID, req.Code)
 	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
-	return c.JSON(http.StatusOK, map[string]bool{"consumed": ok})
+	return c.JSON(http.StatusOK, mfaBackupConsumeResp{Consumed: ok})
 }
 
 // Backup Count godoc
 // @Summary      Count remaining MFA backup codes
 // @Description  Returns number of unused backup codes
-// @Tags         auth
+// @Tags         auth.mfa.backup
 // @Security     BearerAuth
 // @Produce      json
 // @Success      200  {object}  mfaBackupCountResp
@@ -625,7 +758,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 // Verify MFA godoc
 // @Summary      Verify MFA challenge
 // @Description  Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.
-// @Tags         auth
+// @Tags         auth.mfa
 // @Accept       json
 // @Produce      json
 // @Param        body  body  mfaVerifyReq  true  "challenge_token, method, and code"

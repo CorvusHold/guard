@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	domain "github.com/corvusHold/guard/internal/auth/domain"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	"github.com/corvusHold/guard/internal/config"
@@ -86,11 +87,11 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	if irec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", irec.Code, irec.Body.String())
 	}
-	var iout map[string]any
+	var iout domain.Introspection
 	if err := json.NewDecoder(bytes.NewReader(irec.Body.Bytes())).Decode(&iout); err != nil {
 		t.Fatalf("decode introspect: %v", err)
 	}
-	if act, _ := iout["active"].(bool); !act {
+	if !iout.Active {
 		t.Fatalf("expected active=true in introspection")
 	}
 
@@ -102,11 +103,11 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	if mrec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", mrec.Code, mrec.Body.String())
 	}
-	var profile map[string]any
+	var profile domain.UserProfile
 	if err := json.NewDecoder(bytes.NewReader(mrec.Body.Bytes())).Decode(&profile); err != nil {
 		t.Fatalf("decode profile: %v", err)
 	}
-	if profile["email"] != email { t.Fatalf("email mismatch: %v", profile["email"]) }
+	if profile.Email != email { t.Fatalf("email mismatch: %v", profile.Email) }
 
 	// revoke refresh token and ensure refresh fails
 	rb, _ := json.Marshal(map[string]string{"token": stoks.RefreshToken, "token_type": "refresh"})

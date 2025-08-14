@@ -55,6 +55,16 @@ func toTimeString(t pgtype.Timestamptz) string {
 	return t.Time.UTC().Format(time.RFC3339)
 }
 
+// Create Tenant godoc
+// @Summary      Create tenant
+// @Description  Creates a new tenant
+// @Tags         tenants
+// @Accept       json
+// @Produce      json
+// @Param        body  body  createTenantReq  true  "name"
+// @Success      201   {object}  tenantResp
+// @Failure      400   {object}  map[string]string
+// @Router       /tenants [post]
 func (h *Controller) createTenant(c echo.Context) error {
 	var req createTenantReq
 	if err := c.Bind(&req); err != nil {
@@ -76,6 +86,16 @@ func (h *Controller) createTenant(c echo.Context) error {
 	})
 }
 
+// Get Tenant by ID godoc
+// @Summary      Get tenant by ID
+// @Description  Fetch a tenant by UUID
+// @Tags         tenants
+// @Produce      json
+// @Param        id   path   string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  tenantResp
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /tenants/{id} [get]
 func (h *Controller) getTenantByID(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -95,6 +115,16 @@ func (h *Controller) getTenantByID(c echo.Context) error {
 	})
 }
 
+// Get Tenant by Name godoc
+// @Summary      Get tenant by name
+// @Description  Fetch a tenant by unique name
+// @Tags         tenants
+// @Produce      json
+// @Param        name  path   string  true  "Tenant name"
+// @Success      200  {object}  tenantResp
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /tenants/by-name/{name} [get]
 func (h *Controller) getTenantByName(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -113,6 +143,14 @@ func (h *Controller) getTenantByName(c echo.Context) error {
 	})
 }
 
+// Deactivate Tenant godoc
+// @Summary      Deactivate tenant
+// @Description  Deactivates a tenant by ID
+// @Tags         tenants
+// @Param        id   path   string  true  "Tenant ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Router       /tenants/{id}/deactivate [patch]
 func (h *Controller) deactivateTenant(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -140,6 +178,18 @@ type listResponse struct {
 	TotalPages int          `json:"total_pages"`
 }
 
+// List Tenants godoc
+// @Summary      List tenants
+// @Description  Lists tenants with optional filters and pagination
+// @Tags         tenants
+// @Produce      json
+// @Param        q          query   string  false  "Search query"
+// @Param        active     query   int     false  "-1 any, 1 active, 0 inactive"
+// @Param        page       query   int     false  "Page number"
+// @Param        page_size  query   int     false  "Page size"
+// @Success      200  {object}  listResponse
+// @Failure      400  {object}  map[string]string
+// @Router       /tenants [get]
 func (h *Controller) listTenants(c echo.Context) error {
 	// Allow both query binding and manual fallback to avoid validation dependence
 	q := listQuery{Active: -1}

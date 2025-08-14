@@ -27,6 +27,7 @@ import (
 	// Auth DDD slice (factory)
 	_ "github.com/corvusHold/guard/docs" // side-effect import of generated docs
 	auth "github.com/corvusHold/guard/internal/auth"
+	settings "github.com/corvusHold/guard/internal/settings"
 	echoSwagger "github.com/swaggo/echo-swagger"
 	pprof "net/http/pprof"
 )
@@ -137,6 +138,9 @@ func main() {
 	e.Validator = validation.New()
 
 	// Register domain routes via factories
+	// Settings (tenant-scoped settings management)
+	settings.Register(e, pgPool, cfg)
+	// Tenants and Auth
 	tenants.Register(e, pgPool)
 	auth.Register(e, pgPool, cfg)
 

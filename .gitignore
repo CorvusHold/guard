@@ -1,6 +1,6 @@
 # macOS finder artifacts
 .DS_Store
-todo
+# todo
 
 # Local env file
 .env
