@@ -1,0 +1,34 @@
+name: SDK TS Conformance (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ts-conformance:
+    name: TS SDK Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start test stack (docker-compose.test)
+        run: |
+          make conformance-up
+
+      - name: Seed default tenant and user (with MFA)
+        run: |
+          # Seed prints KEY=VALUE lines; store them for Makefile conformance to source
+          docker compose -f docker-compose.test.yml exec -T api_test \
+            sh -lc 'go run ./cmd/seed default --enable-mfa' | tee .env.conformance
+
+      - name: Run TS SDK conformance (inside container)
+        run: |
+          make conformance
+
+      - name: Tear down test stack
+        if: always()
+        run: |
+          make conformance-down

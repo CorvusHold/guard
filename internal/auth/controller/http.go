@@ -14,6 +14,7 @@ import (
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/corvusHold/guard/internal/platform/ratelimit"
 	"github.com/corvusHold/guard/internal/platform/validation"
+	"github.com/corvusHold/guard/internal/config"
 )
 
 type Controller struct {
@@ -23,10 +24,46 @@ type Controller struct {
 	// optional rate limit dependencies
 	settings sdomain.Service
 	rl       ratelimit.Store
+	cfg      config.Config
 }
 
+// magicTokenForTest issues a magic link token without sending email. Test/CI only.
+func (h *Controller) magicTokenForTest(c echo.Context) error {
+    // Only allow in non-production environments
+    if strings.EqualFold(h.cfg.AppEnv, "production") {
+        return c.NoContent(http.StatusNotFound)
+    }
+    var req magicSendReq
+    if err := c.Bind(&req); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+    }
+    if err := c.Validate(&req); err != nil {
+        return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+    }
+    tenID, err := uuid.Parse(req.TenantID)
+    if err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+    }
+    tok, err := h.magic.CreateForTest(c.Request().Context(), domain.MagicSendInput{
+        TenantID:    tenID,
+        Email:       req.Email,
+        RedirectURL: req.RedirectURL,
+    })
+    if err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.JSON(http.StatusOK, magicTokenResp{Token: tok})
+}
+
+// New constructs controller with loaded config (backward compatible for tests).
 func New(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService) *Controller {
-	return &Controller{svc: svc, magic: magic, sso: sso}
+    cfg, _ := config.Load()
+    return NewWithConfig(svc, magic, sso, cfg)
+}
+
+// NewWithConfig allows passing explicit config.
+func NewWithConfig(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService, cfg config.Config) *Controller {
+    return &Controller{svc: svc, magic: magic, sso: sso, cfg: cfg}
 }
 
 // WithRateLimit enables tenant-aware, store-backed rate limiting when provided.
@@ -87,6 +124,8 @@ func (h *Controller) Register(e *echo.Echo) {
 	g.POST("/magic/send", h.sendMagic, rlMagic)
 	g.POST("/magic/verify", h.verifyMagic, rlMagic)
 	g.GET("/magic/verify", h.verifyMagic, rlMagic)
+	// Test-only: fetch raw magic token (only in non-production envs)
+	g.POST("/magic/token", h.magicTokenForTest, rlMagic)
 
 	// SSO / Social providers
 	g.GET("/sso/:provider/start", h.ssoStart, rlSSO)
@@ -149,6 +188,10 @@ type magicSendReq struct {
 
 type magicVerifyReq struct {
 	Token string `json:"token" validate:"required"`
+}
+
+type magicTokenResp struct {
+	Token string `json:"token"`
 }
 
 type mfaTOTPStartResp struct {

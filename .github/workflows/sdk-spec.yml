@@ -1,0 +1,61 @@
+name: SDK Spec Guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-spec:
+    name: SDK Spec / Lint / Diff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install CLI tools
+        run: |
+          npm i -g @redocly/cli@latest swagger-cli@4 openapi-diff@0.24.1
+
+      - name: Validate OpenAPI (docs)
+        run: |
+          swagger-cli validate docs/swagger.json
+          redocly lint docs/swagger.json || true
+
+      - name: Validate OpenAPI (sdk/spec)
+        run: |
+          swagger-cli validate sdk/spec/openapi.json
+          redocly lint sdk/spec/openapi.json || true
+
+      - name: Check spec sync (docs -> sdk/spec)
+        run: |
+          node sdk/spec/scripts/sync-spec.mjs
+
+      - name: Generate operations manifest (check mode)
+        run: |
+          node sdk/spec/scripts/generate-operations.mjs
+
+      - name: Contract diff (block on breaking changes)
+        run: |
+          # Compare base branch's pinned SDK spec to current docs/swagger.json
+          # On PRs, use base branch spec if available; otherwise fallback to current pinned spec
+          BASE_SPEC="sdk/spec/openapi.json"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}" || true
+            if git cat-file -e "origin/${{ github.base_ref }}:sdk/spec/openapi.json" 2>/dev/null; then
+              git show "origin/${{ github.base_ref }}:sdk/spec/openapi.json" > /tmp/openapi-base.json || true
+              if [ -s /tmp/openapi-base.json ]; then
+                BASE_SPEC="/tmp/openapi-base.json"
+              fi
+            fi
+          fi
+          openapi-diff "$BASE_SPEC" "docs/swagger.json"

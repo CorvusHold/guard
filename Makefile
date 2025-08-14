@@ -6,7 +6,8 @@ SHELL := /bin/bash
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
-        grafana-url prometheus-url alertmanager-url
+        grafana-url prometheus-url alertmanager-url \
+        api-test-wait conformance-up conformance conformance-down mailhog-url
 
 compose-up:
 	docker compose up -d
@@ -57,6 +58,32 @@ test-e2e: compose-up-test db-wait-test redis-test-ping migrate-up-test
 lint:
 	go vet ./...
 
+# ---- Conformance runner (TS SDK) ----
+
+# Wait for API test container to be ready (poll /readyz on host port 8081)
+api-test-wait:
+	bash -lc 'for i in {1..60}; do curl -fsS http://localhost:8081/readyz >/dev/null 2>&1 && echo "API is ready" && exit 0; echo "Waiting for API... ($$i)"; sleep 1; done; echo "API not ready after timeout" >&2; exit 1'
+
+# Bring up full test stack (db/redis/mailhog/api)
+conformance-up:
+	docker compose -f docker-compose.test.yml up -d
+
+# Run SDK conformance inside container. You can provide TENANT_ID/EMAIL/PASSWORD/TOTP_SECRET envs
+# Optionally create a .env.conformance file and they will be sourced automatically.
+conformance: conformance-up
+	make migrate-up-test
+	make api-test-wait
+	bash -lc 'set -a; [ -f .env.conformance ] && source .env.conformance; set +a; \
+	docker compose -f docker-compose.test.yml run --rm \
+	  -e BASE_URL=http://api_test:8080 \
+	  -e TENANT_ID="$$TENANT_ID" -e EMAIL="$$EMAIL" -e PASSWORD="$$PASSWORD" \
+	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
+	  $${SDK_SERVICE:-sdk_conformance}'
+
+# Tear down the test stack (including volumes)
+conformance-down:
+	docker compose -f docker-compose.test.yml down -v
+
 # Generate Swagger docs (requires: swag CLI)
 swagger:
 	# Install swag if missing: go install github.com/swaggo/swag/cmd/swag@latest
@@ -96,6 +123,9 @@ prometheus-url:
 
 alertmanager-url:
 	@echo "Alertmanager: http://localhost:9093"
+
+mailhog-url:
+	@echo "MailHog: http://localhost:8025"
 
 # ---- k6 scenarios (via compose service 'k6') ----
 

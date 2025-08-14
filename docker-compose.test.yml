@@ -29,6 +29,67 @@ services:
       timeout: 5s
       retries: 10
 
+  mailhog_test:
+    image: mailhog/mailhog:latest
+    container_name: guard_mailhog_test
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI http://localhost:8025
+
+  api_test:
+    image: golang:1.22
+    container_name: guard_api_test
+    working_dir: /app
+    command: sh -c "go mod download && go run ./cmd/api"
+    environment:
+      APP_ENV: test
+      APP_ADDR: ":8080"
+      DATABASE_URL: "postgres://guard:guard@db_test:5432/guard_test?sslmode=disable"
+      REDIS_ADDR: "valkey_test:6379"
+      REDIS_DB: 0
+      JWT_SIGNING_KEY: "test-secret-change-me"
+      # Email via MailHog for conformance magic link flows
+      EMAIL_PROVIDER: "smtp"
+      SMTP_HOST: "mailhog_test"
+      SMTP_PORT: 1025
+      SMTP_FROM: "no-reply@test.local"
+    volumes:
+      - ./:/app
+    ports:
+      - "8081:8080"   # Host API at http://localhost:8081
+    depends_on:
+      db_test:
+        condition: service_healthy
+      valkey_test:
+        condition: service_healthy
+      mailhog_test:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080 && printf \"GET /readyz HTTP/1.0\\r\\n\\r\\n\" >&3 && head -n 1 <&3 | grep -q \" 200 \"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  sdk_conformance:
+    image: node:20-alpine
+    container_name: guard_sdk_conformance
+    profiles: ["conformance"]
+    working_dir: /app/sdk/ts
+    entrypoint: ["/bin/sh", "-lc"]
+    command: "npm ci && npm run build && npm test && npm run conformance"
+    environment:
+      BASE_URL: http://api_test:8080
+      TENANT_ID: ""
+      EMAIL: ""
+      PASSWORD: ""
+      TOTP_SECRET: ""
+      AUTO_MAGIC_TOKEN: "true"
+    volumes:
+      - ./:/app
+    depends_on:
+      api_test:
+        condition: service_healthy
+
 volumes:
   db_test_data:
   valkey_test_data:
