@@ -37,11 +37,12 @@ services:
       - "8025:8025"   # Web UI http://localhost:8025
 
   api_test:
-    image: golang:1.22
+    image: golang:1.24
     container_name: guard_api_test
     working_dir: /app
     command: sh -c "go mod download && go run ./cmd/api"
     environment:
+      GOTOOLCHAIN: auto
       APP_ENV: test
       APP_ADDR: ":8080"
       DATABASE_URL: "postgres://guard:guard@db_test:5432/guard_test?sslmode=disable"
@@ -75,8 +76,7 @@ services:
     container_name: guard_sdk_conformance
     profiles: ["conformance"]
     working_dir: /app/sdk/ts
-    entrypoint: ["/bin/sh", "-lc"]
-    command: "npm ci && npm run build && npm test && npm run conformance"
+    command: ["/bin/sh", "-lc", "npm ci && npm run build && npm test && npm run conformance"]
     environment:
       BASE_URL: http://api_test:8080
       TENANT_ID: ""
@@ -86,6 +86,7 @@ services:
       AUTO_MAGIC_TOKEN: "true"
     volumes:
       - ./:/app
+      - ./.npm-cache:/root/.npm
     depends_on:
       api_test:
         condition: service_healthy

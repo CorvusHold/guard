@@ -8,7 +8,8 @@
     "setup": {
       "type": "object",
       "properties": {
-        "env": { "type": "object", "additionalProperties": { "type": "string" } }
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "waitMs": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
@@ -40,6 +41,7 @@
             },
             "additionalProperties": false
           },
+          "waitMs": { "type": "integer", "minimum": 0 },
           "store": {
             "type": "object",
             "description": "Store selected values from the response by JSONPath (sdk runner responsibility)",

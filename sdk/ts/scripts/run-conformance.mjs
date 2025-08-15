@@ -73,6 +73,10 @@ function getByDotPath(obj, dotPath) {
 function matchesSubset(expected, actual) {
   if (expected == null) return true;
   if (typeof expected !== 'object') return expected === actual;
+  // Treat empty object {} as an existence check (any type), e.g., { access_token: {} }
+  if (!Array.isArray(expected) && Object.keys(expected).length === 0) {
+    return actual !== undefined && actual !== null;
+  }
   if (typeof actual !== 'object' || actual == null) return false;
   for (const [k, v] of Object.entries(expected)) {
     if (!matchesSubset(v, actual[k])) return false;
@@ -84,12 +88,34 @@ async function runScenario(file, baseUrl, baseCtx) {
   const scenario = readJson(file);
   const name = scenario.name || path.basename(file);
   const ctx = { ...baseCtx };
+  // Apply per-scenario environment overrides if provided (schema: setup.env)
+  const setupEnv = scenario.setup && scenario.setup.env ? scenario.setup.env : null;
+  if (setupEnv && typeof setupEnv === 'object') {
+    // Allow overrides to reference existing env/ctx variables via interpolation
+    const overrides = interpolate(setupEnv, { ...process.env, ...ctx });
+    Object.assign(ctx, overrides);
+  }
+
+  // Ensure TOTP_CODE is computed after overrides if a secret is present
+  if (!ctx.TOTP_CODE && ctx.TOTP_SECRET) {
+    try {
+      ctx.TOTP_CODE = authenticator.generate(String(ctx.TOTP_SECRET));
+    } catch (_) {
+      // ignore
+    }
+  }
   const requires = Array.isArray(scenario.requiresEnv) ? scenario.requiresEnv : [];
   const missing = requires.filter((k) => getVar({ ...process.env, ...ctx }, k) == null || getVar({ ...process.env, ...ctx }, k) === '');
   if (missing.length > 0) {
     console.log(`\nScenario: ${name}`);
     console.log(`  ↷ Skipping (missing env): ${missing.join(', ')}`);
     return { passed: 0, failed: 0, skipped: 1 };
+  }
+
+  // Optional scenario-level pause before running steps
+  const waitMs = Number(scenario?.setup?.waitMs || 0);
+  if (waitMs > 0) {
+    await new Promise((r) => setTimeout(r, waitMs));
   }
 
   console.log(`\nScenario: ${name}`);
@@ -99,6 +125,11 @@ async function runScenario(file, baseUrl, baseCtx) {
 
   for (let i = 0; i < scenario.steps.length; i++) {
     const step = scenario.steps[i];
+    // Optional per-step delay
+    const stepWait = Number(step?.waitMs || 0);
+    if (stepWait > 0) {
+      await new Promise((r) => setTimeout(r, stepWait));
+    }
     const req = interpolate(step.request, ctx);
 
     // Build URL

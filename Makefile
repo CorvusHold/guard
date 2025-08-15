@@ -6,8 +6,9 @@ SHELL := /bin/bash
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
-        grafana-url prometheus-url alertmanager-url \
-        api-test-wait conformance-up conformance conformance-down mailhog-url
+        grafana-url prometheus-url alertmanager-url mailhog-url \
+        api-test-wait conformance-up conformance conformance-down \
+        migrate-up-test-dc
 
 compose-up:
 	docker compose up -d
@@ -26,33 +27,33 @@ compose-down-test:
 dev:
 	air -c .air.toml
 
-# Database migrations (requires: goose)
+# Database migrations (uses `go run` goose; no host goose binary required)
 migrate-up:
-	bash -lc 'set -a; [ -f .env ] && source .env; set +a; goose -dir ./migrations postgres "$$DATABASE_URL" up'
+	bash -lc 'set -a; [ -f .env ] && source .env; set +a; go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" up'
 
 migrate-down:
-	bash -lc 'set -a; [ -f .env ] && source .env; set +a; goose -dir ./migrations postgres "$$DATABASE_URL" down'
+	bash -lc 'set -a; [ -f .env ] && source .env; set +a; go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" down'
 
 migrate-status:
-	bash -lc 'set -a; [ -f .env ] && source .env; set +a; goose -dir ./migrations postgres "$$DATABASE_URL" status'
+	bash -lc 'set -a; [ -f .env ] && source .env; set +a; go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" status'
 
 migrate-up-test:
-	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; goose -dir ./migrations postgres "$$DATABASE_URL" up'
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" up'
 
 migrate-down-test:
-	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; goose -dir ./migrations postgres "$$DATABASE_URL" down'
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" down'
 
 # sqlc codegen (requires: sqlc)
 sqlc:
 	bash -lc 'sqlc generate'
 
-# Tests and linting
+# ---- Tests and linting ----
 test:
 	go test ./...
 
-# Run tests with dedicated TEST env (.env.test or example) for E2E/integration
-test-e2e: compose-up-test db-wait-test redis-test-ping migrate-up-test
-	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; gotestsum --format standard-verbose -- ./...'
+# Run E2E/integration tests against test stack. No extra host tools required.
+test-e2e: compose-up-test db-wait-test redis-test-ping migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test ./...'
 	make compose-down-test
 
 lint:
@@ -64,6 +65,12 @@ lint:
 api-test-wait:
 	bash -lc 'for i in {1..60}; do curl -fsS http://localhost:8081/readyz >/dev/null 2>&1 && echo "API is ready" && exit 0; echo "Waiting for API... ($$i)"; sleep 1; done; echo "API not ready after timeout" >&2; exit 1'
 
+# Run test DB migrations inside the api_test container (no host goose required)
+migrate-up-test-dc:
+	docker compose -f docker-compose.test.yml exec -T api_test \
+	  sh -lc 'export PATH=/usr/local/go/bin:/go/bin:$$PATH; \
+	  go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" up'
+
 # Bring up full test stack (db/redis/mailhog/api)
 conformance-up:
 	docker compose -f docker-compose.test.yml up -d
@@ -71,12 +78,26 @@ conformance-up:
 # Run SDK conformance inside container. You can provide TENANT_ID/EMAIL/PASSWORD/TOTP_SECRET envs
 # Optionally create a .env.conformance file and they will be sourced automatically.
 conformance: conformance-up
-	make migrate-up-test
+	# Run migrations and seed default tenant/user (with MFA), then wait for API and run SDK conformance
+	make migrate-up-test-dc
+	docker compose -f docker-compose.test.yml exec -T api_test \
+	  sh -lc 'export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed default --enable-mfa' | tee .env.conformance
+	# Seed a separate non-MFA tenant and user to avoid tenant-scoped login rate limits
+	bash -lc 'set -e; set -a; [ -f .env.conformance ] && source .env.conformance; set +a; \
+	  NONMFA_TENANT_NAME=$${NONMFA_TENANT_NAME:-test-nomfa}; \
+	  NONMFA_EMAIL=$${NONMFA_EMAIL:-nomfa@example.com}; \
+	  NONMFA_PASSWORD=$${NONMFA_PASSWORD:-Password123!}; \
+	  TEN2=$$(docker compose -f docker-compose.test.yml exec -T api_test sh -lc \
+	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed tenant --name \"$$NONMFA_TENANT_NAME\"" | grep ^TENANT_ID= | cut -d= -f2); \
+	  docker compose -f docker-compose.test.yml exec -T api_test sh -lc \
+	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed user --tenant-id \"$$TEN2\" --email \"$$NONMFA_EMAIL\" --password \"$$NONMFA_PASSWORD\"" >/dev/null; \
+	  { echo "NONMFA_TENANT_ID=$$TEN2"; echo "NONMFA_EMAIL=$$NONMFA_EMAIL"; echo "NONMFA_PASSWORD=$$NONMFA_PASSWORD"; } >> .env.conformance'
 	make api-test-wait
 	bash -lc 'set -a; [ -f .env.conformance ] && source .env.conformance; set +a; \
 	docker compose -f docker-compose.test.yml run --rm \
 	  -e BASE_URL=http://api_test:8080 \
 	  -e TENANT_ID="$$TENANT_ID" -e EMAIL="$$EMAIL" -e PASSWORD="$$PASSWORD" \
+	  -e NONMFA_TENANT_ID="$$NONMFA_TENANT_ID" -e NONMFA_EMAIL="$$NONMFA_EMAIL" -e NONMFA_PASSWORD="$$NONMFA_PASSWORD" \
 	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
 	  $${SDK_SERVICE:-sdk_conformance}'
 
@@ -91,21 +112,21 @@ swagger:
 	bash -lc 'cp docs/swagger.json sdk/spec/openapi.json'
 	bash -lc 'cp docs/swagger.yaml sdk/spec/openapi.yaml'
 
-# Quick checks for local services
+# Quick checks for local services (dockerized, no host tools required)
 db-check:
-	bash -lc 'set -a; [ -f .env ] && source .env; set +a; pg_isready -d "$$DATABASE_URL" || true'
+	docker compose exec -T db pg_isready -U guard || true
 
 redis-ping:
-	valkey-cli -p 6380 ping || true
+	docker compose exec -T valkey valkey-cli ping || true
 
 db-test-check:
-	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; pg_isready -d "$$DATABASE_URL" || true'
+	docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard || true
 
 db-wait-test:
-	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; for i in {1..60}; do pg_isready -d "$$DATABASE_URL" >/dev/null 2>&1 && echo "Postgres is ready" && exit 0; echo "Waiting for Postgres... ($$i)"; sleep 1; done; echo "Postgres not ready after timeout" >&2; exit 1'
+	bash -lc 'for i in {1..60}; do docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard >/dev/null 2>&1 && echo "Postgres is ready" && exit 0; echo "Waiting for Postgres... ($$i)"; sleep 1; done; echo "Postgres not ready after timeout" >&2; exit 1'
 
 redis-test-ping:
-	valkey-cli -p 6481 ping || true
+	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli ping || true
 
 # ---- Observability stack helpers ----
 

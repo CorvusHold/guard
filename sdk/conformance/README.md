@@ -28,6 +28,28 @@ To start a local stack, see repo README (e.g., `make obsv-up`) and seed credenti
 Each scenario may include `requiresEnv: ["VAR1", "VAR2", ...]`.
 If any required env var is missing/empty, the TS runner will skip that scenario and report it as skipped (does not fail the run).
 
+## Scenario features
+- **setup.env overrides**: A scenario may define `setup.env` to override environment variables for that scenario only. Overrides support interpolation like `"{{NONMFA_TENANT_ID}}"`.
+  Example:
+  ```json
+  {
+    "setup": {
+      "env": {
+        "TENANT_ID": "{{NONMFA_TENANT_ID}}",
+        "EMAIL": "{{NONMFA_EMAIL}}",
+        "PASSWORD": "{{NONMFA_PASSWORD}}"
+      }
+    }
+  }
+  ```
+- **Delays (waitMs)**: Optional `waitMs` at the scenario-level (`setup.waitMs`) or step-level (`step.waitMs`) adds small sleeps to reduce rate-limit flakiness.
+- **MFA helpers**: The TS runner computes `TOTP_CODE` from `TOTP_SECRET` after applying overrides, so MFA scenarios only need `TOTP_SECRET`.
+- **Non-MFA tenant separation**: CI seeds a second tenant/user for non‑MFA flows and exposes:
+  - `NONMFA_TENANT_ID`
+  - `NONMFA_EMAIL`
+  - `NONMFA_PASSWORD`
+  Non‑MFA scenarios (e.g., `001-password-login-success.json`, `003-refresh-logout.json`) should override `TENANT_ID/EMAIL/PASSWORD` to these values.
+
 ## Running with .env.k6
 The Make target `make seed-test` writes `.env.k6` at repo root with `TENANT_ID`, `EMAIL`, `PASSWORD` for local testing.
 Example:

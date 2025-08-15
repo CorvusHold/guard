@@ -1,5 +1,8 @@
 {
   "name": "Refresh then logout (204)",
+  "setup": {
+    "env": { "TENANT_ID": "{{NONMFA_TENANT_ID}}", "EMAIL": "{{NONMFA_EMAIL}}", "PASSWORD": "{{NONMFA_PASSWORD}}" }
+  },
   "requiresEnv": ["TENANT_ID", "EMAIL", "PASSWORD"],
   "steps": [
     {

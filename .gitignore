@@ -9,3 +9,6 @@
 # Build artifacts
 bin
 tmp
+
+# Local npm cache for CI speedups
+.npm-cache
