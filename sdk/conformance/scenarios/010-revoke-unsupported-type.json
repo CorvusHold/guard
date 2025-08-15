@@ -1,0 +1,14 @@
+{
+  "name": "Revoke unsupported token_type (400)",
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/revoke",
+        "headers": { "content-type": "application/json" },
+        "body": { "token": "abc", "token_type": "access" }
+      },
+      "expect": { "status": 400, "bodyContains": { "error": {} } }
+    }
+  ]
+}

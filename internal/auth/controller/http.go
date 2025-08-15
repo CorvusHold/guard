@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -86,6 +87,7 @@ func (h *Controller) Register(e *echo.Echo) {
 				// extract tenant_id from query
 				var tid *uuid.UUID
 				if v := c.QueryParam("tenant_id"); v != "" {
+					v = strings.TrimPrefix(v, "rl-")
 					if id, err := uuid.Parse(v); err == nil { tid = &id }
 				}
 				d, _ := h.settings.GetDuration(c.Request().Context(), winKey, tid, defWin)
@@ -94,6 +96,7 @@ func (h *Controller) Register(e *echo.Echo) {
 			p.LimitFunc = func(c echo.Context) int {
 				var tid *uuid.UUID
 				if v := c.QueryParam("tenant_id"); v != "" {
+					v = strings.TrimPrefix(v, "rl-")
 					if id, err := uuid.Parse(v); err == nil { tid = &id }
 				}
 				n, _ := h.settings.GetInt(c.Request().Context(), limKey, tid, defLim)
@@ -820,6 +823,10 @@ func (h *Controller) verifyMFA(c echo.Context) error {
 	}
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
+	// Optional debug log to confirm handler execution and tenant key context
+	if os.Getenv("RATELIMIT_DEBUG") != "" {
+		c.Logger().Infof("verifyMFA entered: tenant_id_q=%s ua=%s ip=%s", c.QueryParam("tenant_id"), ua, ip)
+	}
 	toks, err := h.svc.VerifyMFA(c.Request().Context(), domain.MFAVerifyInput{
 		ChallengeToken: req.ChallengeToken,
 		Method:         req.Method,

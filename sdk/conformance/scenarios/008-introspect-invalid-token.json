@@ -1,0 +1,14 @@
+{
+  "name": "Introspect invalid token (401)",
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/introspect",
+        "headers": { "content-type": "application/json" },
+        "body": { "token": "invalid" }
+      },
+      "expect": { "status": 401, "bodyContains": { "error": {} } }
+    }
+  ]
+}

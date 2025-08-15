@@ -1,0 +1,13 @@
+{
+  "name": "Introspect missing token (400)",
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/introspect",
+        "headers": { "content-type": "application/json" }
+      },
+      "expect": { "status": 400, "bodyContains": { "error": {} } }
+    }
+  ]
+}

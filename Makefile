@@ -99,6 +99,7 @@ conformance: conformance-up
 	  -e TENANT_ID="$$TENANT_ID" -e EMAIL="$$EMAIL" -e PASSWORD="$$PASSWORD" \
 	  -e NONMFA_TENANT_ID="$$NONMFA_TENANT_ID" -e NONMFA_EMAIL="$$NONMFA_EMAIL" -e NONMFA_PASSWORD="$$NONMFA_PASSWORD" \
 	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
+	  -e SCENARIO="$${SCENARIO:-}" -e SCENARIO_FILTER="$${SCENARIO_FILTER:-}" \
 	  $${SDK_SERVICE:-sdk_conformance}'
 
 # Tear down the test stack (including volumes)

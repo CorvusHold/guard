@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ts-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ts-conformance:
     name: TS SDK Conformance

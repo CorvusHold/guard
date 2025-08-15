@@ -49,6 +49,7 @@ services:
       REDIS_ADDR: "valkey_test:6379"
       REDIS_DB: 0
       JWT_SIGNING_KEY: "test-secret-change-me"
+      RATELIMIT_DEBUG: "1"
       # Email via MailHog for conformance magic link flows
       EMAIL_PROVIDER: "smtp"
       SMTP_HOST: "mailhog_test"

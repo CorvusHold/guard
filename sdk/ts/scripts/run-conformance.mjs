@@ -219,10 +219,26 @@ async function main() {
     process.exit(2);
   }
 
-  const files = listScenarioFiles(scenariosDir);
+  let files = listScenarioFiles(scenariosDir);
   if (files.length === 0) {
     console.log(`No scenario files found in ${scenariosDir}`);
     process.exit(0);
+  }
+
+  // Optional filter: run only scenarios whose filename matches or includes SCENARIO/SCENARIO_FILTER
+  const only = (process.env.SCENARIO || process.env.SCENARIO_FILTER || '').trim();
+  if (only) {
+    const match = (f) => {
+      const b = path.basename(f);
+      return b === only || b.includes(only);
+    };
+    const filtered = files.filter(match);
+    if (filtered.length === 0) {
+      console.log(`No scenarios matched filter "${only}". Available: ${files.map((f) => path.basename(f)).join(', ')}`);
+      process.exit(1);
+    }
+    console.log(`Filtering scenarios by "${only}": ${filtered.map((f) => path.basename(f)).join(', ')}`);
+    files = filtered;
   }
 
   const baseCtx = {
