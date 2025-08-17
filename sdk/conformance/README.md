@@ -50,6 +50,29 @@ If any required env var is missing/empty, the TS runner will skip that scenario 
   - `NONMFA_PASSWORD`
   Non‑MFA scenarios (e.g., `001-password-login-success.json`, `003-refresh-logout.json`) should override `TENANT_ID/EMAIL/PASSWORD` to these values.
 
+- **Rate-limit isolation (rl- prefix + second tenant)**:
+  - The conformance `Makefile` resets test Redis (Valkey) with `FLUSHALL` before running to avoid cross-run bucket pollution.
+  - CI also seeds a second non‑MFA tenant/user and exposes:
+    - `NONMFA2_TENANT_ID`
+    - `NONMFA2_EMAIL`
+    - `NONMFA2_PASSWORD`
+  - The rate‑limit login scenario (`011-password-login-rate-limit-429.json`) uses the `NONMFA2_*` credentials to avoid consuming buckets used by earlier scenarios.
+  - For isolated buckets within a single tenant, scenarios can pass `tenant_id=rl-<TENANT_ID>` in the query string while including the raw `tenant_id` in the JSON body. Middleware strips `rl-` before validation/settings, but the rate-limit key still isolates as intended.
+  
+  Example step fragment:
+  ```json
+  {
+    "request": {
+      "method": "POST",
+      "path": "/v1/auth/password/login",
+      "headers": { "content-type": "application/json" },
+      "query": { "tenant_id": "rl-{{TENANT_ID}}" },
+      "body": { "tenant_id": "{{TENANT_ID}}", "email": "{{EMAIL}}", "password": "{{PASSWORD}}" }
+    },
+    "expect": { "status": 200 }
+  }
+  ```
+
 ## Running with .env.k6
 The Make target `make seed-test` writes `.env.k6` at repo root with `TENANT_ID`, `EMAIL`, `PASSWORD` for local testing.
 Example:

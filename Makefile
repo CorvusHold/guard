@@ -11,14 +11,14 @@ SHELL := /bin/bash
         migrate-up-test-dc
 
 compose-up:
-	docker compose up -d
+	docker compose up -d --remove-orphans
 
 compose-down:
 	docker compose down
 
 # Test stack (dedicated Postgres/Redis for integration/E2E)
 compose-up-test:
-	docker compose -f docker-compose.test.yml up -d
+	docker compose -f docker-compose.test.yml up -d --remove-orphans
 
 compose-down-test:
 	docker compose -f docker-compose.test.yml down -v
@@ -73,7 +73,7 @@ migrate-up-test-dc:
 
 # Bring up full test stack (db/redis/mailhog/api)
 conformance-up:
-	docker compose -f docker-compose.test.yml up -d
+	docker compose -f docker-compose.test.yml up -d --remove-orphans
 
 # Run SDK conformance inside container. You can provide TENANT_ID/EMAIL/PASSWORD/TOTP_SECRET envs
 # Optionally create a .env.conformance file and they will be sourced automatically.
@@ -145,7 +145,7 @@ redis-test-ping:
 # ---- Observability stack helpers ----
 
 obsv-up:
-	docker compose up -d db valkey api prometheus grafana alertmanager am-receiver
+	docker compose up -d --remove-orphans db valkey api prometheus grafana alertmanager am-receiver
 
 obsv-down:
 	docker compose down -v

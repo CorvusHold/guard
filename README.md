@@ -48,6 +48,29 @@ make sqlc
 make test
 ```
 
+## Conformance quickstart
+
+Run the SDK conformance suite against your local stack:
+
+```bash
+# bring up dependencies if not already running
+make compose-up
+
+# run all scenarios
+make conformance
+
+# run a single scenario by prefix/substring (e.g., 011)
+SCENARIO_FILTER=011 make conformance
+```
+
+Notes:
+
+- The Makefile flushes the test Redis (Valkey) before running to avoid cross-run rate-limit pollution.
+- Seeding includes two non-MFA tenants: `NONMFA_*` and `NONMFA2_*`. Scenario 011 uses `NONMFA2_*` to isolate its rate‑limit bucket.
+- For isolated buckets within a tenant, scenarios may use the `rl-` prefix in `tenant_id` query param. See:
+  - `docs/rate-limiting.md` (rl- prefix and debugging)
+  - `sdk/conformance/README.md` (scenario overrides and isolation examples)
+
 ## Observability
 - Prometheus metrics are exposed at `/metrics` from `./cmd/api`.
 - Liveness and readiness endpoints: `/livez` and `/readyz`.
