@@ -30,6 +30,8 @@ jobs:
             npm-cache-${{ runner.os }}-
 
       - name: Run TS SDK conformance
+        env:
+          DOCKER_CLI_HINTS: enabled
         run: |
           make conformance
 
@@ -37,3 +39,15 @@ jobs:
         if: always()
         run: |
           make conformance-down
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.test.yml logs --no-color > ts-conformance-logs.txt || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-conformance-logs
+          path: ts-conformance-logs.txt

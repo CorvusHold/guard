@@ -28,15 +28,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Start test stack
-        run: |
-          make conformance-up
-
-      - name: Seed default tenant and user (with MFA)
-        run: |
-          docker compose -f docker-compose.test.yml exec -T api_test \
-            sh -lc 'go run ./cmd/seed default --enable-mfa' | tee .env.conformance
-
       - name: Run SDK conformance (${{ matrix.display }})
         env:
           SDK_SERVICE: ${{ matrix.sdk_service }}
