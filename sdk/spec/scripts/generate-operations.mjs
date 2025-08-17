@@ -29,6 +29,13 @@ function stableStringify(obj) {
   return JSON.stringify(sortObjectDeep(obj), null, 2) + '\n';
 }
 
+function normalizeForCompare(obj) {
+  // Exclude non-deterministic fields from equality checks
+  if (!obj || typeof obj !== 'object') return obj;
+  const { generatedAt, ...rest } = obj;
+  return rest;
+}
+
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
 }
@@ -125,12 +132,19 @@ async function main() {
       operations: ops,
     };
 
-    const outStr = stableStringify(payload);
+    const outStrWrite = stableStringify(payload);
     const hasExisting = await fileExists(OUT_FILE);
     if (!WRITE) {
       if (hasExisting) {
         const existing = await readFile(OUT_FILE, 'utf8');
-        if (existing === outStr) {
+        let upToDate = false;
+        try {
+          const existingObj = JSON.parse(existing);
+          const existingNorm = stableStringify(normalizeForCompare(existingObj));
+          const outNorm = stableStringify(normalizeForCompare(payload));
+          upToDate = existingNorm === outNorm;
+        } catch {}
+        if (upToDate) {
           console.log('operations.json is up-to-date');
           return;
         }
@@ -142,7 +156,7 @@ async function main() {
       }
     }
 
-    await writeFile(OUT_FILE, outStr);
+    await writeFile(OUT_FILE, outStrWrite);
     console.log('Wrote', path.relative(repoRoot, OUT_FILE));
   } catch (err) {
     console.error('generate-operations failed:', err.message);
