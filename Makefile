@@ -93,6 +93,8 @@ conformance: conformance-up
 	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed user --tenant-id \"$$TEN2\" --email \"$$NONMFA_EMAIL\" --password \"$$NONMFA_PASSWORD\"" >/dev/null; \
 	  { echo "NONMFA_TENANT_ID=$$TEN2"; echo "NONMFA_EMAIL=$$NONMFA_EMAIL"; echo "NONMFA_PASSWORD=$$NONMFA_PASSWORD"; } >> .env.conformance'
 	make api-test-wait
+	# Reset Redis to avoid cross-run rate-limit pollution
+	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli FLUSHALL >/dev/null || true
 	bash -lc 'set -a; [ -f .env.conformance ] && source .env.conformance; set +a; \
 	docker compose -f docker-compose.test.yml run --rm \
 	  -e BASE_URL=http://api_test:8080 \

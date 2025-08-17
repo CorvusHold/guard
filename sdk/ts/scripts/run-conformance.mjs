@@ -96,8 +96,8 @@ async function runScenario(file, baseUrl, baseCtx) {
     Object.assign(ctx, overrides);
   }
 
-  // Ensure TOTP_CODE is computed after overrides if a secret is present
-  if (!ctx.TOTP_CODE && ctx.TOTP_SECRET) {
+  // Ensure TOTP_CODE is computed after overrides if a secret is present (fresh for this scenario)
+  if (ctx.TOTP_SECRET) {
     try {
       ctx.TOTP_CODE = authenticator.generate(String(ctx.TOTP_SECRET));
     } catch (_) {
@@ -129,6 +129,20 @@ async function runScenario(file, baseUrl, baseCtx) {
     const stepWait = Number(step?.waitMs || 0);
     if (stepWait > 0) {
       await new Promise((r) => setTimeout(r, stepWait));
+    }
+    // If this step uses {{TOTP_CODE}}, refresh it just-in-time to avoid window roll-over
+    if (ctx.TOTP_SECRET) {
+      try {
+        const rawBody = step?.request?.body;
+        const usesTOTP = typeof rawBody === 'string'
+          ? rawBody.includes('{{TOTP_CODE}}')
+          : JSON.stringify(rawBody || '').includes('{{TOTP_CODE}}');
+        if (usesTOTP) {
+          ctx.TOTP_CODE = authenticator.generate(String(ctx.TOTP_SECRET));
+        }
+      } catch (_) {
+        // ignore
+      }
     }
     const req = interpolate(step.request, ctx);
 
@@ -250,16 +264,6 @@ async function main() {
     TOTP_SECRET: process.env.TOTP_SECRET,
     TOTP_CODE: process.env.TOTP_CODE,
   };
-
-  // Auto-compute TOTP_CODE when a secret is provided.
-  if (!baseCtx.TOTP_CODE && baseCtx.TOTP_SECRET) {
-    try {
-      baseCtx.TOTP_CODE = authenticator.generate(String(baseCtx.TOTP_SECRET));
-      console.log('  • Computed TOTP_CODE from TOTP_SECRET');
-    } catch (e) {
-      console.warn('  • Failed to compute TOTP_CODE:', e?.message || e);
-    }
-  }
 
   // Optionally auto-fetch MAGIC_TOKEN from test-only endpoint.
   const shouldFetchMagic = (process.env.AUTO_MAGIC_TOKEN || '').toLowerCase() === 'true';
