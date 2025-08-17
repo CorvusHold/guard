@@ -16,15 +16,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: SDK Typescript folder
-        run: |
-          cd sdk/ts
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'sdk/ts/package-lock.json'
 
       - name: Install CLI tools
         run: |
