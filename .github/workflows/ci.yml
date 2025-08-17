@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.24.x'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -47,7 +47,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.24.x'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -86,7 +86,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.24.x'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -132,6 +132,18 @@ jobs:
           K6_ITERATIONS: '120'
         run: |
           make k6-rate-limit-login
+
+      - name: Collect docker logs on failure
+        if: failure()
+        run: |
+          docker compose logs --no-color > perf-logs.txt || true
+
+      - name: Upload logs artifact (perf)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-logs
+          path: perf-logs.txt
 
       - name: Tear down stack
         if: always()
