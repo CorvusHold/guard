@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Guard SDK Conformance Scenario",
+  "type": "object",
+  "required": ["name", "steps"],
+  "properties": {
+    "name": { "type": "string" },
+    "setup": {
+      "type": "object",
+      "properties": {
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "waitMs": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["request", "expect"],
+        "properties": {
+          "request": {
+            "type": "object",
+            "required": ["method", "path"],
+            "properties": {
+              "method": { "type": "string" },
+              "path": { "type": "string" },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+              "query": { "type": "object", "additionalProperties": { "type": "string" } },
+              "body": {}
+            },
+            "additionalProperties": false
+          },
+          "expect": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": { "type": "integer" },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+              "bodyContains": { "type": "object" }
+            },
+            "additionalProperties": false
+          },
+          "waitMs": { "type": "integer", "minimum": 0 },
+          "store": {
+            "type": "object",
+            "description": "Store selected values from the response by JSONPath (sdk runner responsibility)",
+            "additionalProperties": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

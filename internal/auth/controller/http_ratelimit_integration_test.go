@@ -432,3 +432,71 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
     }
 }
 
+func TestHTTP_RateLimit_MFA_Verify_11th429_ShortWindow(t *testing.T) {
+    if os.Getenv("DATABASE_URL") == "" {
+        t.Skip("skipping integration test: DATABASE_URL not set")
+    }
+
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil { t.Fatalf("db connect: %v", err) }
+    defer pool.Close()
+
+    // tenant
+    tr := trepo.New(pool)
+    tenantID := uuid.New()
+    if err := tr.Create(ctx, tenantID, "http-rl-mfa-verify-11th429-"+tenantID.String()); err != nil {
+        t.Fatalf("create tenant: %v", err)
+    }
+    // small delay to ensure tenant visibility in settings reads (mirrors other tests)
+    time.Sleep(25 * time.Millisecond)
+
+    // settings overrides: limit=10 per 1s window for MFA verify
+    sr := srepo.New(pool)
+    if err := sr.Upsert(ctx, sdomain.KeyRLMFALimit, &tenantID, "10", false); err != nil {
+        t.Fatalf("upsert mfa limit: %v", err)
+    }
+    if err := sr.Upsert(ctx, sdomain.KeyRLMFAWindow, &tenantID, "1s", false); err != nil {
+        t.Fatalf("upsert mfa window: %v", err)
+    }
+
+    // services and HTTP wiring
+    repo := authrepo.New(pool)
+    settings := ssvc.New(sr)
+    cfg, _ := config.Load()
+    auth := svc.New(repo, cfg, settings)
+    magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
+    sso := svc.NewSSO(repo, cfg, settings)
+
+    e := echo.New()
+    e.Validator = noopValidator{}
+    c := New(auth, magic, sso).WithRateLimit(settings, nil)
+    c.Register(e)
+
+    body, _ := json.Marshal(map[string]string{
+        "challenge_token": "invalid.challenge.token",
+        "code":            "000000",
+        "method":          "totp",
+    })
+
+    // First 10 requests should not be 429 (likely 400 due to invalid payload)
+    for i := 1; i <= 10; i++ {
+        r := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
+        r.Header.Set("Content-Type", "application/json")
+        w := httptest.NewRecorder()
+        e.ServeHTTP(w, r)
+        if w.Code == http.StatusTooManyRequests {
+            t.Fatalf("mfa verify #%d unexpectedly 429: %s", i, w.Body.String())
+        }
+    }
+
+    // 11th request within the same 1s window should be 429
+    r11 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
+    r11.Header.Set("Content-Type", "application/json")
+    w11 := httptest.NewRecorder()
+    e.ServeHTTP(w11, r11)
+    if w11.Code != http.StatusTooManyRequests {
+        t.Fatalf("mfa verify #11 expected 429, got %d: %s", w11.Code, w11.Body.String())
+    }
+}
+

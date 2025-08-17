@@ -1,0 +1,29 @@
+{
+  "name": "Magic link verify 200 persists tokens",
+  "requiresEnv": ["MAGIC_TOKEN"],
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/auth/magic/verify",
+        "query": { "token": "{{MAGIC_TOKEN}}" }
+      },
+      "expect": {
+        "status": 200,
+        "bodyContains": { "access_token": {}, "refresh_token": {} }
+      },
+      "store": {
+        "ACCESS_TOKEN": "access_token",
+        "REFRESH_TOKEN": "refresh_token"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/auth/me",
+        "headers": { "authorization": "Bearer {{ACCESS_TOKEN}}" }
+      },
+      "expect": { "status": 200 }
+    }
+  ]
+}

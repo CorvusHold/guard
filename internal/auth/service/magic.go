@@ -73,6 +73,31 @@ func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 	return m.email.Send(ctx, in.TenantID, in.Email, subject, body)
 }
 
+// CreateForTest creates and stores a magic link token (without sending email) and returns the raw token.
+// This is intended for CI/test environments to automate magic-link verification flows.
+func (m *Magic) CreateForTest(ctx context.Context, in domain.MagicSendInput) (string, error) {
+	if in.Email == "" { return "", errors.New("email is required") }
+	// Resolve TTL so expiry matches production logic
+	ttl, _ := m.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &in.TenantID, m.cfg.MagicLinkTTL)
+
+	// Optional: set userID if identity exists
+	var userID *uuid.UUID
+	if ai, err := m.repo.GetAuthIdentityByEmailTenant(ctx, in.TenantID, in.Email); err == nil {
+		uid := ai.UserID
+		userID = &uid
+	}
+
+	// Generate token and store hashed (same format as Send)
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil { return "", err }
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+	exp := time.Now().Add(ttl)
+	if err := m.repo.CreateMagicLink(ctx, uuid.New(), userID, in.TenantID, in.Email, tokenHash, in.RedirectURL, exp); err != nil { return "", err }
+	return token, nil
+}
+
 func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks domain.AccessTokens, err error) {
 	defer func() {
 		if err == nil {

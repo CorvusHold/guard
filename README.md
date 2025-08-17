@@ -48,6 +48,29 @@ make sqlc
 make test
 ```
 
+## Conformance quickstart
+
+Run the SDK conformance suite against your local stack:
+
+```bash
+# bring up dependencies if not already running
+make compose-up
+
+# run all scenarios
+make conformance
+
+# run a single scenario by prefix/substring (e.g., 011)
+SCENARIO_FILTER=011 make conformance
+```
+
+Notes:
+
+- The Makefile flushes the test Redis (Valkey) before running to avoid cross-run rate-limit pollution.
+- Seeding includes two non-MFA tenants: `NONMFA_*` and `NONMFA2_*`. Scenario 011 uses `NONMFA2_*` to isolate its rate‑limit bucket.
+- For isolated buckets within a tenant, scenarios may use the `rl-` prefix in `tenant_id` query param. See:
+  - `docs/rate-limiting.md` (rl- prefix and debugging)
+  - `sdk/conformance/README.md` (scenario overrides and isolation examples)
+
 ## Observability
 - Prometheus metrics are exposed at `/metrics` from `./cmd/api`.
 - Liveness and readiness endpoints: `/livez` and `/readyz`.
@@ -259,3 +282,62 @@ Notes:
 - Challenge tokens are short-lived and signed per-tenant.
 - Backup codes are single-use and will be consumed on successful verification.
 - Swagger UI: http://localhost:8080/swagger/index.html
+
+## WorkOS SSO Setup and Tenant Settings API
+
+Use the tenant-scoped settings API to configure WorkOS SSO per tenant. The SSO flow is started at `/v1/auth/sso/google/start` (provider path is `google` for WorkOS-backed SSO) and completed at `/v1/auth/sso/google/callback`. Logout is supported via `POST /v1/auth/logout` and revokes the refresh token chain.
+
+Required environment variables:
+
+- `PUBLIC_BASE_URL` (e.g., `http://localhost:8080`)
+- Database and Redis (see docker compose section)
+
+Per-tenant settings (whitelist):
+
+- `sso.provider` (set to `workos`)
+- `sso.workos.client_id`
+- `sso.workos.client_secret` (or `sso.workos.api_key`)
+- `sso.state_ttl` (e.g., `10m`)
+- `sso.redirect_allowlist` (comma-separated URL prefixes)
+
+Endpoints:
+
+- GET `/v1/tenants/{id}/settings` — returns the subset of SSO-related settings; secrets are masked.
+- PUT `/v1/tenants/{id}/settings` — upserts any of the whitelisted keys.
+
+Example curl (PUT):
+
+```bash
+TENANT_ID="<TENANT_UUID>"
+curl -s -X PUT \
+  -H 'Content-Type: application/json' \
+  http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+  -d '{
+    "sso_provider": "workos",
+    "workos_client_id": "client_test_123",
+    "workos_client_secret": "secret_test_456",
+    "sso_state_ttl": "10m",
+    "sso_redirect_allowlist": "http://localhost:3000/callback,http://localhost:5173/callback"
+  }'
+```
+
+Start SSO:
+
+```bash
+curl -i "http://localhost:8080/v1/auth/sso/google/start?tenant_id=$TENANT_ID&connection_id=conn_123"
+```
+
+On success, you will be redirected to WorkOS authorize. After the callback, the API returns access and refresh tokens. To revoke session(s), call:
+
+```bash
+curl -s -X POST \
+  -H 'Content-Type: application/json' \
+  http://localhost:8080/v1/auth/logout \
+  -d '{"refresh_token":"<REFRESH_TOKEN_FROM_LOGIN>"}'
+```
+
+Notes:
+
+- Callback URL is `${PUBLIC_BASE_URL}/v1/auth/sso/google/callback` and must be allowed in WorkOS.
+- If `sso.workos.client_secret` is not set, `sso.workos.api_key` is used for the token exchange.
+- `sso.redirect_allowlist` is enforced for Dev SSO and may be reused by UIs.

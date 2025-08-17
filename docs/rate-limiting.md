@@ -17,6 +17,26 @@ Keys are derived as `prefix:ten:<tenant_id>` if a tenant can be determined from 
 
 If no tenant can be resolved, the key falls back to `prefix:ip:<client_ip>`.
 
+### Isolated test buckets (rl- prefix)
+
+- Middleware strips an optional `rl-` prefix from `tenant_id` before building the key. This enables isolated buckets for tests without changing actual tenant UUIDs.
+- You can pass `tenant_id=rl-<TENANT_ID>` either in the query string or JSON body; the prefix is removed before validation and settings resolution.
+- The conformance `Makefile` resets test Redis (Valkey) with `FLUSHALL` before runs and seeds two non‑MFA tenants/users:
+  - `NONMFA_*`: used by general scenarios (e.g., password success, refresh, etc.).
+  - `NONMFA2_*`: dedicated to the password login rate‑limit scenario to avoid cross‑scenario bucket consumption.
+
+Example (query + body both include tenant):
+
+```sh
+curl -s -X POST "$BASE_URL/v1/auth/password/login?tenant_id=rl-$TENANT_ID" \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"'$TENANT_ID'","email":"user@example.com","password":"Password123!"}'
+```
+
+### Debugging
+
+- Set `RATELIMIT_DEBUG` to enable debug logging for rate limiting.
+
 ### Real client IP behind proxies/CDN (Cloudflare)
 
 If Guard is deployed behind Cloudflare or another reverse proxy, configure Echo to extract the real client IP from proxy headers. This ensures IP-scoped rate limiting and logs are accurate.

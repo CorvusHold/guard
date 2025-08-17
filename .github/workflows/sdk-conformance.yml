@@ -1,0 +1,61 @@
+name: SDK Conformance Matrix
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 3 * * *' # nightly sanity run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Conformance (${{ matrix.display }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sdk_service: sdk_conformance
+            display: ts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache npm (sdk/ts)
+        uses: actions/cache@v4
+        with:
+          path: ./.npm-cache
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('sdk/ts/package-lock.json') }}
+          restore-keys: |
+            npm-cache-${{ runner.os }}-
+
+      - name: Run SDK conformance (${{ matrix.display }})
+        env:
+          SDK_SERVICE: ${{ matrix.sdk_service }}
+          DOCKER_CLI_HINTS: enabled
+        run: |
+          make conformance
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.test.yml logs --no-color > conformance-logs.txt || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-logs-${{ matrix.display }}
+          path: conformance-logs.txt
+
+      - name: Tear down stack
+        if: always()
+        run: |
+          make conformance-down

@@ -1,0 +1,31 @@
+{
+  "name": "MFA verify rate limit (429)",
+  "setup": { "waitMs": 500 },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/password/login",
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "tenant_id": "{{TENANT_ID}}",
+          "email": "{{EMAIL}}",
+          "password": "{{PASSWORD}}"
+        }
+      },
+      "expect": { "status": 202, "bodyContains": { "challenge_token": {} } },
+      "store": { "CHALLENGE_TOKEN": "challenge_token" }
+    },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 401 } },
+    { "waitMs": 50, "request": { "method": "POST", "path": "/v1/auth/mfa/verify", "headers": { "content-type": "application/json" }, "query": { "tenant_id": "rl-{{TENANT_ID}}" }, "body": { "challenge_token": "{{CHALLENGE_TOKEN}}", "method": "totp", "code": "000000" } }, "expect": { "status": 429, "bodyContains": { "error": {} } } }
+  ]
+}

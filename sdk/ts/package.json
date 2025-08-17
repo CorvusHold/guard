@@ -1,0 +1,75 @@
+{
+  "name": "@corvushold/guard-sdk",
+  "version": "0.1.0-beta.0",
+  "description": "Guard CAS TypeScript SDK for Node.js, browsers, and React Native (beta)",
+  "license": "Apache-2.0",
+  "author": "CorvusHold",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/corvusHold/guard.git",
+    "directory": "sdk/ts"
+  },
+  "homepage": "https://github.com/corvusHold/guard/tree/main/sdk/ts#readme",
+  "bugs": {
+    "url": "https://github.com/corvusHold/guard/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "otplib": "^12.0.1"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1.19.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "npm run gen:openapi && tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev:test": "vitest",
+    "lint": "eslint 'src/**/*.{ts,tsx}'",
+    "lint:fix": "eslint --fix 'src/**/*.{ts,tsx}'",
+    "fmt": "prettier --write .",
+    "gen:openapi": "node scripts/gen-types.mjs",
+    "conformance": "node scripts/run-conformance.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vitest": "^0.5.4",
+    "swagger2openapi": "^7.0.8",
+    "openapi-typescript": "^7.4.1",
+    "prettier": "^3.3.3",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

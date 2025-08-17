@@ -1,0 +1,12 @@
+{
+  "name": "Me unauthorized returns 401",
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/auth/me"
+      },
+      "expect": { "status": 401 }
+    }
+  ]
+}

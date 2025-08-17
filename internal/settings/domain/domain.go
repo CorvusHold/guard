@@ -65,3 +65,13 @@ const (
     KeyRLMFALimit    = "auth.ratelimit.mfa.limit"
     KeyRLMFAWindow   = "auth.ratelimit.mfa.window"
 )
+
+// Settings API rate limiting keys (optional, support tenant overrides).
+const (
+    // GET /v1/tenants/:id/settings
+    KeyRLSettingsGetLimit  = "settings.ratelimit.get.limit"
+    KeyRLSettingsGetWindow = "settings.ratelimit.get.window"
+    // PUT /v1/tenants/:id/settings
+    KeyRLSettingsPutLimit  = "settings.ratelimit.put.limit"
+    KeyRLSettingsPutWindow = "settings.ratelimit.put.window"
+)

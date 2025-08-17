@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "io"
     "net/http"
+    "os"
     "strings"
     "sync"
     "time"
@@ -113,9 +114,15 @@ func MiddlewareWithStore(p Policy, s Store) echo.MiddlewareFunc {
             if p.LimitFunc != nil { if l := p.LimitFunc(c); l > 0 { lim = l } }
             allowed, retryAfter, err := s.Allow(c, key, lim, win)
             if err == nil && allowed {
+                // Optional debug logging for allow path to trace keys/limits during investigation
+                if os.Getenv("RATELIMIT_DEBUG") != "" {
+                    c.Logger().Infof("ratelimit allow: endpoint=%s key=%s limit=%d window=%s", p.Name, key, lim, win.String())
+                }
                 return next(c)
             }
             if err != nil {
+                // Log and fail open to avoid hard outages when store is unavailable
+                c.Logger().Errorf("ratelimit store error: endpoint=%s key=%s limit=%d window=%s err=%v", p.Name, key, lim, win.String(), err)
                 // Fail-open on store errors
                 return next(c)
             }
@@ -153,6 +160,10 @@ func KeyTenantOrIP(prefix string) func(echo.Context) string {
         }
         if ten == "" {
             return prefix + ":ip:" + c.RealIP()
+        }
+        // Strip optional "rl-" prefix to align with settings resolvers and test isolation buckets
+        if strings.HasPrefix(strings.ToLower(ten), "rl-") {
+            ten = ten[3:]
         }
         return prefix + ":ten:" + ten
     }

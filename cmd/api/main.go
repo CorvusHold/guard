@@ -14,6 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	echolog "github.com/labstack/gommon/log"
 	"github.com/redis/go-redis/v9"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -27,6 +28,7 @@ import (
 	// Auth DDD slice (factory)
 	_ "github.com/corvusHold/guard/docs" // side-effect import of generated docs
 	auth "github.com/corvusHold/guard/internal/auth"
+	settings "github.com/corvusHold/guard/internal/settings"
 	echoSwagger "github.com/swaggo/echo-swagger"
 	pprof "net/http/pprof"
 )
@@ -72,6 +74,11 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
+
+	// Enable verbose Echo logs in debug/test to surface ratelimit allow/block lines
+	if os.Getenv("RATELIMIT_DEBUG") != "" {
+		e.Logger.SetLevel(echolog.DEBUG)
+	}
 
     // Prefer Cloudflare's header; then XFF; then X-Real-IP; then RemoteAddr.
     // Guard this behind TRUST_PROXY env to avoid trusting spoofable headers when not behind a proxy/CDN.
@@ -137,6 +144,9 @@ func main() {
 	e.Validator = validation.New()
 
 	// Register domain routes via factories
+	// Settings (tenant-scoped settings management)
+	settings.Register(e, pgPool, cfg)
+	// Tenants and Auth
 	tenants.Register(e, pgPool)
 	auth.Register(e, pgPool, cfg)
 

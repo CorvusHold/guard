@@ -57,12 +57,16 @@ func (s *redisStore) Allow(c echo.Context, key string, limit int, window time.Du
         ttlms = 0
     }
     if current <= int64(limit) {
+        // Allowed within window
+        c.Logger().Debugf("ratelimit allow: key=%s limit=%d window=%s current=%d ttlms=%d", k, limit, window.String(), current, ttlms)
         return true, 0, nil
     }
     // compute retry-after seconds (ceil(ttl/1000))
     if ttlms <= 0 {
+        c.Logger().Warnf("ratelimit block: key=%s limit=%d window=%s current=%d retry_after=%ds (no ttl)", k, limit, window.String(), current, 0)
         return false, 0, nil
     }
     secs := int((ttlms + 999) / 1000)
+    c.Logger().Warnf("ratelimit block: key=%s limit=%d window=%s current=%d retry_after=%ds", k, limit, window.String(), current, secs)
     return false, secs, nil
 }

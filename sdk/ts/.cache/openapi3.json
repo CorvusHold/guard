@@ -1,0 +1,1983 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "description": "Central Authentication Service for multi-tenant identity management.",
+    "title": "Guard CAS API",
+    "contact": {},
+    "version": "1.0"
+  },
+  "paths": {
+    "/tenants": {
+      "get": {
+        "description": "Lists tenants with optional filters and pagination",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "List tenants",
+        "parameters": [
+          {
+            "description": "Search query",
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "-1 any, 1 active, 0 inactive",
+            "name": "active",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page number",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size",
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.listResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Creates a new tenant",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Create tenant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.createTenantReq"
+              }
+            }
+          },
+          "description": "name",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tenantResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/by-name/{name}": {
+      "get": {
+        "description": "Fetch a tenant by unique name",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Get tenant by name",
+        "parameters": [
+          {
+            "description": "Tenant name",
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tenantResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}": {
+      "get": {
+        "description": "Fetch a tenant by UUID",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Get tenant by ID",
+        "parameters": [
+          {
+            "description": "Tenant ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tenantResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/deactivate": {
+      "patch": {
+        "description": "Deactivates a tenant by ID",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Deactivate tenant",
+        "parameters": [
+          {
+            "description": "Tenant ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/introspect": {
+      "post": {
+        "description": "Validate and parse JWT token either from Authorization header or request body",
+        "tags": [
+          "auth.introspect"
+        ],
+        "summary": "Introspect access token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.introspectReq"
+              }
+            }
+          },
+          "description": "Token in body; otherwise uses Authorization Bearer"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Introspection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "Revokes the provided refresh token if present; idempotent",
+        "tags": [
+          "auth.tokens"
+        ],
+        "summary": "Logout (revoke refresh token)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.refreshReq"
+              }
+            }
+          },
+          "description": "refresh_token (optional)"
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/magic/send": {
+      "post": {
+        "description": "Sends a single-use magic login link to the user's email",
+        "tags": [
+          "auth.magic"
+        ],
+        "summary": "Send magic login link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.magicSendReq"
+              }
+            }
+          },
+          "description": "tenant_id, email, optional redirect_url",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/magic/verify": {
+      "get": {
+        "description": "Verifies magic link token from query parameter or request body and returns tokens",
+        "tags": [
+          "auth.magic"
+        ],
+        "summary": "Verify magic link token",
+        "parameters": [
+          {
+            "description": "Magic token (alternative to body)",
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/controller.magicVerifyReq"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Verifies magic link token from query parameter or request body and returns tokens",
+        "tags": [
+          "auth.magic"
+        ],
+        "summary": "Verify magic link token",
+        "parameters": [
+          {
+            "description": "Magic token (alternative to body)",
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/controller.magicVerifyReq"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns the authenticated user's profile derived from the access token",
+        "tags": [
+          "auth.profile"
+        ],
+        "summary": "Get current user's profile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.UserProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/backup/consume": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Consumes a single-use backup code",
+        "tags": [
+          "auth.mfa.backup"
+        ],
+        "summary": "Consume an MFA backup code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.mfaBackupConsumeReq"
+              }
+            }
+          },
+          "description": "backup code",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.mfaBackupConsumeResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/backup/count": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns number of unused backup codes",
+        "tags": [
+          "auth.mfa.backup"
+        ],
+        "summary": "Count remaining MFA backup codes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.mfaBackupCountResp"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/backup/generate": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Generates backup codes, stores their hashes, and returns the codes",
+        "tags": [
+          "auth.mfa.backup"
+        ],
+        "summary": "Generate MFA backup codes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.mfaBackupGenerateReq"
+              }
+            }
+          },
+          "description": "count (default 10, max 20)"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.mfaBackupGenerateResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/totp/activate": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Verifies a TOTP code for the stored secret and enables MFA",
+        "tags": [
+          "auth.mfa.totp"
+        ],
+        "summary": "Activate TOTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.mfaTOTPActivateReq"
+              }
+            }
+          },
+          "description": "TOTP code",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/totp/disable": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Disables TOTP for the user",
+        "tags": [
+          "auth.mfa.totp"
+        ],
+        "summary": "Disable TOTP",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/totp/start": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Generates and stores a TOTP secret (disabled) and returns the secret and otpauth URL",
+        "tags": [
+          "auth.mfa.totp"
+        ],
+        "summary": "Start TOTP enrollment",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.mfaTOTPStartResp"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa/verify": {
+      "post": {
+        "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.",
+        "tags": [
+          "auth.mfa"
+        ],
+        "summary": "Verify MFA challenge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.mfaVerifyReq"
+              }
+            }
+          },
+          "description": "challenge_token, method, and code",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password/login": {
+      "post": {
+        "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.",
+        "tags": [
+          "auth.password"
+        ],
+        "summary": "Password login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.loginReq"
+              }
+            }
+          },
+          "description": "email/password",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.mfaChallengeResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password/reset/confirm": {
+      "post": {
+        "description": "Resets the password for the given email address",
+        "tags": [
+          "auth.password"
+        ],
+        "summary": "Confirm password reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.resetPasswordConfirmReq"
+              }
+            }
+          },
+          "description": "tenant_id, token, new_password",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password/reset/request": {
+      "post": {
+        "description": "Requests a password reset for the given email address",
+        "tags": [
+          "auth.password"
+        ],
+        "summary": "Request password reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.resetPasswordRequestReq"
+              }
+            }
+          },
+          "description": "tenant_id, email",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password/signup": {
+      "post": {
+        "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens",
+        "tags": [
+          "auth.password"
+        ],
+        "summary": "Password signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.signupReq"
+              }
+            }
+          },
+          "description": "tenant_id, email, password, optional first/last name",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "description": "Exchanges a refresh token for new access and refresh tokens",
+        "tags": [
+          "auth.tokens"
+        ],
+        "summary": "Refresh access token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.refreshReq"
+              }
+            }
+          },
+          "description": "refresh_token",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/revoke": {
+      "post": {
+        "description": "Revoke a token; currently supports token_type=\"refresh\"",
+        "tags": [
+          "auth.tokens"
+        ],
+        "summary": "Revoke token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.revokeReq"
+              }
+            }
+          },
+          "description": "token and token_type=refresh",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/sso/{provider}/callback": {
+      "get": {
+        "description": "Completes SSO flow and returns access/refresh tokens",
+        "tags": [
+          "auth.sso"
+        ],
+        "summary": "Handle SSO/OAuth callback",
+        "parameters": [
+          {
+            "description": "SSO provider (google, github, azuread)",
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.tokensResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/sso/{provider}/start": {
+      "get": {
+        "description": "Initiates an SSO flow for the given provider and redirects to the provider authorization URL",
+        "tags": [
+          "auth.sso"
+        ],
+        "summary": "Start SSO/OAuth flow",
+        "parameters": [
+          {
+            "description": "SSO provider (google, github, azuread)",
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant ID (UUID)",
+            "name": "tenant_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Absolute redirect URL after callback",
+            "name": "redirect_url",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque state to round-trip",
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider connection identifier",
+            "name": "connection_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Organization identifier",
+            "name": "organization_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "requestBodies": {
+      "controller.magicVerifyReq": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/controller.magicVerifyReq"
+            }
+          }
+        },
+        "description": "Magic token in JSON body"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "controller.createTenantReq": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.introspectReq": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.listResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/controller.tenantResp"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "total_pages": {
+            "type": "integer"
+          }
+        }
+      },
+      "controller.loginReq": {
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.magicSendReq": {
+        "type": "object",
+        "required": [
+          "email",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "redirect_url": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.magicVerifyReq": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.mfaBackupConsumeReq": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.mfaBackupConsumeResp": {
+        "type": "object",
+        "properties": {
+          "consumed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "controller.mfaBackupCountResp": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "controller.mfaBackupGenerateReq": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "maximum": 20,
+            "minimum": 1
+          }
+        }
+      },
+      "controller.mfaBackupGenerateResp": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "controller.mfaChallengeResp": {
+        "type": "object",
+        "properties": {
+          "challenge_token": {
+            "type": "string"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "controller.mfaTOTPActivateReq": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.mfaTOTPStartResp": {
+        "type": "object",
+        "properties": {
+          "otpauth_url": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.mfaVerifyReq": {
+        "type": "object",
+        "required": [
+          "challenge_token",
+          "code",
+          "method"
+        ],
+        "properties": {
+          "challenge_token": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "totp",
+              "backup_code"
+            ]
+          }
+        }
+      },
+      "controller.refreshReq": {
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.resetPasswordConfirmReq": {
+        "type": "object",
+        "required": [
+          "new_password",
+          "tenant_id",
+          "token"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "minLength": 8
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.resetPasswordRequestReq": {
+        "type": "object",
+        "required": [
+          "email",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.revokeReq": {
+        "type": "object",
+        "required": [
+          "token",
+          "token_type"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.signupReq": {
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.tenantResp": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.tokensResp": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.Introspection": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "exp": {
+            "type": "integer"
+          },
+          "iat": {
+            "type": "integer"
+          },
+          "mfa_verified": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.UserProfile": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_login_at": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "mfa_enabled": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

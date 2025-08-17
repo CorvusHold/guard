@@ -107,6 +107,9 @@ type MFAVerifyInput struct {
 type MagicLinkService interface {
 	Send(ctx context.Context, in MagicSendInput) error
 	Verify(ctx context.Context, in MagicVerifyInput) (AccessTokens, error)
+	// CreateForTest creates and stores a magic link token and returns the raw token (no email).
+	// Intended for CI/testing environments only.
+	CreateForTest(ctx context.Context, in MagicSendInput) (string, error)
 }
 
 // SSO inputs

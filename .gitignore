@@ -1,6 +1,6 @@
 # macOS finder artifacts
 .DS_Store
-todo
+# todo
 
 # Local env file
 .env
@@ -9,3 +9,6 @@ todo
 # Build artifacts
 bin
 tmp
+
+# Local npm cache for CI speedups
+.npm-cache
