@@ -92,6 +92,16 @@ conformance: conformance-up
 	  docker compose -f docker-compose.test.yml exec -T api_test sh -lc \
 	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed user --tenant-id \"$$TEN2\" --email \"$$NONMFA_EMAIL\" --password \"$$NONMFA_PASSWORD\"" >/dev/null; \
 	  { echo "NONMFA_TENANT_ID=$$TEN2"; echo "NONMFA_EMAIL=$$NONMFA_EMAIL"; echo "NONMFA_PASSWORD=$$NONMFA_PASSWORD"; } >> .env.conformance'
+	# Seed a second isolated non-MFA tenant/user for rate-limit tests (scenario 011)
+	bash -lc 'set -e; set -a; [ -f .env.conformance ] && source .env.conformance; set +a; \
+	  NONMFA2_TENANT_NAME=$${NONMFA2_TENANT_NAME:-test-nomfa-2}; \
+	  NONMFA2_EMAIL=$${NONMFA2_EMAIL:-nomfa2@example.com}; \
+	  NONMFA2_PASSWORD=$${NONMFA2_PASSWORD:-Password123!}; \
+	  TEN3=$$(docker compose -f docker-compose.test.yml exec -T api_test sh -lc \
+	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed tenant --name \"$$NONMFA2_TENANT_NAME\"" | grep ^TENANT_ID= | cut -d= -f2); \
+	  docker compose -f docker-compose.test.yml exec -T api_test sh -lc \
+	    "export PATH=/usr/local/go/bin:/go/bin:$$PATH; go run ./cmd/seed user --tenant-id \"$$TEN3\" --email \"$$NONMFA2_EMAIL\" --password \"$$NONMFA2_PASSWORD\"" >/dev/null; \
+	  { echo "NONMFA2_TENANT_ID=$$TEN3"; echo "NONMFA2_EMAIL=$$NONMFA2_EMAIL"; echo "NONMFA2_PASSWORD=$$NONMFA2_PASSWORD"; } >> .env.conformance'
 	make api-test-wait
 	# Reset Redis to avoid cross-run rate-limit pollution
 	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli FLUSHALL >/dev/null || true
@@ -100,6 +110,7 @@ conformance: conformance-up
 	  -e BASE_URL=http://api_test:8080 \
 	  -e TENANT_ID="$$TENANT_ID" -e EMAIL="$$EMAIL" -e PASSWORD="$$PASSWORD" \
 	  -e NONMFA_TENANT_ID="$$NONMFA_TENANT_ID" -e NONMFA_EMAIL="$$NONMFA_EMAIL" -e NONMFA_PASSWORD="$$NONMFA_PASSWORD" \
+	  -e NONMFA2_TENANT_ID="$$NONMFA2_TENANT_ID" -e NONMFA2_EMAIL="$$NONMFA2_EMAIL" -e NONMFA2_PASSWORD="$$NONMFA2_PASSWORD" \
 	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
 	  -e SCENARIO="$${SCENARIO:-}" -e SCENARIO_FILTER="$${SCENARIO_FILTER:-}" \
 	  $${SDK_SERVICE:-sdk_conformance}'
