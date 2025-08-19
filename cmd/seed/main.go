@@ -73,6 +73,7 @@ func main() {
 		password := fs.String("password", os.Getenv("PASSWORD"), "user password")
 		first := fs.String("first", envOr("FIRST_NAME", "Test"), "first name")
 		last := fs.String("last", envOr("LAST_NAME", "User"), "last name")
+		rolesCSV := fs.String("roles", os.Getenv("ROLES"), "comma-separated roles (e.g. admin,member)")
 		enableMFA := fs.Bool("enable-mfa", envOrBool("ENABLE_MFA", false), "enable MFA (TOTP) for user")
 		_ = fs.Parse(os.Args[2:])
 
@@ -82,6 +83,7 @@ func main() {
 		if strings.TrimSpace(*password) == "" { v := os.Getenv("PASSWORD"); password = &v }
 		if strings.TrimSpace(*first) == "" { v := envOr("FIRST_NAME", "Test"); first = &v }
 		if strings.TrimSpace(*last) == "" { v := envOr("LAST_NAME", "User"); last = &v }
+		if strings.TrimSpace(*rolesCSV) == "" { v := os.Getenv("ROLES"); rolesCSV = &v }
 
 		if *tenantIDStr == "" || *email == "" || *password == "" {
 			fatalf("tenant-id, email, and password are required")
@@ -90,6 +92,22 @@ func main() {
 		if err != nil { fatalf("invalid tenant-id: %v", err) }
 		userID, created, err := ensureUser(ctx, authSvc, authRepo, tenantID, *email, *password, *first, *last)
 		if err != nil { fatalf("user create: %v", err) }
+		// Apply roles if provided
+		if strings.TrimSpace(*rolesCSV) != "" {
+			parts := strings.Split(*rolesCSV, ",")
+			var roles []string
+			for _, p := range parts {
+				r := strings.TrimSpace(p)
+				if r == "" { continue }
+				roles = append(roles, r)
+			}
+			if len(roles) > 0 {
+				if err := authSvc.UpdateUserRoles(ctx, userID, roles); err != nil {
+					fatalf("update roles: %v", err)
+				}
+				stderr("updated roles for user %s: %s", userID, strings.Join(roles, ","))
+			}
+		}
 		out := map[string]string{
 			"TENANT_ID": tenantID.String(),
 			"EMAIL":     *email,
@@ -205,11 +223,11 @@ func enableUserMFA(ctx context.Context, svc adb.Service, userID, tenantID uuid.U
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage:
   seed tenant --name <name>
-  seed user --tenant-id <uuid> --email <email> --password <password> [--first First] [--last Last] [--enable-mfa]
+  seed user --tenant-id <uuid> --email <email> --password <password> [--first First] [--last Last] [--roles admin,member] [--enable-mfa]
   seed default [--tenant-name test] [--email test@example.com] [--password Password123!] [--enable-mfa]
 
 Environment fallbacks:
-  TENANT_NAME, TENANT_ID, EMAIL, PASSWORD, FIRST_NAME, LAST_NAME, ENABLE_MFA
+  TENANT_NAME, TENANT_ID, EMAIL, PASSWORD, FIRST_NAME, LAST_NAME, ENABLE_MFA, ROLES
 `)
 }
 
