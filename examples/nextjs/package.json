@@ -1,0 +1,34 @@
+{
+  "name": "guard-nextjs-example",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "set:rate-wait": "node scripts/set-rate-wait.js",
+    "set:rate-attempts": "node scripts/set-rate-attempts.js",
+    "playwright:install": "playwright install"
+  },
+  "dependencies": {
+    "@corvushold/guard-sdk": "file:../../sdk/ts",
+    "next": "14.2.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.2.66",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "typescript": "^5.5.4",
+    "@playwright/test": "^1.45.0",
+    "dotenv": "^16.4.5",
+    "otplib": "^12.0.1"
+  }
+}

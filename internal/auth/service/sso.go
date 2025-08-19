@@ -5,6 +5,7 @@ import (
     "crypto/rand"
     "crypto/sha256"
     "encoding/base64"
+    "encoding/json"
     "errors"
     "net/url"
     "time"
@@ -137,8 +138,18 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
     }
     // Prefer tenant-scoped adapter selection using state->tenant mapping (WorkOS flow)
     if stVals := in.Query["state"]; len(stVals) > 0 && stVals[0] != "" {
-        if tenStr, err := s.redis.Get(ctx, "sso:state:"+stVals[0]).Result(); err == nil && tenStr != "" {
-            if tenID, err := uuid.Parse(tenStr); err == nil {
+        if raw, err := s.redis.Get(ctx, "sso:state:"+stVals[0]).Result(); err == nil && raw != "" {
+            var tenID uuid.UUID
+            // State may be legacy UUID or JSON {"tenant_id": "..."}
+            if strings.HasPrefix(strings.TrimSpace(raw), "{") {
+                var sm struct { TenantID string `json:"tenant_id"` }
+                if json.Unmarshal([]byte(raw), &sm) == nil {
+                    if t, err := uuid.Parse(strings.TrimSpace(sm.TenantID)); err == nil { tenID = t }
+                }
+            } else {
+                if t, err := uuid.Parse(strings.TrimSpace(raw)); err == nil { tenID = t }
+            }
+            if tenID != uuid.Nil {
                 mode, _ := s.settings.GetString(ctx, sdomain.KeySSOProvider, &tenID, "")
                 if strings.EqualFold(mode, "workos") {
                     return s.callbackWorkOS(ctx, in)

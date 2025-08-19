@@ -63,6 +63,9 @@ type Service interface {
 	// Revoke invalidates a token. Currently supports refresh tokens.
 	Revoke(ctx context.Context, token string, tokenType string) error
 
+	// UpdateUserRoles updates the roles array for the specified user.
+	UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error
+
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
 	StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (secret string, otpauthURL string, err error)
@@ -155,6 +158,9 @@ type Repository interface {
 	// User/profile lookups
 	GetUserByID(ctx context.Context, userID uuid.UUID) (User, error)
 	GetAuthIdentitiesByUser(ctx context.Context, userID uuid.UUID) ([]AuthIdentity, error)
+
+	// UpdateUserRoles updates only the roles column for a user, preserving other profile fields.
+	UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error
 
 	// MFA persistence
 	UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret string, enabled bool) error

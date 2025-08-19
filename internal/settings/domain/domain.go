@@ -43,6 +43,9 @@ const (
 	KeyWorkOSAPIKey    = "sso.workos.api_key"
 	KeyWorkOSClientID  = "sso.workos.client_id"
 	KeyWorkOSClientSecret = "sso.workos.client_secret"
+    // Optional defaults to target a WorkOS SSO flow without passing query params on start
+    KeyWorkOSDefaultConnectionID  = "sso.workos.default_connection_id"
+    KeyWorkOSDefaultOrganizationID = "sso.workos.default_organization_id"
     // SSO hardening
     // KeySSOStateTTL controls the TTL for SSO OAuth state values stored in Redis (e.g., "10m").
     KeySSOStateTTL     = "sso.state_ttl"

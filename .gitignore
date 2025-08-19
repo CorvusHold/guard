@@ -12,3 +12,11 @@ tmp
 
 # Local npm cache for CI speedups
 .npm-cache
+node_modules
+.next
+
+.env.test
+.env
+.env.conformance
+.env.k6
+.env.local

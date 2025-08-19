@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
@@ -396,6 +397,21 @@ func (s *Service) Revoke(ctx context.Context, token string, tokenType string) er
     default:
         return errors.New("unsupported token type")
     }
+}
+
+// UpdateUserRoles updates the roles array for the specified user.
+func (s *Service) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error {
+    // Normalize: trim spaces and drop empties, and lowercase role names for consistency.
+    out := make([]string, 0, len(roles))
+    seen := make(map[string]struct{}, len(roles))
+    for _, r := range roles {
+        v := strings.ToLower(strings.TrimSpace(r))
+        if v == "" { continue }
+        if _, ok := seen[v]; ok { continue }
+        seen[v] = struct{}{}
+        out = append(out, v)
+    }
+    return s.repo.UpdateUserRoles(ctx, userID, out)
 }
 
 // --- MFA (TOTP + Backup Codes) ---

@@ -141,6 +141,9 @@ func (h *Controller) Register(e *echo.Echo) {
 	g.POST("/introspect", h.introspect, rlToken)
 	g.POST("/revoke", h.revoke, rlToken)
 
+    // Admin: user management
+    g.POST("/admin/users/:id/roles", h.adminUpdateRoles, rlToken)
+
 	// MFA: TOTP + Backup codes
 	g.POST("/mfa/totp/start", h.totpStart, rlMFA)
 	g.POST("/mfa/totp/activate", h.totpActivate, rlMFA)
@@ -246,6 +249,10 @@ type resetPasswordConfirmReq struct {
 	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
 	Token       string `json:"token" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
+type adminUpdateRolesReq struct {
+    Roles []string `json:"roles" validate:"required,dive,required"`
 }
 
 func bearerToken(c echo.Context) string {
@@ -471,6 +478,44 @@ func (h *Controller) revoke(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Admin Update Roles godoc
+// @Summary      Update a user's roles (admin-only)
+// @Description  Updates the roles array for a user. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string                 true  "User ID (UUID)"
+// @Param        body  body   adminUpdateRolesReq    true  "roles"
+// @Success      204
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/roles [post]
+func (h *Controller) adminUpdateRoles(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    var req adminUpdateRolesReq
+    if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+    if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+
+    if err := h.svc.UpdateUserRoles(c.Request().Context(), userID, req.Roles); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
 // ---- Password reset (stubs) ----
 // Password Reset Request godoc
 // @Summary      Request password reset
@@ -592,13 +637,14 @@ var allowedProviders = map[string]struct{}{
 	"google":   {},
 	"github":   {},
 	"azuread":  {},
+    "workos":  {},
 }
 
 // SSO Start godoc
 // @Summary      Start SSO/OAuth flow
 // @Description  Initiates an SSO flow for the given provider and redirects to the provider authorization URL
 // @Tags         auth.sso
-// @Param        provider         path      string  true   "SSO provider (google, github, azuread)"
+// @Param        provider         path      string  true   "SSO provider (google, github, azuread, workos)"
 // @Param        tenant_id        query     string  true   "Tenant ID (UUID)"
 // @Param        redirect_url     query     string  false  "Absolute redirect URL after callback"
 // @Param        state            query     string  false  "Opaque state to round-trip"

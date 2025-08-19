@@ -207,6 +207,19 @@ func (r *SQLCRepository) GetAuthIdentitiesByUser(ctx context.Context, userID uui
     return out, nil
 }
 
+// UpdateUserRoles updates only the roles column while preserving other profile fields.
+func (r *SQLCRepository) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error {
+    // Load current profile fields to preserve first/last name
+    u, err := r.q.GetUserByID(ctx, toPgUUID(userID))
+    if err != nil { return err }
+    return r.q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+        ID:        toPgUUID(userID),
+        FirstName: u.FirstName,
+        LastName:  u.LastName,
+        Roles:     roles,
+    })
+}
+
 // MFA persistence
 func (r *SQLCRepository) UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret string, enabled bool) error {
     return r.q.UpsertMFASecret(ctx, db.UpsertMFASecretParams{
