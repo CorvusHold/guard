@@ -18,3 +18,9 @@ WITH RECURSIVE chain AS (
   JOIN chain c ON rt.parent_id = c.id
 )
 UPDATE refresh_tokens rt SET revoked = TRUE WHERE rt.id IN (SELECT c.id FROM chain c);
+
+-- name: ListUserSessions :many
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at
+FROM refresh_tokens
+WHERE user_id = $1 AND tenant_id = $2
+ORDER BY created_at DESC;

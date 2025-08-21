@@ -13,7 +13,11 @@
     "test:e2e:ui": "playwright test --ui",
     "set:rate-wait": "node scripts/set-rate-wait.js",
     "set:rate-attempts": "node scripts/set-rate-attempts.js",
-    "playwright:install": "playwright install"
+    "playwright:install": "playwright install",
+    "sso:dev": "GUARD_BASE_URL=http://localhost:8081 ADMIN_EMAIL=nomfa@example.com ADMIN_PASSWORD=Password123! node scripts/configure_sso_dev.mjs",
+    "test:owner": "bash -lc 'GUARD_BASE_URL=http://localhost:8081 ADMIN_EMAIL=nomfa@example.com ADMIN_PASSWORD=Password123! eval \"$(node scripts/owner_setup.mjs)\"; playwright test tests/e2e/settings_owner_access.spec.ts'",
+    "test:settings:persistence": "bash -lc 'GUARD_BASE_URL=http://localhost:8081 ADMIN_EMAIL=nomfa@example.com ADMIN_PASSWORD=Password123! eval \"$(node scripts/owner_setup.mjs)\"; playwright test tests/e2e/settings_provider_persistence.spec.ts'",
+    "test:sso": "GUARD_BASE_URL=http://localhost:8081 ADMIN_EMAIL=nomfa@example.com ADMIN_PASSWORD=Password123! node scripts/configure_sso_dev.mjs && RUN_SSO_E2E=true playwright test tests/e2e/sso_workos.spec.ts"
   },
   "dependencies": {
     "@corvushold/guard-sdk": "file:../../sdk/ts",

@@ -66,6 +66,18 @@ type Service interface {
 	// UpdateUserRoles updates the roles array for the specified user.
 	UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error
 
+	// Admin/user management
+	// ListTenantUsers returns all users that belong to the given tenant.
+	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]User, error)
+	// UpdateUserNames updates only first and last name for a user, preserving roles.
+	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
+	// SetUserActive toggles the active state of a user.
+	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
+	// RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
+	RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error
+
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
 	StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (secret string, otpauthURL string, err error)
@@ -169,6 +181,16 @@ type Repository interface {
 	CountRemainingMFABackupCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// ConsumeMFABackupCode returns true when a code was valid and consumed.
 	ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, codeHash string) (bool, error)
+
+	// Admin/user management
+	// ListTenantUsers returns all users that belong to the given tenant.
+	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]User, error)
+	// SetUserActive toggles the active state of a user.
+	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// UpdateUserNames updates only first and last name for a user, preserving roles.
+	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
+	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
 }
 
 type AuthIdentity struct {
@@ -185,6 +207,9 @@ type RefreshToken struct {
 	TenantID uuid.UUID
 	Revoked  bool
 	ExpiresAt time.Time
+	CreatedAt time.Time
+	UserAgent string
+	IP        string
 }
 
 type MagicLink struct {

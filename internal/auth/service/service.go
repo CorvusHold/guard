@@ -29,6 +29,43 @@ type Service struct {
 	pub      evdomain.Publisher
 }
 
+// --- Admin/user management ---
+
+// ListTenantUsers returns all users that belong to the given tenant.
+func (s *Service) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+    return s.repo.ListTenantUsers(ctx, tenantID)
+}
+
+// UpdateUserNames updates only first and last name for a user, preserving roles.
+func (s *Service) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+    fn := strings.TrimSpace(firstName)
+    ln := strings.TrimSpace(lastName)
+    return s.repo.UpdateUserNames(ctx, userID, fn, ln)
+}
+
+// SetUserActive toggles the active state of a user.
+func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
+    return s.repo.SetUserActive(ctx, userID, active)
+}
+
+// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+func (s *Service) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
+    return s.repo.ListUserSessions(ctx, userID, tenantID)
+}
+
+// RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
+func (s *Service) RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error {
+    // Ensure the session belongs to this user and tenant
+    sessions, err := s.repo.ListUserSessions(ctx, userID, tenantID)
+    if err != nil { return err }
+    ok := false
+    for _, rt := range sessions {
+        if rt.ID == sessionID { ok = true; break }
+    }
+    if !ok { return errors.New("session not found") }
+    return s.repo.RevokeTokenChain(ctx, sessionID)
+}
+
 // VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
 func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks domain.AccessTokens, err error) {
 	defer func() {

@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getClient } from '@/lib/client';
+import { isRateLimitError } from '@corvushold/guard-sdk';
 
 const ACCESS_COOKIE = 'guard_access_token';
 const REFRESH_COOKIE = 'guard_refresh_token';
 
-function getBaseAndTenant() {
+function ensureEnv() {
   const baseUrl = process.env.GUARD_BASE_URL;
   if (!baseUrl) throw new Error('GUARD_BASE_URL is not set');
   const tenantId = process.env.GUARD_TENANT_ID;
   if (!tenantId) throw new Error('GUARD_TENANT_ID is not set');
-  return { baseUrl, tenantId };
 }
 
 export async function POST(req: NextRequest) {
@@ -16,8 +17,8 @@ export async function POST(req: NextRequest) {
   if (!email || !password) {
     return NextResponse.json({ error: 'email and password are required' }, { status: 400 });
   }
-
-  const { baseUrl, tenantId } = getBaseAndTenant();
+  ensureEnv();
+  const client = getClient();
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const envAttempts = Number(process.env.GUARD_RATE_LIMIT_MAX_ATTEMPTS ?? '3');
@@ -28,37 +29,24 @@ export async function POST(req: NextRequest) {
   let attempt = 0;
   while (true) {
     try {
-      const r = await fetch(`${baseUrl}/v1/auth/password/signup`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tenant_id: tenantId, email, password, first_name, last_name }),
-      });
-
-      const status = r.status;
-      // 429 handling with Retry-After
-      if (status === 429 && attempt < maxAttempts - 1) {
-        const retryAfter = r.headers.get('retry-after');
-        const hinted = retryAfter ? Number(retryAfter) : 1;
-        const waitSecs = Number.isFinite(hinted) && hinted > 0 ? Math.min(hinted, maxWaitSecs) : 1;
-        await sleep(waitSecs * 1000);
-        attempt++;
-        continue;
-      }
-
-      const j = status === 204 ? {} : await r.json().catch(() => ({}));
-
-      // Treat 200 or 201 as success
+      const res = await client.passwordSignup({ email, password, first_name, last_name });
+      const status = res.meta.status;
       if (status === 200 || status === 201) {
-        const { access_token, refresh_token } = j as any;
+        const { access_token, refresh_token } = res.data || ({} as any);
         const out = NextResponse.json({ ok: true }, { status: 201 });
         if (access_token) out.cookies.set(ACCESS_COOKIE, access_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
         if (refresh_token) out.cookies.set(REFRESH_COOKIE, refresh_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
         return out;
       }
-
-      // Surface backend error message when available
-      return NextResponse.json({ error: (j && (j.error || j.message)) || 'Signup failed' }, { status });
+      return NextResponse.json(res, { status });
     } catch (e: any) {
+      if (isRateLimitError(e) && attempt < maxAttempts - 1) {
+        const hinted = e.retryAfter && e.retryAfter > 0 ? e.retryAfter : 1;
+        const waitSecs = Math.min(hinted, maxWaitSecs);
+        await sleep(waitSecs * 1000);
+        attempt++;
+        continue;
+      }
       if (attempt < maxAttempts - 1) {
         await sleep(1000);
         attempt++;

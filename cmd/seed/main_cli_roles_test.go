@@ -39,7 +39,8 @@ func TestCLI_UserRolesFlag_UpdatesRoles(t *testing.T) {
 
 	// Run the seed CLI to create/update user with roles, using intentionally messy roles to test normalization
 	cmd := exec.Command("go", "run", ".", "user", "--tenant-id", tenantID.String(), "--email", email, "--password", password, "--roles", "Admin, member,ADMIN,,member ")
-	cmd.Dir = "./cmd/seed"
+    // Run from the current package directory (this test resides in cmd/seed)
+    cmd.Dir = "."
 	cmd.Env = append(os.Environ())
 	out, err := cmd.CombinedOutput()
 	if err != nil {

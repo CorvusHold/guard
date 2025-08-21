@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-function getBase() {
-  const baseUrl = process.env.GUARD_BASE_URL;
-  if (!baseUrl) throw new Error('GUARD_BASE_URL is not set');
-  return baseUrl;
-}
-
-function bearerFrom(req: NextRequest): string | null {
-  return req.cookies.get('guard_access_token')?.value ?? null;
-}
+import { getClientFromCookies } from '@/lib/client';
+import { isRateLimitError } from '@corvushold/guard-sdk';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function getRetryConfig() {
@@ -20,34 +12,31 @@ function getRetryConfig() {
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const token = bearerFrom(req);
-  if (!token) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const baseUrl = getBase();
+  const client = getClientFromCookies(req);
   const { id } = params;
   const { maxAttempts, maxWaitSecs } = getRetryConfig();
 
   let attempt = 0;
   while (true) {
-    const r = await fetch(`${baseUrl}/v1/tenants/${encodeURIComponent(id)}/settings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (r.status === 429 && attempt < maxAttempts - 1) {
-      const retryAfter = r.headers.get('retry-after');
-      const hinted = retryAfter ? Number(retryAfter) : 1;
-      const waitSecs = Number.isFinite(hinted) && hinted > 0 ? Math.min(hinted, maxWaitSecs) : 1;
-      await sleep(waitSecs * 1000);
-      attempt++;
-      continue;
+    try {
+      const res = await client.getTenantSettings(id);
+      return NextResponse.json(res.data, { status: res.meta.status });
+    } catch (e: any) {
+      if (isRateLimitError(e) && attempt < maxAttempts - 1) {
+        const hinted = e.retryAfter && e.retryAfter > 0 ? e.retryAfter : 1;
+        const waitSecs = Math.min(hinted, maxWaitSecs);
+        await sleep(waitSecs * 1000);
+        attempt++;
+        continue;
+      }
+      const status = typeof e?.status === 'number' ? e.status : 500;
+      return NextResponse.json({ error: e?.message || 'failed' }, { status });
     }
-    const body = await r.json().catch(() => ({}));
-    return NextResponse.json(body, { status: r.status });
   }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const token = bearerFrom(req);
-  if (!token) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const baseUrl = getBase();
+  const client = getClientFromCookies(req);
   const { id } = params;
   const { maxAttempts, maxWaitSecs } = getRetryConfig();
 
@@ -55,21 +44,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   let attempt = 0;
   while (true) {
-    const r = await fetch(`${baseUrl}/v1/tenants/${encodeURIComponent(id)}/settings`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload ?? {}),
-    });
-    if (r.status === 429 && attempt < maxAttempts - 1) {
-      const retryAfter = r.headers.get('retry-after');
-      const hinted = retryAfter ? Number(retryAfter) : 1;
-      const waitSecs = Number.isFinite(hinted) && hinted > 0 ? Math.min(hinted, maxWaitSecs) : 1;
-      await sleep(waitSecs * 1000);
-      attempt++;
-      continue;
+    try {
+      const res = await client.updateTenantSettings(id, payload ?? {});
+      if (res.meta.status === 204) return new NextResponse(null, { status: 204 });
+      return NextResponse.json(res.data ?? {}, { status: res.meta.status });
+    } catch (e: any) {
+      if (isRateLimitError(e) && attempt < maxAttempts - 1) {
+        const hinted = e.retryAfter && e.retryAfter > 0 ? e.retryAfter : 1;
+        const waitSecs = Math.min(hinted, maxWaitSecs);
+        await sleep(waitSecs * 1000);
+        attempt++;
+        continue;
+      }
+      const status = typeof e?.status === 'number' ? e.status : 500;
+      return NextResponse.json({ error: e?.message || 'failed' }, { status });
     }
-    if (r.status === 204) return new NextResponse(null, { status: 204 });
-    const body = await r.json().catch(() => ({}));
-    return NextResponse.json(body, { status: r.status });
   }
 }

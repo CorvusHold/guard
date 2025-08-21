@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GuardClient, isRateLimitError } from '@corvushold/guard-sdk';
+import { GuardClient, isRateLimitError, isTokensResp, isMfaChallengeResp } from '@corvushold/guard-sdk';
 
 const ACCESS_COOKIE = 'guard_access_token';
 const REFRESH_COOKIE = 'guard_refresh_token';
@@ -42,16 +42,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (res.meta.status === 200) {
-    const { access_token, refresh_token } = res.data as any;
+  if (res.meta.status === 200 && isTokensResp(res.data)) {
+    const { access_token, refresh_token } = res.data;
     const out = NextResponse.json({ ok: true }, { status: 200 });
     if (access_token) out.cookies.set(ACCESS_COOKIE, access_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
     if (refresh_token) out.cookies.set(REFRESH_COOKIE, refresh_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
     return out;
   }
 
-  if (res.meta.status === 202) {
-    const { challenge_token, methods } = res.data as any;
+  if (res.meta.status === 202 && isMfaChallengeResp(res.data)) {
+    const { challenge_token, methods } = res.data;
     return NextResponse.json({ challenge_token, methods }, { status: 202 });
   }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -100,8 +99,6 @@ func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string,
 		q.Set("organization", orgID)
 	}
 	u.RawQuery = q.Encode()
-
-	fmt.Println("WorkOS authorize URL: ", u.String())
 	return u.String(), nil
 }
 

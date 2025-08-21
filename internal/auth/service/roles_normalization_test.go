@@ -62,6 +62,18 @@ func (f *fakeRepo) ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, c
 	return false, nil
 }
 
+// New methods required by domain.Repository
+func (f *fakeRepo) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+	return nil, nil
+}
+func (f *fakeRepo) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error { return nil }
+func (f *fakeRepo) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+	return nil
+}
+func (f *fakeRepo) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
+	return nil, nil
+}
+
 func TestService_UpdateUserRoles_NormalizesAndDedupes(t *testing.T) {
 	repo := &fakeRepo{}
 	s := &Service{repo: repo}

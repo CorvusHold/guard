@@ -52,7 +52,32 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  // Best-effort revoke on backend is optional for GET; clear browser cookies and redirect.
+  // Best-effort revoke on backend; then clear browser cookies and redirect.
+  const refresh = req.cookies.get(REFRESH_COOKIE)?.value ?? null;
+  if (refresh) {
+    const client = getClient();
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const envAttempts = Number(process.env.GUARD_RATE_LIMIT_MAX_ATTEMPTS ?? '3');
+    const maxAttempts = Number.isFinite(envAttempts) && envAttempts > 0 ? envAttempts : 3;
+    const envMax = Number(process.env.GUARD_RATE_LIMIT_MAX_WAIT_SECS ?? '2');
+    const maxWaitSecs = Number.isFinite(envMax) && envMax > 0 ? envMax : 2;
+    let attempt = 0;
+    while (true) {
+      try {
+        await client.logout({ refresh_token: refresh });
+        break;
+      } catch (e: any) {
+        if (isRateLimitError(e) && attempt < maxAttempts - 1) {
+          const hinted = e.retryAfter && e.retryAfter > 0 ? e.retryAfter : 1;
+          const waitSecs = Math.min(hinted, maxWaitSecs);
+          await sleep(waitSecs * 1000);
+          attempt++;
+          continue;
+        }
+        break; // ignore other errors during GET logout
+      }
+    }
+  }
   const out = NextResponse.redirect(new URL('/', req.url), { status: 303 });
   out.cookies.set(REFRESH_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0, expires: new Date(0), secure: false });
   out.cookies.set(ACCESS_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0, expires: new Date(0), secure: false });

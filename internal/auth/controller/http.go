@@ -143,6 +143,14 @@ func (h *Controller) Register(e *echo.Echo) {
 
     // Admin: user management
     g.POST("/admin/users/:id/roles", h.adminUpdateRoles, rlToken)
+    g.GET("/admin/users", h.adminListUsers, rlToken)
+    g.PATCH("/admin/users/:id", h.adminUpdateNames, rlToken)
+    g.POST("/admin/users/:id/block", h.adminBlockUser, rlToken)
+    g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
+
+    // Sessions (self)
+    g.GET("/sessions", h.sessionsList, rlToken)
+    g.POST("/sessions/:id/revoke", h.sessionRevoke, rlToken)
 
 	// MFA: TOTP + Backup codes
 	g.POST("/mfa/totp/start", h.totpStart, rlMFA)
@@ -253,6 +261,42 @@ type resetPasswordConfirmReq struct {
 
 type adminUpdateRolesReq struct {
     Roles []string `json:"roles" validate:"required,dive,required"`
+}
+
+// Admin Users DTOs
+type adminUser struct {
+    ID            uuid.UUID  `json:"id"`
+    EmailVerified bool       `json:"email_verified"`
+    IsActive      bool       `json:"is_active"`
+    FirstName     string     `json:"first_name"`
+    LastName      string     `json:"last_name"`
+    Roles         []string   `json:"roles"`
+    CreatedAt     time.Time  `json:"created_at"`
+    UpdatedAt     time.Time  `json:"updated_at"`
+    LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
+}
+
+type adminUsersResp struct {
+    Users []adminUser `json:"users"`
+}
+
+type adminUpdateNamesReq struct {
+    FirstName string `json:"first_name" validate:"omitempty"`
+    LastName  string `json:"last_name" validate:"omitempty"`
+}
+
+// Sessions DTOs
+type sessionItem struct {
+    ID        uuid.UUID `json:"id"`
+    Revoked   bool      `json:"revoked"`
+    UserAgent string    `json:"user_agent"`
+    IP        string    `json:"ip"`
+    CreatedAt time.Time `json:"created_at"`
+    ExpiresAt time.Time `json:"expires_at"`
+}
+
+type sessionsListResp struct {
+    Sessions []sessionItem `json:"sessions"`
 }
 
 func bearerToken(c echo.Context) string {
@@ -509,8 +553,220 @@ func (h *Controller) adminUpdateRoles(c echo.Context) error {
     var req adminUpdateRolesReq
     if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
     if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+    // Explicitly reject empty roles array (tests use a noop validator, so enforce here)
+    if len(req.Roles) == 0 {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "roles must not be empty"})
+    }
 
     if err := h.svc.UpdateUserRoles(c.Request().Context(), userID, req.Roles); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin List Users godoc
+// @Summary      List users for a tenant (admin-only)
+// @Description  Lists all users that belong to the specified tenant. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  adminUsersResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users [get]
+func (h *Controller) adminListUsers(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    tenStr := c.QueryParam("tenant_id")
+    if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+    tenantID, err := uuid.Parse(tenStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+    users, err := h.svc.ListTenantUsers(c.Request().Context(), tenantID)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+    out := make([]adminUser, 0, len(users))
+    for _, u := range users {
+        out = append(out, adminUser{
+            ID:            u.ID,
+            EmailVerified: u.EmailVerified,
+            IsActive:      u.IsActive,
+            FirstName:     u.FirstName,
+            LastName:      u.LastName,
+            Roles:         u.Roles,
+            CreatedAt:     u.CreatedAt,
+            UpdatedAt:     u.UpdatedAt,
+            LastLoginAt:   u.LastLoginAt,
+        })
+    }
+    return c.JSON(http.StatusOK, adminUsersResp{Users: out})
+}
+
+// Admin Update Names godoc
+// @Summary      Update a user's names (admin-only)
+// @Description  Updates first and/or last name for a user. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string               true  "User ID (UUID)"
+// @Param        body  body   adminUpdateNamesReq  true  "first_name, last_name"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id} [patch]
+func (h *Controller) adminUpdateNames(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    var req adminUpdateNamesReq
+    if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+    if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+
+    if err := h.svc.UpdateUserNames(c.Request().Context(), userID, req.FirstName, req.LastName); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Block User godoc
+// @Summary      Block a user (admin-only)
+// @Description  Sets a user's active status to false. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path   string  true  "User ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/block [post]
+func (h *Controller) adminBlockUser(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    if err := h.svc.SetUserActive(c.Request().Context(), userID, false); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Unblock User godoc
+// @Summary      Unblock a user (admin-only)
+// @Description  Sets a user's active status to true. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path   string  true  "User ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/unblock [post]
+func (h *Controller) adminUnblockUser(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    if err := h.svc.SetUserActive(c.Request().Context(), userID, true); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Sessions List godoc
+// @Summary      List my active sessions
+// @Description  Lists the authenticated user's sessions (refresh tokens) for the current tenant.
+// @Tags         auth.sessions
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  sessionsListResp
+// @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/sessions [get]
+func (h *Controller) sessionsList(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+
+    sessions, err := h.svc.ListUserSessions(c.Request().Context(), in.UserID, in.TenantID)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+    out := make([]sessionItem, 0, len(sessions))
+    for _, s := range sessions {
+        out = append(out, sessionItem{
+            ID:        s.ID,
+            Revoked:   s.Revoked,
+            UserAgent: s.UserAgent,
+            IP:        s.IP,
+            CreatedAt: s.CreatedAt,
+            ExpiresAt: s.ExpiresAt,
+        })
+    }
+    return c.JSON(http.StatusOK, sessionsListResp{Sessions: out})
+}
+
+// Session Revoke godoc
+// @Summary      Revoke a specific session
+// @Description  Revokes a specific session by ID for the authenticated user within the current tenant.
+// @Tags         auth.sessions
+// @Security     BearerAuth
+// @Param        id   path   string  true  "Session ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/sessions/{id}/revoke [post]
+func (h *Controller) sessionRevoke(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+
+    sidStr := c.Param("id")
+    sid, err := uuid.Parse(sidStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid session id"}) }
+
+    if err := h.svc.RevokeSession(c.Request().Context(), in.UserID, in.TenantID, sid); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
     }
     return c.NoContent(http.StatusNoContent)

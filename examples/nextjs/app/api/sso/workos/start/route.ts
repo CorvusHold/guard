@@ -1,32 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GuardClient } from '@corvushold/guard-sdk';
 
 export async function GET(req: NextRequest) {
   const base = process.env.GUARD_BASE_URL;
-  const tenant = process.env.GUARD_TENANT_ID;
-  if (!base || !tenant) {
-    return NextResponse.json({ error: 'GUARD_BASE_URL and GUARD_TENANT_ID must be set' }, { status: 500 });
-  }
+  if (!base) return NextResponse.json({ error: 'GUARD_BASE_URL must be set' }, { status: 500 });
+
+  const tenantId = process.env.GUARD_TENANT_ID;
+  const client = new GuardClient({ baseUrl: base, tenantId });
 
   // Always point redirect_url to our Next.js callback so we can set cookies client-side
-  const nextCallback = new URL('/api/sso/workos/callback', req.nextUrl.origin).toString();
+  const redirect_url = new URL('/api/sso/workos/callback', req.nextUrl.origin).toString();
   const state = req.nextUrl.searchParams.get('state') || '';
-  const connectionId = req.nextUrl.searchParams.get('connection_id') || '';
-  const organizationId = req.nextUrl.searchParams.get('organization_id') || '';
+  const connection_id = req.nextUrl.searchParams.get('connection_id') || '';
+  const organization_id = req.nextUrl.searchParams.get('organization_id') || '';
 
-  const u = new URL('/v1/auth/sso/workos/start', base);
-  u.searchParams.set('tenant_id', tenant);
-  // Force backend to use our callback URL for WorkOS redirect_uri
-  u.searchParams.set('redirect_url', nextCallback);
-  if (state) u.searchParams.set('state', state);
-  if (connectionId) u.searchParams.set('connection_id', connectionId);
-  if (organizationId) u.searchParams.set('organization_id', organizationId);
-
-  // Call Guard start with manual redirect handling so we can intercept dev adapter callback URLs.
-  const r = await fetch(u.toString(), { method: 'GET', redirect: 'manual' as RequestRedirect });
-  const loc = r.headers.get('location');
-  if (!loc) {
-    return NextResponse.json({ error: 'missing redirect location from SSO start' }, { status: 400 });
-  }
+  const res = await client.startSso('workos', { redirect_url, state, connection_id, organization_id });
+  const loc = res.data.redirect_url;
 
   try {
     const locUrl = new URL(loc);

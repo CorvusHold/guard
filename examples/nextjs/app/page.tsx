@@ -110,10 +110,12 @@ export default function Page() {
       const r = await fetch("/api/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
       if (r.status === 200) {
-        // cookies set; fetch profile
+        // Give the browser a moment to apply Set-Cookie then fetch profile once (server route retries internally)
+        await new Promise((r) => setTimeout(r, 300));
         await fetchMe();
       } else if (r.status === 202) {
         const j = await r.json();
@@ -207,8 +209,9 @@ export default function Page() {
     setLoading(true);
     setError(null);
     try {
-      // Navigate to GET /api/logout which clears cookies and redirects to '/'
-      window.location.href = "/api/logout";
+      // Revoke server session and clear cookies, then navigate home
+      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+      window.location.href = '/';
       return;
     } catch (e: any) {
       setError(e?.message || "failed");
@@ -228,6 +231,10 @@ export default function Page() {
             <button onClick={onRefresh} disabled={loading} data-testid="btn-refresh-tokens">Refresh Tokens</button>
             <button onClick={onLogout} disabled={loading} data-testid="btn-logout">Logout</button>
             <a href="/protected" data-testid="link-protected">Go to Protected</a>
+            <a href="/sessions" data-testid="link-sessions">Sessions</a>
+            {Array.isArray(profile?.roles) && profile.roles.includes('admin') && (
+              <a href="/admin/users" data-testid="link-admin-users">Admin Users</a>
+            )}
             {Array.isArray(profile?.roles) && profile.roles.includes('owner') && (
               <a href="/settings" data-testid="link-settings">Settings</a>
             )}

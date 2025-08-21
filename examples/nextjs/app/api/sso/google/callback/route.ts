@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GuardClient, isTokensResp } from '@corvushold/guard-sdk';
 
 const ACCESS_COOKIE = 'guard_access_token';
 const REFRESH_COOKIE = 'guard_refresh_token';
@@ -11,20 +12,17 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state') || '';
   if (!code) return NextResponse.json({ error: 'code is required' }, { status: 400 });
 
-  const u = new URL('/v1/auth/sso/google/callback', base);
-  u.searchParams.set('code', code);
-  if (state) u.searchParams.set('state', state);
+  const tenantId = process.env.GUARD_TENANT_ID;
+  const client = new GuardClient({ baseUrl: base, tenantId });
+  const res = await client.handleSsoCallback('google', { code, state });
 
-  const r = await fetch(u.toString(), { method: 'GET' });
-  const j = await r.json().catch(() => ({}));
-
-  if (r.ok) {
-    const { access_token, refresh_token } = j as any;
+  if (res.meta.status >= 200 && res.meta.status < 300 && isTokensResp(res.data)) {
+    const { access_token, refresh_token } = res.data;
     const out = NextResponse.redirect(new URL('/', req.url), { status: 302 });
     if (access_token) out.cookies.set(ACCESS_COOKIE, access_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
     if (refresh_token) out.cookies.set(REFRESH_COOKIE, refresh_token, { httpOnly: true, sameSite: 'lax', path: '/', secure: false });
     return out;
   }
 
-  return NextResponse.json({ error: j?.error || 'SSO callback failed' }, { status: r.status });
+  return NextResponse.json({ error: 'SSO callback failed' }, { status: res.meta.status });
 }

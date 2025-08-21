@@ -67,3 +67,67 @@ These values are useful to adjust between fast local runs and potentially higher
 - If TypeScript cannot resolve aliases like `@/lib/*`, ensure `tsconfig.json` includes `baseUrl` and `paths` (already configured).
 - If `@corvushold/guard-sdk` types are missing, ensure `npm install` completed successfully.
 - If calling the API returns connection errors, verify `GUARD_BASE_URL` and that the Guard API is up and reachable.
+
+## E2E Test Runbook
+This example includes Playwright E2E tests you can run locally. Ensure:
+  
+- Guard API is running and seeded users exist (admin without MFA).
+- `.env.local` contains `GUARD_BASE_URL` and `GUARD_TENANT_ID`.
+  
+### 1) Owner Settings Test
+- Create an owner user and export its credentials to the current shell, then run the test:
+  
+```bash
+cd examples/nextjs
+# Exports OWNER_EMAIL/OWNER_PASSWORD in this shell
+node scripts/owner_setup.mjs
+  
+npm run test:e2e -- tests/e2e/settings_owner_access.spec.ts
+```
+  
+Notes:
+- The Settings page only sends non-empty fields to the backend to avoid validation errors.
+- Success condition: UI shows "Settings saved." after clicking Save.
+  
+### 2) WorkOS SSO (Dev Adapter) Test
+- Configure the tenant to use the dev SSO provider and allow redirects to this Next app, then run the opt-in SSO test:
+  
+```bash
+cd examples/nextjs
+GUARD_BASE_URL=http://localhost:8081 \
+ADMIN_EMAIL=nomfa@example.com \
+ADMIN_PASSWORD=Password123! \
+node scripts/configure_sso_dev.mjs
+  
+RUN_SSO_E2E=true npm run test:e2e -- tests/e2e/sso_workos.spec.ts
+```
+  
+What it does:
+- Starts the WorkOS SSO flow via `/api/sso/workos/start`.
+- Uses the dev adapter to callback into `/api/sso/workos/callback`.
+- Sets `guard_access_token`/`guard_refresh_token` cookies and verifies `/protected` can be accessed.
+  
+### Playwright config notes
+- Tests run the Next.js app on `http://localhost:3001` with `ENABLE_TEST_ROUTES=true`.
+- `GUARD_BASE_URL` and `GUARD_TENANT_ID` are read by Next.js from `.env.local`.
+
+### Convenience scripts
+For quicker runs, you can use the provided npm scripts (they set required env and handle retries where appropriate):
+
+```bash
+# Configure tenant SSO to dev provider and allow redirects to http://localhost:3001
+npm run sso:dev
+
+# Run Owner Settings E2E (auto-creates an owner and exports OWNER_* for the test)
+npm run test:owner
+
+# Run Settings persistence E2E (provider + allowlist)
+npm run test:settings:persistence
+
+# Run opt-in WorkOS SSO E2E with dev adapter
+npm run test:sso
+```
+
+Notes:
+- `scripts/configure_sso_dev.mjs` includes retry/backoff to avoid 429 rate limit flakes.
+- Ensure `.env.local` has `GUARD_TENANT_ID`; `GUARD_BASE_URL` defaults to `http://localhost:8081` in scripts.

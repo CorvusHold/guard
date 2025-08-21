@@ -66,7 +66,9 @@ describe('GuardClient', () => {
     const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock });
 
     const login = await client.passwordLogin({ email: 'a@example.com', password: 'pw', tenant_id: 't1' });
-    expect(login.data.access_token).toBe('acc-1');
+    expect(login.meta.status).toBe(200);
+    expect('access_token' in login.data).toBe(true);
+    expect((login.data as any).access_token).toBe('acc-1');
     expect(storage.getAccessToken()).toBe('acc-1');
     expect(storage.getRefreshToken()).toBe('ref-1');
 
@@ -96,7 +98,8 @@ describe('GuardClient', () => {
     const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock });
     const res = await client.passwordLogin({ email: 'a@example.com', password: 'pw' });
     expect(res.meta.status).toBe(202);
-    expect(res.data.challenge_token).toBe('ch-1');
+    expect('challenge_token' in res.data).toBe(true);
+    expect((res.data as any).challenge_token).toBe('ch-1');
     expect(storage.getAccessToken()).toBeNull();
     expect(storage.getRefreshToken()).toBeNull();
   });

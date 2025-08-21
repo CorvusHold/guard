@@ -65,6 +65,49 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 	return err
 }
 
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at
+FROM refresh_tokens
+WHERE user_id = $1 AND tenant_id = $2
+ORDER BY created_at DESC
+`
+
+type ListUserSessionsParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsParams) ([]RefreshToken, error) {
+	rows, err := q.db.Query(ctx, listUserSessions, arg.UserID, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RefreshToken
+	for rows.Next() {
+		var i RefreshToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TenantID,
+			&i.TokenHash,
+			&i.ParentID,
+			&i.Revoked,
+			&i.UserAgent,
+			&i.Ip,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
 UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1
 `

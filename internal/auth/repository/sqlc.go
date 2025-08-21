@@ -14,6 +14,48 @@ import (
 
 type SQLCRepository struct{ q *db.Queries }
 
+// --- Admin/user management ---
+
+// ListTenantUsers returns all users that belong to the given tenant.
+func (r *SQLCRepository) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+    items, err := r.q.ListTenantUsers(ctx, toPgUUID(tenantID))
+    if err != nil { return nil, err }
+    out := make([]domain.User, 0, len(items))
+    for _, u := range items {
+        out = append(out, mapUser(u))
+    }
+    return out, nil
+}
+
+// SetUserActive toggles the active state of a user.
+func (r *SQLCRepository) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
+    return r.q.SetUserActive(ctx, db.SetUserActiveParams{ID: toPgUUID(userID), IsActive: active})
+}
+
+// UpdateUserNames updates only first and last name for a user, preserving roles.
+func (r *SQLCRepository) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+    // Load current roles to preserve
+    u, err := r.q.GetUserByID(ctx, toPgUUID(userID))
+    if err != nil { return err }
+    return r.q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+        ID:        toPgUUID(userID),
+        FirstName: toPgText(firstName),
+        LastName:  toPgText(lastName),
+        Roles:     u.Roles,
+    })
+}
+
+// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+func (r *SQLCRepository) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
+    items, err := r.q.ListUserSessions(ctx, db.ListUserSessionsParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+    if err != nil { return nil, err }
+    out := make([]domain.RefreshToken, 0, len(items))
+    for _, rt := range items {
+        out = append(out, mapRefreshToken(rt))
+    }
+    return out, nil
+}
+
 func mapMFASecret(ms db.MfaSecret) domain.MFASecret {
     return domain.MFASecret{
         UserID:    toUUID(ms.UserID),
@@ -75,6 +117,9 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		TenantID:  toUUID(rt.TenantID),
 		Revoked:   rt.Revoked,
 		ExpiresAt: rt.ExpiresAt.Time,
+		CreatedAt: rt.CreatedAt.Time,
+		UserAgent: rt.UserAgent.String,
+		IP:        rt.Ip.String,
 	}
 }
 
@@ -164,7 +209,7 @@ func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash st
 }
 
 func (r *SQLCRepository) RevokeTokenChain(ctx context.Context, id uuid.UUID) error {
-	return r.q.RevokeTokenChain(ctx, toPgUUID(id))
+    return r.q.RevokeTokenChain(ctx, toPgUUID(id))
 }
 
 // Magic link operations

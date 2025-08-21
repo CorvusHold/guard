@@ -87,14 +87,14 @@ export default function SettingsPage() {
     setInfo(null);
     setLoading(true);
     try {
-      const payload: any = {
-        sso_provider: ssoProvider || "",
-        workos_client_id: workosClientId || "",
-        workos_default_connection_id: workosDefaultConnectionId || "",
-        workos_default_organization_id: workosDefaultOrganizationId || "",
-        sso_state_ttl: ssoStateTTL || "",
-        sso_redirect_allowlist: redirectAllowlist || "",
-      };
+      const payload: any = {};
+      // Only include non-empty fields; backend treats missing fields as no-op
+      if (ssoProvider) payload.sso_provider = ssoProvider;
+      if (workosClientId) payload.workos_client_id = workosClientId;
+      if (workosDefaultConnectionId) payload.workos_default_connection_id = workosDefaultConnectionId;
+      if (workosDefaultOrganizationId) payload.workos_default_organization_id = workosDefaultOrganizationId;
+      if (ssoStateTTL) payload.sso_state_ttl = ssoStateTTL;
+      if (redirectAllowlist) payload.sso_redirect_allowlist = redirectAllowlist;
       // Only include secrets if provided to avoid clearing
       if (workosClientSecret) payload.workos_client_secret = workosClientSecret;
       if (workosApiKey) payload.workos_api_key = workosApiKey;
