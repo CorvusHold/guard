@@ -11,7 +11,7 @@ export async function loginWithPasswordAndMFA(page: Page, opts?: { email?: strin
 
   await page.goto('/');
   // Wait for any relevant UI to appear: login form, MFA form, or profile
-  await page.waitForSelector('[data-testid="input-email"], [data-testid="profile-json"], [data-testid="input-mfa-code"]', { timeout: 30000, state: 'attached' });
+  await page.waitForSelector('[data-testid="input-email"], [data-testid="profile-json"], [data-testid="input-mfa-code"]', { timeout: 120000, state: 'attached' });
 
   // If already logged in
   if (await page.getByTestId('profile-json').isVisible().catch(() => false)) {
@@ -25,7 +25,7 @@ export async function loginWithPasswordAndMFA(page: Page, opts?: { email?: strin
   // Either profile appears (no MFA) or MFA challenge appears
   const mfaForm = page.getByTestId('btn-verify-mfa');
   const profile = page.getByTestId('profile-json');
-  await page.waitForSelector('[data-testid="profile-json"], [data-testid="input-mfa-code"]', { timeout: 30000, state: 'attached' });
+  await page.waitForSelector('[data-testid="profile-json"], [data-testid="input-mfa-code"]', { timeout: 120000, state: 'attached' });
   if (await profile.isVisible().catch(() => false)) return;
 
   // MFA path

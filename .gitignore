@@ -20,3 +20,9 @@ node_modules
 .env.conformance
 .env.k6
 .env.local
+trace.zip
+
+# Playwright artifacts (Next.js example)
+examples/nextjs/test-results/
+examples/nextjs/playwright-report/
+examples/nextjs/blob-report/

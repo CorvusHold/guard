@@ -124,6 +124,9 @@ npm run test:owner
 # Run Settings persistence E2E (provider + allowlist)
 npm run test:settings:persistence
 
+# Run consolidated smoke (owner + settings persistence; optional SSO if RUN_SSO_E2E=true)
+npm run test:smoke
+
 # Run opt-in WorkOS SSO E2E with dev adapter
 npm run test:sso
 ```
@@ -131,3 +134,28 @@ npm run test:sso
 Notes:
 - `scripts/configure_sso_dev.mjs` includes retry/backoff to avoid 429 rate limit flakes.
 - Ensure `.env.local` has `GUARD_TENANT_ID`; `GUARD_BASE_URL` defaults to `http://localhost:8081` in scripts.
+
+### CI: Next.js Example E2E in GitHub Actions
+
+A dedicated workflow runs the smoke tests on PRs and pushes:
+
+- Workflow file: `.github/workflows/examples-nextjs-e2e.yml`
+- Always runs owner + settings persistence.
+- Optional SSO can be toggled via `workflow_dispatch` input `run_sso_e2e=true`.
+
+Local equivalent:
+
+```bash
+# Start the examples API (db, valkey, mailhog, seed, api_examples)
+docker compose up -d db valkey mailhog examples_setup api_examples
+
+cd examples/nextjs
+npm ci
+npx playwright install --with-deps
+
+# Run smoke
+npm run test:smoke
+
+# Optionally include SSO
+RUN_SSO_E2E=true npm run test:smoke
+```
