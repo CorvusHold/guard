@@ -74,6 +74,61 @@ func (f *fakeRepo) ListUserSessions(ctx context.Context, userID uuid.UUID, tenan
 	return nil, nil
 }
 
+// --- RBAC v2 stubs to satisfy domain.Repository ---
+// Permissions
+func (f *fakeRepo) ListPermissions(ctx context.Context) ([]domain.Permission, error) {
+	return nil, nil
+}
+func (f *fakeRepo) GetPermissionByKey(ctx context.Context, key string) (domain.Permission, error) {
+	return domain.Permission{}, nil
+}
+
+// Roles
+func (f *fakeRepo) ListRolesByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Role, error) {
+	return nil, nil
+}
+func (f *fakeRepo) CreateRole(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
+	return domain.Role{}, nil
+}
+func (f *fakeRepo) UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
+	return domain.Role{}, nil
+}
+func (f *fakeRepo) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error { return nil }
+func (f *fakeRepo) GetRoleByName(ctx context.Context, tenantID uuid.UUID, name string) (domain.Role, error) {
+	return domain.Role{}, nil
+}
+
+// User role assignments
+func (f *fakeRepo) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (f *fakeRepo) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
+	return nil
+}
+func (f *fakeRepo) RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
+	return nil
+}
+
+// Role-permissions
+func (f *fakeRepo) ListRolePermissionKeys(ctx context.Context, roleIDs []uuid.UUID) ([]domain.RolePermissionGrant, error) {
+	return nil, nil
+}
+func (f *fakeRepo) UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error {
+	return nil
+}
+func (f *fakeRepo) DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error {
+	return nil
+}
+
+// Groups and ACL
+func (f *fakeRepo) ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) { return nil, nil }
+func (f *fakeRepo) ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]domain.PermissionGrant, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]domain.GroupPermissionGrant, error) {
+	return nil, nil
+}
+
 func TestService_UpdateUserRoles_NormalizesAndDedupes(t *testing.T) {
 	repo := &fakeRepo{}
 	s := &Service{repo: repo}

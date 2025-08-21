@@ -1,5 +1,51 @@
 basePath: /
 definitions:
+  controller.adminUpdateNamesReq:
+    properties:
+      first_name:
+        type: string
+      last_name:
+        type: string
+    type: object
+  controller.adminUpdateRolesReq:
+    properties:
+      roles:
+        items:
+          type: string
+        type: array
+    required:
+    - roles
+    type: object
+  controller.adminUser:
+    properties:
+      created_at:
+        type: string
+      email_verified:
+        type: boolean
+      first_name:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      last_login_at:
+        type: string
+      last_name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  controller.adminUsersResp:
+    properties:
+      users:
+        items:
+          $ref: '#/definitions/controller.adminUser'
+        type: array
+    type: object
   controller.createTenantReq:
     properties:
       name:
@@ -129,6 +175,138 @@ definitions:
     - code
     - method
     type: object
+  controller.permissionGrantItem:
+    properties:
+      key:
+        type: string
+      object_id:
+        type: string
+      object_type:
+        type: string
+    type: object
+  controller.putSettingsRequest:
+    properties:
+      sso_provider:
+        type: string
+      sso_redirect_allowlist:
+        type: string
+      sso_state_ttl:
+        type: string
+      workos_api_key:
+        type: string
+      workos_client_id:
+        type: string
+      workos_client_secret:
+        type: string
+      workos_default_connection_id:
+        type: string
+      workos_default_organization_id:
+        type: string
+    type: object
+  controller.rbacCreateRoleReq:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - name
+    - tenant_id
+    type: object
+  controller.rbacModifyUserRoleReq:
+    properties:
+      role_id:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - role_id
+    - tenant_id
+    type: object
+  controller.rbacPermissionItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      key:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  controller.rbacPermissionsResp:
+    properties:
+      permissions:
+        items:
+          $ref: '#/definitions/controller.rbacPermissionItem'
+        type: array
+    type: object
+  controller.rbacResolvedPermissionsResp:
+    properties:
+      grants:
+        items:
+          $ref: '#/definitions/controller.permissionGrantItem'
+        type: array
+    type: object
+  controller.rbacRoleItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  controller.rbacRolePermissionReq:
+    properties:
+      permission_key:
+        type: string
+      resource_id:
+        type: string
+      resource_type:
+        type: string
+      scope_type:
+        type: string
+    required:
+    - permission_key
+    - scope_type
+    type: object
+  controller.rbacRolesResp:
+    properties:
+      roles:
+        items:
+          $ref: '#/definitions/controller.rbacRoleItem'
+        type: array
+    type: object
+  controller.rbacUpdateRoleReq:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - name
+    - tenant_id
+    type: object
+  controller.rbacUserRolesResp:
+    properties:
+      role_ids:
+        items:
+          type: string
+        type: array
+    type: object
   controller.refreshReq:
     properties:
       refresh_token:
@@ -169,6 +347,50 @@ definitions:
     required:
     - token
     - token_type
+    type: object
+  controller.sessionItem:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      ip:
+        type: string
+      revoked:
+        type: boolean
+      user_agent:
+        type: string
+    type: object
+  controller.sessionsListResp:
+    properties:
+      sessions:
+        items:
+          $ref: '#/definitions/controller.sessionItem'
+        type: array
+    type: object
+  controller.settingsResponse:
+    properties:
+      sso_provider:
+        description: SSO
+        type: string
+      sso_redirect_allowlist:
+        type: string
+      sso_state_ttl:
+        type: string
+      workos_api_key:
+        description: masked
+        type: string
+      workos_client_id:
+        type: string
+      workos_client_secret:
+        description: masked
+        type: string
+      workos_default_connection_id:
+        type: string
+      workos_default_organization_id:
+        type: string
     type: object
   controller.signupReq:
     properties:
@@ -406,6 +628,686 @@ paths:
       summary: Get tenant by name
       tags:
       - tenants
+  /v1/auth/admin/rbac/permissions:
+    get:
+      description: Returns all known permissions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.rbacPermissionsResp'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List all permissions (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/rbac/roles:
+    get:
+      description: Returns all roles for the specified tenant.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.rbacRolesResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List roles for a tenant (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new role for the specified tenant.
+      parameters:
+      - description: tenant_id, name, optional description
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacCreateRoleReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.rbacRoleItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create role (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/rbac/roles/{id}:
+    delete:
+      description: Deletes a role for the specified tenant.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete role (admin-only)
+      tags:
+      - auth.admin
+    patch:
+      consumes:
+      - application/json
+      description: Updates a role's name/description in the specified tenant.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: tenant_id, name, optional description
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacUpdateRoleReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.rbacRoleItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update role (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/rbac/roles/{id}/permissions:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a permission grant for a role, optionally scoped to a resource.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: permission_key, scope_type, optional resource_type/resource_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacRolePermissionReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a permission grant from a role (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Upserts a permission grant for a role, optionally scoped to a resource.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: permission_key, scope_type, optional resource_type/resource_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacRolePermissionReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Grant/Update a permission to a role (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/rbac/users/{id}/permissions/resolve:
+    get:
+      description: Aggregates user permissions from roles and ACL for a tenant.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.rbacResolvedPermissionsResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Resolve user permissions (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/rbac/users/{id}/roles:
+    delete:
+      consumes:
+      - application/json
+      description: Removes a role assignment for a user within a tenant.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: tenant_id, role_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacModifyUserRoleReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove a role from a user (admin-only)
+      tags:
+      - auth.admin
+    get:
+      description: Lists role assignments for a user within a tenant.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.rbacUserRolesResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List role IDs assigned to a user (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Adds a role assignment for a user within a tenant.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: tenant_id, role_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.rbacModifyUserRoleReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a role to a user (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users:
+    get:
+      description: Lists all users that belong to the specified tenant. Requires caller
+        to have the admin role.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.adminUsersResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List users for a tenant (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates first and/or last name for a user. Requires caller to have
+        the admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: first_name, last_name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.adminUpdateNamesReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a user's names (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users/{id}/block:
+    post:
+      description: Sets a user's active status to false. Requires caller to have the
+        admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Block a user (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users/{id}/roles:
+    post:
+      consumes:
+      - application/json
+      description: Updates the roles array for a user. Requires caller to have the
+        admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: roles
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.adminUpdateRolesReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a user's roles (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users/{id}/unblock:
+    post:
+      description: Sets a user's active status to true. Requires caller to have the
+        admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unblock a user (admin-only)
+      tags:
+      - auth.admin
   /v1/auth/introspect:
     post:
       consumes:
@@ -1068,6 +1970,70 @@ paths:
       summary: Revoke token
       tags:
       - auth.tokens
+  /v1/auth/sessions:
+    get:
+      description: Lists the authenticated user's sessions (refresh tokens) for the
+        current tenant.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.sessionsListResp'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List my active sessions
+      tags:
+      - auth.sessions
+  /v1/auth/sessions/{id}/revoke:
+    post:
+      description: Revokes a specific session by ID for the authenticated user within
+        the current tenant.
+      parameters:
+      - description: Session ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Revoke a specific session
+      tags:
+      - auth.sessions
   /v1/auth/sso/{provider}/callback:
     get:
       description: Completes SSO flow and returns access/refresh tokens
@@ -1104,7 +2070,7 @@ paths:
       description: Initiates an SSO flow for the given provider and redirects to the
         provider authorization URL
       parameters:
-      - description: SSO provider (google, github, azuread)
+      - description: SSO provider (google, github, azuread, workos)
         in: path
         name: provider
         required: true
@@ -1142,6 +2108,100 @@ paths:
       summary: Start SSO/OAuth flow
       tags:
       - auth.sso
+  /v1/tenants/{id}/settings:
+    get:
+      description: Returns tenant-scoped settings required for SSO setup (WorkOS)
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.settingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get tenant settings (subset)
+      tags:
+      - tenants
+    put:
+      consumes:
+      - application/json
+      description: Upserts tenant settings for SSO setup (WorkOS). Only whitelisted
+        keys are accepted.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: settings
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.putSettingsRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upsert tenant settings (subset)
+      tags:
+      - tenants
 schemes:
 - http
 securityDefinitions:

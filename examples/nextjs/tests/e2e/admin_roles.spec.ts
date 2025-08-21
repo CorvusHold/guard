@@ -88,7 +88,12 @@ test('admin can create user and assign admin+owner roles', async ({ page, contex
   // Verify page visible
   await expect(page.getByTestId('admin-users')).toBeVisible();
   // Look up table row by first/last names
-  const row = page.locator('table tbody tr').filter({ hasText: newFirst }).filter({ hasText: newLast });
+  // In the Admin UI, first/last names are rendered inside input values, not as text nodes.
+  // Filter the row by matching input[value="..."] for both first and last names.
+  const row = page
+    .locator('table tbody tr')
+    .filter({ has: page.locator(`input[value="${newFirst}"]`) })
+    .filter({ has: page.locator(`input[value="${newLast}"]`) });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('admin');
   await expect(row).toContainText('owner');

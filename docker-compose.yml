@@ -173,7 +173,7 @@ services:
     working_dir: /app
     environment:
       GOTOOLCHAIN: auto
-      DATABASE_URL: "postgres://guard:guard@db:5433/guard?sslmode=disable"
+      DATABASE_URL: "postgres://guard:guard@db:5432/guard?sslmode=disable"
     volumes:
       - ./:/app
     depends_on:
