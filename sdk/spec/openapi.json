@@ -233,6 +233,452 @@
                 }
             }
         },
+        "/v1/auth/admin/fga/acl/tuples": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a direct permission grant (tuple).",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Create ACL tuple (admin-only)",
+                "parameters": [
+                    {
+                        "description": "tuple payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaCreateACLTupleReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a direct permission grant (tuple).",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Delete ACL tuple (admin-only)",
+                "parameters": [
+                    {
+                        "description": "tuple selector",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaDeleteACLTupleReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/admin/fga/groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists groups for the specified tenant.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "List groups for a tenant (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaListGroupsResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new group for the specified tenant.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Create group (admin-only)",
+                "parameters": [
+                    {
+                        "description": "tenant_id, name, description",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaCreateGroupReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaGroupItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/admin/fga/groups/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a group for the specified tenant.",
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Delete group (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/admin/fga/groups/{id}/members": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a user to a group.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Add user to group (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "user_id",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a user from a group.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Remove user from group (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "user_id",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/admin/rbac/permissions": {
             "get": {
                 "security": [
@@ -1272,6 +1718,63 @@
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/authorize": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns allow/deny for a subject, action (permission_key) and object. Note: subject_id is optional when subject_type=self (it will be derived from the caller token).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Authorization decision",
+                "parameters": [
+                    {
+                        "description": "decision input (subject_id optional when subject_type=self)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaAuthorizeReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.fgaAuthorizeResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2728,6 +3231,184 @@
             ],
             "properties": {
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaAuthorizeReq": {
+            "type": "object",
+            "required": [
+                "object_type",
+                "permission_key",
+                "subject_type",
+                "tenant_id"
+            ],
+            "properties": {
+                "object_id": {
+                    "type": "string"
+                },
+                "object_type": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "permission_key": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "subject_id": {
+                    "description": "SubjectID is optional when subject_type=self; otherwise required.\nWhen subject_type=self, the server derives the subject from the caller's token.",
+                    "type": "string"
+                },
+                "subject_type": {
+                    "type": "string",
+                    "enum": [
+                        "self",
+                        "user",
+                        "group"
+                    ]
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaAuthorizeResp": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaCreateACLTupleReq": {
+            "type": "object",
+            "required": [
+                "object_type",
+                "permission_key",
+                "subject_id",
+                "subject_type",
+                "tenant_id"
+            ],
+            "properties": {
+                "object_id": {
+                    "type": "string"
+                },
+                "object_type": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "permission_key": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "subject_id": {
+                    "type": "string"
+                },
+                "subject_type": {
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "group"
+                    ]
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaCreateGroupReq": {
+            "type": "object",
+            "required": [
+                "name",
+                "tenant_id"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaDeleteACLTupleReq": {
+            "type": "object",
+            "required": [
+                "object_type",
+                "permission_key",
+                "subject_id",
+                "subject_type",
+                "tenant_id"
+            ],
+            "properties": {
+                "object_id": {
+                    "type": "string"
+                },
+                "object_type": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "permission_key": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "subject_id": {
+                    "type": "string"
+                },
+                "subject_type": {
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "group"
+                    ]
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaGroupItem": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.fgaListGroupsResp": {
+            "type": "object",
+            "properties": {
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.fgaGroupItem"
+                    }
+                }
+            }
+        },
+        "controller.fgaModifyGroupMemberReq": {
+            "type": "object",
+            "required": [
+                "user_id"
+            ],
+            "properties": {
+                "user_id": {
                     "type": "string"
                 }
             }

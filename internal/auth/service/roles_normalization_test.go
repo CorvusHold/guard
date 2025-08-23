@@ -129,6 +129,21 @@ func (f *fakeRepo) ListACLPermissionKeysForGroups(ctx context.Context, tenantID 
 	return nil, nil
 }
 
+// --- FGA repository methods ---
+func (f *fakeRepo) CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Group, error) {
+	return domain.Group{ID: id, TenantID: tenantID, Name: name, Description: description}, nil
+}
+func (f *fakeRepo) ListGroups(ctx context.Context, tenantID uuid.UUID) ([]domain.Group, error) { return nil, nil }
+func (f *fakeRepo) DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error { return nil }
+func (f *fakeRepo) AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error { return nil }
+func (f *fakeRepo) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error { return nil }
+func (f *fakeRepo) CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (domain.ACLTuple, error) {
+	return domain.ACLTuple{ID: id, TenantID: tenantID, SubjectType: subjectType, SubjectID: subjectID, PermissionID: permissionID, ObjectType: objectType, ObjectID: objectID, CreatedBy: createdBy}, nil
+}
+func (f *fakeRepo) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error {
+	return nil
+}
+
 func TestService_UpdateUserRoles_NormalizesAndDedupes(t *testing.T) {
 	repo := &fakeRepo{}
 	s := &Service{repo: repo}

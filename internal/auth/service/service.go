@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/pquerna/otp/totp"
+	"github.com/rs/zerolog"
 )
 
 type Service struct {
@@ -27,163 +28,340 @@ type Service struct {
 	cfg      config.Config
 	settings sdomain.Service
 	pub      evdomain.Publisher
+	log      zerolog.Logger
+}
+
+// --- FGA: Groups, Memberships, ACL Tuples, Authorization ---
+
+// CreateGroup creates a tenant-scoped group.
+func (s *Service) CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (domain.Group, error) {
+	n := strings.TrimSpace(name)
+	if n == "" {
+		return domain.Group{}, errors.New("group name required")
+	}
+	return s.repo.CreateGroup(ctx, uuid.New(), tenantID, n, strings.TrimSpace(description))
+}
+
+// ListGroups lists groups for a tenant.
+func (s *Service) ListGroups(ctx context.Context, tenantID uuid.UUID) ([]domain.Group, error) {
+	return s.repo.ListGroups(ctx, tenantID)
+}
+
+// DeleteGroup deletes a group within a tenant.
+func (s *Service) DeleteGroup(ctx context.Context, groupID uuid.UUID, tenantID uuid.UUID) error {
+	return s.repo.DeleteGroup(ctx, groupID, tenantID)
+}
+
+// AddGroupMember adds a user to a group.
+func (s *Service) AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	return s.repo.AddGroupMember(ctx, groupID, userID)
+}
+
+// RemoveGroupMember removes a user from a group.
+func (s *Service) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	return s.repo.RemoveGroupMember(ctx, groupID, userID)
+}
+
+// CreateACLTuple creates a direct permission grant (tuple).
+func (s *Service) CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (domain.ACLTuple, error) {
+	// Resolve permission ID by key
+	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
+	if err != nil { return domain.ACLTuple{}, err }
+	st := strings.ToLower(strings.TrimSpace(subjectType))
+	if st != "user" && st != "group" { return domain.ACLTuple{}, errors.New("subject_type must be 'user' or 'group'") }
+	ot := strings.TrimSpace(objectType)
+	if ot == "" { return domain.ACLTuple{}, errors.New("object_type required") }
+	return s.repo.CreateACLTuple(ctx, uuid.New(), tenantID, st, subjectID, p.ID, ot, objectID, createdBy)
+}
+
+// DeleteACLTuple deletes a direct permission grant (tuple).
+func (s *Service) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error {
+	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
+	if err != nil { return err }
+	st := strings.ToLower(strings.TrimSpace(subjectType))
+	if st != "user" && st != "group" { return errors.New("subject_type must be 'user' or 'group'") }
+	ot := strings.TrimSpace(objectType)
+	if ot == "" { return errors.New("object_type required") }
+	return s.repo.DeleteACLTuple(ctx, tenantID, st, subjectID, p.ID, ot, objectID)
+}
+
+// Authorize returns whether subject has permissionKey on object within tenant.
+func (s *Service) Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (bool, string, error) {
+	st := strings.ToLower(strings.TrimSpace(subjectType))
+	oid := ""
+	if objectID != nil { oid = *objectID }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("subject_type", st).
+		Str("subject_id", subjectID.String()).
+		Str("permission", permissionKey).
+		Str("object_type", objectType).
+		Str("object_id", oid).
+		Msg("authorize:start")
+	switch st {
+	case "user":
+		ok, err := s.HasPermission(ctx, subjectID, tenantID, permissionKey, objectType, objectID)
+		if err != nil { return false, "error", err }
+		if ok {
+			s.log.Debug().
+				Str("tenant_id", tenantID.String()).
+				Str("user_id", subjectID.String()).
+				Str("permission", permissionKey).
+				Str("object_type", objectType).
+				Str("object_id", oid).
+				Msg("authorize:granted")
+			return true, "granted", nil
+		}
+		s.log.Debug().
+			Str("tenant_id", tenantID.String()).
+			Str("user_id", subjectID.String()).
+			Str("permission", permissionKey).
+			Str("object_type", objectType).
+			Str("object_id", oid).
+			Msg("authorize:denied")
+		return false, "denied", nil
+	case "group":
+		// Evaluate group ACL directly
+		grants, err := s.repo.ListACLPermissionKeysForGroups(ctx, tenantID, []uuid.UUID{subjectID})
+		if err != nil { return false, "error", err }
+		s.log.Debug().
+			Str("tenant_id", tenantID.String()).
+			Str("group_id", subjectID.String()).
+			Int("grants_count", len(grants)).
+			Msg("authorize:group:grants_fetched")
+		// Apply same matching logic as HasPermission
+		for _, g := range grants {
+			if g.Key != permissionKey { continue }
+			if g.ObjectType == "*" { return true, "granted", nil }
+			if objectID == nil {
+				if g.ObjectType == objectType && g.ObjectID == nil { return true, "granted", nil }
+				continue
+			}
+			if g.ObjectType != objectType { continue }
+			if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) { return true, "granted", nil }
+		}
+		s.log.Debug().
+			Str("tenant_id", tenantID.String()).
+			Str("group_id", subjectID.String()).
+			Str("permission", permissionKey).
+			Str("object_type", objectType).
+			Str("object_id", oid).
+			Msg("authorize:group:denied")
+		return false, "denied", nil
+	default:
+		return false, "invalid_subject_type", errors.New("unsupported subject_type")
+	}
 }
 
 // --- RBAC v2 ---
 
 // ListPermissions returns all known permissions.
 func (s *Service) ListPermissions(ctx context.Context) ([]domain.Permission, error) {
-    return s.repo.ListPermissions(ctx)
+	return s.repo.ListPermissions(ctx)
 }
 
 // ListRoles returns all roles for a tenant.
 func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]domain.Role, error) {
-    return s.repo.ListRolesByTenant(ctx, tenantID)
+	return s.repo.ListRolesByTenant(ctx, tenantID)
 }
 
 // CreateRole creates a role in a tenant.
 func (s *Service) CreateRole(ctx context.Context, tenantID uuid.UUID, name, description string) (domain.Role, error) {
-    n := strings.ToLower(strings.TrimSpace(name))
-    if n == "" { return domain.Role{}, errors.New("role name required") }
-    return s.repo.CreateRole(ctx, uuid.New(), tenantID, n, description)
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "" { return domain.Role{}, errors.New("role name required") }
+	return s.repo.CreateRole(ctx, uuid.New(), tenantID, n, description)
 }
 
 // UpdateRole updates a role in a tenant.
 func (s *Service) UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
-    n := strings.ToLower(strings.TrimSpace(name))
-    if n == "" { return domain.Role{}, errors.New("role name required") }
-    return s.repo.UpdateRole(ctx, roleID, tenantID, n, description)
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "" { return domain.Role{}, errors.New("role name required") }
+	return s.repo.UpdateRole(ctx, roleID, tenantID, n, description)
 }
 
 // DeleteRole deletes a role in a tenant.
 func (s *Service) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error {
-    return s.repo.DeleteRole(ctx, roleID, tenantID)
+	return s.repo.DeleteRole(ctx, roleID, tenantID)
 }
 
 // User role assignments
 func (s *Service) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error) {
-    return s.repo.ListUserRoleIDs(ctx, userID, tenantID)
+	return s.repo.ListUserRoleIDs(ctx, userID, tenantID)
 }
 
 func (s *Service) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
-    return s.repo.AddUserRole(ctx, userID, tenantID, roleID)
+	return s.repo.AddUserRole(ctx, userID, tenantID, roleID)
 }
 
 func (s *Service) RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
-    return s.repo.RemoveUserRole(ctx, userID, tenantID, roleID)
+	return s.repo.RemoveUserRole(ctx, userID, tenantID, roleID)
 }
 
 // Role-permission mapping management (permissionKey is the unique permission key).
 func (s *Service) UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error {
-    // Resolve permission ID by key
-    p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-    if err != nil { return err }
-    return s.repo.UpsertRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
+	// Resolve permission ID by key
+	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
+	if err != nil { return err }
+	return s.repo.UpsertRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
 }
 
 func (s *Service) DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error {
-    p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-    if err != nil { return err }
-    return s.repo.DeleteRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
+	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
+	if err != nil { return err }
+	return s.repo.DeleteRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
 }
 
 // ResolveUserPermissions aggregates permissions from roles, user ACL, and group ACL.
 func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (domain.ResolvedPermissions, error) {
-    // Role-derived grants
-    roleIDs, err := s.repo.ListUserRoleIDs(ctx, userID, tenantID)
-    if err != nil { return domain.ResolvedPermissions{}, err }
-    rolePerms, err := s.repo.ListRolePermissionKeys(ctx, roleIDs)
-    if err != nil { return domain.ResolvedPermissions{}, err }
-    // Direct user ACL
-    userACL, err := s.repo.ListACLPermissionKeysForUser(ctx, tenantID, userID)
-    if err != nil { return domain.ResolvedPermissions{}, err }
-    // Group ACL via memberships
-    groups, err := s.repo.ListUserGroups(ctx, userID)
-    if err != nil { return domain.ResolvedPermissions{}, err }
-    groupACL, err := s.repo.ListACLPermissionKeysForGroups(ctx, tenantID, groups)
-    if err != nil { return domain.ResolvedPermissions{}, err }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Msg("resolve_user_permissions:start")
+	// Role-derived grants
+	roleIDs, err := s.repo.ListUserRoleIDs(ctx, userID, tenantID)
+	if err != nil { return domain.ResolvedPermissions{}, err }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("role_ids_count", len(roleIDs)).
+		Msg("resolve_user_permissions:roles_fetched")
+	rolePerms, err := s.repo.ListRolePermissionKeys(ctx, roleIDs)
+	if err != nil { return domain.ResolvedPermissions{}, err }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("role_perms_count", len(rolePerms)).
+		Msg("resolve_user_permissions:role_perms_fetched")
+	// Direct user ACL
+	userACL, err := s.repo.ListACLPermissionKeysForUser(ctx, tenantID, userID)
+	if err != nil { return domain.ResolvedPermissions{}, err }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("user_acl_count", len(userACL)).
+		Msg("resolve_user_permissions:user_acl_fetched")
+	// Group ACL via memberships
+	groups, err := s.repo.ListUserGroups(ctx, userID)
+	if err != nil { return domain.ResolvedPermissions{}, err }
+	// Represent groups as strings for logging
+	gs := make([]string, 0, len(groups))
+	for _, gid := range groups { gs = append(gs, gid.String()) }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("groups_count", len(groups)).
+		Strs("groups", gs).
+		Msg("resolve_user_permissions:user_groups_fetched")
+	groupACL, err := s.repo.ListACLPermissionKeysForGroups(ctx, tenantID, groups)
+	if err != nil { return domain.ResolvedPermissions{}, err }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("group_acl_count", len(groupACL)).
+		Msg("resolve_user_permissions:group_acl_fetched")
 
-    // Merge and deduplicate
-    dedup := make(map[string]struct{})
-    appendGrant := func(gs *[]domain.PermissionGrant, g domain.PermissionGrant) {
-        id := ""
-        if g.ObjectID != nil { id = *g.ObjectID }
-        k := g.Key + "|" + g.ObjectType + "|" + id
-        if _, ok := dedup[k]; ok { return }
-        dedup[k] = struct{}{}
-        *gs = append(*gs, g)
-    }
+	// Merge and deduplicate
+	dedup := make(map[string]struct{})
+	appendGrant := func(gs *[]domain.PermissionGrant, g domain.PermissionGrant) {
+		id := ""
+		if g.ObjectID != nil { id = *g.ObjectID }
+		k := g.Key + "|" + g.ObjectType + "|" + id
+		if _, ok := dedup[k]; ok { return }
+		dedup[k] = struct{}{}
+		*gs = append(*gs, g)
+	}
 
-    grants := make([]domain.PermissionGrant, 0, len(rolePerms)+len(userACL)+len(groupACL))
-    // Map role perms: global when no resource_type/resource_id
-    for _, rp := range rolePerms {
-        if rp.ResourceType != nil {
-            appendGrant(&grants, domain.PermissionGrant{Key: rp.Key, ObjectType: *rp.ResourceType, ObjectID: rp.ResourceID})
-        } else {
-            appendGrant(&grants, domain.PermissionGrant{Key: rp.Key, ObjectType: "*", ObjectID: nil})
-        }
-    }
-    for _, ua := range userACL { appendGrant(&grants, ua) }
-    for _, ga := range groupACL { appendGrant(&grants, domain.PermissionGrant{Key: ga.Key, ObjectType: ga.ObjectType, ObjectID: ga.ObjectID}) }
+	grants := make([]domain.PermissionGrant, 0, len(rolePerms)+len(userACL)+len(groupACL))
+	// Map role perms: global when no resource_type/resource_id
+	for _, rp := range rolePerms {
+		if rp.ResourceType != nil {
+			appendGrant(&grants, domain.PermissionGrant{Key: rp.Key, ObjectType: *rp.ResourceType, ObjectID: rp.ResourceID})
+		} else {
+			appendGrant(&grants, domain.PermissionGrant{Key: rp.Key, ObjectType: "*", ObjectID: nil})
+		}
+	}
+	for _, ua := range userACL { appendGrant(&grants, ua) }
+	for _, ga := range groupACL { appendGrant(&grants, domain.PermissionGrant{Key: ga.Key, ObjectType: ga.ObjectType, ObjectID: ga.ObjectID}) }
 
-    return domain.ResolvedPermissions{Grants: grants}, nil
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Int("grants_count", len(grants)).
+		Msg("resolve_user_permissions:done")
+	return domain.ResolvedPermissions{Grants: grants}, nil
 }
 
 // HasPermission checks whether user has a permission, optionally scoped to an object.
 func (s *Service) HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error) {
-    rp, err := s.ResolveUserPermissions(ctx, userID, tenantID)
-    if err != nil { return false, err }
-    for _, g := range rp.Grants {
-        if g.Key != key { continue }
-        if g.ObjectType == "*" { return true, nil }
-        if objectID == nil {
-            // Global check for a specific type requires an unscoped grant for that type
-            if g.ObjectType == objectType && g.ObjectID == nil { return true, nil }
-            continue
-        }
-        if g.ObjectType != objectType { continue }
-        if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) {
-            return true, nil
-        }
-    }
-    return false, nil
+	oid := ""
+	if objectID != nil { oid = *objectID }
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Str("permission", key).
+		Str("object_type", objectType).
+		Str("object_id", oid).
+		Msg("has_permission:start")
+	rp, err := s.ResolveUserPermissions(ctx, userID, tenantID)
+	if err != nil { return false, err }
+	for _, g := range rp.Grants {
+		if g.Key != key { continue }
+		if g.ObjectType == "*" { return true, nil }
+		if objectID == nil {
+			// Global check for a specific type requires an unscoped grant for that type
+			if g.ObjectType == objectType && g.ObjectID == nil { return true, nil }
+			continue
+		}
+		if g.ObjectType != objectType { continue }
+		if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) {
+			return true, nil
+		}
+	}
+	s.log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("user_id", userID.String()).
+		Str("permission", key).
+		Str("object_type", objectType).
+		Str("object_id", oid).
+		Msg("has_permission:denied")
+	return false, nil
 }
 
 // --- Admin/user management ---
 
 // ListTenantUsers returns all users that belong to the given tenant.
 func (s *Service) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
-    return s.repo.ListTenantUsers(ctx, tenantID)
+	return s.repo.ListTenantUsers(ctx, tenantID)
 }
 
 // UpdateUserNames updates only first and last name for a user, preserving roles.
 func (s *Service) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
-    fn := strings.TrimSpace(firstName)
-    ln := strings.TrimSpace(lastName)
-    return s.repo.UpdateUserNames(ctx, userID, fn, ln)
+	fn := strings.TrimSpace(firstName)
+	ln := strings.TrimSpace(lastName)
+	return s.repo.UpdateUserNames(ctx, userID, fn, ln)
 }
 
 // SetUserActive toggles the active state of a user.
 func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
-    return s.repo.SetUserActive(ctx, userID, active)
+	return s.repo.SetUserActive(ctx, userID, active)
 }
 
 // ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 func (s *Service) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
-    return s.repo.ListUserSessions(ctx, userID, tenantID)
+	return s.repo.ListUserSessions(ctx, userID, tenantID)
 }
 
 // RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
 func (s *Service) RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error {
-    // Ensure the session belongs to this user and tenant
-    sessions, err := s.repo.ListUserSessions(ctx, userID, tenantID)
-    if err != nil { return err }
-    ok := false
-    for _, rt := range sessions {
-        if rt.ID == sessionID { ok = true; break }
-    }
-    if !ok { return errors.New("session not found") }
-    return s.repo.RevokeTokenChain(ctx, sessionID)
+	// Ensure the session belongs to this user and tenant
+	sessions, err := s.repo.ListUserSessions(ctx, userID, tenantID)
+	if err != nil { return err }
+	ok := false
+	for _, rt := range sessions {
+		if rt.ID == sessionID { ok = true; break }
+	}
+	if !ok { return errors.New("session not found") }
+	return s.repo.RevokeTokenChain(ctx, sessionID)
 }
 
 // VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
@@ -260,11 +438,14 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 }
 
 func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *Service {
-	return &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger()}
+	return &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger(), log: zerolog.Nop()}
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
 func (s *Service) SetPublisher(p evdomain.Publisher) { s.pub = p }
+
+// SetLogger allows injection of a structured logger for debug tracing.
+func (s *Service) SetLogger(l zerolog.Logger) { s.log = l }
 
 func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.AccessTokens, error) {
     // Normalize email to lowercase and trim spaces to ensure consistent storage

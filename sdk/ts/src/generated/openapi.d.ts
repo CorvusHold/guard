@@ -281,6 +281,482 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/auth/admin/fga/acl/tuples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create ACL tuple (admin-only)
+         * @description Creates a direct permission grant (tuple).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description tuple payload */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.fgaCreateACLTupleReq"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * Delete ACL tuple (admin-only)
+         * @description Deletes a direct permission grant (tuple).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description tuple selector */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.fgaDeleteACLTupleReq"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/admin/fga/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List groups for a tenant (admin-only)
+         * @description Lists groups for the specified tenant.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Tenant ID (UUID) */
+                    tenant_id: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.fgaListGroupsResp"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create group (admin-only)
+         * @description Creates a new group for the specified tenant.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description tenant_id, name, description */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.fgaCreateGroupReq"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.fgaGroupItem"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/admin/fga/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete group (admin-only)
+         * @description Deletes a group for the specified tenant.
+         */
+        delete: {
+            parameters: {
+                query: {
+                    /** @description Tenant ID (UUID) */
+                    tenant_id: string;
+                };
+                header?: never;
+                path: {
+                    /** @description Group ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/admin/fga/groups/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add user to group (admin-only)
+         * @description Adds a user to a group.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Group ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["controller.fgaModifyGroupMemberReq"];
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * Remove user from group (admin-only)
+         * @description Removes a user from a group.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Group ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["controller.fgaModifyGroupMemberReq"];
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/admin/rbac/permissions": {
         parameters: {
             query?: never;
@@ -1438,6 +1914,72 @@ export interface paths {
                     };
                     content: {
                         "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authorization decision
+         * @description Returns allow/deny for a subject, action (permission_key) and object. Note: subject_id is optional when subject_type=self (it will be derived from the caller token).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description decision input (subject_id optional when subject_type=self) */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.fgaAuthorizeReq"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.fgaAuthorizeResp"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
                             [key: string]: string;
                         };
                     };
@@ -3194,6 +3736,56 @@ export interface components {
         "controller.createTenantReq": {
             name: string;
         };
+        "controller.fgaAuthorizeReq": {
+            object_id?: string;
+            object_type: string;
+            permission_key: string;
+            /** @description SubjectID is optional when subject_type=self; otherwise required.
+             *     When subject_type=self, the server derives the subject from the caller's token. */
+            subject_id?: string;
+            /** @enum {string} */
+            subject_type: "self" | "user" | "group";
+            tenant_id: string;
+        };
+        "controller.fgaAuthorizeResp": {
+            allowed?: boolean;
+            reason?: string;
+        };
+        "controller.fgaCreateACLTupleReq": {
+            object_id?: string;
+            object_type: string;
+            permission_key: string;
+            subject_id: string;
+            /** @enum {string} */
+            subject_type: "user" | "group";
+            tenant_id: string;
+        };
+        "controller.fgaCreateGroupReq": {
+            description?: string;
+            name: string;
+            tenant_id: string;
+        };
+        "controller.fgaDeleteACLTupleReq": {
+            object_id?: string;
+            object_type: string;
+            permission_key: string;
+            subject_id: string;
+            /** @enum {string} */
+            subject_type: "user" | "group";
+            tenant_id: string;
+        };
+        "controller.fgaGroupItem": {
+            description?: string;
+            id?: string;
+            name?: string;
+            tenant_id?: string;
+        };
+        "controller.fgaListGroupsResp": {
+            groups?: components["schemas"]["controller.fgaGroupItem"][];
+        };
+        "controller.fgaModifyGroupMemberReq": {
+            user_id: string;
+        };
         "controller.introspectReq": {
             token?: string;
         };
@@ -3405,6 +3997,12 @@ export interface components {
         "controller.rbacRolePermissionReq": {
             content: {
                 "application/json": components["schemas"]["controller.rbacRolePermissionReq"];
+            };
+        };
+        /** @description user_id */
+        "controller.fgaModifyGroupMemberReq": {
+            content: {
+                "application/json": components["schemas"]["controller.fgaModifyGroupMemberReq"];
             };
         };
         /** @description tenant_id, role_id */

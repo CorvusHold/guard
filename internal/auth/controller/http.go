@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -562,6 +564,18 @@ func (h *Controller) Register(e *echo.Echo) {
     g.DELETE("/admin/rbac/roles/:id/permissions", h.rbacDeleteRolePermission, rlToken)
     g.GET("/admin/rbac/users/:id/permissions/resolve", h.rbacResolveUserPermissions, rlToken)
 
+    // Admin: FGA (groups, memberships, ACL tuples)
+    g.POST("/admin/fga/groups", h.fgaCreateGroup, rlToken)
+    g.GET("/admin/fga/groups", h.fgaListGroups, rlToken)
+    g.DELETE("/admin/fga/groups/:id", h.fgaDeleteGroup, rlToken)
+    g.POST("/admin/fga/groups/:id/members", h.fgaAddGroupMember, rlToken)
+    g.DELETE("/admin/fga/groups/:id/members", h.fgaRemoveGroupMember, rlToken)
+    g.POST("/admin/fga/acl/tuples", h.fgaCreateACLTuple, rlToken)
+    g.DELETE("/admin/fga/acl/tuples", h.fgaDeleteACLTuple, rlToken)
+
+    // Authorization decision
+    g.POST("/authorize", h.fgaAuthorize, rlToken)
+
     // Sessions (self)
     g.GET("/sessions", h.sessionsList, rlToken)
     g.POST("/sessions/:id/revoke", h.sessionRevoke, rlToken)
@@ -882,11 +896,33 @@ func (h *Controller) login(c echo.Context) error {
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/refresh [post]
 func (h *Controller) refresh(c echo.Context) error {
+	// Peek and restore body for debug logging
+	var raw []byte
+	if c.Request().Body != nil {
+		if buf, err := io.ReadAll(c.Request().Body); err == nil {
+			raw = buf
+			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
+		}
+	}
+	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if len(raw) > 0 {
+			c.Logger().Debugf("refresh: raw body=%s", string(raw))
+		} else {
+			c.Logger().Debug("refresh: raw body=<empty>")
+		}
+		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
+	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("refresh: bind error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	if err := c.Validate(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("refresh: validation error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
 	ua := c.Request().UserAgent()
@@ -909,8 +945,27 @@ func (h *Controller) refresh(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/logout [post]
 func (h *Controller) logout(c echo.Context) error {
+	// Peek and restore body for debug logging
+	var raw []byte
+	if c.Request().Body != nil {
+		if buf, err := io.ReadAll(c.Request().Body); err == nil {
+			raw = buf
+			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
+		}
+	}
+	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if len(raw) > 0 {
+			c.Logger().Debugf("logout: raw body=%s", string(raw))
+		} else {
+			c.Logger().Debug("logout: raw body=<empty>")
+		}
+		c.Logger().Debugf("logout: tenant_id=%s", c.QueryParam("tenant_id"))
+	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("logout: bind error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	if req.RefreshToken == "" {

@@ -161,10 +161,11 @@ func KeyTenantOrIP(prefix string) func(echo.Context) string {
         if ten == "" {
             return prefix + ":ip:" + c.RealIP()
         }
-        // Strip optional "rl-" prefix to align with settings resolvers and test isolation buckets
-        if strings.HasPrefix(strings.ToLower(ten), "rl-") {
-            ten = ten[3:]
-        }
+        // IMPORTANT: Preserve an optional "rl-" prefix in the key to allow
+        // per-scenario rate limit bucket isolation in tests. Dynamic limit/window
+        // resolvers (in auth controller) are responsible for stripping the prefix
+        // when looking up tenant-scoped settings. Here we keep the raw value so
+        // that "rl-<uuid>" and "<uuid>" use different buckets.
         return prefix + ":ten:" + ten
     }
 }

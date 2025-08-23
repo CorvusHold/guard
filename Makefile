@@ -113,6 +113,7 @@ conformance: conformance-up
 	  -e NONMFA2_TENANT_ID="$$NONMFA2_TENANT_ID" -e NONMFA2_EMAIL="$$NONMFA2_EMAIL" -e NONMFA2_PASSWORD="$$NONMFA2_PASSWORD" \
 	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
 	  -e SCENARIO="$${SCENARIO:-}" -e SCENARIO_FILTER="$${SCENARIO_FILTER:-}" \
+	  -e RATE_LIMIT_RETRIES="$${RATE_LIMIT_RETRIES:-}" \
 	  $${SDK_SERVICE:-sdk_conformance}'
 
 # Tear down the test stack (including volumes)

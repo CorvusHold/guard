@@ -166,18 +166,29 @@ async function runScenario(file, baseUrl, baseCtx) {
       body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
       if (!headers.has('content-type')) headers.set('content-type', 'application/json');
     }
-
-    const res = await fetch(url, { method: req.method, headers, body });
-    const resText = await res.text();
-    let resJson = null;
-    try {
-      resJson = resText ? JSON.parse(resText) : null;
-    } catch (_) {
-      // ignore non-JSON
+    // Execute request with lightweight retry on 429 when not expected
+    let res, resText, resJson;
+    const exp = step.expect || {};
+    const maxRetries = Number.isFinite(Number(process.env.RATE_LIMIT_RETRIES))
+      ? Number(process.env.RATE_LIMIT_RETRIES)
+      : 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      res = await fetch(url, { method: req.method, headers, body });
+      resText = await res.text();
+      resJson = null;
+      try { resJson = resText ? JSON.parse(resText) : null; } catch (_) { /* ignore */ }
+      // If we got rate-limited but weren't expecting 429, backoff and retry
+      if (res.status === 429 && exp.status !== 429 && attempt < maxRetries) {
+        const ra = Number(res.headers.get('retry-after'));
+        const delayMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 250 * Math.pow(2, attempt);
+        console.log(`    • 429 received; retrying in ${Math.round(delayMs)}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      break;
     }
 
     // Validate
-    const exp = step.expect || {};
     let ok = true;
     const errs = [];
 

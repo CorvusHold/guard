@@ -53,6 +53,132 @@ definitions:
     required:
     - name
     type: object
+  controller.fgaAuthorizeReq:
+    properties:
+      object_id:
+        type: string
+      object_type:
+        minLength: 1
+        type: string
+      permission_key:
+        minLength: 1
+        type: string
+      subject_id:
+        description: |-
+          SubjectID is optional when subject_type=self; otherwise required.
+          When subject_type=self, the server derives the subject from the caller's token.
+        type: string
+      subject_type:
+        enum:
+        - self
+        - user
+        - group
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - object_type
+    - permission_key
+    - subject_type
+    - tenant_id
+    type: object
+  controller.fgaAuthorizeResp:
+    properties:
+      allowed:
+        type: boolean
+      reason:
+        type: string
+    type: object
+  controller.fgaCreateACLTupleReq:
+    properties:
+      object_id:
+        type: string
+      object_type:
+        minLength: 1
+        type: string
+      permission_key:
+        minLength: 1
+        type: string
+      subject_id:
+        type: string
+      subject_type:
+        enum:
+        - user
+        - group
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - object_type
+    - permission_key
+    - subject_id
+    - subject_type
+    - tenant_id
+    type: object
+  controller.fgaCreateGroupReq:
+    properties:
+      description:
+        type: string
+      name:
+        minLength: 1
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - name
+    - tenant_id
+    type: object
+  controller.fgaDeleteACLTupleReq:
+    properties:
+      object_id:
+        type: string
+      object_type:
+        minLength: 1
+        type: string
+      permission_key:
+        minLength: 1
+        type: string
+      subject_id:
+        type: string
+      subject_type:
+        enum:
+        - user
+        - group
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - object_type
+    - permission_key
+    - subject_id
+    - subject_type
+    - tenant_id
+    type: object
+  controller.fgaGroupItem:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  controller.fgaListGroupsResp:
+    properties:
+      groups:
+        items:
+          $ref: '#/definitions/controller.fgaGroupItem'
+        type: array
+    type: object
+  controller.fgaModifyGroupMemberReq:
+    properties:
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
   controller.introspectReq:
     properties:
       token:
@@ -628,6 +754,292 @@ paths:
       summary: Get tenant by name
       tags:
       - tenants
+  /v1/auth/admin/fga/acl/tuples:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a direct permission grant (tuple).
+      parameters:
+      - description: tuple selector
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaDeleteACLTupleReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete ACL tuple (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a direct permission grant (tuple).
+      parameters:
+      - description: tuple payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaCreateACLTupleReq'
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create ACL tuple (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/fga/groups:
+    get:
+      description: Lists groups for the specified tenant.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.fgaListGroupsResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List groups for a tenant (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new group for the specified tenant.
+      parameters:
+      - description: tenant_id, name, description
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaCreateGroupReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.fgaGroupItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create group (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/fga/groups/{id}:
+    delete:
+      description: Deletes a group for the specified tenant.
+      parameters:
+      - description: Group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete group (admin-only)
+      tags:
+      - auth.admin
+  /v1/auth/admin/fga/groups/{id}/members:
+    delete:
+      consumes:
+      - application/json
+      description: Removes a user from a group.
+      parameters:
+      - description: Group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: user_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaModifyGroupMemberReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove user from group (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Adds a user to a group.
+      parameters:
+      - description: Group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: user_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaModifyGroupMemberReq'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add user to group (admin-only)
+      tags:
+      - auth.admin
   /v1/auth/admin/rbac/permissions:
     get:
       description: Returns all known permissions.
@@ -1308,6 +1720,44 @@ paths:
       summary: Unblock a user (admin-only)
       tags:
       - auth.admin
+  /v1/auth/authorize:
+    post:
+      consumes:
+      - application/json
+      description: 'Returns allow/deny for a subject, action (permission_key) and
+        object. Note: subject_id is optional when subject_type=self (it will be derived
+        from the caller token).'
+      parameters:
+      - description: decision input (subject_id optional when subject_type=self)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.fgaAuthorizeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.fgaAuthorizeResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Authorization decision
+      tags:
+      - auth
   /v1/auth/introspect:
     post:
       consumes:

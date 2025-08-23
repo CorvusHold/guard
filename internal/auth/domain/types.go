@@ -117,6 +117,20 @@ type Service interface {
 	ResolveUserPermissions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (ResolvedPermissions, error)
 	// HasPermission checks whether user has a permission, optionally scoped to an object.
 	HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error)
+
+    // --- FGA ---
+    // Group management
+    CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
+    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+    DeleteGroup(ctx context.Context, groupID uuid.UUID, tenantID uuid.UUID) error
+    // Group membership
+    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    // ACL tuples
+    CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
+    // Authorization decision
+    Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
 }
 
 // Magic-link inputs
@@ -237,6 +251,18 @@ type Repository interface {
 	ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 	ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]PermissionGrant, error)
 	ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]GroupPermissionGrant, error)
+
+    // --- FGA repository methods (groups, memberships, ACL tuples) ---
+    // Groups
+    CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
+    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+    DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
+    // Group membership
+    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    // ACL tuples
+    CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
 }
 
 type AuthIdentity struct {
