@@ -4,11 +4,13 @@ import (
     "errors"
     "net/http"
     "strings"
+    "time"
 
     domain "github.com/corvusHold/guard/internal/auth/domain"
     "github.com/google/uuid"
     "github.com/labstack/echo/v4"
     "github.com/corvusHold/guard/internal/platform/validation"
+    evdomain "github.com/corvusHold/guard/internal/events/domain"
 )
 
 // ---- Admin: FGA (scaffold) ----
@@ -67,6 +69,18 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
             return c.JSON(http.StatusConflict, map[string]string{"error": "group already exists"})
         }
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    if h.pub != nil {
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.group.create.success",
+            TenantID: tenantID,
+            UserID:   in.UserID,
+            Meta: map[string]string{
+                "group_id":   g.ID.String(),
+                "group_name": g.Name,
+            },
+            Time: time.Now(),
+        })
     }
     return c.JSON(http.StatusCreated, fgaGroupItem{ID: g.ID, TenantID: g.TenantID, Name: g.Name, Description: g.Description})
 }
@@ -138,6 +152,15 @@ func (h *Controller) fgaDeleteGroup(c echo.Context) error {
     if err := h.svc.DeleteGroup(c.Request().Context(), groupID, tenantID); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
     }
+    if h.pub != nil {
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.group.delete.success",
+            TenantID: tenantID,
+            UserID:   in.UserID,
+            Meta:     map[string]string{"group_id": groupID.String()},
+            Time:     time.Now(),
+        })
+    }
     return c.NoContent(http.StatusNoContent)
 }
 
@@ -180,6 +203,15 @@ func (h *Controller) fgaAddGroupMember(c echo.Context) error {
     if err := h.svc.AddGroupMember(c.Request().Context(), groupID, userID); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
     }
+    if h.pub != nil {
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.group.member.add.success",
+            TenantID: in.TenantID,
+            UserID:   in.UserID,
+            Meta:     map[string]string{"group_id": groupID.String(), "member_user_id": userID.String()},
+            Time:     time.Now(),
+        })
+    }
     return c.NoContent(http.StatusNoContent)
 }
 
@@ -216,6 +248,15 @@ func (h *Controller) fgaRemoveGroupMember(c echo.Context) error {
 
     if err := h.svc.RemoveGroupMember(c.Request().Context(), groupID, userID); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    if h.pub != nil {
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.group.member.remove.success",
+            TenantID: in.TenantID,
+            UserID:   in.UserID,
+            Meta:     map[string]string{"group_id": groupID.String(), "member_user_id": userID.String()},
+            Time:     time.Now(),
+        })
     }
     return c.NoContent(http.StatusNoContent)
 }
@@ -262,6 +303,22 @@ func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
     if _, err := h.svc.CreateACLTuple(c.Request().Context(), tenantID, strings.ToLower(req.SubjectType), subjectID, req.PermissionKey, req.ObjectType, req.ObjectID, &in.UserID); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
     }
+    if h.pub != nil {
+        meta := map[string]string{
+            "subject_type":  strings.ToLower(req.SubjectType),
+            "subject_id":    subjectID.String(),
+            "permission_key": req.PermissionKey,
+            "object_type":   req.ObjectType,
+        }
+        if req.ObjectID != nil { meta["object_id"] = *req.ObjectID }
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.acl.tuple.create.success",
+            TenantID: tenantID,
+            UserID:   in.UserID,
+            Meta:     meta,
+            Time:     time.Now(),
+        })
+    }
     return c.NoContent(http.StatusCreated)
 }
 
@@ -306,6 +363,22 @@ func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
 
     if err := h.svc.DeleteACLTuple(c.Request().Context(), tenantID, strings.ToLower(req.SubjectType), subjectID, req.PermissionKey, req.ObjectType, req.ObjectID); err != nil {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    if h.pub != nil {
+        meta := map[string]string{
+            "subject_type":  strings.ToLower(req.SubjectType),
+            "subject_id":    subjectID.String(),
+            "permission_key": req.PermissionKey,
+            "object_type":   req.ObjectType,
+        }
+        if req.ObjectID != nil { meta["object_id"] = *req.ObjectID }
+        _ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+            Type:     "fga.acl.tuple.delete.success",
+            TenantID: tenantID,
+            UserID:   in.UserID,
+            Meta:     meta,
+            Time:     time.Now(),
+        })
     }
     return c.NoContent(http.StatusNoContent)
 }
@@ -360,6 +433,11 @@ func (h *Controller) fgaAuthorize(c echo.Context) error {
     // For non-self requests, subject_id must be present (validation allows omitempty)
     if strings.TrimSpace(req.SubjectID) == "" {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": "subject_id required"})
+    }
+
+    // Explicitly require object_type even if validator is a no-op in tests
+    if strings.TrimSpace(req.ObjectType) == "" {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "object_type required"})
     }
 
     tenantID, err := uuid.Parse(req.TenantID)

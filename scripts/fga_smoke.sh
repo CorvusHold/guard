@@ -1,9 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# FGA end-to-end smoke: seed tenant/admin, login, create group, add member,
-# create ACL tuple, authorize allow, delete tuple, authorize deny.
-# Idempotent where possible. Requires: docker-compose stack up, Go toolchain, curl.
+# FGA end-to-end smoke test
+# - Seeds tenant/admin, logs in, ensures group+membership, creates ACL tuple
+# - Verifies authorize allow, optionally deletes tuple, then verifies deny
+# - Idempotent where possible
+#
+# Usage:
+#   scripts/fga_smoke.sh [--help|-h]
+#
+# Environment variables:
+#   BASE              API base URL (default: http://localhost:8080)
+#   TENANT_NAME       Tenant name to seed (default: test)
+#   EMAIL             Admin email to seed/login (default: admin@example.com)
+#   PASSWORD          Admin password (default: Password123!)
+#   SMOKE_WRITE_ENV   Controls writes (default: 0)
+#                     0 => read-only: only calls /v1/auth/authorize and exits
+#                     1 => write-enabled: performs group/membership/ACL writes
+#   KEEP_TUPLE        When SMOKE_WRITE_ENV=1, keep the created ACL tuple (default: unset)
+#                     1 => skip deletion and final deny check
+#                     empty/unset => delete tuple and verify deny
+#
+# Examples:
+#   # Read-only smoke (no writes):
+#   SMOKE_WRITE_ENV=0 scripts/fga_smoke.sh
+#
+#   # Write-enabled smoke and keep ACL tuple for inspection:
+#   SMOKE_WRITE_ENV=1 KEEP_TUPLE=1 scripts/fga_smoke.sh
+#
+# Requirements: docker-compose stack up, Go toolchain, curl, jq (recommended; falls back to python3 for read parsing)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -12,6 +37,33 @@ BASE="http://localhost:8080"
 TENANT_NAME=${TENANT_NAME:-test}
 ADMIN_EMAIL=${EMAIL:-admin@example.com}
 ADMIN_PASSWORD=${PASSWORD:-Password123!}
+
+# Help/usage
+usage() {
+  cat <<'USAGE'
+FGA smoke test
+
+Flags:
+  -h, --help    Show this help and exit
+
+Environment variables:
+  BASE              API base URL (default: http://localhost:8080)
+  TENANT_NAME       Tenant name to seed (default: test)
+  EMAIL             Admin email to seed/login (default: admin@example.com)
+  PASSWORD          Admin password (default: Password123!)
+  SMOKE_WRITE_ENV   0 = read-only, 1 = write-enabled (default: 0)
+  KEEP_TUPLE        When write-enabled, 1 = keep ACL tuple (skip delete/deny)
+
+Examples:
+  SMOKE_WRITE_ENV=0 scripts/fga_smoke.sh
+  SMOKE_WRITE_ENV=1 KEEP_TUPLE=1 scripts/fga_smoke.sh
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
 
 # Ensure API is ready
 for i in {1..60}; do

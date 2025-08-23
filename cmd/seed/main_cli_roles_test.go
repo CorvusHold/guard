@@ -41,7 +41,7 @@ func TestCLI_UserRolesFlag_UpdatesRoles(t *testing.T) {
 	cmd := exec.Command("go", "run", ".", "user", "--tenant-id", tenantID.String(), "--email", email, "--password", password, "--roles", "Admin, member,ADMIN,,member ")
     // Run from the current package directory (this test resides in cmd/seed)
     cmd.Dir = "."
-	cmd.Env = append(os.Environ())
+    cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("seed user failed: %v\n%s", err, string(out))
@@ -53,9 +53,9 @@ func TestCLI_UserRolesFlag_UpdatesRoles(t *testing.T) {
 	u, err := repo.GetUserByID(ctx, ai.UserID)
 	if err != nil { t.Fatalf("get user: %v", err) }
 	if len(u.Roles) != 2 { t.Fatalf("expected 2 roles, got %v", u.Roles) }
-	if !(contains(u.Roles, "admin") && contains(u.Roles, "member")) {
-		t.Fatalf("roles mismatch, expected [admin member], got %v", u.Roles)
-	}
+	if !contains(u.Roles, "admin") || !contains(u.Roles, "member") {
+        t.Fatalf("roles mismatch, expected [admin member], got %v", u.Roles)
+    }
 }
 
 func contains(ss []string, v string) bool {

@@ -37,6 +37,104 @@ jobs:
       - name: Run unit tests
         run: go test ./...
 
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rbac: ${{ steps.filter.outputs.rbac }}
+      fga: ${{ steps.filter.outputs.fga }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rbac:
+              - 'internal/auth/controller/**'
+              - 'internal/auth/domain/**'
+              - 'internal/auth/service/**'
+              - 'internal/auth/repository/**'
+              - 'internal/db/**'
+              - 'migrations/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            fga:
+              - 'internal/auth/controller/**'
+              - 'internal/auth/repository/**'
+              - 'internal/auth/service/**'
+              - 'internal/db/queries/**'
+              - 'migrations/**'
+              - 'scripts/fga_*.sh'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+
+  rbac-admin:
+    name: RBAC Admin Tests
+    needs: changes
+    if: needs.changes.outputs.rbac == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run RBAC admin tests
+        env:
+          DOCKER_CLI_HINTS: enabled
+        run: |
+          make test-rbac-admin
+
+  fga-tests:
+    name: FGA Authorization Tests
+    needs: changes
+    if: needs.changes.outputs.fga == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run FGA tests
+        env:
+          DOCKER_CLI_HINTS: enabled
+        run: |
+          make test-fga
+
   e2e:
     name: E2E / Integration
     runs-on: ubuntu-latest

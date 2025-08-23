@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
@@ -28,7 +28,9 @@ func TestHTTP_RBAC_Admin_Unauthorized(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)
@@ -69,7 +71,9 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -108,10 +112,16 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
-	if srec.Code != http.StatusCreated { t.Fatalf("signup: expected 201, got %d: %s", srec.Code, srec.Body.String()) }
+	if srec.Code != http.StatusCreated {
+		t.Fatalf("signup: expected 201, got %d: %s", srec.Code, srec.Body.String())
+	}
 	var toks tokensResponse
-	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&toks); err != nil { t.Fatalf("decode tokens: %v", err) }
-	if toks.AccessToken == "" { t.Fatalf("expected access token") }
+	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&toks); err != nil {
+		t.Fatalf("decode tokens: %v", err)
+	}
+	if toks.AccessToken == "" {
+		t.Fatalf("expected access token")
+	}
 
 	// Try listing roles as non-admin
 	lreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/roles?tenant_id="+tenantID.String(), nil)
@@ -130,7 +140,9 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -165,14 +177,22 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
-	if srec.Code != http.StatusCreated { t.Fatalf("signup: expected 201, got %d: %s", srec.Code, srec.Body.String()) }
+	if srec.Code != http.StatusCreated {
+		t.Fatalf("signup: expected 201, got %d: %s", srec.Code, srec.Body.String())
+	}
 	var stoks tokensResponse
-	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&stoks); err != nil { t.Fatalf("decode tokens: %v", err) }
+	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&stoks); err != nil {
+		t.Fatalf("decode tokens: %v", err)
+	}
 
 	// Grant admin role
 	aiAdmin, err := repo.GetAuthIdentityByEmailTenant(ctx, tenantID, adminEmail)
-	if err != nil { t.Fatalf("lookup admin identity: %v", err) }
-	if err := auth.UpdateUserRoles(ctx, aiAdmin.UserID, []string{"admin"}); err != nil { t.Fatalf("grant admin: %v", err) }
+	if err != nil {
+		t.Fatalf("lookup admin identity: %v", err)
+	}
+	if err := auth.UpdateUserRoles(ctx, aiAdmin.UserID, []string{"admin"}); err != nil {
+		t.Fatalf("grant admin: %v", err)
+	}
 
 	// Invalid UUID in path: update role
 	upd := map[string]string{"tenant_id": tenantID.String(), "name": "x", "description": "y"}
@@ -182,7 +202,9 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	ureq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	urec := httptest.NewRecorder()
 	e.ServeHTTP(urec, ureq)
-	if urec.Code != http.StatusBadRequest { t.Fatalf("update role bad uuid: expected 400, got %d: %s", urec.Code, urec.Body.String()) }
+	if urec.Code != http.StatusBadRequest {
+		t.Fatalf("update role bad uuid: expected 400, got %d: %s", urec.Code, urec.Body.String())
+	}
 
 	// Invalid tenant_id UUID in body: create role
 	cr := map[string]string{"tenant_id": "bad-uuid", "name": "qa", "description": "d"}
@@ -192,7 +214,9 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	creq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	crec := httptest.NewRecorder()
 	e.ServeHTTP(crec, creq)
-	if crec.Code != http.StatusBadRequest { t.Fatalf("create role bad tenant_id: expected 400, got %d: %s", crec.Code, crec.Body.String()) }
+	if crec.Code != http.StatusBadRequest {
+		t.Fatalf("create role bad tenant_id: expected 400, got %d: %s", crec.Code, crec.Body.String())
+	}
 
 	// Invalid JSON: upsert role permission
 	preq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/roles/"+uuid.NewString()+"/permissions", bytes.NewBufferString("{bad json"))
@@ -200,7 +224,9 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	preq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	prec := httptest.NewRecorder()
 	e.ServeHTTP(prec, preq)
-	if prec.Code != http.StatusBadRequest { t.Fatalf("upsert perm invalid json: expected 400, got %d: %s", prec.Code, prec.Body.String()) }
+	if prec.Code != http.StatusBadRequest {
+		t.Fatalf("upsert perm invalid json: expected 400, got %d: %s", prec.Code, prec.Body.String())
+	}
 
 	// Invalid user UUID in path: assign role
 	assign := map[string]string{"tenant_id": tenantID.String(), "role_id": uuid.NewString()}
@@ -210,12 +236,16 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	aReq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	aRec := httptest.NewRecorder()
 	e.ServeHTTP(aRec, aReq)
-	if aRec.Code != http.StatusBadRequest { t.Fatalf("assign role bad user id: expected 400, got %d: %s", aRec.Code, aRec.Body.String()) }
+	if aRec.Code != http.StatusBadRequest {
+		t.Fatalf("assign role bad user id: expected 400, got %d: %s", aRec.Code, aRec.Body.String())
+	}
 
 	// Invalid tenant_id in resolve query
 	rreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/users/"+aiAdmin.UserID.String()+"/permissions/resolve?tenant_id=bad-uuid", nil)
 	rreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)
-	if rrec.Code != http.StatusBadRequest { t.Fatalf("resolve bad tenant_id: expected 400, got %d: %s", rrec.Code, rrec.Body.String()) }
+	if rrec.Code != http.StatusBadRequest {
+		t.Fatalf("resolve bad tenant_id: expected 400, got %d: %s", rrec.Code, rrec.Body.String())
+	}
 }

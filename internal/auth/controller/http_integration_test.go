@@ -16,7 +16,6 @@ import (
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	"github.com/corvusHold/guard/internal/config"
- 	"github.com/corvusHold/guard/internal/platform/validation"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"

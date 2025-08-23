@@ -9,7 +9,8 @@ export RATE_LIMIT_RETRIES ?= 2
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
-        migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url
+        migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
+        test-rbac-admin test-fga
 
 compose-up:
 	docker compose up -d --remove-orphans
@@ -53,8 +54,18 @@ test:
 	go test ./...
 
 # Run E2E/integration tests against test stack. No extra host tools required.
-test-e2e: compose-up-test db-wait-test redis-test-ping migrate-up-test-dc
+test-e2e: compose-up-test db-wait-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test ./...'
+	make compose-down-test
+
+# Run only the RBAC admin controller tests against the dockerized test stack
+test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
+	make compose-down-test
+
+# Run only FGA authorization integration tests against the dockerized test stack
+test-fga: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
 	make compose-down-test
 
 lint:

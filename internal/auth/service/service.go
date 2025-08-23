@@ -690,10 +690,6 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
         if err != nil || !parsed2.Valid {
             return domain.Introspection{Active: false}, errors.New("invalid token")
         }
-        // refresh claims from parsed2 to be safe
-        if mc, ok := parsed2.Claims.(jwt.MapClaims); ok {
-            claims = mc
-        }
     }
     // Check issuer/audience if present
     if issStr != "" && issStr != issuer {

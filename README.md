@@ -48,6 +48,63 @@ make sqlc
 make test
 ```
 
+### Integration/E2E tests (dockerized)
+
+Run all packages against the dedicated test stack (Postgres/Valkey/MailHog/API):
+
+```bash
+make test-e2e
+```
+
+This target will:
+
+- bring up the stack from `docker-compose.test.yml`
+- run DB migrations inside the container
+- execute `go test ./...` with env sourced from `.env.test` or `.env.test.example`
+- tear the stack down
+
+### RBAC admin tests (quick)
+
+- One-liner (recommended):
+
+```bash
+make test-rbac-admin
+```
+
+- Manual sequence:
+
+```bash
+make compose-up-test
+make migrate-up-test-dc
+bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
+make compose-down-test
+```
+
+Notes:
+
+- If you are on Apple Silicon, you may see a MailHog platform warning; it is safe to ignore for tests.
+
+### FGA authorization tests (quick)
+
+- One-liner (recommended):
+
+```bash
+make test-fga
+```
+
+- Manual sequence:
+
+```bash
+make compose-up-test
+make migrate-up-test-dc
+bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
+make compose-down-test
+```
+
+Notes:
+
+- The regex `^TestHTTP_Authorize_` targets only the FGA authorization integration tests in `internal/auth/controller/http_integration_test.go`.
+
 ## Conformance quickstart
 
 Run the SDK conformance suite against your local stack:

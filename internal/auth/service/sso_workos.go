@@ -221,7 +221,7 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_transport_error"}, Time: time.Now()})
 		return domain.AccessTokens{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_failed", "status": resp.Status}, Time: time.Now()})
 		return domain.AccessTokens{}, errors.New("workos token exchange failed")
