@@ -1,11 +1,141 @@
 {
-  "count": 46,
-  "generatedAt": "2025-08-21T14:31:04.921Z",
+  "count": 54,
+  "generatedAt": "2025-08-23T16:45:17.799Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
   },
   "operations": [
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_acl_tuples",
+      "path": "/v1/auth/admin/fga/acl/tuples",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaDeleteACLTupleReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete ACL tuple (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_groups_by_id",
+      "path": "/v1/auth/admin/fga/groups/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_groups_by_id_members",
+      "path": "/v1/auth/admin/fga/groups/{id}/members",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Remove user from group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
     {
       "errors": [
         {
@@ -233,6 +363,51 @@
       "summary": "Get tenant by name",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_fga_groups",
+      "path": "/v1/auth/admin/fga/groups",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaListGroupsResp"
+        },
+        "status": "200"
+      },
+      "summary": "List groups for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -911,6 +1086,150 @@
         }
       ],
       "method": "post",
+      "operationId": "post_v1_auth_admin_fga_acl_tuples",
+      "path": "/v1/auth/admin/fga/acl/tuples",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaCreateACLTupleReq"
+      },
+      "success": {
+        "status": "201"
+      },
+      "summary": "Create ACL tuple (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_fga_groups",
+      "path": "/v1/auth/admin/fga/groups",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaCreateGroupReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaGroupItem"
+        },
+        "status": "201"
+      },
+      "summary": "Create group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_fga_groups_by_id_members",
+      "path": "/v1/auth/admin/fga/groups/{id}/members",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Add user to group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
       "operationId": "post_v1_auth_admin_rbac_roles",
       "path": "/v1/auth/admin/rbac/roles",
       "requestBody": {
@@ -1168,6 +1487,44 @@
       "summary": "Unblock a user (admin-only)",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_authorize",
+      "path": "/v1/auth/authorize",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaAuthorizeReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaAuthorizeResp"
+        },
+        "status": "200"
+      },
+      "summary": "Authorization decision",
+      "tags": [
+        "auth"
       ]
     },
     {

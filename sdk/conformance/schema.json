@@ -5,6 +5,10 @@
   "required": ["name", "steps"],
   "properties": {
     "name": { "type": "string" },
+    "requiresEnv": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "setup": {
       "type": "object",
       "properties": {

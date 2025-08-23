@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+export RATE_LIMIT_RETRIES ?= 2
 
 # Note: commands that require env vars will source .env inline
 
