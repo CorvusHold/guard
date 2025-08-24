@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+  id-token: write
+
 
 jobs:
   unit:
@@ -293,9 +296,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl jq
 
-      - name: Start API stack (db, valkey, api)
+      - name: Start data services (db, valkey)
         run: |
-          docker compose up -d db valkey api
+          docker compose up -d db valkey
+
+      - name: Wait for Postgres readiness
+        run: |
+          for i in {1..120}; do \
+            if docker compose exec -T db pg_isready -U guard >/dev/null 2>&1; then echo "Postgres ready"; break; fi; \
+            echo "Waiting for Postgres... ($i)"; sleep 1; \
+            if [ "$i" -eq 120 ]; then echo "Postgres not ready" >&2; exit 1; fi; \
+          done
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
+        run: |
+          go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$DATABASE_URL" up
+
+      - name: Start API
+        run: |
+          docker compose up -d api
 
       - name: Wait for API readiness
         run: |
