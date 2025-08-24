@@ -62,17 +62,17 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
-    "@types/node": "^20.12.12",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
+    "@types/node": "24.3.0",
+    "@typescript-eslint/eslint-plugin": "8.40.0",
+    "@typescript-eslint/parser": "8.40.0",
+    "eslint": "^9.34.0",
     "eslint-plugin-vitest": "^0.5.4",
-    "swagger2openapi": "^7.0.8",
     "openapi-typescript": "^7.4.1",
     "prettier": "^3.3.3",
     "rimraf": "^6.0.1",
+    "swagger2openapi": "^7.0.8",
     "tsup": "^8.2.4",
     "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
+    "vitest": "^3.2.4"
   }
 }
