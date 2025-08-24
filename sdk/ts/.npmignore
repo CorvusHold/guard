@@ -1,0 +1,9 @@
+src
+scripts
+node_modules
+.cache
+.prettierrc.json
+package-lock.json
+tsconfig.json
+tsup.config.js
+vitest.config.js
