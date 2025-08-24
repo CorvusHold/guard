@@ -12,6 +12,8 @@ import (
 	rl "github.com/corvusHold/guard/internal/platform/ratelimit"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
+	"github.com/corvusHold/guard/internal/logger"
+	evsvc "github.com/corvusHold/guard/internal/events/service"
 )
 
 // Register wires the auth module and registers HTTP routes.
@@ -21,9 +23,12 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	sr := srepo.New(pg)
 	settings := ssvc.New(sr)
 	s := svc.New(r, cfg, settings)
+	// Inject module logger (debug in development)
+	s.SetLogger(logger.New(cfg.AppEnv))
 	emailSender := emailsvc.NewRouter(settings, cfg)
 	magic := svc.NewMagic(r, cfg, settings, emailSender)
 	sso := svc.NewSSO(r, cfg, settings)
-	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rl.NewRedisStore(cfg))
+	pub := evsvc.NewLogger()
+	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rl.NewRedisStore(cfg)).WithPublisher(pub)
 	c.Register(e)
 }

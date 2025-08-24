@@ -92,4 +92,30 @@ export class HttpClient {
       meta: { status, requestId, headers: toHeadersMap(res2.headers) },
     };
   }
+
+  // Low-level raw request that returns the Response without throwing on non-2xx.
+  // Useful for endpoints like SSO start that intentionally return 3xx redirects.
+  async requestRaw(path: string, init: RequestInit = {}): Promise<Response> {
+    const url = this.buildUrl(path);
+
+    const headers = new Headers(init.headers || {});
+    // default JSON
+    if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+    if (!headers.has('accept')) headers.set('accept', 'application/json');
+    // client identification
+    if (this.clientHeader && !headers.has('x-guard-client')) {
+      headers.set('x-guard-client', this.clientHeader);
+    }
+    // default headers
+    for (const [k, v] of Object.entries(this.defaultHeaders)) {
+      if (!headers.has(k)) headers.set(k, v);
+    }
+
+    const reqInit: RequestInit = { ...init, headers };
+    const [finalUrl, finalInit] = await applyRequestInterceptors(url, reqInit, this.interceptors?.request as any);
+
+    const res = await this.fetchImpl(finalUrl, finalInit);
+    const res2 = await applyResponseInterceptors(res, this.interceptors?.response);
+    return res2;
+  }
 }

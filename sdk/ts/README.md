@@ -23,7 +23,7 @@ npm install @corvushold/guard-sdk
 ## Node (>=18)
 
 ```ts
-import { GuardClient, InMemoryStorage } from '@corvushold/guard-sdk';
+import { GuardClient, InMemoryStorage, isTokensResp, isMfaChallengeResp } from '@corvushold/guard-sdk';
 
 const client = new GuardClient({
   baseUrl: 'https://guard.example.com', // required
@@ -31,11 +31,11 @@ const client = new GuardClient({
   // fetchImpl: global fetch in Node 18+; inject a polyfill if needed
 });
 
-// Password login
+// Password login returns a union: Tokens or MFA Challenge
 const login = await client.passwordLogin({ email: 'a@example.com', password: 'pw', tenant_id: 'tenant_123' });
-if (login.meta.status === 200) {
+if (login.meta.status === 200 && isTokensResp(login.data)) {
   // access/refresh tokens persisted into storage
-} else if (login.meta.status === 202) {
+} else if (login.meta.status === 202 && isMfaChallengeResp(login.data)) {
   // MFA challenge flow
   const verify = await client.mfaVerify({ challenge_token: login.data.challenge_token, method: 'totp', code: '123456' });
 }
@@ -93,4 +93,5 @@ const client = new GuardClient({
 - `baseUrl` must be provided explicitly.
 - `Authorization: Bearer <access_token>` is injected automatically from the configured storage, when present.
 - `X-Guard-Client` is sent as `ts-sdk/<pkg.version>`.
+- `passwordLogin()` returns a union of tokens or MFA challenge. Use the exported type guards `isTokensResp()` and `isMfaChallengeResp()` to narrow.
 - The SDK uses generated DTOs; see `src/generated/openapi.d.ts` for types.

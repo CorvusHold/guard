@@ -1,11 +1,271 @@
 {
-  "count": 26,
-  "generatedAt": "2025-08-17T07:57:48.284Z",
+  "count": 54,
+  "generatedAt": "2025-08-23T16:45:17.799Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
   },
   "operations": [
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_acl_tuples",
+      "path": "/v1/auth/admin/fga/acl/tuples",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaDeleteACLTupleReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete ACL tuple (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_groups_by_id",
+      "path": "/v1/auth/admin/fga/groups/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_fga_groups_by_id_members",
+      "path": "/v1/auth/admin/fga/groups/{id}/members",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Remove user from group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_rbac_roles_by_id",
+      "path": "/v1/auth/admin/rbac/roles/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete role (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_rbac_roles_by_id_permissions",
+      "path": "/v1/auth/admin/rbac/roles/{id}/permissions",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacRolePermissionReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete a permission grant from a role (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_v1_auth_admin_rbac_users_by_id_roles",
+      "path": "/v1/auth/admin/rbac/users/{id}/roles",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacModifyUserRoleReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Remove a role from a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
     {
       "errors": [
         {
@@ -103,6 +363,276 @@
       "summary": "Get tenant by name",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_fga_groups",
+      "path": "/v1/auth/admin/fga/groups",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaListGroupsResp"
+        },
+        "status": "200"
+      },
+      "summary": "List groups for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_rbac_permissions",
+      "path": "/v1/auth/admin/rbac/permissions",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacPermissionsResp"
+        },
+        "status": "200"
+      },
+      "summary": "List all permissions (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_rbac_roles",
+      "path": "/v1/auth/admin/rbac/roles",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacRolesResp"
+        },
+        "status": "200"
+      },
+      "summary": "List roles for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_rbac_users_by_id_permissions_resolve",
+      "path": "/v1/auth/admin/rbac/users/{id}/permissions/resolve",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacResolvedPermissionsResp"
+        },
+        "status": "200"
+      },
+      "summary": "Resolve user permissions (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_rbac_users_by_id_roles",
+      "path": "/v1/auth/admin/rbac/users/{id}/roles",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacUserRolesResp"
+        },
+        "status": "200"
+      },
+      "summary": "List role IDs assigned to a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_admin_users",
+      "path": "/v1/auth/admin/users",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.adminUsersResp"
+        },
+        "status": "200"
+      },
+      "summary": "List users for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -233,6 +763,42 @@
             },
             "type": "object"
           },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_sessions",
+      "path": "/v1/auth/sessions",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.sessionsListResp"
+        },
+        "status": "200"
+      },
+      "summary": "List my active sessions",
+      "tags": [
+        "auth.sessions"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "status": "400"
         },
         {
@@ -292,6 +858,60 @@
             "type": "object"
           },
           "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_tenants_by_id_settings",
+      "path": "/v1/tenants/{id}/settings",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.settingsResponse"
+        },
+        "status": "200"
+      },
+      "summary": "Get tenant settings (subset)",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
         }
       ],
       "method": "patch",
@@ -304,6 +924,106 @@
       "summary": "Deactivate tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_v1_auth_admin_rbac_roles_by_id",
+      "path": "/v1/auth/admin/rbac/roles/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacUpdateRoleReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacRoleItem"
+        },
+        "status": "200"
+      },
+      "summary": "Update role (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_v1_auth_admin_users_by_id",
+      "path": "/v1/auth/admin/users/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.adminUpdateNamesReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Update a user's names (admin-only)",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -333,6 +1053,478 @@
       "summary": "Create tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_fga_acl_tuples",
+      "path": "/v1/auth/admin/fga/acl/tuples",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaCreateACLTupleReq"
+      },
+      "success": {
+        "status": "201"
+      },
+      "summary": "Create ACL tuple (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_fga_groups",
+      "path": "/v1/auth/admin/fga/groups",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaCreateGroupReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaGroupItem"
+        },
+        "status": "201"
+      },
+      "summary": "Create group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_fga_groups_by_id_members",
+      "path": "/v1/auth/admin/fga/groups/{id}/members",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaModifyGroupMemberReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Add user to group (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_rbac_roles",
+      "path": "/v1/auth/admin/rbac/roles",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacCreateRoleReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.rbacRoleItem"
+        },
+        "status": "201"
+      },
+      "summary": "Create role (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_rbac_roles_by_id_permissions",
+      "path": "/v1/auth/admin/rbac/roles/{id}/permissions",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacRolePermissionReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Grant/Update a permission to a role (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_rbac_users_by_id_roles",
+      "path": "/v1/auth/admin/rbac/users/{id}/roles",
+      "requestBody": {
+        "$ref": "#/definitions/controller.rbacModifyUserRoleReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Add a role to a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_users_by_id_block",
+      "path": "/v1/auth/admin/users/{id}/block",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Block a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_users_by_id_roles",
+      "path": "/v1/auth/admin/users/{id}/roles",
+      "requestBody": {
+        "$ref": "#/definitions/controller.adminUpdateRolesReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Update a user's roles (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_admin_users_by_id_unblock",
+      "path": "/v1/auth/admin/users/{id}/unblock",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Unblock a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_authorize",
+      "path": "/v1/auth/authorize",
+      "requestBody": {
+        "$ref": "#/definitions/controller.fgaAuthorizeReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.fgaAuthorizeResp"
+        },
+        "status": "200"
+      },
+      "summary": "Authorization decision",
+      "tags": [
+        "auth"
       ]
     },
     {
@@ -979,6 +2171,101 @@
       "summary": "Revoke token",
       "tags": [
         "auth.tokens"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_sessions_by_id_revoke",
+      "path": "/v1/auth/sessions/{id}/revoke",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Revoke a specific session",
+      "tags": [
+        "auth.sessions"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_v1_tenants_by_id_settings",
+      "path": "/v1/tenants/{id}/settings",
+      "requestBody": {
+        "$ref": "#/definitions/controller.putSettingsRequest"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Upsert tenant settings (subset)",
+      "tags": [
+        "tenants"
       ]
     }
   ]

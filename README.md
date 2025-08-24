@@ -48,6 +48,63 @@ make sqlc
 make test
 ```
 
+### Integration/E2E tests (dockerized)
+
+Run all packages against the dedicated test stack (Postgres/Valkey/MailHog/API):
+
+```bash
+make test-e2e
+```
+
+This target will:
+
+- bring up the stack from `docker-compose.test.yml`
+- run DB migrations inside the container
+- execute `go test ./...` with env sourced from `.env.test` or `.env.test.example`
+- tear the stack down
+
+### RBAC admin tests (quick)
+
+- One-liner (recommended):
+
+```bash
+make test-rbac-admin
+```
+
+- Manual sequence:
+
+```bash
+make compose-up-test
+make migrate-up-test-dc
+bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
+make compose-down-test
+```
+
+Notes:
+
+- If you are on Apple Silicon, you may see a MailHog platform warning; it is safe to ignore for tests.
+
+### FGA authorization tests (quick)
+
+- One-liner (recommended):
+
+```bash
+make test-fga
+```
+
+- Manual sequence:
+
+```bash
+make compose-up-test
+make migrate-up-test-dc
+bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
+make compose-down-test
+```
+
+Notes:
+
+- The regex `^TestHTTP_Authorize_` targets only the FGA authorization integration tests in `internal/auth/controller/http_integration_test.go`.
+
 ## Conformance quickstart
 
 Run the SDK conformance suite against your local stack:
@@ -70,6 +127,129 @@ Notes:
 - For isolated buckets within a tenant, scenarios may use the `rl-` prefix in `tenant_id` query param. See:
   - `docs/rate-limiting.md` (rl- prefix and debugging)
   - `sdk/conformance/README.md` (scenario overrides and isolation examples)
+
+## FGA quickstart
+
+Minimal, copy-pasteable examples for the Fine-Grained Authorization endpoints.
+
+Prereqs:
+
+- API running at `http://localhost:8080` (see Run local services)
+- A tenant and admin user exist (see seeding helpers or use `scripts/fga_smoke.sh`)
+
+Set env:
+
+```bash
+BASE=http://localhost:8080
+TENANT_ID=<TENANT_UUID>
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD='Password123!'
+
+# Admin login
+ADMIN_TOKEN=$(curl -sS -X POST "$BASE/v1/auth/password/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" | jq -r .access_token)
+```
+
+Admin: create a group → add a member → grant a permission via ACL tuple:
+
+```bash
+# Create group
+GROUP_JSON=$(curl -sS -X POST "$BASE/v1/auth/admin/fga/groups" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"name\":\"engineering\",\"description\":\"Eng\"}")
+GROUP_ID=$(echo "$GROUP_JSON" | jq -r .id)
+
+# Add user to group (replace with target user UUID)
+USER_ID=<USER_UUID>
+curl -sS -X POST "$BASE/v1/auth/admin/fga/groups/$GROUP_ID/members" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"user_id\":\"$USER_ID\"}" -o /dev/null -w '%{http_code}\n'
+
+# Grant settings:read on tenant to the group
+curl -sS -X POST "$BASE/v1/auth/admin/fga/acl/tuples" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"group\",\"subject_id\":\"$GROUP_ID\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}" -o /dev/null -w '%{http_code}\n'
+```
+
+Non-admin: authorize using your own token and `subject_type=self` (subject_id optional):
+
+```bash
+# Login as non-admin user
+EMAIL=user1@example.com
+PASSWORD='Password123!'
+ACCESS_TOKEN=$(curl -sS -X POST "$BASE/v1/auth/password/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" | jq -r .access_token)
+
+# Authorize: subject_type=self (omit subject_id)
+curl -sS -X POST "$BASE/v1/auth/authorize" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"self\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}"
+```
+
+Tips:
+
+- To remove the tuple, call `DELETE /v1/auth/admin/fga/acl/tuples` with the same selector payload.
+- End-to-end demo script: `bash scripts/fga_smoke.sh` (creates group, grants/denies, verifies decisions).
+
+### Helper scripts and tips
+
+- `scripts/fga_smoke.sh` supports an environment switch to keep the ACL tuple after the allow check, useful for interactive verification:
+
+  ```bash
+  KEEP_TUPLE=1 bash scripts/fga_smoke.sh
+  ```
+
+- Non-admin flow helper (deny → allow → optional cleanup):
+
+  ```bash
+  # Uses TENANT_ID from .env.fga if not exported
+  bash scripts/fga_nonadmin_check.sh            # delete tuple at end
+  KEEP_TUPLE=1 bash scripts/fga_nonadmin_check.sh  # keep tuple
+  ```
+
+- Rate‑limit resilience: both `scripts/fga_nonadmin_check.sh` and `scripts/fga_smoke.sh` automatically retry password login once on HTTP 429, honoring the `Retry-After` header. Additionally, `fga_nonadmin_check.sh` reuses the admin token from the pre-clean step when `PRE_CLEAN=1` to avoid extra logins and stay under the 2/min per-tenant login limit.
+
+### Troubleshooting residual ACL (pre-clean)
+
+If your environment is "dirty" from earlier runs and the initial deny unexpectedly allows, use the pre-clean mode to remove any residual grants before the deny check:
+
+```bash
+# Remove residual ACL tuples; then run the deny → allow check
+PRE_CLEAN=1 bash scripts/fga_nonadmin_check.sh
+
+# Also remove 'engineering' membership during pre-clean (optional)
+PRE_CLEAN=1 PRE_CLEAN_MEMBERSHIP=1 bash scripts/fga_nonadmin_check.sh
+```
+
+Manual cleanup (same effect as pre-clean):
+
+```bash
+# Delete group-based tuple (engineering → settings:read on tenant)
+curl -sS -X DELETE "$BASE/v1/auth/admin/fga/acl/tuples" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"group\",\"subject_id\":\"$GROUP_ID\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}" -o /dev/null -w '%{http_code}\n'
+
+# Delete any direct user tuple (user → settings:read on tenant)
+curl -sS -X DELETE "$BASE/v1/auth/admin/fga/acl/tuples" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"user\",\"subject_id\":\"$USER_ID\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}" -o /dev/null -w '%{http_code}\n'
+
+# Optional: remove membership (non-204 may just mean not a member)
+curl -sS -X DELETE "$BASE/v1/auth/admin/fga/groups/$GROUP_ID/members" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"user_id\":\"$USER_ID\"}" -o /dev/null -w '%{http_code}\n'
+```
+
+- zsh JSON quoting tip: use jq to build JSON safely (avoids history expansion with `!`):
+
+  ```zsh
+  curl -sS -X POST "$BASE/v1/auth/password/login" \
+    -H 'Content-Type: application/json' \
+    --data-raw "$(jq -n --arg tenant_id "$TENANT_ID" --arg email "$EMAIL" --arg password "$PASSWORD" \
+      '{tenant_id:$tenant_id, email:$email, password:$password}')"
+  ```
 
 ## Observability
 - Prometheus metrics are exposed at `/metrics` from `./cmd/api`.

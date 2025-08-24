@@ -123,6 +123,8 @@ type settingsResponse struct {
 	WorkOSClientID        string `json:"workos_client_id"`
 	WorkOSClientSecret    string `json:"workos_client_secret,omitempty"` // masked
 	WorkOSAPIKey          string `json:"workos_api_key,omitempty"`       // masked
+	WorkOSDefaultConnectionID  string `json:"workos_default_connection_id,omitempty"`
+	WorkOSDefaultOrganizationID string `json:"workos_default_organization_id,omitempty"`
 	SSOStateTTL           string `json:"sso_state_ttl"`
 	SSORedirectAllowlist  string `json:"sso_redirect_allowlist"`
 }
@@ -132,6 +134,8 @@ type putSettingsRequest struct {
 	WorkOSClientID        *string `json:"workos_client_id"`
 	WorkOSClientSecret    *string `json:"workos_client_secret"`
 	WorkOSAPIKey          *string `json:"workos_api_key"`
+	WorkOSDefaultConnectionID  *string `json:"workos_default_connection_id"`
+	WorkOSDefaultOrganizationID *string `json:"workos_default_organization_id"`
 	SSOStateTTL           *string `json:"sso_state_ttl"`
 	SSORedirectAllowlist  *string `json:"sso_redirect_allowlist"`
 }
@@ -164,6 +168,8 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	cid, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSClientID, &id, "")
 	csec, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSClientSecret, &id, "")
 	apikey, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSAPIKey, &id, "")
+	defConn, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSDefaultConnectionID, &id, "")
+	defOrg, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSDefaultOrganizationID, &id, "")
 	stateTTL, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSOStateTTL, &id, "")
 	allow, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSORedirectAllowlist, &id, "")
 	// Mask secrets if present
@@ -177,6 +183,8 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 		WorkOSClientID:       cid,
 		WorkOSClientSecret:   mask(csec),
 		WorkOSAPIKey:         mask(apikey),
+		WorkOSDefaultConnectionID:  defConn,
+		WorkOSDefaultOrganizationID: defOrg,
 		SSOStateTTL:          stateTTL,
 		SSORedirectAllowlist: allow,
 	}
@@ -249,7 +257,7 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 	}
 
 	// Upsert allowed keys and track changes
-	changed := make([]string, 0, 6)
+	changed := make([]string, 0, 8)
 	if req.SSOProvider != nil {
 		if err := h.repo.Upsert(ctx, sdomain.KeySSOProvider, &id, *req.SSOProvider, false); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -273,6 +281,20 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		changed = append(changed, sdomain.KeyWorkOSAPIKey)
+	}
+	if req.WorkOSDefaultConnectionID != nil {
+		v := strings.TrimSpace(*req.WorkOSDefaultConnectionID)
+		if err := h.repo.Upsert(ctx, sdomain.KeyWorkOSDefaultConnectionID, &id, v, false); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeyWorkOSDefaultConnectionID)
+	}
+	if req.WorkOSDefaultOrganizationID != nil {
+		v := strings.TrimSpace(*req.WorkOSDefaultOrganizationID)
+		if err := h.repo.Upsert(ctx, sdomain.KeyWorkOSDefaultOrganizationID, &id, v, false); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeyWorkOSDefaultOrganizationID)
 	}
 	if req.SSOStateTTL != nil {
 		if err := h.repo.Upsert(ctx, sdomain.KeySSOStateTTL, &id, *req.SSOStateTTL, false); err != nil {

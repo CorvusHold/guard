@@ -2,17 +2,126 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	db "github.com/corvusHold/guard/internal/db/sqlc"
 	domain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type SQLCRepository struct{ q *db.Queries }
+
+func mapGroup(g db.Group) domain.Group {
+    return domain.Group{
+        ID:          toUUID(g.ID),
+        TenantID:    toUUID(g.TenantID),
+        Name:        g.Name,
+        Description: g.Description.String,
+        CreatedAt:   g.CreatedAt.Time,
+        UpdatedAt:   g.UpdatedAt.Time,
+    }
+}
+
+func mapACLTuple(t db.AclTuple) domain.ACLTuple {
+    var oid *string
+    if t.ObjectID.Valid { s := t.ObjectID.String; oid = &s }
+    var cb *uuid.UUID
+    if t.CreatedBy.Valid { u := toUUID(t.CreatedBy); cb = &u }
+    return domain.ACLTuple{
+        ID:           toUUID(t.ID),
+        TenantID:     toUUID(t.TenantID),
+        SubjectType:  t.SubjectType,
+        SubjectID:    toUUID(t.SubjectID),
+        PermissionID: toUUID(t.PermissionID),
+        ObjectType:   t.ObjectType,
+        ObjectID:     oid,
+        CreatedBy:    cb,
+        CreatedAt:    t.CreatedAt.Time,
+    }
+}
+
+// --- RBAC v2 mappings ---
+func mapRole(r db.Role) domain.Role {
+    return domain.Role{
+        ID:          toUUID(r.ID),
+        TenantID:    toUUID(r.TenantID),
+        Name:        r.Name,
+        Description: r.Description.String,
+        CreatedAt:   r.CreatedAt.Time,
+        UpdatedAt:   r.UpdatedAt.Time,
+    }
+}
+
+func mapPermission(p db.Permission) domain.Permission {
+    return domain.Permission{
+        ID:          toUUID(p.ID),
+        Key:         p.Key,
+        Description: p.Description.String,
+        CreatedAt:   p.CreatedAt.Time,
+        UpdatedAt:   p.UpdatedAt.Time,
+    }
+}
+
+func mapRolePermissionKeyRow(r db.ListRolePermissionKeysRow) domain.RolePermissionGrant {
+    var rt *string
+    if r.ResourceType.Valid { s := r.ResourceType.String; rt = &s }
+    var rid *string
+    if r.ResourceID.Valid { s := r.ResourceID.String; rid = &s }
+    return domain.RolePermissionGrant{
+        RoleID:       toUUID(r.RoleID),
+        Key:          r.Key,
+        ScopeType:    r.ScopeType,
+        ResourceType: rt,
+        ResourceID:   rid,
+    }
+}
+
+// --- Admin/user management ---
+
+// ListTenantUsers returns all users that belong to the given tenant.
+func (r *SQLCRepository) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+    items, err := r.q.ListTenantUsers(ctx, toPgUUID(tenantID))
+    if err != nil { return nil, err }
+    out := make([]domain.User, 0, len(items))
+    for _, u := range items {
+        out = append(out, mapUser(u))
+    }
+    return out, nil
+}
+
+// SetUserActive toggles the active state of a user.
+func (r *SQLCRepository) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
+    return r.q.SetUserActive(ctx, db.SetUserActiveParams{ID: toPgUUID(userID), IsActive: active})
+}
+
+// UpdateUserNames updates only first and last name for a user, preserving roles.
+func (r *SQLCRepository) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+    // Load current roles to preserve
+    u, err := r.q.GetUserByID(ctx, toPgUUID(userID))
+    if err != nil { return err }
+    return r.q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+        ID:        toPgUUID(userID),
+        FirstName: toPgText(firstName),
+        LastName:  toPgText(lastName),
+        Roles:     u.Roles,
+    })
+}
+
+// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+func (r *SQLCRepository) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
+    items, err := r.q.ListUserSessions(ctx, db.ListUserSessionsParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+    if err != nil { return nil, err }
+    out := make([]domain.RefreshToken, 0, len(items))
+    for _, rt := range items {
+        out = append(out, mapRefreshToken(rt))
+    }
+    return out, nil
+}
 
 func mapMFASecret(ms db.MfaSecret) domain.MFASecret {
     return domain.MFASecret{
@@ -75,6 +184,9 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		TenantID:  toUUID(rt.TenantID),
 		Revoked:   rt.Revoked,
 		ExpiresAt: rt.ExpiresAt.Time,
+		CreatedAt: rt.CreatedAt.Time,
+		UserAgent: rt.UserAgent.String,
+		IP:        rt.Ip.String,
 	}
 }
 
@@ -164,7 +276,7 @@ func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash st
 }
 
 func (r *SQLCRepository) RevokeTokenChain(ctx context.Context, id uuid.UUID) error {
-	return r.q.RevokeTokenChain(ctx, toPgUUID(id))
+    return r.q.RevokeTokenChain(ctx, toPgUUID(id))
 }
 
 // Magic link operations
@@ -207,6 +319,19 @@ func (r *SQLCRepository) GetAuthIdentitiesByUser(ctx context.Context, userID uui
     return out, nil
 }
 
+// UpdateUserRoles updates only the roles column while preserving other profile fields.
+func (r *SQLCRepository) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error {
+    // Load current profile fields to preserve first/last name
+    u, err := r.q.GetUserByID(ctx, toPgUUID(userID))
+    if err != nil { return err }
+    return r.q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+        ID:        toPgUUID(userID),
+        FirstName: u.FirstName,
+        LastName:  u.LastName,
+        Roles:     roles,
+    })
+}
+
 // MFA persistence
 func (r *SQLCRepository) UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret string, enabled bool) error {
     return r.q.UpsertMFASecret(ctx, db.UpsertMFASecretParams{
@@ -243,4 +368,224 @@ func (r *SQLCRepository) ConsumeMFABackupCode(ctx context.Context, userID uuid.U
         return false, err
     }
     return true, nil
+}
+
+// --- RBAC v2 repository methods ---
+
+// Permissions
+func (r *SQLCRepository) ListPermissions(ctx context.Context) ([]domain.Permission, error) {
+    items, err := r.q.ListPermissions(ctx)
+    if err != nil { return nil, err }
+    out := make([]domain.Permission, 0, len(items))
+    for _, p := range items { out = append(out, mapPermission(p)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) GetPermissionByKey(ctx context.Context, key string) (domain.Permission, error) {
+    p, err := r.q.GetPermissionByKey(ctx, key)
+    if err != nil { return domain.Permission{}, err }
+    return mapPermission(p), nil
+}
+
+// Roles
+func (r *SQLCRepository) ListRolesByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Role, error) {
+    items, err := r.q.ListRolesByTenant(ctx, toPgUUID(tenantID))
+    if err != nil { return nil, err }
+    out := make([]domain.Role, 0, len(items))
+    for _, it := range items { out = append(out, mapRole(it)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) CreateRole(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
+    it, err := r.q.CreateRole(ctx, db.CreateRoleParams{
+        ID:          toPgUUID(id),
+        TenantID:    toPgUUID(tenantID),
+        Name:        name,
+        Description: toPgText(description),
+    })
+    if err != nil { return domain.Role{}, err }
+    return mapRole(it), nil
+}
+
+func (r *SQLCRepository) UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
+    it, err := r.q.UpdateRole(ctx, db.UpdateRoleParams{
+        ID:          toPgUUID(roleID),
+        TenantID:    toPgUUID(tenantID),
+        Name:        name,
+        Description: toPgText(description),
+    })
+    if err != nil { return domain.Role{}, err }
+    return mapRole(it), nil
+}
+
+func (r *SQLCRepository) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error {
+    return r.q.DeleteRole(ctx, db.DeleteRoleParams{ID: toPgUUID(roleID), TenantID: toPgUUID(tenantID)})
+}
+
+func (r *SQLCRepository) GetRoleByName(ctx context.Context, tenantID uuid.UUID, name string) (domain.Role, error) {
+    it, err := r.q.GetRoleByName(ctx, db.GetRoleByNameParams{TenantID: toPgUUID(tenantID), Name: name})
+    if err != nil { return domain.Role{}, err }
+    return mapRole(it), nil
+}
+
+// User role assignments
+func (r *SQLCRepository) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error) {
+    rows, err := r.q.ListUserRoleIDs(ctx, db.ListUserRoleIDsParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+    if err != nil { return nil, err }
+    out := make([]uuid.UUID, 0, len(rows))
+    for _, v := range rows { out = append(out, toUUID(v)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
+    return r.q.AddUserRole(ctx, db.AddUserRoleParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID), RoleID: toPgUUID(roleID)})
+}
+
+func (r *SQLCRepository) RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
+    return r.q.RemoveUserRole(ctx, db.RemoveUserRoleParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID), RoleID: toPgUUID(roleID)})
+}
+
+// Role-permissions
+func (r *SQLCRepository) ListRolePermissionKeys(ctx context.Context, roleIDs []uuid.UUID) ([]domain.RolePermissionGrant, error) {
+    arr := make([]pgtype.UUID, 0, len(roleIDs))
+    for _, id := range roleIDs { arr = append(arr, toPgUUID(id)) }
+    rows, err := r.q.ListRolePermissionKeys(ctx, arr)
+    if err != nil { return nil, err }
+    out := make([]domain.RolePermissionGrant, 0, len(rows))
+    for _, row := range rows { out = append(out, mapRolePermissionKeyRow(row)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error {
+    return r.q.UpsertRolePermission(ctx, db.UpsertRolePermissionParams{
+        RoleID:       toPgUUID(roleID),
+        PermissionID: toPgUUID(permissionID),
+        ScopeType:    scopeType,
+        ResourceType: toPgTextNullable(resourceType),
+        ResourceID:   toPgTextNullable(resourceID),
+    })
+}
+
+func (r *SQLCRepository) DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error {
+    return r.q.DeleteRolePermission(ctx, db.DeleteRolePermissionParams{
+        RoleID:       toPgUUID(roleID),
+        PermissionID: toPgUUID(permissionID),
+        ScopeType:    scopeType,
+        ResourceType: toPgTextNullable(resourceType),
+        ResourceID:   toPgTextNullable(resourceID),
+    })
+}
+
+// --- FGA repository methods (groups, memberships, ACL tuples) ---
+
+// Groups
+func (r *SQLCRepository) CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Group, error) {
+    it, err := r.q.CreateGroup(ctx, db.CreateGroupParams{
+        ID:          toPgUUID(id),
+        TenantID:    toPgUUID(tenantID),
+        Name:        name,
+        Description: toPgText(description),
+    })
+    if err != nil {
+        var pgErr *pgconn.PgError
+        if errors.As(err, &pgErr) {
+            if pgErr.Code == "23505" { // unique_violation
+                return domain.Group{}, domain.ErrDuplicateGroup
+            }
+        }
+        return domain.Group{}, err
+    }
+    return mapGroup(it), nil
+}
+
+func (r *SQLCRepository) ListGroups(ctx context.Context, tenantID uuid.UUID) ([]domain.Group, error) {
+    items, err := r.q.ListGroups(ctx, toPgUUID(tenantID))
+    if err != nil { return nil, err }
+    out := make([]domain.Group, 0, len(items))
+    for _, g := range items { out = append(out, mapGroup(g)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
+    return r.q.DeleteGroup(ctx, db.DeleteGroupParams{ID: toPgUUID(id), TenantID: toPgUUID(tenantID)})
+}
+
+// Group membership
+func (r *SQLCRepository) AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+    return r.q.AddGroupMember(ctx, db.AddGroupMemberParams{GroupID: toPgUUID(groupID), UserID: toPgUUID(userID)})
+}
+
+func (r *SQLCRepository) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+    return r.q.RemoveGroupMember(ctx, db.RemoveGroupMemberParams{GroupID: toPgUUID(groupID), UserID: toPgUUID(userID)})
+}
+
+// ACL tuples
+func (r *SQLCRepository) CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (domain.ACLTuple, error) {
+    it, err := r.q.CreateACLTuple(ctx, db.CreateACLTupleParams{
+        ID:           toPgUUID(id),
+        TenantID:     toPgUUID(tenantID),
+        SubjectType:  subjectType,
+        SubjectID:    toPgUUID(subjectID),
+        PermissionID: toPgUUID(permissionID),
+        ObjectType:   objectType,
+        ObjectID:     toPgTextNullable(objectID),
+        CreatedBy:    toPgUUIDNullable(createdBy),
+    })
+    if err != nil { return domain.ACLTuple{}, err }
+    return mapACLTuple(it), nil
+}
+
+func (r *SQLCRepository) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error {
+    return r.q.DeleteACLTuple(ctx, db.DeleteACLTupleParams{
+        TenantID:     toPgUUID(tenantID),
+        SubjectType:  subjectType,
+        SubjectID:    toPgUUID(subjectID),
+        PermissionID: toPgUUID(permissionID),
+        ObjectType:   objectType,
+        ObjectID:     toPgTextNullable(objectID),
+    })
+}
+
+// Convenience wrappers to match domain.FGARepository naming
+func (r *SQLCRepository) ListACLForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]domain.PermissionGrant, error) {
+    return r.ListACLPermissionKeysForUser(ctx, tenantID, userID)
+}
+
+func (r *SQLCRepository) ListACLForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]domain.GroupPermissionGrant, error) {
+    return r.ListACLPermissionKeysForGroups(ctx, tenantID, groupIDs)
+}
+
+// Groups and ACL
+func (r *SQLCRepository) ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+    rows, err := r.q.ListUserGroups(ctx, toPgUUID(userID))
+    if err != nil { return nil, err }
+    out := make([]uuid.UUID, 0, len(rows))
+    for _, v := range rows { out = append(out, toUUID(v)) }
+    return out, nil
+}
+
+func (r *SQLCRepository) ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]domain.PermissionGrant, error) {
+    rows, err := r.q.ListACLPermissionKeysForUser(ctx, db.ListACLPermissionKeysForUserParams{TenantID: toPgUUID(tenantID), SubjectID: toPgUUID(userID)})
+    if err != nil { return nil, err }
+    out := make([]domain.PermissionGrant, 0, len(rows))
+    for _, row := range rows {
+        var oid *string
+        if row.ObjectID.Valid { s := row.ObjectID.String; oid = &s }
+        out = append(out, domain.PermissionGrant{Key: row.Key, ObjectType: row.ObjectType, ObjectID: oid})
+    }
+    return out, nil
+}
+
+func (r *SQLCRepository) ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]domain.GroupPermissionGrant, error) {
+    arr := make([]pgtype.UUID, 0, len(groupIDs))
+    for _, id := range groupIDs { arr = append(arr, toPgUUID(id)) }
+    rows, err := r.q.ListACLPermissionKeysForGroups(ctx, db.ListACLPermissionKeysForGroupsParams{TenantID: toPgUUID(tenantID), Column2: arr})
+    if err != nil { return nil, err }
+    out := make([]domain.GroupPermissionGrant, 0, len(rows))
+    for _, row := range rows {
+        var oid *string
+        if row.ObjectID.Valid { s := row.ObjectID.String; oid = &s }
+        out = append(out, domain.GroupPermissionGrant{GroupID: toUUID(row.GroupID), Key: row.Key, ObjectType: row.ObjectType, ObjectID: oid})
+    }
+    return out, nil
 }

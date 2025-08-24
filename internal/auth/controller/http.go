@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"github.com/corvusHold/guard/internal/platform/ratelimit"
 	"github.com/corvusHold/guard/internal/platform/validation"
 	"github.com/corvusHold/guard/internal/config"
+	evdomain "github.com/corvusHold/guard/internal/events/domain"
 )
 
 type Controller struct {
@@ -26,45 +29,448 @@ type Controller struct {
 	settings sdomain.Service
 	rl       ratelimit.Store
 	cfg      config.Config
+	pub      evdomain.Publisher
+}
+
+// ---- Admin: RBAC v2 ----
+
+// RBAC List Permissions godoc
+// @Summary      List all permissions (admin-only)
+// @Description  Returns all known permissions.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  rbacPermissionsResp
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/permissions [get]
+func (h *Controller) rbacListPermissions(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	// require admin
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	perms, err := h.svc.ListPermissions(c.Request().Context())
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	out := make([]rbacPermissionItem, 0, len(perms))
+	for _, p := range perms {
+		out = append(out, rbacPermissionItem{ID: p.ID, Key: p.Key, Description: p.Description, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})
+	}
+	return c.JSON(http.StatusOK, rbacPermissionsResp{Permissions: out})
+}
+
+// RBAC List Roles godoc
+// @Summary      List roles for a tenant (admin-only)
+// @Description  Returns all roles for the specified tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  rbacRolesResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles [get]
+func (h *Controller) rbacListRoles(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	tenStr := c.QueryParam("tenant_id")
+	if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+	tenantID, err := uuid.Parse(tenStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	roles, err := h.svc.ListRoles(c.Request().Context(), tenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	out := make([]rbacRoleItem, 0, len(roles))
+	for _, r := range roles {
+		out = append(out, rbacRoleItem{ID: r.ID, TenantID: r.TenantID, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
+	}
+	return c.JSON(http.StatusOK, rbacRolesResp{Roles: out})
+}
+
+// RBAC Create Role godoc
+// @Summary      Create role (admin-only)
+// @Description  Creates a new role for the specified tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  rbacCreateRoleReq  true  "tenant_id, name, optional description"
+// @Success      201   {object}  rbacRoleItem
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles [post]
+func (h *Controller) rbacCreateRole(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	var req rbacCreateRoleReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tenantID, err := uuid.Parse(req.TenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	r, err := h.svc.CreateRole(c.Request().Context(), tenantID, req.Name, req.Description)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusCreated, rbacRoleItem{ID: r.ID, TenantID: r.TenantID, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
+}
+
+// RBAC Update Role godoc
+// @Summary      Update role (admin-only)
+// @Description  Updates a role's name/description in the specified tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string            true  "Role ID (UUID)"
+// @Param        body  body   rbacUpdateRoleReq true  "tenant_id, name, optional description"
+// @Success      200   {object}  rbacRoleItem
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles/{id} [patch]
+func (h *Controller) rbacUpdateRole(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	roleIDStr := c.Param("id")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role id"}) }
+
+	var req rbacUpdateRoleReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tenantID, err := uuid.Parse(req.TenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	r, err := h.svc.UpdateRole(c.Request().Context(), roleID, tenantID, req.Name, req.Description)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, rbacRoleItem{ID: r.ID, TenantID: r.TenantID, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
+}
+
+// RBAC Delete Role godoc
+// @Summary      Delete role (admin-only)
+// @Description  Deletes a role for the specified tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id         path   string  true  "Role ID (UUID)"
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles/{id} [delete]
+func (h *Controller) rbacDeleteRole(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	roleIDStr := c.Param("id")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role id"}) }
+	tenStr := c.QueryParam("tenant_id")
+	if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+	tenantID, err := uuid.Parse(tenStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	if err := h.svc.DeleteRole(c.Request().Context(), roleID, tenantID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RBAC List User Roles godoc
+// @Summary      List role IDs assigned to a user (admin-only)
+// @Description  Lists role assignments for a user within a tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id         path   string  true  "User ID (UUID)"
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  rbacUserRolesResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/users/{id}/roles [get]
+func (h *Controller) rbacListUserRoles(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+	tenStr := c.QueryParam("tenant_id")
+	if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+	tenantID, err := uuid.Parse(tenStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	ids, err := h.svc.ListUserRoleIDs(c.Request().Context(), userID, tenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusOK, rbacUserRolesResp{RoleIDs: ids})
+}
+
+// RBAC Add User Role godoc
+// @Summary      Add a role to a user (admin-only)
+// @Description  Adds a role assignment for a user within a tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string               true  "User ID (UUID)"
+// @Param        body  body   rbacModifyUserRoleReq true  "tenant_id, role_id"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/users/{id}/roles [post]
+func (h *Controller) rbacAddUserRole(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+	var req rbacModifyUserRoleReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tenantID, err := uuid.Parse(req.TenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+	roleID, err := uuid.Parse(req.RoleID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role_id"}) }
+
+	if err := h.svc.AddUserRole(c.Request().Context(), userID, tenantID, roleID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RBAC Remove User Role godoc
+// @Summary      Remove a role from a user (admin-only)
+// @Description  Removes a role assignment for a user within a tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string               true  "User ID (UUID)"
+// @Param        body  body   rbacModifyUserRoleReq true  "tenant_id, role_id"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/users/{id}/roles [delete]
+func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+	var req rbacModifyUserRoleReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	tenantID, err := uuid.Parse(req.TenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+	roleID, err := uuid.Parse(req.RoleID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role_id"}) }
+
+	if err := h.svc.RemoveUserRole(c.Request().Context(), userID, tenantID, roleID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RBAC Upsert Role Permission godoc
+// @Summary      Grant/Update a permission to a role (admin-only)
+// @Description  Upserts a permission grant for a role, optionally scoped to a resource.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string                 true  "Role ID (UUID)"
+// @Param        body  body   rbacRolePermissionReq  true  "permission_key, scope_type, optional resource_type/resource_id"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles/{id}/permissions [post]
+func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	roleIDStr := c.Param("id")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role id"}) }
+
+	var req rbacRolePermissionReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	var rt, rid *string
+	if req.ResourceType != "" { rt = &req.ResourceType }
+	if req.ResourceID != "" { rid = &req.ResourceID }
+
+	if err := h.svc.UpsertRolePermission(c.Request().Context(), roleID, req.PermissionKey, req.ScopeType, rt, rid); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RBAC Delete Role Permission godoc
+// @Summary      Delete a permission grant from a role (admin-only)
+// @Description  Deletes a permission grant for a role, optionally scoped to a resource.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string                 true  "Role ID (UUID)"
+// @Param        body  body   rbacRolePermissionReq  true  "permission_key, scope_type, optional resource_type/resource_id"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/roles/{id}/permissions [delete]
+func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	roleIDStr := c.Param("id")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid role id"}) }
+
+	var req rbacRolePermissionReq
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+	var rt, rid *string
+	if req.ResourceType != "" { rt = &req.ResourceType }
+	if req.ResourceID != "" { rid = &req.ResourceID }
+
+	if err := h.svc.DeleteRolePermission(c.Request().Context(), roleID, req.PermissionKey, req.ScopeType, rt, rid); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RBAC Resolve User Permissions godoc
+// @Summary      Resolve user permissions (admin-only)
+// @Description  Aggregates user permissions from roles and ACL for a tenant.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id         path   string  true  "User ID (UUID)"
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  rbacResolvedPermissionsResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Router       /v1/auth/admin/rbac/users/{id}/permissions/resolve [get]
+func (h *Controller) rbacResolveUserPermissions(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+	isAdmin := false
+	for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+	if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+	tenStr := c.QueryParam("tenant_id")
+	if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+	tenantID, err := uuid.Parse(tenStr)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+	rp, err := h.svc.ResolveUserPermissions(c.Request().Context(), userID, tenantID)
+	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+	out := make([]permissionGrantItem, 0, len(rp.Grants))
+	for _, g := range rp.Grants { out = append(out, permissionGrantItem{Key: g.Key, ObjectType: g.ObjectType, ObjectID: g.ObjectID}) }
+	return c.JSON(http.StatusOK, rbacResolvedPermissionsResp{Grants: out})
 }
 
 // magicTokenForTest issues a magic link token without sending email. Test/CI only.
 func (h *Controller) magicTokenForTest(c echo.Context) error {
-    // Only allow in non-production environments
-    if strings.EqualFold(h.cfg.AppEnv, "production") {
-        return c.NoContent(http.StatusNotFound)
-    }
-    var req magicSendReq
-    if err := c.Bind(&req); err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
-    }
-    if err := c.Validate(&req); err != nil {
-        return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
-    }
-    tenID, err := uuid.Parse(req.TenantID)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
-    }
-    tok, err := h.magic.CreateForTest(c.Request().Context(), domain.MagicSendInput{
-        TenantID:    tenID,
-        Email:       req.Email,
-        RedirectURL: req.RedirectURL,
-    })
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-    }
-    return c.JSON(http.StatusOK, magicTokenResp{Token: tok})
+	// Only allow in non-production environments
+	if strings.EqualFold(h.cfg.AppEnv, "production") {
+		return c.NoContent(http.StatusNotFound)
+	}
+	var req magicSendReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	tenID, err := uuid.Parse(req.TenantID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	tok, err := h.magic.CreateForTest(c.Request().Context(), domain.MagicSendInput{
+		TenantID:    tenID,
+		Email:       req.Email,
+		RedirectURL: req.RedirectURL,
+	})
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, magicTokenResp{Token: tok})
 }
 
 // New constructs controller with loaded config (backward compatible for tests).
 func New(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService) *Controller {
-    cfg, _ := config.Load()
-    return NewWithConfig(svc, magic, sso, cfg)
+	cfg, _ := config.Load()
+	return NewWithConfig(svc, magic, sso, cfg)
 }
 
 // NewWithConfig allows passing explicit config.
 func NewWithConfig(svc domain.Service, magic domain.MagicLinkService, sso domain.SSOService, cfg config.Config) *Controller {
-    return &Controller{svc: svc, magic: magic, sso: sso, cfg: cfg}
+	return &Controller{svc: svc, magic: magic, sso: sso, cfg: cfg}
 }
 
 // WithRateLimit enables tenant-aware, store-backed rate limiting when provided.
@@ -73,6 +479,9 @@ func (h *Controller) WithRateLimit(settings sdomain.Service, store ratelimit.Sto
 	h.rl = store
 	return h
 }
+
+// WithPublisher injects an audit event publisher for controller-level event emission.
+func (h *Controller) WithPublisher(p evdomain.Publisher) *Controller { h.pub = p; return h }
 
 // Register mounts all auth routes under /v1/auth with multi-method structure.
 func (h *Controller) Register(e *echo.Echo) {
@@ -140,6 +549,41 @@ func (h *Controller) Register(e *echo.Echo) {
 	g.GET("/me", h.me, rlToken)
 	g.POST("/introspect", h.introspect, rlToken)
 	g.POST("/revoke", h.revoke, rlToken)
+
+    // Admin: user management
+    g.POST("/admin/users/:id/roles", h.adminUpdateRoles, rlToken)
+    g.GET("/admin/users", h.adminListUsers, rlToken)
+    g.PATCH("/admin/users/:id", h.adminUpdateNames, rlToken)
+    g.POST("/admin/users/:id/block", h.adminBlockUser, rlToken)
+    g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
+    // Admin: RBAC v2
+    g.GET("/admin/rbac/permissions", h.rbacListPermissions, rlToken)
+    g.GET("/admin/rbac/roles", h.rbacListRoles, rlToken)
+    g.POST("/admin/rbac/roles", h.rbacCreateRole, rlToken)
+    g.PATCH("/admin/rbac/roles/:id", h.rbacUpdateRole, rlToken)
+    g.DELETE("/admin/rbac/roles/:id", h.rbacDeleteRole, rlToken)
+    g.GET("/admin/rbac/users/:id/roles", h.rbacListUserRoles, rlToken)
+    g.POST("/admin/rbac/users/:id/roles", h.rbacAddUserRole, rlToken)
+    g.DELETE("/admin/rbac/users/:id/roles", h.rbacRemoveUserRole, rlToken)
+    g.POST("/admin/rbac/roles/:id/permissions", h.rbacUpsertRolePermission, rlToken)
+    g.DELETE("/admin/rbac/roles/:id/permissions", h.rbacDeleteRolePermission, rlToken)
+    g.GET("/admin/rbac/users/:id/permissions/resolve", h.rbacResolveUserPermissions, rlToken)
+
+    // Admin: FGA (groups, memberships, ACL tuples)
+    g.POST("/admin/fga/groups", h.fgaCreateGroup, rlToken)
+    g.GET("/admin/fga/groups", h.fgaListGroups, rlToken)
+    g.DELETE("/admin/fga/groups/:id", h.fgaDeleteGroup, rlToken)
+    g.POST("/admin/fga/groups/:id/members", h.fgaAddGroupMember, rlToken)
+    g.DELETE("/admin/fga/groups/:id/members", h.fgaRemoveGroupMember, rlToken)
+    g.POST("/admin/fga/acl/tuples", h.fgaCreateACLTuple, rlToken)
+    g.DELETE("/admin/fga/acl/tuples", h.fgaDeleteACLTuple, rlToken)
+
+    // Authorization decision
+    g.POST("/authorize", h.fgaAuthorize, rlToken)
+
+    // Sessions (self)
+    g.GET("/sessions", h.sessionsList, rlToken)
+    g.POST("/sessions/:id/revoke", h.sessionRevoke, rlToken)
 
 	// MFA: TOTP + Backup codes
 	g.POST("/mfa/totp/start", h.totpStart, rlMFA)
@@ -248,6 +692,110 @@ type resetPasswordConfirmReq struct {
 	NewPassword string `json:"new_password" validate:"required,min=8"`
 }
 
+type adminUpdateRolesReq struct {
+    Roles []string `json:"roles" validate:"required,dive,required"`
+}
+
+// Admin Users DTOs
+type adminUser struct {
+    ID            uuid.UUID  `json:"id"`
+    EmailVerified bool       `json:"email_verified"`
+    IsActive      bool       `json:"is_active"`
+    FirstName     string     `json:"first_name"`
+    LastName      string     `json:"last_name"`
+    Roles         []string   `json:"roles"`
+    CreatedAt     time.Time  `json:"created_at"`
+    UpdatedAt     time.Time  `json:"updated_at"`
+    LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
+}
+
+type adminUsersResp struct {
+    Users []adminUser `json:"users"`
+}
+
+type adminUpdateNamesReq struct {
+    FirstName string `json:"first_name" validate:"omitempty"`
+    LastName  string `json:"last_name" validate:"omitempty"`
+}
+
+// --- RBAC v2 DTOs ---
+type rbacPermissionItem struct {
+    ID          uuid.UUID `json:"id"`
+    Key         string    `json:"key"`
+    Description string    `json:"description"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type rbacPermissionsResp struct {
+    Permissions []rbacPermissionItem `json:"permissions"`
+}
+
+type rbacRoleItem struct {
+    ID          uuid.UUID `json:"id"`
+    TenantID    uuid.UUID `json:"tenant_id"`
+    Name        string    `json:"name"`
+    Description string    `json:"description"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type rbacRolesResp struct {
+    Roles []rbacRoleItem `json:"roles"`
+}
+
+type rbacCreateRoleReq struct {
+    TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+    Name        string `json:"name" validate:"required"`
+    Description string `json:"description" validate:"omitempty"`
+}
+
+type rbacUpdateRoleReq struct {
+    TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+    Name        string `json:"name" validate:"required"`
+    Description string `json:"description" validate:"omitempty"`
+}
+
+type rbacUserRolesResp struct {
+    RoleIDs []uuid.UUID `json:"role_ids"`
+}
+
+type rbacModifyUserRoleReq struct {
+    TenantID string `json:"tenant_id" validate:"required,uuid4"`
+    RoleID   string `json:"role_id" validate:"required,uuid4"`
+}
+
+type rbacRolePermissionReq struct {
+    PermissionKey string `json:"permission_key" validate:"required"`
+    ScopeType     string `json:"scope_type" validate:"required"`
+    ResourceType  string `json:"resource_type" validate:"omitempty"`
+    ResourceID    string `json:"resource_id" validate:"omitempty"`
+}
+
+type permissionGrantItem struct {
+    Key        string  `json:"key"`
+    ObjectType string  `json:"object_type"`
+    ObjectID   *string `json:"object_id,omitempty"`
+}
+
+type rbacResolvedPermissionsResp struct {
+    Grants []permissionGrantItem `json:"grants"`
+}
+
+// Sessions DTOs
+type sessionItem struct {
+    ID        uuid.UUID `json:"id"`
+    Revoked   bool      `json:"revoked"`
+    UserAgent string    `json:"user_agent"`
+    IP        string    `json:"ip"`
+    CreatedAt time.Time `json:"created_at"`
+    ExpiresAt time.Time `json:"expires_at"`
+}
+
+type sessionsListResp struct {
+    Sessions []sessionItem `json:"sessions"`
+}
+
 func bearerToken(c echo.Context) string {
 	h := c.Request().Header.Get("Authorization")
 	if h == "" { return "" }
@@ -321,9 +869,11 @@ func (h *Controller) login(c echo.Context) error {
 	}
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
+	// Normalize email to lowercase and trim spaces to match DB lookup semantics
+	email := strings.ToLower(strings.TrimSpace(req.Email))
 	tok, err := h.svc.Login(c.Request().Context(), domain.LoginInput{
 		TenantID:  tenID,
-		Email:     req.Email,
+		Email:     email,
 		Password:  req.Password,
 		UserAgent: ua,
 		IP:        ip,
@@ -351,11 +901,33 @@ func (h *Controller) login(c echo.Context) error {
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/refresh [post]
 func (h *Controller) refresh(c echo.Context) error {
+	// Peek and restore body for debug logging
+	var raw []byte
+	if c.Request().Body != nil {
+		if buf, err := io.ReadAll(c.Request().Body); err == nil {
+			raw = buf
+			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
+		}
+	}
+	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if len(raw) > 0 {
+			c.Logger().Debugf("refresh: raw body=%s", string(raw))
+		} else {
+			c.Logger().Debug("refresh: raw body=<empty>")
+		}
+		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
+	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("refresh: bind error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	if err := c.Validate(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("refresh: validation error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
 	ua := c.Request().UserAgent()
@@ -378,8 +950,27 @@ func (h *Controller) refresh(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/logout [post]
 func (h *Controller) logout(c echo.Context) error {
+	// Peek and restore body for debug logging
+	var raw []byte
+	if c.Request().Body != nil {
+		if buf, err := io.ReadAll(c.Request().Body); err == nil {
+			raw = buf
+			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
+		}
+	}
+	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if len(raw) > 0 {
+			c.Logger().Debugf("logout: raw body=%s", string(raw))
+		} else {
+			c.Logger().Debug("logout: raw body=<empty>")
+		}
+		c.Logger().Debugf("logout: tenant_id=%s", c.QueryParam("tenant_id"))
+	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
+		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			c.Logger().Warnf("logout: bind error=%v body=%s", err, string(raw))
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	if req.RefreshToken == "" {
@@ -469,6 +1060,256 @@ func (h *Controller) revoke(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Update Roles godoc
+// @Summary      Update a user's roles (admin-only)
+// @Description  Updates the roles array for a user. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string                 true  "User ID (UUID)"
+// @Param        body  body   adminUpdateRolesReq    true  "roles"
+// @Success      204
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Failure      429   {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/roles [post]
+func (h *Controller) adminUpdateRoles(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    var req adminUpdateRolesReq
+    if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+    if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+    // Explicitly reject empty roles array (tests use a noop validator, so enforce here)
+    if len(req.Roles) == 0 {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "roles must not be empty"})
+    }
+
+    if err := h.svc.UpdateUserRoles(c.Request().Context(), userID, req.Roles); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin List Users godoc
+// @Summary      List users for a tenant (admin-only)
+// @Description  Lists all users that belong to the specified tenant. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Produce      json
+// @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Success      200  {object}  adminUsersResp
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users [get]
+func (h *Controller) adminListUsers(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    tenStr := c.QueryParam("tenant_id")
+    if tenStr == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"}) }
+    tenantID, err := uuid.Parse(tenStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"}) }
+
+    users, err := h.svc.ListTenantUsers(c.Request().Context(), tenantID)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+    out := make([]adminUser, 0, len(users))
+    for _, u := range users {
+        out = append(out, adminUser{
+            ID:            u.ID,
+            EmailVerified: u.EmailVerified,
+            IsActive:      u.IsActive,
+            FirstName:     u.FirstName,
+            LastName:      u.LastName,
+            Roles:         u.Roles,
+            CreatedAt:     u.CreatedAt,
+            UpdatedAt:     u.UpdatedAt,
+            LastLoginAt:   u.LastLoginAt,
+        })
+    }
+    return c.JSON(http.StatusOK, adminUsersResp{Users: out})
+}
+
+// Admin Update Names godoc
+// @Summary      Update a user's names (admin-only)
+// @Description  Updates first and/or last name for a user. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Accept       json
+// @Param        id    path   string               true  "User ID (UUID)"
+// @Param        body  body   adminUpdateNamesReq  true  "first_name, last_name"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id} [patch]
+func (h *Controller) adminUpdateNames(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    var req adminUpdateNamesReq
+    if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+    if err := c.Validate(&req); err != nil { return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err)) }
+
+    if err := h.svc.UpdateUserNames(c.Request().Context(), userID, req.FirstName, req.LastName); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Block User godoc
+// @Summary      Block a user (admin-only)
+// @Description  Sets a user's active status to false. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path   string  true  "User ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/block [post]
+func (h *Controller) adminBlockUser(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    if err := h.svc.SetUserActive(c.Request().Context(), userID, false); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Unblock User godoc
+// @Summary      Unblock a user (admin-only)
+// @Description  Sets a user's active status to true. Requires caller to have the admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path   string  true  "User ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/unblock [post]
+func (h *Controller) adminUnblockUser(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+    // RBAC: require admin role
+    isAdmin := false
+    for _, r := range in.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+
+    userIDStr := c.Param("id")
+    userID, err := uuid.Parse(userIDStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"}) }
+
+    if err := h.svc.SetUserActive(c.Request().Context(), userID, true); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
+}
+
+// Sessions List godoc
+// @Summary      List my active sessions
+// @Description  Lists the authenticated user's sessions (refresh tokens) for the current tenant.
+// @Tags         auth.sessions
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  sessionsListResp
+// @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/sessions [get]
+func (h *Controller) sessionsList(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+
+    sessions, err := h.svc.ListUserSessions(c.Request().Context(), in.UserID, in.TenantID)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+    out := make([]sessionItem, 0, len(sessions))
+    for _, s := range sessions {
+        out = append(out, sessionItem{
+            ID:        s.ID,
+            Revoked:   s.Revoked,
+            UserAgent: s.UserAgent,
+            IP:        s.IP,
+            CreatedAt: s.CreatedAt,
+            ExpiresAt: s.ExpiresAt,
+        })
+    }
+    return c.JSON(http.StatusOK, sessionsListResp{Sessions: out})
+}
+
+// Session Revoke godoc
+// @Summary      Revoke a specific session
+// @Description  Revokes a specific session by ID for the authenticated user within the current tenant.
+// @Tags         auth.sessions
+// @Security     BearerAuth
+// @Param        id   path   string  true  "Session ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/sessions/{id}/revoke [post]
+func (h *Controller) sessionRevoke(c echo.Context) error {
+    tok := bearerToken(c)
+    if tok == "" { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"}) }
+    in, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !in.Active { return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"}) }
+
+    sidStr := c.Param("id")
+    sid, err := uuid.Parse(sidStr)
+    if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid session id"}) }
+
+    if err := h.svc.RevokeSession(c.Request().Context(), in.UserID, in.TenantID, sid); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    return c.NoContent(http.StatusNoContent)
 }
 
 // ---- Password reset (stubs) ----
@@ -592,13 +1433,14 @@ var allowedProviders = map[string]struct{}{
 	"google":   {},
 	"github":   {},
 	"azuread":  {},
+    "workos":  {},
 }
 
 // SSO Start godoc
 // @Summary      Start SSO/OAuth flow
 // @Description  Initiates an SSO flow for the given provider and redirects to the provider authorization URL
 // @Tags         auth.sso
-// @Param        provider         path      string  true   "SSO provider (google, github, azuread)"
+// @Param        provider         path      string  true   "SSO provider (google, github, azuread, workos)"
 // @Param        tenant_id        query     string  true   "Tenant ID (UUID)"
 // @Param        redirect_url     query     string  false  "Absolute redirect URL after callback"
 // @Param        state            query     string  false  "Opaque state to round-trip"

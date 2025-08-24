@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+  id-token: write
+
 
 jobs:
   unit:
@@ -36,6 +39,104 @@ jobs:
 
       - name: Run unit tests
         run: go test ./...
+
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rbac: ${{ steps.filter.outputs.rbac }}
+      fga: ${{ steps.filter.outputs.fga }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rbac:
+              - 'internal/auth/controller/**'
+              - 'internal/auth/domain/**'
+              - 'internal/auth/service/**'
+              - 'internal/auth/repository/**'
+              - 'internal/db/**'
+              - 'migrations/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            fga:
+              - 'internal/auth/controller/**'
+              - 'internal/auth/repository/**'
+              - 'internal/auth/service/**'
+              - 'internal/db/queries/**'
+              - 'migrations/**'
+              - 'scripts/fga_*.sh'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+
+  rbac-admin:
+    name: RBAC Admin Tests
+    needs: changes
+    if: needs.changes.outputs.rbac == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run RBAC admin tests
+        env:
+          DOCKER_CLI_HINTS: enabled
+        run: |
+          make test-rbac-admin
+
+  fga-tests:
+    name: FGA Authorization Tests
+    needs: changes
+    if: needs.changes.outputs.fga == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run FGA tests
+        env:
+          DOCKER_CLI_HINTS: enabled
+        run: |
+          make test-fga
 
   e2e:
     name: E2E / Integration
@@ -103,9 +204,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl
 
-      - name: Start API stack (db, valkey, api)
+      - name: Start data services (db, valkey)
         run: |
-          docker compose up -d db valkey api
+          docker compose up -d db valkey
+
+      - name: Wait for Postgres readiness
+        run: |
+          for i in {1..120}; do \
+            if docker compose exec -T db pg_isready -U guard >/dev/null 2>&1; then echo "Postgres ready"; break; fi; \
+            echo "Waiting for Postgres... ($i)"; sleep 1; \
+            if [ "$i" -eq 120 ]; then echo "Postgres not ready" >&2; exit 1; fi; \
+          done
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
+        run: |
+          go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$DATABASE_URL" up
+
+      - name: Start API
+        run: |
+          docker compose up -d api
 
       - name: Wait for API readiness
         run: |
@@ -144,6 +263,94 @@ jobs:
         with:
           name: perf-logs
           path: perf-logs.txt
+
+      - name: Tear down stack
+        if: always()
+        run: |
+          docker compose down -v
+
+  fga-smoke:
+    name: FGA Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Start data services (db, valkey)
+        run: |
+          docker compose up -d db valkey
+
+      - name: Wait for Postgres readiness
+        run: |
+          for i in {1..120}; do \
+            if docker compose exec -T db pg_isready -U guard >/dev/null 2>&1; then echo "Postgres ready"; break; fi; \
+            echo "Waiting for Postgres... ($i)"; sleep 1; \
+            if [ "$i" -eq 120 ]; then echo "Postgres not ready" >&2; exit 1; fi; \
+          done
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
+        run: |
+          go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$DATABASE_URL" up
+
+      - name: Start API
+        run: |
+          docker compose up -d api
+
+      - name: Wait for API readiness
+        run: |
+          for i in {1..120}; do \
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz || true); \
+            if [ "$code" = "200" ]; then echo "API ready"; break; fi; \
+            echo "Waiting for API... ($i)"; sleep 1; \
+            if [ "$i" -eq 120 ]; then echo "API not ready" >&2; exit 1; fi; \
+          done
+
+      - name: Go mod download
+        run: go mod download
+
+      - name: Run FGA smoke script
+        env:
+          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
+        run: |
+          bash scripts/fga_smoke.sh
+
+      - name: Run non-admin helper check (deny → allow)
+        run: |
+          bash scripts/fga_nonadmin_check.sh
+
+      - name: Collect docker logs on failure
+        if: failure()
+        run: |
+          docker compose logs --no-color > fga-smoke-logs.txt || true
+
+      - name: Upload logs artifact (fga-smoke)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fga-smoke-logs
+          path: fga-smoke-logs.txt
 
       - name: Tear down stack
         if: always()

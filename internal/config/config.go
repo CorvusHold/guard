@@ -9,32 +9,32 @@ import (
 )
 
 type Config struct {
-	AppEnv            string
-	AppAddr           string
+	AppEnv             string
+	AppAddr            string
 	CORSAllowedOrigins []string
-	PublicBaseURL     string
+	PublicBaseURL      string
 
 	DatabaseURL string
 
 	RedisAddr string
 	RedisDB   int
 
-	JWTSigningKey    string
-	AccessTokenTTL   time.Duration
-	RefreshTokenTTL  time.Duration
-	MagicLinkTTL     time.Duration
+	JWTSigningKey   string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	MagicLinkTTL    time.Duration
 
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	SMTPFrom     string
+	SMTPHost      string
+	SMTPPort      int
+	SMTPUsername  string
+	SMTPPassword  string
+	SMTPFrom      string
 	EmailProvider string // smtp | brevo
 	BrevoAPIKey   string
 	BrevoSender   string
 
-	WorkOSAPIKey      string
-	WorkOSClientID    string
+	WorkOSAPIKey       string
+	WorkOSClientID     string
 	WorkOSClientSecret string
 }
 

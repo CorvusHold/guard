@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+export RATE_LIMIT_RETRIES ?= 2
 
 # Note: commands that require env vars will source .env inline
 
@@ -8,7 +9,8 @@ SHELL := /bin/bash
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
-        migrate-up-test-dc
+        migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
+        test-rbac-admin test-fga
 
 compose-up:
 	docker compose up -d --remove-orphans
@@ -52,8 +54,18 @@ test:
 	go test ./...
 
 # Run E2E/integration tests against test stack. No extra host tools required.
-test-e2e: compose-up-test db-wait-test redis-test-ping migrate-up-test-dc
+test-e2e: compose-up-test db-wait-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test ./...'
+	make compose-down-test
+
+# Run only the RBAC admin controller tests against the dockerized test stack
+test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
+	make compose-down-test
+
+# Run only FGA authorization integration tests against the dockerized test stack
+test-fga: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
 	make compose-down-test
 
 lint:
@@ -113,6 +125,7 @@ conformance: conformance-up
 	  -e NONMFA2_TENANT_ID="$$NONMFA2_TENANT_ID" -e NONMFA2_EMAIL="$$NONMFA2_EMAIL" -e NONMFA2_PASSWORD="$$NONMFA2_PASSWORD" \
 	  -e TOTP_SECRET="$$TOTP_SECRET" -e AUTO_MAGIC_TOKEN="$${AUTO_MAGIC_TOKEN:-true}" \
 	  -e SCENARIO="$${SCENARIO:-}" -e SCENARIO_FILTER="$${SCENARIO_FILTER:-}" \
+	  -e RATE_LIMIT_RETRIES="$${RATE_LIMIT_RETRIES:-}" \
 	  $${SDK_SERVICE:-sdk_conformance}'
 
 # Tear down the test stack (including volumes)
@@ -160,6 +173,29 @@ alertmanager-url:
 	@echo "Alertmanager: http://localhost:9093"
 
 mailhog-url:
+	@echo "MailHog: http://localhost:8025"
+
+# ---- Examples stack helpers ----
+
+# Bring up the examples stack using the classic compose file, with API on :8081 and SMTP via MailHog.
+examples-up:
+	docker compose up -d --remove-orphans db valkey mailhog examples_setup api_examples
+
+# Wait until the examples API is ready
+examples-wait:
+	bash -lc 'for i in {1..60}; do curl -fsS http://localhost:8081/readyz >/dev/null 2>&1 && echo "API (examples) is ready" && exit 0; echo "Waiting for API (examples)... ($$i)"; sleep 1; done; echo "API (examples) not ready after timeout" >&2; exit 1'
+
+# Re-run seeding/migrations for examples (idempotent). Also updates examples/nextjs/.env.local
+examples-seed:
+	docker compose run --rm examples_setup
+
+# Tear down the examples stack
+examples-down:
+	docker compose down -v
+
+# Quick URLs
+examples-url:
+	@echo "Examples API: http://localhost:8081"
 	@echo "MailHog: http://localhost:8025"
 
 # ---- k6 scenarios (via compose service 'k6') ----

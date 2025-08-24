@@ -63,6 +63,21 @@ type Service interface {
 	// Revoke invalidates a token. Currently supports refresh tokens.
 	Revoke(ctx context.Context, token string, tokenType string) error
 
+	// UpdateUserRoles updates the roles array for the specified user.
+	UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error
+
+	// Admin/user management
+	// ListTenantUsers returns all users that belong to the given tenant.
+	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]User, error)
+	// UpdateUserNames updates only first and last name for a user, preserving roles.
+	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
+	// SetUserActive toggles the active state of a user.
+	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
+	// RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
+	RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error
+
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
 	StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (secret string, otpauthURL string, err error)
@@ -79,6 +94,43 @@ type Service interface {
 
 	// VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
 	VerifyMFA(ctx context.Context, in MFAVerifyInput) (AccessTokens, error)
+
+	// --- RBAC v2 ---
+	// ListPermissions returns all known permissions.
+	ListPermissions(ctx context.Context) ([]Permission, error)
+	// ListRoles returns all roles for a tenant.
+	ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
+	// CreateRole creates a role in a tenant.
+	CreateRole(ctx context.Context, tenantID uuid.UUID, name, description string) (Role, error)
+	// UpdateRole updates a role in a tenant.
+	UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (Role, error)
+	// DeleteRole deletes a role in a tenant.
+	DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error
+	// User role assignments in normalized table.
+	ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error)
+	AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
+	RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
+	// Role-permission mapping management (permissionKey is the unique permission key).
+	UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error
+	DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error
+	// ResolveUserPermissions aggregates permissions from roles, user ACL, and group ACL.
+	ResolveUserPermissions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (ResolvedPermissions, error)
+	// HasPermission checks whether user has a permission, optionally scoped to an object.
+	HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error)
+
+    // --- FGA ---
+    // Group management
+    CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
+    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+    DeleteGroup(ctx context.Context, groupID uuid.UUID, tenantID uuid.UUID) error
+    // Group membership
+    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    // ACL tuples
+    CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
+    // Authorization decision
+    Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
 }
 
 // Magic-link inputs
@@ -156,6 +208,9 @@ type Repository interface {
 	GetUserByID(ctx context.Context, userID uuid.UUID) (User, error)
 	GetAuthIdentitiesByUser(ctx context.Context, userID uuid.UUID) ([]AuthIdentity, error)
 
+	// UpdateUserRoles updates only the roles column for a user, preserving other profile fields.
+	UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error
+
 	// MFA persistence
 	UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret string, enabled bool) error
 	GetMFASecret(ctx context.Context, userID uuid.UUID) (MFASecret, error)
@@ -163,6 +218,51 @@ type Repository interface {
 	CountRemainingMFABackupCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// ConsumeMFABackupCode returns true when a code was valid and consumed.
 	ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, codeHash string) (bool, error)
+
+	// Admin/user management
+	// ListTenantUsers returns all users that belong to the given tenant.
+	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]User, error)
+	// SetUserActive toggles the active state of a user.
+	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// UpdateUserNames updates only first and last name for a user, preserving roles.
+	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
+	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
+	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
+
+	// --- RBAC v2 ---
+	// Permissions
+	ListPermissions(ctx context.Context) ([]Permission, error)
+	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
+	// Roles
+	ListRolesByTenant(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
+	CreateRole(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Role, error)
+	UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (Role, error)
+	DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error
+	GetRoleByName(ctx context.Context, tenantID uuid.UUID, name string) (Role, error)
+	// User role assignments
+	ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error)
+	AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
+	RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
+	// Role-permissions
+	ListRolePermissionKeys(ctx context.Context, roleIDs []uuid.UUID) ([]RolePermissionGrant, error)
+	UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error
+	DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionID uuid.UUID, scopeType string, resourceType, resourceID *string) error
+	// Groups and ACL
+	ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]PermissionGrant, error)
+	ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]GroupPermissionGrant, error)
+
+    // --- FGA repository methods (groups, memberships, ACL tuples) ---
+    // Groups
+    CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
+    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+    DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
+    // Group membership
+    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+    // ACL tuples
+    CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
 }
 
 type AuthIdentity struct {
@@ -179,6 +279,9 @@ type RefreshToken struct {
 	TenantID uuid.UUID
 	Revoked  bool
 	ExpiresAt time.Time
+	CreatedAt time.Time
+	UserAgent string
+	IP        string
 }
 
 type MagicLink struct {
@@ -230,4 +333,54 @@ type Introspection struct {
 	EmailVerified bool      `json:"email_verified"`
 	Exp          int64      `json:"exp"`
 	Iat          int64      `json:"iat"`
+}
+
+// --- RBAC v2 domain types ---
+
+// Role represents a tenant-scoped role.
+type Role struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// Permission represents a global permission definition.
+type Permission struct {
+	ID          uuid.UUID
+	Key         string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// RolePermissionGrant captures a role's permission grant with optional resource scoping.
+type RolePermissionGrant struct {
+	RoleID       uuid.UUID
+	Key          string
+	ScopeType    string
+	ResourceType *string
+	ResourceID   *string
+}
+
+// PermissionGrant is a resolved permission possibly scoped to an object (type, id).
+type PermissionGrant struct {
+	Key        string
+	ObjectType string
+	ObjectID   *string
+}
+
+// GroupPermissionGrant is an ACL grant via group membership.
+type GroupPermissionGrant struct {
+	GroupID    uuid.UUID
+	Key        string
+	ObjectType string
+	ObjectID   *string
+}
+
+// ResolvedPermissions aggregates all grants for a user.
+type ResolvedPermissions struct {
+	Grants []PermissionGrant
 }

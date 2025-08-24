@@ -841,3 +841,101 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
     }
     if !ok { t.Fatalf("expected auth.sso.login.failure profile_missing_email") }
 }
+
+func TestHTTP_SSO_WorkOS_Start_UsesTenantDefaultsWhenMissing(t *testing.T) {
+    if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
+        t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
+    }
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil { t.Fatalf("db connect: %v", err) }
+    defer pool.Close()
+
+    tr := trepo.New(pool)
+    tenantID := uuid.New()
+    _ = tr.Create(ctx, tenantID, "http-sso-workos-def-"+tenantID.String())
+    time.Sleep(25 * time.Millisecond)
+    sr := srepo.New(pool)
+    _ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
+    _ = sr.Upsert(ctx, "sso.workos.client_id", &tenantID, "client", true)
+    _ = sr.Upsert(ctx, "sso.workos.client_secret", &tenantID, "secret", true)
+    // tenant-scoped defaults
+    _ = sr.Upsert(ctx, "sso.workos.default_connection_id", &tenantID, "conn_def_123", false)
+    _ = sr.Upsert(ctx, "sso.workos.default_organization_id", &tenantID, "org_def_456", false)
+
+    repo := authrepo.New(pool)
+    cfg, _ := config.Load()
+    settings := ssvc.New(sr)
+    e := echo.New()
+    e.Validator = noopValidatorWorkOS{}
+    sso := svc.NewSSO(repo, cfg, settings)
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
+    c.Register(e)
+
+    // Start without explicit connection_id or organization_id
+    qs := url.Values{}
+    qs.Set("tenant_id", tenantID.String())
+    req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+    rec := httptest.NewRecorder()
+    e.ServeHTTP(rec, req)
+    if rec.Code != http.StatusFound { t.Fatalf("start not 302: %d", rec.Code) }
+    loc := rec.Header().Get("Location")
+    u, _ := url.Parse(loc)
+    q := u.Query()
+    if q.Get("connection") != "conn_def_123" {
+        t.Fatalf("expected default connection=conn_def_123, got %s", q.Get("connection"))
+    }
+    if q.Get("organization") != "org_def_456" {
+        t.Fatalf("expected default organization=org_def_456, got %s", q.Get("organization"))
+    }
+}
+
+func TestHTTP_SSO_WorkOS_Start_ExplicitParamsOverrideDefaults(t *testing.T) {
+    if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
+        t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
+    }
+    ctx := context.Background()
+    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+    if err != nil { t.Fatalf("db connect: %v", err) }
+    defer pool.Close()
+
+    tr := trepo.New(pool)
+    tenantID := uuid.New()
+    _ = tr.Create(ctx, tenantID, "http-sso-workos-override-"+tenantID.String())
+    time.Sleep(25 * time.Millisecond)
+    sr := srepo.New(pool)
+    _ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
+    _ = sr.Upsert(ctx, "sso.workos.client_id", &tenantID, "client", true)
+    _ = sr.Upsert(ctx, "sso.workos.client_secret", &tenantID, "secret", true)
+    // tenant defaults present but should be overridden
+    _ = sr.Upsert(ctx, "sso.workos.default_connection_id", &tenantID, "conn_def_x", false)
+    _ = sr.Upsert(ctx, "sso.workos.default_organization_id", &tenantID, "org_def_y", false)
+
+    repo := authrepo.New(pool)
+    cfg, _ := config.Load()
+    settings := ssvc.New(sr)
+    e := echo.New()
+    e.Validator = noopValidatorWorkOS{}
+    sso := svc.NewSSO(repo, cfg, settings)
+    c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
+    c.Register(e)
+
+    // Start with explicit connection_id and organization_id
+    qs := url.Values{}
+    qs.Set("tenant_id", tenantID.String())
+    qs.Set("connection_id", "conn_explicit")
+    qs.Set("organization_id", "org_explicit")
+    req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+    rec := httptest.NewRecorder()
+    e.ServeHTTP(rec, req)
+    if rec.Code != http.StatusFound { t.Fatalf("start not 302: %d", rec.Code) }
+    loc := rec.Header().Get("Location")
+    u, _ := url.Parse(loc)
+    q := u.Query()
+    if q.Get("connection") != "conn_explicit" {
+        t.Fatalf("expected connection=conn_explicit, got %s", q.Get("connection"))
+    }
+    if q.Get("organization") != "org_explicit" {
+        t.Fatalf("expected organization=org_explicit, got %s", q.Get("organization"))
+    }
+}

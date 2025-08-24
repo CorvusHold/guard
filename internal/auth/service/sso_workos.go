@@ -23,26 +23,65 @@ import (
 // It stores the state in Redis for CSRF protection and supports both connection_id and organization_id.
 func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string, error) {
 	clientID, err := s.settings.GetString(ctx, sdomain.KeyWorkOSClientID, &in.TenantID, "")
-	if err != nil { return "", err }
-	if clientID == "" { return "", errors.New("workos client_id missing") }
+	if err != nil {
+		return "", err
+	}
+	if clientID == "" {
+		return "", errors.New("workos client_id missing")
+	}
 
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
-	// redirect_uri is our callback endpoint
-	cb, err := url.Parse(baseURL)
-	if err != nil { return "", err }
-	cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
-	redirectURI := cb.String()
+	// redirect_uri: prefer explicit in.RedirectURL when provided and absolute; else fall back to our API callback
+	var redirectURI string
+	if ru := strings.TrimSpace(in.RedirectURL); ru != "" {
+		if parsed, err := url.Parse(ru); err == nil && parsed.IsAbs() {
+			redirectURI = parsed.String()
+		}
+	}
+	if redirectURI == "" {
+		cb, err := url.Parse(baseURL)
+		if err != nil {
+			return "", err
+		}
+		cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
+		redirectURI = cb.String()
+	}
 
 	// Prepare state and store in Redis with short TTL
 	state := in.State
 	if state == "" {
 		buf := make([]byte, 32)
-		if _, err := rand.Read(buf); err != nil { return "", err }
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
 		state = base64.RawURLEncoding.EncodeToString(buf)
 	}
 	stateTTL, _ := s.settings.GetDuration(ctx, sdomain.KeySSOStateTTL, &in.TenantID, 10*time.Minute)
-	if err := s.redis.Set(ctx, "sso:state:"+state, in.TenantID.String(), stateTTL).Err(); err != nil {
-		return "", err
+	// Store JSON with tenant_id and redirect_uri for callback use (backward compatible parsing)
+	meta := map[string]string{"tenant_id": in.TenantID.String(), "redirect_uri": redirectURI}
+	if b, err := json.Marshal(meta); err == nil {
+		if err := s.redis.Set(ctx, "sso:state:"+state, string(b), stateTTL).Err(); err != nil {
+			return "", err
+		}
+	} else {
+		// Fallback: store tenant ID only
+		if err := s.redis.Set(ctx, "sso:state:"+state, in.TenantID.String(), stateTTL).Err(); err != nil {
+			return "", err
+		}
+	}
+
+	// Resolve optional targeting parameters: prefer request input, else tenant-scoped defaults
+	connID := strings.TrimSpace(in.ConnectionID)
+	if connID == "" {
+		if v, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSDefaultConnectionID, &in.TenantID, ""); v != "" {
+			connID = v
+		}
+	}
+	orgID := strings.TrimSpace(in.OrganizationID)
+	if orgID == "" {
+		if v, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSDefaultOrganizationID, &in.TenantID, ""); v != "" {
+			orgID = v
+		}
 	}
 
 	u, _ := url.Parse("https://api.workos.com/sso/authorize")
@@ -53,8 +92,12 @@ func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string,
 	q.Set("redirect_uri", redirectURI)
 	q.Set("state", state)
 	// Map to WorkOS parameter names: connection / organization
-	if in.ConnectionID != "" { q.Set("connection", in.ConnectionID) }
-	if in.OrganizationID != "" { q.Set("organization", in.OrganizationID) }
+	if connID != "" {
+		q.Set("connection", connID)
+	}
+	if orgID != "" {
+		q.Set("organization", orgID)
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
@@ -90,8 +133,29 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	}
 	tenStr, _ := res.(string)
 
-	tenantID, err := uuid.Parse(tenStr)
-	if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant for state") }
+	// Backward-compatible state payload: either plain tenant UUID string, or JSON {tenant_id, redirect_uri}
+	var tenantID uuid.UUID
+	var stateRedirectURI string
+	type stateMeta struct {
+		TenantID    string `json:"tenant_id"`
+		RedirectURI string `json:"redirect_uri"`
+	}
+	var sm stateMeta
+	if strings.HasPrefix(strings.TrimSpace(tenStr), "{") && json.Unmarshal([]byte(tenStr), &sm) == nil && sm.TenantID != "" {
+		if tID, err := uuid.Parse(sm.TenantID); err == nil {
+			tenantID = tID
+			stateRedirectURI = strings.TrimSpace(sm.RedirectURI)
+		} else {
+			return domain.AccessTokens{}, errors.New("invalid tenant for state")
+		}
+	} else {
+		// legacy format: just the tenant UUID
+		tID, err := uuid.Parse(strings.TrimSpace(tenStr))
+		if err != nil {
+			return domain.AccessTokens{}, errors.New("invalid tenant for state")
+		}
+		tenantID = tID
+	}
 
 	// Extract authorization code
 	cv := in.Query["code"]
@@ -122,12 +186,19 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		return domain.AccessTokens{}, errors.New("workos client_secret missing")
 	}
 
-	// Reconstruct redirect_uri to match startWorkOS
-	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
-	cb, err := url.Parse(baseURL)
-	if err != nil { return domain.AccessTokens{}, err }
-	cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
-	redirectURI := cb.String()
+	// Reconstruct redirect_uri to match startWorkOS: prefer value stored in state, else fallback to API callback
+	var redirectURI string
+	if stateRedirectURI != "" {
+		redirectURI = stateRedirectURI
+	} else {
+		baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
+		cb, err := url.Parse(baseURL)
+		if err != nil {
+			return domain.AccessTokens{}, err
+		}
+		cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
+		redirectURI = cb.String()
+	}
 
 	// Exchange code for profile + token
 	form := url.Values{}
@@ -150,7 +221,7 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_transport_error"}, Time: time.Now()})
 		return domain.AccessTokens{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_failed", "status": resp.Status}, Time: time.Now()})
 		return domain.AccessTokens{}, errors.New("workos token exchange failed")
@@ -158,9 +229,9 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
-		Profile struct {
-			ID    string `json:"id"`
-			Email string `json:"email"`
+		Profile     struct {
+			ID        string `json:"id"`
+			Email     string `json:"email"`
 			FirstName string `json:"first_name"`
 			LastName  string `json:"last_name"`
 		} `json:"profile"`
@@ -182,9 +253,15 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		_ = s.repo.UpdateUserLoginAt(ctx, userID)
 	} else {
 		userID = uuid.New()
-		if err := s.repo.CreateUser(ctx, userID, tokenResp.Profile.FirstName, tokenResp.Profile.LastName, []string{}); err != nil { return domain.AccessTokens{}, err }
-		if err := s.repo.CreateAuthIdentity(ctx, uuid.New(), userID, tenantID, email, ""); err != nil { return domain.AccessTokens{}, err }
-		if err := s.repo.AddUserToTenant(ctx, userID, tenantID); err != nil { return domain.AccessTokens{}, err }
+		if err := s.repo.CreateUser(ctx, userID, tokenResp.Profile.FirstName, tokenResp.Profile.LastName, []string{}); err != nil {
+			return domain.AccessTokens{}, err
+		}
+		if err := s.repo.CreateAuthIdentity(ctx, uuid.New(), userID, tenantID, email, ""); err != nil {
+			return domain.AccessTokens{}, err
+		}
+		if err := s.repo.AddUserToTenant(ctx, userID, tenantID); err != nil {
+			return domain.AccessTokens{}, err
+		}
 	}
 
 	// Issue tokens
@@ -204,10 +281,14 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	}
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, accClaims)
 	access, err := at.SignedString([]byte(signingKey))
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 
 	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil { return domain.AccessTokens{}, err }
+	if _, err := rand.Read(raw); err != nil {
+		return domain.AccessTokens{}, err
+	}
 	rt := base64.RawURLEncoding.EncodeToString(raw)
 	rh := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(rh[:])

@@ -40,6 +40,7 @@ jobs:
         env:
           SDK_SERVICE: ${{ matrix.sdk_service }}
           DOCKER_CLI_HINTS: enabled
+          RATE_LIMIT_RETRIES: "2"
         run: |
           make conformance
 

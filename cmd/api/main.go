@@ -69,7 +69,11 @@ func main() {
 		Addr: cfg.RedisAddr,
 		DB:   cfg.RedisDB,
 	})
-	defer redisClient.Close()
+	defer func() {
+		if cerr := redisClient.Close(); cerr != nil {
+			log.Error().Err(cerr).Msg("redis close error")
+		}
+	}()
 
 	e := echo.New()
 	e.HideBanner = true

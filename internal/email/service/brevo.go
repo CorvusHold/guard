@@ -54,7 +54,7 @@ func (b *Brevo) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body 
 	req.Header.Set("api-key", apiKey)
 	resp, err := b.http.Do(req)
 	if err != nil { return err }
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("brevo send failed: %s", resp.Status)
 	}

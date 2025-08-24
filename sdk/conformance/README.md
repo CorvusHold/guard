@@ -73,6 +73,14 @@ If any required env var is missing/empty, the TS runner will skip that scenario 
   }
   ```
 
+## Retry behavior (429)
+- The TS runner automatically retries requests that receive HTTP 429 when 429 is not the expected status for that step.
+- Default retries: `RATE_LIMIT_RETRIES=2` (set in the top-level Makefile). Override by passing an env/Make variable, e.g.:
+  - `make conformance RATE_LIMIT_RETRIES=0` (disable)
+  - `make conformance RATE_LIMIT_RETRIES=3` (increase)
+- Backoff respects `Retry-After` header when present; otherwise exponential backoff is used.
+- Use `rl-<TENANT_ID>` isolation only in dedicated rate-limit scenarios (e.g., 011/012). Avoid using `rl-` in other scenarios to prevent unintended 429s mid-suite.
+
 ## Running with .env.k6
 The Make target `make seed-test` writes `.env.k6` at repo root with `TENANT_ID`, `EMAIL`, `PASSWORD` for local testing.
 Example:
