@@ -59,7 +59,7 @@ jobs:
           go-version: '1.24.x'
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: v2.4.0
           args: --timeout=5m
@@ -124,6 +124,9 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         with:
           args: detect --redact --source .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE}}
 
   changes:
     name: Detect Changes
