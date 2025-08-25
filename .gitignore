@@ -26,3 +26,5 @@ trace.zip
 examples/nextjs/test-results/
 examples/nextjs/playwright-report/
 examples/nextjs/blob-report/
+
+coverage.out
