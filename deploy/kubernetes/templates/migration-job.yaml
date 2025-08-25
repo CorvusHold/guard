@@ -1,0 +1,64 @@
+{{- if .Values.migrationJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "guard.fullname" . }}-migrate
+  labels:
+    {{- include "guard.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with .Values.migrationJob.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "guard.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "guard.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ required "migrationJob.image must be set when migrationJob.enabled=true" .Values.migrationJob.image | quote }}
+          imagePullPolicy: {{ .Values.migrationJob.pullPolicy }}
+          {{- if or (and (hasKey .Values "env") (gt (len .Values.env) 0)) (and (hasKey .Values "secretEnv") (gt (len .Values.secretEnv) 0)) }}
+          envFrom:
+            {{- if and (hasKey .Values "env") (gt (len .Values.env) 0) }}
+            - configMapRef:
+                name: {{ include "guard.fullname" . }}-config
+            {{- end }}
+            {{- if and (hasKey .Values "secretEnv") (gt (len .Values.secretEnv) 0) }}
+            - secretRef:
+                name: {{ include "guard.fullname" . }}-secret
+            {{- end }}
+          {{- end }}
+          {{- $env := .Values.migrationJob.env }}
+          {{- $secretEnv := .Values.migrationJob.secretEnv }}
+          {{- if or (gt (len $env) 0) (gt (len $secretEnv) 0) }}
+          env:
+            {{- range $k, $v := $env }}
+            - name: {{ $k }}
+              value: {{ $v | toString | quote }}
+            {{- end }}
+            {{- range $k, $v := $secretEnv }}
+            - name: {{ $k }}
+              value: {{ $v | toString | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.migrationJob.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.migrationJob.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
