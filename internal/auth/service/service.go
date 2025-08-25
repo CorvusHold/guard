@@ -12,15 +12,15 @@ import (
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
-	"github.com/corvusHold/guard/internal/metrics"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
+	"github.com/corvusHold/guard/internal/metrics"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/pquerna/otp/totp"
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Service struct {
@@ -66,22 +66,34 @@ func (s *Service) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, user
 func (s *Service) CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (domain.ACLTuple, error) {
 	// Resolve permission ID by key
 	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-	if err != nil { return domain.ACLTuple{}, err }
+	if err != nil {
+		return domain.ACLTuple{}, err
+	}
 	st := strings.ToLower(strings.TrimSpace(subjectType))
-	if st != "user" && st != "group" { return domain.ACLTuple{}, errors.New("subject_type must be 'user' or 'group'") }
+	if st != "user" && st != "group" {
+		return domain.ACLTuple{}, errors.New("subject_type must be 'user' or 'group'")
+	}
 	ot := strings.TrimSpace(objectType)
-	if ot == "" { return domain.ACLTuple{}, errors.New("object_type required") }
+	if ot == "" {
+		return domain.ACLTuple{}, errors.New("object_type required")
+	}
 	return s.repo.CreateACLTuple(ctx, uuid.New(), tenantID, st, subjectID, p.ID, ot, objectID, createdBy)
 }
 
 // DeleteACLTuple deletes a direct permission grant (tuple).
 func (s *Service) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error {
 	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	st := strings.ToLower(strings.TrimSpace(subjectType))
-	if st != "user" && st != "group" { return errors.New("subject_type must be 'user' or 'group'") }
+	if st != "user" && st != "group" {
+		return errors.New("subject_type must be 'user' or 'group'")
+	}
 	ot := strings.TrimSpace(objectType)
-	if ot == "" { return errors.New("object_type required") }
+	if ot == "" {
+		return errors.New("object_type required")
+	}
 	return s.repo.DeleteACLTuple(ctx, tenantID, st, subjectID, p.ID, ot, objectID)
 }
 
@@ -89,7 +101,9 @@ func (s *Service) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjec
 func (s *Service) Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (bool, string, error) {
 	st := strings.ToLower(strings.TrimSpace(subjectType))
 	oid := ""
-	if objectID != nil { oid = *objectID }
+	if objectID != nil {
+		oid = *objectID
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("subject_type", st).
@@ -101,7 +115,9 @@ func (s *Service) Authorize(ctx context.Context, tenantID uuid.UUID, subjectType
 	switch st {
 	case "user":
 		ok, err := s.HasPermission(ctx, subjectID, tenantID, permissionKey, objectType, objectID)
-		if err != nil { return false, "error", err }
+		if err != nil {
+			return false, "error", err
+		}
 		if ok {
 			s.log.Debug().
 				Str("tenant_id", tenantID.String()).
@@ -123,7 +139,9 @@ func (s *Service) Authorize(ctx context.Context, tenantID uuid.UUID, subjectType
 	case "group":
 		// Evaluate group ACL directly
 		grants, err := s.repo.ListACLPermissionKeysForGroups(ctx, tenantID, []uuid.UUID{subjectID})
-		if err != nil { return false, "error", err }
+		if err != nil {
+			return false, "error", err
+		}
 		s.log.Debug().
 			Str("tenant_id", tenantID.String()).
 			Str("group_id", subjectID.String()).
@@ -131,14 +149,24 @@ func (s *Service) Authorize(ctx context.Context, tenantID uuid.UUID, subjectType
 			Msg("authorize:group:grants_fetched")
 		// Apply same matching logic as HasPermission
 		for _, g := range grants {
-			if g.Key != permissionKey { continue }
-			if g.ObjectType == "*" { return true, "granted", nil }
-			if objectID == nil {
-				if g.ObjectType == objectType && g.ObjectID == nil { return true, "granted", nil }
+			if g.Key != permissionKey {
 				continue
 			}
-			if g.ObjectType != objectType { continue }
-			if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) { return true, "granted", nil }
+			if g.ObjectType == "*" {
+				return true, "granted", nil
+			}
+			if objectID == nil {
+				if g.ObjectType == objectType && g.ObjectID == nil {
+					return true, "granted", nil
+				}
+				continue
+			}
+			if g.ObjectType != objectType {
+				continue
+			}
+			if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) {
+				return true, "granted", nil
+			}
 		}
 		s.log.Debug().
 			Str("tenant_id", tenantID.String()).
@@ -168,14 +196,18 @@ func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]domain.R
 // CreateRole creates a role in a tenant.
 func (s *Service) CreateRole(ctx context.Context, tenantID uuid.UUID, name, description string) (domain.Role, error) {
 	n := strings.ToLower(strings.TrimSpace(name))
-	if n == "" { return domain.Role{}, errors.New("role name required") }
+	if n == "" {
+		return domain.Role{}, errors.New("role name required")
+	}
 	return s.repo.CreateRole(ctx, uuid.New(), tenantID, n, description)
 }
 
 // UpdateRole updates a role in a tenant.
 func (s *Service) UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
 	n := strings.ToLower(strings.TrimSpace(name))
-	if n == "" { return domain.Role{}, errors.New("role name required") }
+	if n == "" {
+		return domain.Role{}, errors.New("role name required")
+	}
 	return s.repo.UpdateRole(ctx, roleID, tenantID, n, description)
 }
 
@@ -201,13 +233,17 @@ func (s *Service) RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID
 func (s *Service) UpsertRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error {
 	// Resolve permission ID by key
 	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return s.repo.UpsertRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
 }
 
 func (s *Service) DeleteRolePermission(ctx context.Context, roleID uuid.UUID, permissionKey, scopeType string, resourceType, resourceID *string) error {
 	p, err := s.repo.GetPermissionByKey(ctx, permissionKey)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return s.repo.DeleteRolePermission(ctx, roleID, p.ID, scopeType, resourceType, resourceID)
 }
 
@@ -219,14 +255,18 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 		Msg("resolve_user_permissions:start")
 	// Role-derived grants
 	roleIDs, err := s.repo.ListUserRoleIDs(ctx, userID, tenantID)
-	if err != nil { return domain.ResolvedPermissions{}, err }
+	if err != nil {
+		return domain.ResolvedPermissions{}, err
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
 		Int("role_ids_count", len(roleIDs)).
 		Msg("resolve_user_permissions:roles_fetched")
 	rolePerms, err := s.repo.ListRolePermissionKeys(ctx, roleIDs)
-	if err != nil { return domain.ResolvedPermissions{}, err }
+	if err != nil {
+		return domain.ResolvedPermissions{}, err
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
@@ -234,7 +274,9 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 		Msg("resolve_user_permissions:role_perms_fetched")
 	// Direct user ACL
 	userACL, err := s.repo.ListACLPermissionKeysForUser(ctx, tenantID, userID)
-	if err != nil { return domain.ResolvedPermissions{}, err }
+	if err != nil {
+		return domain.ResolvedPermissions{}, err
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
@@ -242,10 +284,14 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 		Msg("resolve_user_permissions:user_acl_fetched")
 	// Group ACL via memberships
 	groups, err := s.repo.ListUserGroups(ctx, userID)
-	if err != nil { return domain.ResolvedPermissions{}, err }
+	if err != nil {
+		return domain.ResolvedPermissions{}, err
+	}
 	// Represent groups as strings for logging
 	gs := make([]string, 0, len(groups))
-	for _, gid := range groups { gs = append(gs, gid.String()) }
+	for _, gid := range groups {
+		gs = append(gs, gid.String())
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
@@ -253,7 +299,9 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 		Strs("groups", gs).
 		Msg("resolve_user_permissions:user_groups_fetched")
 	groupACL, err := s.repo.ListACLPermissionKeysForGroups(ctx, tenantID, groups)
-	if err != nil { return domain.ResolvedPermissions{}, err }
+	if err != nil {
+		return domain.ResolvedPermissions{}, err
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
@@ -264,9 +312,13 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 	dedup := make(map[string]struct{})
 	appendGrant := func(gs *[]domain.PermissionGrant, g domain.PermissionGrant) {
 		id := ""
-		if g.ObjectID != nil { id = *g.ObjectID }
+		if g.ObjectID != nil {
+			id = *g.ObjectID
+		}
 		k := g.Key + "|" + g.ObjectType + "|" + id
-		if _, ok := dedup[k]; ok { return }
+		if _, ok := dedup[k]; ok {
+			return
+		}
 		dedup[k] = struct{}{}
 		*gs = append(*gs, g)
 	}
@@ -280,8 +332,12 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 			appendGrant(&grants, domain.PermissionGrant{Key: rp.Key, ObjectType: "*", ObjectID: nil})
 		}
 	}
-	for _, ua := range userACL { appendGrant(&grants, ua) }
-	for _, ga := range groupACL { appendGrant(&grants, domain.PermissionGrant{Key: ga.Key, ObjectType: ga.ObjectType, ObjectID: ga.ObjectID}) }
+	for _, ua := range userACL {
+		appendGrant(&grants, ua)
+	}
+	for _, ga := range groupACL {
+		appendGrant(&grants, domain.PermissionGrant{Key: ga.Key, ObjectType: ga.ObjectType, ObjectID: ga.ObjectID})
+	}
 
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
@@ -294,7 +350,9 @@ func (s *Service) ResolveUserPermissions(ctx context.Context, userID uuid.UUID, 
 // HasPermission checks whether user has a permission, optionally scoped to an object.
 func (s *Service) HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error) {
 	oid := ""
-	if objectID != nil { oid = *objectID }
+	if objectID != nil {
+		oid = *objectID
+	}
 	s.log.Debug().
 		Str("tenant_id", tenantID.String()).
 		Str("user_id", userID.String()).
@@ -303,16 +361,26 @@ func (s *Service) HasPermission(ctx context.Context, userID uuid.UUID, tenantID 
 		Str("object_id", oid).
 		Msg("has_permission:start")
 	rp, err := s.ResolveUserPermissions(ctx, userID, tenantID)
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 	for _, g := range rp.Grants {
-		if g.Key != key { continue }
-		if g.ObjectType == "*" { return true, nil }
-		if objectID == nil {
-			// Global check for a specific type requires an unscoped grant for that type
-			if g.ObjectType == objectType && g.ObjectID == nil { return true, nil }
+		if g.Key != key {
 			continue
 		}
-		if g.ObjectType != objectType { continue }
+		if g.ObjectType == "*" {
+			return true, nil
+		}
+		if objectID == nil {
+			// Global check for a specific type requires an unscoped grant for that type
+			if g.ObjectType == objectType && g.ObjectID == nil {
+				return true, nil
+			}
+			continue
+		}
+		if g.ObjectType != objectType {
+			continue
+		}
 		if g.ObjectID == nil || (g.ObjectID != nil && *g.ObjectID == *objectID) {
 			return true, nil
 		}
@@ -355,12 +423,19 @@ func (s *Service) ListUserSessions(ctx context.Context, userID uuid.UUID, tenant
 func (s *Service) RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error {
 	// Ensure the session belongs to this user and tenant
 	sessions, err := s.repo.ListUserSessions(ctx, userID, tenantID)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	ok := false
 	for _, rt := range sessions {
-		if rt.ID == sessionID { ok = true; break }
+		if rt.ID == sessionID {
+			ok = true
+			break
+		}
 	}
-	if !ok { return errors.New("session not found") }
+	if !ok {
+		return errors.New("session not found")
+	}
 	return s.repo.RevokeTokenChain(ctx, sessionID)
 }
 
@@ -392,9 +467,13 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	tenStr, _ := claims["ten"].(string)
 	subStr, _ := claims["sub"].(string)
 	uid, err := uuid.Parse(subStr)
-	if err != nil { return domain.AccessTokens{}, errors.New("invalid subject in challenge") }
+	if err != nil {
+		return domain.AccessTokens{}, errors.New("invalid subject in challenge")
+	}
 	tid, err := uuid.Parse(tenStr)
-	if err != nil { return domain.AccessTokens{}, errors.New("invalid tenant in challenge") }
+	if err != nil {
+		return domain.AccessTokens{}, errors.New("invalid tenant in challenge")
+	}
 	// Verify signature and expiry with tenant signing key
 	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
 	parsed, err := jwt.Parse(in.ChallengeToken, func(t *jwt.Token) (interface{}, error) {
@@ -418,14 +497,20 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 		}
 	case "backup_code":
 		ok, err := s.ConsumeBackupCode(ctx, uid, in.Code)
-		if err != nil { return domain.AccessTokens{}, err }
-		if !ok { return domain.AccessTokens{}, errors.New("invalid backup code") }
+		if err != nil {
+			return domain.AccessTokens{}, err
+		}
+		if !ok {
+			return domain.AccessTokens{}, errors.New("invalid backup code")
+		}
 	default:
 		return domain.AccessTokens{}, errors.New("unsupported method")
 	}
 	// Issue tokens and publish login success audit event
 	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil)
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 	_ = s.repo.UpdateUserLoginAt(ctx, uid)
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.password.login.success",
@@ -448,11 +533,11 @@ func (s *Service) SetPublisher(p evdomain.Publisher) { s.pub = p }
 func (s *Service) SetLogger(l zerolog.Logger) { s.log = l }
 
 func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.AccessTokens, error) {
-    // Normalize email to lowercase and trim spaces to ensure consistent storage
-    in.Email = strings.ToLower(strings.TrimSpace(in.Email))
-    if in.Email == "" || in.Password == "" {
-        return domain.AccessTokens{}, errors.New("email and password are required")
-    }
+	// Normalize email to lowercase and trim spaces to ensure consistent storage
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+	if in.Email == "" || in.Password == "" {
+		return domain.AccessTokens{}, errors.New("email and password are required")
+	}
 	userID := uuid.New()
 	authID := uuid.New()
 	// naive roles default empty
@@ -473,11 +558,11 @@ func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.Acc
 }
 
 func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.AccessTokens, error) {
-    // Normalize email to lowercase and trim spaces to ensure consistent lookup
-    in.Email = strings.ToLower(strings.TrimSpace(in.Email))
-    if in.Email == "" || in.Password == "" {
-        return domain.AccessTokens{}, errors.New("email and password are required")
-    }
+	// Normalize email to lowercase and trim spaces to ensure consistent lookup
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+	if in.Email == "" || in.Password == "" {
+		return domain.AccessTokens{}, errors.New("email and password are required")
+	}
 	ai, err := s.repo.GetAuthIdentityByEmailTenant(ctx, in.TenantID, in.Email)
 	if err != nil {
 		metrics.IncAuthOutcome("password", "failure")
@@ -492,24 +577,28 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		// Build short-lived challenge token (5m) signed with tenant's signing key
 		signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &ai.TenantID, s.cfg.JWTSigningKey)
 		claims := jwt.MapClaims{
-			"typ": "mfa_challenge",
-			"sub": ai.UserID.String(),
-			"ten": ai.TenantID.String(),
+			"typ":   "mfa_challenge",
+			"sub":   ai.UserID.String(),
+			"ten":   ai.TenantID.String(),
 			"email": ai.Email,
-			"amr": []string{"totp", "backup_code"},
-			"exp": time.Now().Add(5 * time.Minute).Unix(),
-			"iat": time.Now().Unix(),
+			"amr":   []string{"totp", "backup_code"},
+			"exp":   time.Now().Add(5 * time.Minute).Unix(),
+			"iat":   time.Now().Unix(),
 		}
 		t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		ch, err := t.SignedString([]byte(signingKey))
-		if err != nil { return domain.AccessTokens{}, err }
+		if err != nil {
+			return domain.AccessTokens{}, err
+		}
 		return domain.AccessTokens{}, domain.ErrMFARequired{ChallengeToken: ch, Methods: []string{"totp", "backup_code"}}
 	}
 	if err := s.repo.UpdateUserLoginAt(ctx, ai.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil)
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 	// Publish audit event for successful password login
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.password.login.success",
@@ -540,7 +629,9 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 		return domain.AccessTokens{}, err
 	}
 	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID)
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 	// Publish audit event for successful token refresh
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.token.refresh.success",
@@ -553,284 +644,320 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 }
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
-	if refreshToken == "" { return nil }
+	if refreshToken == "" {
+		return nil
+	}
 	h := sha256.Sum256([]byte(refreshToken))
 	hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
 	rt, err := s.repo.GetRefreshTokenByHash(ctx, hashB64)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return s.repo.RevokeTokenChain(ctx, rt.ID)
 }
 
 func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID) (domain.AccessTokens, error) {
-    // Resolve settings with tenant override and env defaults
-    accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
-    refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
-    signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
-    issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
-    audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
+	// Resolve settings with tenant override and env defaults
+	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
+	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
+	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
-    // Access JWT
-    claims := jwt.MapClaims{
-        "sub": userID.String(),
-        "ten": tenantID.String(),
-        "exp": time.Now().Add(accessTTL).Unix(),
-        "iat": time.Now().Unix(),
-        "iss": issuer,
-        "aud": audience,
-    }
-    t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-    access, err := t.SignedString([]byte(signingKey))
-    if err != nil { return domain.AccessTokens{}, err }
-    // Refresh token: random
-    raw := make([]byte, 32)
-    if _, err := rand.Read(raw); err != nil { return domain.AccessTokens{}, err }
-    rt := base64.RawURLEncoding.EncodeToString(raw)
-    h := sha256.Sum256([]byte(rt))
-    hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
-    expiresAt := time.Now().Add(refreshTTL)
-    if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt); err != nil {
-        return domain.AccessTokens{}, err
-    }
-    return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
+	// Access JWT
+	claims := jwt.MapClaims{
+		"sub": userID.String(),
+		"ten": tenantID.String(),
+		"exp": time.Now().Add(accessTTL).Unix(),
+		"iat": time.Now().Unix(),
+		"iss": issuer,
+		"aud": audience,
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	access, err := t.SignedString([]byte(signingKey))
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
+	// Refresh token: random
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return domain.AccessTokens{}, err
+	}
+	rt := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(rt))
+	hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
+	expiresAt := time.Now().Add(refreshTTL)
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt); err != nil {
+		return domain.AccessTokens{}, err
+	}
+	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
 }
 
 // Me returns the current user's profile in a tenant context.
 func (s *Service) Me(ctx context.Context, userID, tenantID uuid.UUID) (domain.UserProfile, error) {
-    u, err := s.repo.GetUserByID(ctx, userID)
-    if err != nil { return domain.UserProfile{}, err }
-    ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID)
-    if err != nil { return domain.UserProfile{}, err }
-    email := ""
-    for _, ai := range ids {
-        if ai.TenantID == tenantID {
-            email = ai.Email
-            break
-        }
-    }
-    // Determine MFA enabled state
-    mfaEnabled := false
-    if ms, err := s.repo.GetMFASecret(ctx, userID); err == nil {
-        mfaEnabled = ms.Enabled
-    }
-    prof := domain.UserProfile{
-        ID:            u.ID,
-        TenantID:      tenantID,
-        Email:         email,
-        FirstName:     u.FirstName,
-        LastName:      u.LastName,
-        Roles:         u.Roles,
-        MFAEnabled:    mfaEnabled,
-        EmailVerified: u.EmailVerified,
-        LastLoginAt:   u.LastLoginAt,
-    }
-    return prof, nil
+	u, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return domain.UserProfile{}, err
+	}
+	ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID)
+	if err != nil {
+		return domain.UserProfile{}, err
+	}
+	email := ""
+	for _, ai := range ids {
+		if ai.TenantID == tenantID {
+			email = ai.Email
+			break
+		}
+	}
+	// Determine MFA enabled state
+	mfaEnabled := false
+	if ms, err := s.repo.GetMFASecret(ctx, userID); err == nil {
+		mfaEnabled = ms.Enabled
+	}
+	prof := domain.UserProfile{
+		ID:            u.ID,
+		TenantID:      tenantID,
+		Email:         email,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		Roles:         u.Roles,
+		MFAEnabled:    mfaEnabled,
+		EmailVerified: u.EmailVerified,
+		LastLoginAt:   u.LastLoginAt,
+	}
+	return prof, nil
 }
 
 // Introspect validates an access token and returns claims and user context.
 func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspection, error) {
-    if token == "" {
-        return domain.Introspection{Active: false}, errors.New("token required")
-    }
-    // We don't know tenant a priori; parse without checking iss/aud first to extract tenant claim.
-    // Use default signing key until tenant is known (settings lookup may rely on tenant id).
-    signingDefault := s.cfg.JWTSigningKey
-    parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-        // HS256 only
-        if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, errors.New("unexpected signing method")
-        }
-        return []byte(signingDefault), nil
-    })
-    if err != nil || !parsed.Valid {
-        return domain.Introspection{Active: false}, errors.New("invalid token")
-    }
-    claims, ok := parsed.Claims.(jwt.MapClaims)
-    if !ok {
-        return domain.Introspection{Active: false}, errors.New("invalid claims")
-    }
-    // Extract basic claims
-    subStr, _ := claims["sub"].(string)
-    tenStr, _ := claims["ten"].(string)
-    issStr, _ := claims["iss"].(string)
-    audStr, _ := claims["aud"].(string)
-    var expInt int64
-    switch v := claims["exp"].(type) {
-    case float64:
-        expInt = int64(v)
-    case int64:
-        expInt = v
-    }
-    var iatInt int64
-    switch v := claims["iat"].(type) {
-    case float64:
-        iatInt = int64(v)
-    case int64:
-        iatInt = v
-    }
-    uid, err := uuid.Parse(subStr)
-    if err != nil {
-        return domain.Introspection{Active: false}, errors.New("invalid sub")
-    }
-    tid, err := uuid.Parse(tenStr)
-    if err != nil {
-        return domain.Introspection{Active: false}, errors.New("invalid ten")
-    }
-    // Validate against settings (issuer/audience/signing key may be overridden per tenant)
-    issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, s.cfg.PublicBaseURL)
-    audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
-    signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
-    // Re-verify signature with possibly different signing key if default differed
-    if signingKey != signingDefault {
-        parsed2, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-            if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-                return nil, errors.New("unexpected signing method")
-            }
-            return []byte(signingKey), nil
-        })
-        if err != nil || !parsed2.Valid {
-            return domain.Introspection{Active: false}, errors.New("invalid token")
-        }
-    }
-    // Check issuer/audience if present
-    if issStr != "" && issStr != issuer {
-        return domain.Introspection{Active: false}, errors.New("issuer mismatch")
-    }
-    if audStr != "" && audStr != audience {
-        return domain.Introspection{Active: false}, errors.New("audience mismatch")
-    }
-    // Exp validation
-    if expInt != 0 && time.Now().Unix() > expInt {
-        return domain.Introspection{Active: false}, errors.New("token expired")
-    }
-    // Load user context
-    u, err := s.repo.GetUserByID(ctx, uid)
-    if err != nil { return domain.Introspection{Active: false}, err }
-    ids, err := s.repo.GetAuthIdentitiesByUser(ctx, uid)
-    if err != nil { return domain.Introspection{Active: false}, err }
-    email := ""
-    for _, ai := range ids {
-        if ai.TenantID == tid {
-            email = ai.Email
-            break
-        }
-    }
-    return domain.Introspection{
-        Active:        true,
-        UserID:        uid,
-        TenantID:      tid,
-        Email:         email,
-        Roles:         u.Roles,
-        MFAVerified:   false,
-        EmailVerified: u.EmailVerified,
-        Exp:           expInt,
-        Iat:           iatInt,
-    }, nil
+	if token == "" {
+		return domain.Introspection{Active: false}, errors.New("token required")
+	}
+	// We don't know tenant a priori; parse without checking iss/aud first to extract tenant claim.
+	// Use default signing key until tenant is known (settings lookup may rely on tenant id).
+	signingDefault := s.cfg.JWTSigningKey
+	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		// HS256 only
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(signingDefault), nil
+	})
+	if err != nil || !parsed.Valid {
+		return domain.Introspection{Active: false}, errors.New("invalid token")
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return domain.Introspection{Active: false}, errors.New("invalid claims")
+	}
+	// Extract basic claims
+	subStr, _ := claims["sub"].(string)
+	tenStr, _ := claims["ten"].(string)
+	issStr, _ := claims["iss"].(string)
+	audStr, _ := claims["aud"].(string)
+	var expInt int64
+	switch v := claims["exp"].(type) {
+	case float64:
+		expInt = int64(v)
+	case int64:
+		expInt = v
+	}
+	var iatInt int64
+	switch v := claims["iat"].(type) {
+	case float64:
+		iatInt = int64(v)
+	case int64:
+		iatInt = v
+	}
+	uid, err := uuid.Parse(subStr)
+	if err != nil {
+		return domain.Introspection{Active: false}, errors.New("invalid sub")
+	}
+	tid, err := uuid.Parse(tenStr)
+	if err != nil {
+		return domain.Introspection{Active: false}, errors.New("invalid ten")
+	}
+	// Validate against settings (issuer/audience/signing key may be overridden per tenant)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, s.cfg.PublicBaseURL)
+	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
+	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+	// Re-verify signature with possibly different signing key if default differed
+	if signingKey != signingDefault {
+		parsed2, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return []byte(signingKey), nil
+		})
+		if err != nil || !parsed2.Valid {
+			return domain.Introspection{Active: false}, errors.New("invalid token")
+		}
+	}
+	// Check issuer/audience if present
+	if issStr != "" && issStr != issuer {
+		return domain.Introspection{Active: false}, errors.New("issuer mismatch")
+	}
+	if audStr != "" && audStr != audience {
+		return domain.Introspection{Active: false}, errors.New("audience mismatch")
+	}
+	// Exp validation
+	if expInt != 0 && time.Now().Unix() > expInt {
+		return domain.Introspection{Active: false}, errors.New("token expired")
+	}
+	// Load user context
+	u, err := s.repo.GetUserByID(ctx, uid)
+	if err != nil {
+		return domain.Introspection{Active: false}, err
+	}
+	ids, err := s.repo.GetAuthIdentitiesByUser(ctx, uid)
+	if err != nil {
+		return domain.Introspection{Active: false}, err
+	}
+	email := ""
+	for _, ai := range ids {
+		if ai.TenantID == tid {
+			email = ai.Email
+			break
+		}
+	}
+	return domain.Introspection{
+		Active:        true,
+		UserID:        uid,
+		TenantID:      tid,
+		Email:         email,
+		Roles:         u.Roles,
+		MFAVerified:   false,
+		EmailVerified: u.EmailVerified,
+		Exp:           expInt,
+		Iat:           iatInt,
+	}, nil
 }
 
 // Revoke invalidates a token (refresh tokens supported).
 func (s *Service) Revoke(ctx context.Context, token string, tokenType string) error {
-    switch tokenType {
-    case "refresh", "refresh_token", "rt":
-        return s.Logout(ctx, token)
-    default:
-        return errors.New("unsupported token type")
-    }
+	switch tokenType {
+	case "refresh", "refresh_token", "rt":
+		return s.Logout(ctx, token)
+	default:
+		return errors.New("unsupported token type")
+	}
 }
 
 // UpdateUserRoles updates the roles array for the specified user.
 func (s *Service) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error {
-    // Normalize: trim spaces and drop empties, and lowercase role names for consistency.
-    out := make([]string, 0, len(roles))
-    seen := make(map[string]struct{}, len(roles))
-    for _, r := range roles {
-        v := strings.ToLower(strings.TrimSpace(r))
-        if v == "" { continue }
-        if _, ok := seen[v]; ok { continue }
-        seen[v] = struct{}{}
-        out = append(out, v)
-    }
-    return s.repo.UpdateUserRoles(ctx, userID, out)
+	// Normalize: trim spaces and drop empties, and lowercase role names for consistency.
+	out := make([]string, 0, len(roles))
+	seen := make(map[string]struct{}, len(roles))
+	for _, r := range roles {
+		v := strings.ToLower(strings.TrimSpace(r))
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return s.repo.UpdateUserRoles(ctx, userID, out)
 }
 
 // --- MFA (TOTP + Backup Codes) ---
 
 // StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
 func (s *Service) StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (string, string, error) {
-    issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
-    // Determine account name (prefer email in this tenant)
-    acct := userID.String()
-    ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID)
-    if err == nil {
-        for _, ai := range ids {
-            if ai.TenantID == tenantID && ai.Email != "" {
-                acct = ai.Email
-                break
-            }
-        }
-    }
-    key, err := totp.Generate(totp.GenerateOpts{Issuer: issuer, AccountName: acct})
-    if err != nil { return "", "", err }
-    secret := key.Secret()
-    if err := s.repo.UpsertMFASecret(ctx, userID, secret, false); err != nil {
-        return "", "", err
-    }
-    return secret, key.URL(), nil
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	// Determine account name (prefer email in this tenant)
+	acct := userID.String()
+	ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID)
+	if err == nil {
+		for _, ai := range ids {
+			if ai.TenantID == tenantID && ai.Email != "" {
+				acct = ai.Email
+				break
+			}
+		}
+	}
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: issuer, AccountName: acct})
+	if err != nil {
+		return "", "", err
+	}
+	secret := key.Secret()
+	if err := s.repo.UpsertMFASecret(ctx, userID, secret, false); err != nil {
+		return "", "", err
+	}
+	return secret, key.URL(), nil
 }
 
 // ActivateTOTP verifies a TOTP code for the stored secret and marks MFA as enabled.
 func (s *Service) ActivateTOTP(ctx context.Context, userID uuid.UUID, code string) error {
-    ms, err := s.repo.GetMFASecret(ctx, userID)
-    if err != nil { return err }
-    ok := totp.Validate(code, ms.Secret)
-    if !ok { return errors.New("invalid TOTP code") }
-    return s.repo.UpsertMFASecret(ctx, userID, ms.Secret, true)
+	ms, err := s.repo.GetMFASecret(ctx, userID)
+	if err != nil {
+		return err
+	}
+	ok := totp.Validate(code, ms.Secret)
+	if !ok {
+		return errors.New("invalid TOTP code")
+	}
+	return s.repo.UpsertMFASecret(ctx, userID, ms.Secret, true)
 }
 
 // DisableTOTP disables TOTP for the user (keeps secret for potential reactivation).
 func (s *Service) DisableTOTP(ctx context.Context, userID uuid.UUID) error {
-    ms, err := s.repo.GetMFASecret(ctx, userID)
-    if err != nil { return err }
-    return s.repo.UpsertMFASecret(ctx, userID, ms.Secret, false)
+	ms, err := s.repo.GetMFASecret(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpsertMFASecret(ctx, userID, ms.Secret, false)
 }
 
 // GenerateBackupCodes creates N backup codes, stores their hashes, and returns the plaintext codes.
 func (s *Service) GenerateBackupCodes(ctx context.Context, userID uuid.UUID, count int) ([]string, error) {
-    if count <= 0 { return nil, errors.New("count must be > 0") }
-    out := make([]string, 0, count)
-    for i := 0; i < count; i++ {
-        code, err := generateBackupCode(10)
-        if err != nil { return nil, err }
-        hash := hashCode(code)
-        if err := s.repo.InsertMFABackupCode(ctx, uuid.New(), userID, hash); err != nil {
-            return nil, err
-        }
-        out = append(out, code)
-    }
-    return out, nil
+	if count <= 0 {
+		return nil, errors.New("count must be > 0")
+	}
+	out := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		code, err := generateBackupCode(10)
+		if err != nil {
+			return nil, err
+		}
+		hash := hashCode(code)
+		if err := s.repo.InsertMFABackupCode(ctx, uuid.New(), userID, hash); err != nil {
+			return nil, err
+		}
+		out = append(out, code)
+	}
+	return out, nil
 }
 
 // ConsumeBackupCode attempts to consume a backup code; returns true if it was valid and unused.
 func (s *Service) ConsumeBackupCode(ctx context.Context, userID uuid.UUID, code string) (bool, error) {
-    if code == "" { return false, errors.New("code required") }
-    hash := hashCode(code)
-    return s.repo.ConsumeMFABackupCode(ctx, userID, hash)
+	if code == "" {
+		return false, errors.New("code required")
+	}
+	hash := hashCode(code)
+	return s.repo.ConsumeMFABackupCode(ctx, userID, hash)
 }
 
 // CountRemainingBackupCodes returns the number of unused backup codes.
 func (s *Service) CountRemainingBackupCodes(ctx context.Context, userID uuid.UUID) (int64, error) {
-    return s.repo.CountRemainingMFABackupCodes(ctx, userID)
+	return s.repo.CountRemainingMFABackupCodes(ctx, userID)
 }
 
 // --- Helpers ---
 func hashCode(sv string) string {
-    h := sha256.Sum256([]byte(sv))
-    return base64.RawURLEncoding.EncodeToString(h[:])
+	h := sha256.Sum256([]byte(sv))
+	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 func generateBackupCode(n int) (string, error) {
-    // n is number of random bytes; base32 (no padding) yields ~1.6x chars
-    b := make([]byte, n)
-    if _, err := rand.Read(b); err != nil { return "", err }
-    enc := base32.StdEncoding.WithPadding(base32.NoPadding)
-    return enc.EncodeToString(b), nil
+	// n is number of random bytes; base32 (no padding) yields ~1.6x chars
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
+	return enc.EncodeToString(b), nil
 }

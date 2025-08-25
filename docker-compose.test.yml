@@ -55,6 +55,8 @@ services:
       SMTP_HOST: "mailhog_test"
       SMTP_PORT: 1025
       SMTP_FROM: "no-reply@test.local"
+      BODY_LIMIT: "2M"
+      HANDLER_TIMEOUT: "10s"
     volumes:
       - ./:/app
     ports:

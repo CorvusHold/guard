@@ -10,7 +10,7 @@ export RATE_LIMIT_RETRIES ?= 2
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
-        test-rbac-admin test-fga
+        test-rbac-admin test-fga fmt-check tidy-check fmt tidy lint-fix unit-cover qa
 
 compose-up:
 	docker compose up -d --remove-orphans
@@ -54,22 +54,48 @@ test:
 	go test ./...
 
 # Run E2E/integration tests against test stack. No extra host tools required.
-test-e2e: compose-up-test db-wait-test migrate-up-test-dc
+test-e2e: compose-up-test db-wait-test migrate-up-test-dc api-test-wait
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test ./...'
 	make compose-down-test
 
 # Run only the RBAC admin controller tests against the dockerized test stack
-test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
+test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc api-test-wait
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
 	make compose-down-test
 
 # Run only FGA authorization integration tests against the dockerized test stack
-test-fga: compose-up-test db-wait-test migrate-up-test-dc
+test-fga: compose-up-test db-wait-test migrate-up-test-dc api-test-wait
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
 	make compose-down-test
 
 lint:
-	go vet ./...
+	bash -lc 'if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not found, running go vet"; go vet ./...; fi'
+
+fmt-check:
+	bash -lc 'out=$$(gofmt -s -l .); if [ -n "$$out" ]; then echo "Files not formatted with gofmt -s:"; echo "$$out"; exit 1; fi'
+
+tidy-check:
+	bash -lc 'go mod tidy; if ! git diff --quiet -- go.mod go.sum; then echo "go mod tidy produced changes; run go mod tidy locally"; git --no-pager diff -- go.mod go.sum; exit 1; fi'
+
+# Apply formatting
+fmt:
+	bash -lc 'gofmt -s -w .'
+
+# Apply module tidy
+tidy:
+	bash -lc 'go mod tidy'
+
+# Try to auto-fix lint issues where possible
+lint-fix:
+	bash -lc 'if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run --fix; else echo "golangci-lint not found"; fi'
+
+# Unit tests with race + coverage
+unit-cover:
+	bash -lc 'go test -race -coverprofile=coverage.out ./...'
+
+# Run common quality gates locally
+qa:
+	make fmt-check tidy-check lint unit-cover
 
 # ---- Conformance runner (TS SDK) ----
 

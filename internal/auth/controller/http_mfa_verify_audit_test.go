@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
@@ -31,14 +31,18 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-mfa-verify-audit-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil { t.Fatalf("create tenant: %v", err) }
+	if err := tr.Create(ctx, tenantID, name); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 	time.Sleep(25 * time.Millisecond)
 
 	// wire services
@@ -75,16 +79,22 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
-	if srec.Code != http.StatusCreated { t.Fatalf("signup expected 201, got %d: %s", srec.Code, srec.Body.String()) }
+	if srec.Code != http.StatusCreated {
+		t.Fatalf("signup expected 201, got %d: %s", srec.Code, srec.Body.String())
+	}
 	var stoks tokensResponse
-	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&stoks); err != nil { t.Fatalf("decode tokens: %v", err) }
+	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&stoks); err != nil {
+		t.Fatalf("decode tokens: %v", err)
+	}
 
 	// enroll + activate TOTP
 	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
-	if recStart.Code != http.StatusOK { t.Fatalf("totp start expected 200, got %d: %s", recStart.Code, recStart.Body.String()) }
+	if recStart.Code != http.StatusOK {
+		t.Fatalf("totp start expected 200, got %d: %s", recStart.Code, recStart.Body.String())
+	}
 	var startResp struct{ Secret string }
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
 	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
@@ -94,7 +104,9 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
 	e.ServeHTTP(recAct, reqAct)
-	if recAct.Code != http.StatusNoContent { t.Fatalf("totp activate expected 204, got %d: %s", recAct.Code, recAct.Body.String()) }
+	if recAct.Code != http.StatusNoContent {
+		t.Fatalf("totp activate expected 204, got %d: %s", recAct.Code, recAct.Body.String())
+	}
 
 	// login -> 202 challenge
 	lb, _ := json.Marshal(map[string]string{
@@ -107,7 +119,9 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	lreq.Header.Set("User-Agent", "itest-agent")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
-	if lrec.Code != http.StatusAccepted { t.Fatalf("login expected 202, got %d: %s", lrec.Code, lrec.Body.String()) }
+	if lrec.Code != http.StatusAccepted {
+		t.Fatalf("login expected 202, got %d: %s", lrec.Code, lrec.Body.String())
+	}
 	var ch mfaChallengeResp
 	_ = json.NewDecoder(bytes.NewReader(lrec.Body.Bytes())).Decode(&ch)
 
@@ -122,28 +136,48 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	vreq.Header.Set("User-Agent", "itest-agent")
 	vrec := httptest.NewRecorder()
 	e.ServeHTTP(vrec, vreq)
-	if vrec.Code != http.StatusOK { t.Fatalf("verify expected 200, got %d: %s", vrec.Code, vrec.Body.String()) }
+	if vrec.Code != http.StatusOK {
+		t.Fatalf("verify expected 200, got %d: %s", vrec.Code, vrec.Body.String())
+	}
 	var vtoks tokensResponse
 	_ = json.NewDecoder(bytes.NewReader(vrec.Body.Bytes())).Decode(&vtoks)
-	if vtoks.AccessToken == "" || vtoks.RefreshToken == "" { t.Fatalf("tokens empty: %+v", vtoks) }
+	if vtoks.AccessToken == "" || vtoks.RefreshToken == "" {
+		t.Fatalf("tokens empty: %+v", vtoks)
+	}
 	// iss/aud claims
 	parts := strings.Split(vtoks.AccessToken, ".")
-	if len(parts) < 2 { t.Fatalf("invalid jwt format") }
+	if len(parts) < 2 {
+		t.Fatalf("invalid jwt format")
+	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil { t.Fatalf("decode jwt payload: %v", err) }
+	if err != nil {
+		t.Fatalf("decode jwt payload: %v", err)
+	}
 	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil { t.Fatalf("unmarshal claims: %v", err) }
-	if iss, _ := claims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("iss mismatch: %v", claims["iss"]) }
-	if aud, _ := claims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("aud mismatch: %v", claims["aud"]) }
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatalf("unmarshal claims: %v", err)
+	}
+	if iss, _ := claims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") {
+		t.Fatalf("iss mismatch: %v", claims["iss"])
+	}
+	if aud, _ := claims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") {
+		t.Fatalf("aud mismatch: %v", claims["aud"])
+	}
 
 	// assert audit event emitted with mfa=true
 	found := false
 	for _, ev := range events {
 		if ev.Type == "auth.password.login.success" {
-			if ev.Meta["provider"] != "password" { t.Fatalf("provider mismatch: %v", ev.Meta["provider"]) }
-			if ev.Meta["mfa"] != "true" { t.Fatalf("mfa meta missing/false: %+v", ev.Meta) }
+			if ev.Meta["provider"] != "password" {
+				t.Fatalf("provider mismatch: %v", ev.Meta["provider"])
+			}
+			if ev.Meta["mfa"] != "true" {
+				t.Fatalf("mfa meta missing/false: %+v", ev.Meta)
+			}
 			found = true
 		}
 	}
-	if !found { t.Fatalf("expected auth.password.login.success event after MFA verify") }
+	if !found {
+		t.Fatalf("expected auth.password.login.success event after MFA verify")
+	}
 }

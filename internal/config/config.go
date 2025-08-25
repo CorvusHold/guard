@@ -13,6 +13,8 @@ type Config struct {
 	AppAddr            string
 	CORSAllowedOrigins []string
 	PublicBaseURL      string
+	BodyLimit          string
+	HandlerTimeout     time.Duration
 
 	DatabaseURL string
 
@@ -45,6 +47,8 @@ func Load() (Config, error) {
 	c.AppAddr = getEnv("APP_ADDR", ":8080")
 	c.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
 	c.PublicBaseURL = getEnv("PUBLIC_BASE_URL", "http://localhost:8080")
+	c.BodyLimit = getEnv("BODY_LIMIT", "2M")
+	c.HandlerTimeout = getDuration("HANDLER_TIMEOUT", 10*time.Second)
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
 

@@ -11,18 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
 
-	"github.com/corvusHold/guard/internal/config"
 	adb "github.com/corvusHold/guard/internal/auth/domain"
 	arepo "github.com/corvusHold/guard/internal/auth/repository"
 	asvc "github.com/corvusHold/guard/internal/auth/service"
+	"github.com/corvusHold/guard/internal/config"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
-	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 	tdomain "github.com/corvusHold/guard/internal/tenants/domain"
+	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 	tsvc "github.com/corvusHold/guard/internal/tenants/service"
 )
 
@@ -64,7 +64,9 @@ func main() {
 			name = &def
 		}
 		id, err := ensureTenant(ctx, tenantsSvc, *name)
-		if err != nil { fatalf("tenant create: %v", err) }
+		if err != nil {
+			fatalf("tenant create: %v", err)
+		}
 		printEnv(map[string]string{"TENANT_ID": id.String()})
 	case "user":
 		fs := flag.NewFlagSet("user", flag.ExitOnError)
@@ -78,27 +80,51 @@ func main() {
 		_ = fs.Parse(os.Args[2:])
 
 		// Coalesce empty flags back to env/defaults
-		if strings.TrimSpace(*tenantIDStr) == "" { v := os.Getenv("TENANT_ID"); tenantIDStr = &v }
-		if strings.TrimSpace(*email) == "" { v := os.Getenv("EMAIL"); email = &v }
-		if strings.TrimSpace(*password) == "" { v := os.Getenv("PASSWORD"); password = &v }
-		if strings.TrimSpace(*first) == "" { v := envOr("FIRST_NAME", "Test"); first = &v }
-		if strings.TrimSpace(*last) == "" { v := envOr("LAST_NAME", "User"); last = &v }
-		if strings.TrimSpace(*rolesCSV) == "" { v := os.Getenv("ROLES"); rolesCSV = &v }
+		if strings.TrimSpace(*tenantIDStr) == "" {
+			v := os.Getenv("TENANT_ID")
+			tenantIDStr = &v
+		}
+		if strings.TrimSpace(*email) == "" {
+			v := os.Getenv("EMAIL")
+			email = &v
+		}
+		if strings.TrimSpace(*password) == "" {
+			v := os.Getenv("PASSWORD")
+			password = &v
+		}
+		if strings.TrimSpace(*first) == "" {
+			v := envOr("FIRST_NAME", "Test")
+			first = &v
+		}
+		if strings.TrimSpace(*last) == "" {
+			v := envOr("LAST_NAME", "User")
+			last = &v
+		}
+		if strings.TrimSpace(*rolesCSV) == "" {
+			v := os.Getenv("ROLES")
+			rolesCSV = &v
+		}
 
 		if *tenantIDStr == "" || *email == "" || *password == "" {
 			fatalf("tenant-id, email, and password are required")
 		}
 		tenantID, err := uuid.Parse(*tenantIDStr)
-		if err != nil { fatalf("invalid tenant-id: %v", err) }
+		if err != nil {
+			fatalf("invalid tenant-id: %v", err)
+		}
 		userID, created, err := ensureUser(ctx, authSvc, authRepo, tenantID, *email, *password, *first, *last)
-		if err != nil { fatalf("user create: %v", err) }
+		if err != nil {
+			fatalf("user create: %v", err)
+		}
 		// Apply roles if provided
 		if strings.TrimSpace(*rolesCSV) != "" {
 			parts := strings.Split(*rolesCSV, ",")
 			var roles []string
 			for _, p := range parts {
 				r := strings.TrimSpace(p)
-				if r == "" { continue }
+				if r == "" {
+					continue
+				}
 				roles = append(roles, r)
 			}
 			if len(roles) > 0 {
@@ -120,7 +146,9 @@ func main() {
 		}
 		if *enableMFA {
 			secret, codes, err := enableUserMFA(ctx, authSvc, userID, tenantID)
-			if err != nil { fatalf("enable mfa: %v", err) }
+			if err != nil {
+				fatalf("enable mfa: %v", err)
+			}
 			out["TOTP_SECRET"] = secret
 			out["K6_TOTP"] = secret
 			if len(codes) > 0 {
@@ -144,20 +172,41 @@ func main() {
 		_ = fs.Parse(os.Args[2:])
 
 		// Coalesce empties to env/defaults if flags were provided empty
-		if strings.TrimSpace(*tenantName) == "" { v := envOr("TENANT_NAME", "test"); tenantName = &v }
-		if strings.TrimSpace(*email) == "" { v := envOr("EMAIL", "test@example.com"); email = &v }
-		if strings.TrimSpace(*password) == "" { v := envOr("PASSWORD", "Password123!"); password = &v }
-		if strings.TrimSpace(*first) == "" { v := envOr("FIRST_NAME", "Test"); first = &v }
-		if strings.TrimSpace(*last) == "" { v := envOr("LAST_NAME", "User"); last = &v }
+		if strings.TrimSpace(*tenantName) == "" {
+			v := envOr("TENANT_NAME", "test")
+			tenantName = &v
+		}
+		if strings.TrimSpace(*email) == "" {
+			v := envOr("EMAIL", "test@example.com")
+			email = &v
+		}
+		if strings.TrimSpace(*password) == "" {
+			v := envOr("PASSWORD", "Password123!")
+			password = &v
+		}
+		if strings.TrimSpace(*first) == "" {
+			v := envOr("FIRST_NAME", "Test")
+			first = &v
+		}
+		if strings.TrimSpace(*last) == "" {
+			v := envOr("LAST_NAME", "User")
+			last = &v
+		}
 
 		tenantID, err := ensureTenant(ctx, tenantsSvc, *tenantName)
-		if err != nil { fatalf("ensure tenant: %v", err) }
+		if err != nil {
+			fatalf("ensure tenant: %v", err)
+		}
 		userID, _, err := ensureUser(ctx, authSvc, authRepo, tenantID, *email, *password, *first, *last)
-		if err != nil { fatalf("ensure user: %v", err) }
+		if err != nil {
+			fatalf("ensure user: %v", err)
+		}
 		out := map[string]string{"TENANT_ID": tenantID.String(), "EMAIL": *email, "PASSWORD": *password, "USER_ID": userID.String()}
 		if *enableMFA {
 			secret, codes, err := enableUserMFA(ctx, authSvc, userID, tenantID)
-			if err != nil { fatalf("enable mfa: %v", err) }
+			if err != nil {
+				fatalf("enable mfa: %v", err)
+			}
 			out["TOTP_SECRET"] = secret
 			if len(codes) > 0 {
 				out["BACKUP_CODES"] = strings.Join(codes, ",")
@@ -171,21 +220,33 @@ func main() {
 }
 
 func ensureTenant(ctx context.Context, svc tdomain.Service, name string) (uuid.UUID, error) {
-	if name == "" { return uuid.Nil, errors.New("tenant name required") }
+	if name == "" {
+		return uuid.Nil, errors.New("tenant name required")
+	}
 	if t, err := svc.GetByName(ctx, name); err == nil {
-		id, e := fromPgUUID(t.ID); if e != nil { return uuid.Nil, e }
+		id, e := fromPgUUID(t.ID)
+		if e != nil {
+			return uuid.Nil, e
+		}
 		return id, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
 	t, err := svc.Create(ctx, name)
-	if err != nil { return uuid.Nil, err }
-	id, e := fromPgUUID(t.ID); if e != nil { return uuid.Nil, e }
+	if err != nil {
+		return uuid.Nil, err
+	}
+	id, e := fromPgUUID(t.ID)
+	if e != nil {
+		return uuid.Nil, e
+	}
 	return id, nil
 }
 
 func fromPgUUID(id pgtype.UUID) (uuid.UUID, error) {
-	if !id.Valid { return uuid.Nil, errors.New("uuid invalid") }
+	if !id.Valid {
+		return uuid.Nil, errors.New("uuid invalid")
+	}
 	return uuid.UUID(id.Bytes), nil
 }
 
@@ -202,21 +263,33 @@ func ensureUser(ctx context.Context, svc adb.Service, repo adb.Repository, tenan
 		FirstName: first,
 		LastName:  last,
 	})
-	if err != nil { return uuid.Nil, false, err }
+	if err != nil {
+		return uuid.Nil, false, err
+	}
 	ai, err := repo.GetAuthIdentityByEmailTenant(ctx, tenantID, strings.ToLower(email))
-	if err != nil { return uuid.Nil, false, err }
+	if err != nil {
+		return uuid.Nil, false, err
+	}
 	return ai.UserID, true, nil
 }
 
 func enableUserMFA(ctx context.Context, svc adb.Service, userID, tenantID uuid.UUID) (secret string, codes []string, err error) {
 	sec, _, err := svc.StartTOTPEnrollment(ctx, userID, tenantID)
-	if err != nil { return "", nil, err }
+	if err != nil {
+		return "", nil, err
+	}
 	// Generate a current code to activate
 	code, err := totp.GenerateCode(sec, time.Now())
-	if err != nil { return "", nil, err }
-	if err := svc.ActivateTOTP(ctx, userID, code); err != nil { return "", nil, err }
+	if err != nil {
+		return "", nil, err
+	}
+	if err := svc.ActivateTOTP(ctx, userID, code); err != nil {
+		return "", nil, err
+	}
 	codes, err = svc.GenerateBackupCodes(ctx, userID, 5)
-	if err != nil { return "", nil, err }
+	if err != nil {
+		return "", nil, err
+	}
 	return sec, codes, nil
 }
 
@@ -232,14 +305,20 @@ Environment fallbacks:
 }
 
 func envOr(k, def string) string {
-	if v := strings.TrimSpace(os.Getenv(k)); v != "" { return v }
+	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+		return v
+	}
 	return def
 }
 
 func envOrBool(k string, def bool) bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(k)))
-	if v == "true" || v == "1" || v == "yes" { return true }
-	if v == "false" || v == "0" || v == "no" { return false }
+	if v == "true" || v == "1" || v == "yes" {
+		return true
+	}
+	if v == "false" || v == "0" || v == "no" {
+		return false
+	}
 	return def
 }
 

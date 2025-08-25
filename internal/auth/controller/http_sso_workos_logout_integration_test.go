@@ -37,7 +37,9 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -83,11 +85,17 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 		t.Fatalf("expected 302, got %d: %s", rec.Code, rec.Body.String())
 	}
 	loc := rec.Header().Get("Location")
-	if loc == "" { t.Fatalf("expected redirect Location") }
+	if loc == "" {
+		t.Fatalf("expected redirect Location")
+	}
 	authURL, err := url.Parse(loc)
-	if err != nil { t.Fatalf("parse location: %v", err) }
+	if err != nil {
+		t.Fatalf("parse location: %v", err)
+	}
 	state := authURL.Query().Get("state")
-	if state == "" { t.Fatalf("missing state") }
+	if state == "" {
+		t.Fatalf("missing state")
+	}
 
 	// Mock WorkOS token exchange
 	httpmock.Activate()
@@ -129,7 +137,9 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 	if err := json.NewDecoder(rec2.Body).Decode(&trsp); err != nil {
 		t.Fatalf("decode tokens: %v", err)
 	}
-	if trsp.RefreshToken == "" { t.Fatalf("expected refresh token") }
+	if trsp.RefreshToken == "" {
+		t.Fatalf("expected refresh token")
+	}
 
 	// Verify token persisted and not revoked yet
 	h := sha256.Sum256([]byte(trsp.RefreshToken))

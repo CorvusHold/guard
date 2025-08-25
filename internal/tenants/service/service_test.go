@@ -9,14 +9,18 @@ import (
 	"github.com/google/uuid"
 )
 
-type mockRepo struct{
+type mockRepo struct {
 	items []db.Tenant
 	total int64
 }
 
 func (m *mockRepo) Create(ctx context.Context, id uuid.UUID, name string) error { return nil }
-func (m *mockRepo) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) { return db.Tenant{}, nil }
-func (m *mockRepo) GetByName(ctx context.Context, name string) (db.Tenant, error) { return db.Tenant{}, nil }
+func (m *mockRepo) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) {
+	return db.Tenant{}, nil
+}
+func (m *mockRepo) GetByName(ctx context.Context, name string) (db.Tenant, error) {
+	return db.Tenant{}, nil
+}
 func (m *mockRepo) Deactivate(ctx context.Context, id uuid.UUID) error { return nil }
 func (m *mockRepo) List(ctx context.Context, query string, active int, limit, offset int32) ([]db.Tenant, int64, error) {
 	return m.items, m.total, nil
@@ -35,11 +39,21 @@ func TestServiceList_DefaultsAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
-	if res.Page != 1 { t.Errorf("expected Page=1 got %d", res.Page) }
-	if res.PageSize != 20 { t.Errorf("expected PageSize=20 got %d", res.PageSize) }
-	if res.Total != 42 { t.Errorf("expected Total=42 got %d", res.Total) }
-	if res.TotalPages != 3 { t.Errorf("expected TotalPages=3 got %d", res.TotalPages) }
-	if len(res.Items) != 2 { t.Errorf("expected Items len=2 got %d", len(res.Items)) }
+	if res.Page != 1 {
+		t.Errorf("expected Page=1 got %d", res.Page)
+	}
+	if res.PageSize != 20 {
+		t.Errorf("expected PageSize=20 got %d", res.PageSize)
+	}
+	if res.Total != 42 {
+		t.Errorf("expected Total=42 got %d", res.Total)
+	}
+	if res.TotalPages != 3 {
+		t.Errorf("expected TotalPages=3 got %d", res.TotalPages)
+	}
+	if len(res.Items) != 2 {
+		t.Errorf("expected Items len=2 got %d", len(res.Items))
+	}
 }
 
 func TestServiceList_NormalizesActive(t *testing.T) {

@@ -15,8 +15,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echolog "github.com/labstack/gommon/log"
-	"github.com/redis/go-redis/v9"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/corvusHold/guard/internal/config"
 	"github.com/corvusHold/guard/internal/logger"
@@ -84,53 +84,62 @@ func main() {
 		e.Logger.SetLevel(echolog.DEBUG)
 	}
 
-    // Prefer Cloudflare's header; then XFF; then X-Real-IP; then RemoteAddr.
-    // Guard this behind TRUST_PROXY env to avoid trusting spoofable headers when not behind a proxy/CDN.
-    if v := strings.ToLower(os.Getenv("TRUST_PROXY")); v == "true" || v == "1" || v == "yes" {
-        // Parse optional TRUST_PROXY_CIDRS to restrict which proxy IPs are trusted
-        var trustProxyCIDRs []*net.IPNet
-        if cidrs := os.Getenv("TRUST_PROXY_CIDRS"); cidrs != "" {
-            for _, part := range strings.Split(cidrs, ",") {
-                s := strings.TrimSpace(part)
-                if s == "" { continue }
-                if _, n, err := net.ParseCIDR(s); err == nil {
-                    trustProxyCIDRs = append(trustProxyCIDRs, n)
-                }
-            }
-        }
-        e.IPExtractor = func(r *http.Request) string {
-            // If CIDRs configured, only trust headers when RemoteAddr is in one of them
-            remoteHost, _, _ := net.SplitHostPort(r.RemoteAddr)
-            if remoteHost == "" { remoteHost = r.RemoteAddr }
-            if len(trustProxyCIDRs) > 0 {
-                ip := net.ParseIP(remoteHost)
-                allowed := false
-                if ip != nil {
-                    for _, n := range trustProxyCIDRs {
-                        if n.Contains(ip) { allowed = true; break }
-                    }
-                }
-                if !allowed {
-                    // Do not trust headers, return remote address
-                    return remoteHost
-                }
-            }
-            if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-                return ip
-            }
-            if xff := r.Header.Get(echo.HeaderXForwardedFor); xff != "" {
-                if i := strings.IndexByte(xff, ','); i >= 0 {
-                    return strings.TrimSpace(xff[:i])
-                }
-                return strings.TrimSpace(xff)
-            }
-            if ip := r.Header.Get(echo.HeaderXRealIP); ip != "" {
-                return ip
-            }
-            if remoteHost != "" { return remoteHost }
-            return r.RemoteAddr
-        }
-    }
+	// Prefer Cloudflare's header; then XFF; then X-Real-IP; then RemoteAddr.
+	// Guard this behind TRUST_PROXY env to avoid trusting spoofable headers when not behind a proxy/CDN.
+	if v := strings.ToLower(os.Getenv("TRUST_PROXY")); v == "true" || v == "1" || v == "yes" {
+		// Parse optional TRUST_PROXY_CIDRS to restrict which proxy IPs are trusted
+		var trustProxyCIDRs []*net.IPNet
+		if cidrs := os.Getenv("TRUST_PROXY_CIDRS"); cidrs != "" {
+			for _, part := range strings.Split(cidrs, ",") {
+				s := strings.TrimSpace(part)
+				if s == "" {
+					continue
+				}
+				if _, n, err := net.ParseCIDR(s); err == nil {
+					trustProxyCIDRs = append(trustProxyCIDRs, n)
+				}
+			}
+		}
+		e.IPExtractor = func(r *http.Request) string {
+			// If CIDRs configured, only trust headers when RemoteAddr is in one of them
+			remoteHost, _, _ := net.SplitHostPort(r.RemoteAddr)
+			if remoteHost == "" {
+				remoteHost = r.RemoteAddr
+			}
+			if len(trustProxyCIDRs) > 0 {
+				ip := net.ParseIP(remoteHost)
+				allowed := false
+				if ip != nil {
+					for _, n := range trustProxyCIDRs {
+						if n.Contains(ip) {
+							allowed = true
+							break
+						}
+					}
+				}
+				if !allowed {
+					// Do not trust headers, return remote address
+					return remoteHost
+				}
+			}
+			if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+				return ip
+			}
+			if xff := r.Header.Get(echo.HeaderXForwardedFor); xff != "" {
+				if i := strings.IndexByte(xff, ','); i >= 0 {
+					return strings.TrimSpace(xff[:i])
+				}
+				return strings.TrimSpace(xff)
+			}
+			if ip := r.Header.Get(echo.HeaderXRealIP); ip != "" {
+				return ip
+			}
+			if remoteHost != "" {
+				return remoteHost
+			}
+			return r.RemoteAddr
+		}
+	}
 
 	// Middlewares
 	e.Use(middleware.Recover())
@@ -138,6 +147,16 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(httpmetrics.HTTPMiddleware())
 	e.Use(middleware.Secure())
+	// Configurable body size limit (default 2M)
+	e.Use(middleware.BodyLimit(cfg.BodyLimit))
+	// Apply handler-level timeout, skipping health/metrics endpoints
+	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
+		Timeout: cfg.HandlerTimeout,
+		Skipper: func(c echo.Context) bool {
+			p := c.Path()
+			return p == "/livez" || p == "/readyz" || p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, "/debug/pprof")
+		},
+	}))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: cfg.CORSAllowedOrigins,
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
@@ -154,33 +173,33 @@ func main() {
 	tenants.Register(e, pgPool)
 	auth.Register(e, pgPool, cfg)
 
-    // Background dependency ping metrics
-    go func() {
-        ticker := time.NewTicker(10 * time.Second)
-        defer ticker.Stop()
-        for range ticker.C {
-            // DB ping
-            {
-                ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-                start := time.Now()
-                err := pgPool.Ping(ctx)
-                dur := time.Since(start).Seconds()
-                httpmetrics.ObserveDBPing(dur)
-                httpmetrics.SetDBUp(err == nil)
-                cancel()
-            }
-            // Redis ping
-            {
-                ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-                start := time.Now()
-                _, err := redisClient.Ping(ctx).Result()
-                dur := time.Since(start).Seconds()
-                httpmetrics.ObserveRedisPing(dur)
-                httpmetrics.SetRedisUp(err == nil)
-                cancel()
-            }
-        }
-    }()
+	// Background dependency ping metrics
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// DB ping
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				start := time.Now()
+				err := pgPool.Ping(ctx)
+				dur := time.Since(start).Seconds()
+				httpmetrics.ObserveDBPing(dur)
+				httpmetrics.SetDBUp(err == nil)
+				cancel()
+			}
+			// Redis ping
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				start := time.Now()
+				_, err := redisClient.Ping(ctx).Result()
+				dur := time.Since(start).Seconds()
+				httpmetrics.ObserveRedisPing(dur)
+				httpmetrics.SetRedisUp(err == nil)
+				cancel()
+			}
+		}
+	}()
 
 	// Health endpoint pings DB and Redis
 	e.GET("/healthz", func(c echo.Context) error {
@@ -261,28 +280,43 @@ func main() {
 	}
 	metricsGroup.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
-    // pprof endpoints (non-production only)
-    if env := strings.ToLower(cfg.AppEnv); env != "prod" && env != "production" {
-        grp := e.Group("/debug/pprof")
-        grp.GET("/", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
-        grp.GET("/cmdline", echo.WrapHandler(http.HandlerFunc(pprof.Cmdline)))
-        grp.GET("/profile", echo.WrapHandler(http.HandlerFunc(pprof.Profile)))
-        grp.GET("/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
-        grp.GET("/trace", echo.WrapHandler(http.HandlerFunc(pprof.Trace)))
-        // Named profiles
-        grp.GET("/allocs", echo.WrapHandler(pprof.Handler("allocs")))
-        grp.GET("/block", echo.WrapHandler(pprof.Handler("block")))
-        grp.GET("/goroutine", echo.WrapHandler(pprof.Handler("goroutine")))
-        grp.GET("/heap", echo.WrapHandler(pprof.Handler("heap")))
-        grp.GET("/mutex", echo.WrapHandler(pprof.Handler("mutex")))
-        grp.GET("/threadcreate", echo.WrapHandler(pprof.Handler("threadcreate")))
-    }
+	// pprof endpoints (non-production only)
+	if env := strings.ToLower(cfg.AppEnv); env != "prod" && env != "production" {
+		grp := e.Group("/debug/pprof")
+		grp.GET("/", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
+		grp.GET("/cmdline", echo.WrapHandler(http.HandlerFunc(pprof.Cmdline)))
+		grp.GET("/profile", echo.WrapHandler(http.HandlerFunc(pprof.Profile)))
+		grp.GET("/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
+		grp.GET("/trace", echo.WrapHandler(http.HandlerFunc(pprof.Trace)))
+		// Named profiles
+		grp.GET("/allocs", echo.WrapHandler(pprof.Handler("allocs")))
+		grp.GET("/block", echo.WrapHandler(pprof.Handler("block")))
+		grp.GET("/goroutine", echo.WrapHandler(pprof.Handler("goroutine")))
+		grp.GET("/heap", echo.WrapHandler(pprof.Handler("heap")))
+		grp.GET("/mutex", echo.WrapHandler(pprof.Handler("mutex")))
+		grp.GET("/threadcreate", echo.WrapHandler(pprof.Handler("threadcreate")))
+	}
 
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Start server
 	go func() {
-		if err := e.Start(cfg.AppAddr); err != nil && err != http.ErrServerClosed {
+		// Production safety checks
+		if env := strings.ToLower(cfg.AppEnv); env == "prod" || env == "production" {
+			if cfg.JWTSigningKey == "" || cfg.JWTSigningKey == "dev-insecure-change-this" || len(cfg.JWTSigningKey) < 32 {
+				log.Fatal().Msg("insecure JWT_SIGNING_KEY for production; set a strong secret (>=32 bytes)")
+			}
+		}
+
+		srv := &http.Server{
+			Addr:              cfg.AppAddr,
+			ReadTimeout:       10 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    1 << 20, // 1 MiB
+		}
+		if err := e.StartServer(srv); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("server error")
 		}
 	}()

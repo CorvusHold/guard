@@ -11,8 +11,8 @@ import (
 	"time"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
@@ -28,7 +28,9 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -107,7 +109,9 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(mrec.Body.Bytes())).Decode(&profile); err != nil {
 		t.Fatalf("decode profile: %v", err)
 	}
-	if profile.Email != email { t.Fatalf("email mismatch: %v", profile.Email) }
+	if profile.Email != email {
+		t.Fatalf("email mismatch: %v", profile.Email)
+	}
 
 	// revoke refresh token and ensure refresh fails
 	rb, _ := json.Marshal(map[string]string{"token": stoks.RefreshToken, "token_type": "refresh"})

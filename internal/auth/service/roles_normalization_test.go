@@ -24,7 +24,9 @@ func (f *fakeRepo) GetAuthIdentityByEmailTenant(ctx context.Context, tenantID uu
 	return domain.AuthIdentity{}, nil
 }
 func (f *fakeRepo) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error { return nil }
-func (f *fakeRepo) AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error { return nil }
+func (f *fakeRepo) AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error {
+	return nil
+}
 func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error {
 	return nil
 }
@@ -56,8 +58,12 @@ func (f *fakeRepo) UpsertMFASecret(ctx context.Context, userID uuid.UUID, secret
 func (f *fakeRepo) GetMFASecret(ctx context.Context, userID uuid.UUID) (domain.MFASecret, error) {
 	return domain.MFASecret{}, nil
 }
-func (f *fakeRepo) InsertMFABackupCode(ctx context.Context, id uuid.UUID, userID uuid.UUID, codeHash string) error { return nil }
-func (f *fakeRepo) CountRemainingMFABackupCodes(ctx context.Context, userID uuid.UUID) (int64, error) { return 0, nil }
+func (f *fakeRepo) InsertMFABackupCode(ctx context.Context, id uuid.UUID, userID uuid.UUID, codeHash string) error {
+	return nil
+}
+func (f *fakeRepo) CountRemainingMFABackupCodes(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return 0, nil
+}
 func (f *fakeRepo) ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, codeHash string) (bool, error) {
 	return false, nil
 }
@@ -66,7 +72,9 @@ func (f *fakeRepo) ConsumeMFABackupCode(ctx context.Context, userID uuid.UUID, c
 func (f *fakeRepo) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
 	return nil, nil
 }
-func (f *fakeRepo) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error { return nil }
+func (f *fakeRepo) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
+	return nil
+}
 func (f *fakeRepo) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
 	return nil
 }
@@ -93,7 +101,9 @@ func (f *fakeRepo) CreateRole(ctx context.Context, id uuid.UUID, tenantID uuid.U
 func (f *fakeRepo) UpdateRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Role, error) {
 	return domain.Role{}, nil
 }
-func (f *fakeRepo) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error { return nil }
+func (f *fakeRepo) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error {
+	return nil
+}
 func (f *fakeRepo) GetRoleByName(ctx context.Context, tenantID uuid.UUID, name string) (domain.Role, error) {
 	return domain.Role{}, nil
 }
@@ -121,7 +131,9 @@ func (f *fakeRepo) DeleteRolePermission(ctx context.Context, roleID uuid.UUID, p
 }
 
 // Groups and ACL
-func (f *fakeRepo) ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) { return nil, nil }
+func (f *fakeRepo) ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
 func (f *fakeRepo) ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]domain.PermissionGrant, error) {
 	return nil, nil
 }
@@ -133,10 +145,18 @@ func (f *fakeRepo) ListACLPermissionKeysForGroups(ctx context.Context, tenantID 
 func (f *fakeRepo) CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (domain.Group, error) {
 	return domain.Group{ID: id, TenantID: tenantID, Name: name, Description: description}, nil
 }
-func (f *fakeRepo) ListGroups(ctx context.Context, tenantID uuid.UUID) ([]domain.Group, error) { return nil, nil }
-func (f *fakeRepo) DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error { return nil }
-func (f *fakeRepo) AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error { return nil }
-func (f *fakeRepo) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error { return nil }
+func (f *fakeRepo) ListGroups(ctx context.Context, tenantID uuid.UUID) ([]domain.Group, error) {
+	return nil, nil
+}
+func (f *fakeRepo) DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
+	return nil
+}
+func (f *fakeRepo) AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	return nil
+}
+func (f *fakeRepo) RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	return nil
+}
 func (f *fakeRepo) CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (domain.ACLTuple, error) {
 	return domain.ACLTuple{ID: id, TenantID: tenantID, SubjectType: subjectType, SubjectID: subjectID, PermissionID: permissionID, ObjectType: objectType, ObjectID: objectID, CreatedBy: createdBy}, nil
 }

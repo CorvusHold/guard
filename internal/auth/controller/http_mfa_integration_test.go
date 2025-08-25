@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
@@ -30,9 +30,11 @@ func setupAuthApp(t *testing.T) (*echo.Echo, uuid.UUID, tokensResponse) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	// closing handled by t.Cleanup
-	t.Cleanup(func(){ pool.Close() })
+	t.Cleanup(func() { pool.Close() })
 
 	// tenant
 	tr := trepo.New(pool)
@@ -101,7 +103,9 @@ func TestHTTP_MFA_TOTP_Enrollment_Activate_Disable(t *testing.T) {
 
 	// activate using generated code
 	code, err := totp.GenerateCode(startResp.Secret, time.Now())
-	if err != nil { t.Fatalf("generate code: %v", err) }
+	if err != nil {
+		t.Fatalf("generate code: %v", err)
+	}
 	ab, _ := json.Marshal(map[string]string{"code": code})
 	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	req2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
@@ -139,19 +143,25 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&genResp); err != nil {
 		t.Fatalf("decode generate: %v", err)
 	}
-	if len(genResp.Codes) != 5 { t.Fatalf("expected 5 codes, got %d", len(genResp.Codes)) }
+	if len(genResp.Codes) != 5 {
+		t.Fatalf("expected 5 codes, got %d", len(genResp.Codes))
+	}
 
 	// count -> 5
 	reqC := httptest.NewRequest(http.MethodGet, "/v1/auth/mfa/backup/count", nil)
 	reqC.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recC := httptest.NewRecorder()
 	e.ServeHTTP(recC, reqC)
-	if recC.Code != http.StatusOK { t.Fatalf("count expected 200, got %d: %s", recC.Code, recC.Body.String()) }
+	if recC.Code != http.StatusOK {
+		t.Fatalf("count expected 200, got %d: %s", recC.Code, recC.Body.String())
+	}
 	var cntResp mfaBackupCountResp
 	if err := json.NewDecoder(bytes.NewReader(recC.Body.Bytes())).Decode(&cntResp); err != nil {
 		t.Fatalf("decode count: %v", err)
 	}
-	if cntResp.Count != 5 { t.Fatalf("expected count 5, got %d", cntResp.Count) }
+	if cntResp.Count != 5 {
+		t.Fatalf("expected count 5, got %d", cntResp.Count)
+	}
 
 	// consume one
 	cb, _ := json.Marshal(map[string]string{"code": genResp.Codes[0]})
@@ -160,12 +170,16 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
-	if rec2.Code != http.StatusOK { t.Fatalf("consume expected 200, got %d: %s", rec2.Code, rec2.Body.String()) }
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("consume expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
 	var consResp mfaBackupConsumeResp
 	if err := json.NewDecoder(bytes.NewReader(rec2.Body.Bytes())).Decode(&consResp); err != nil {
 		t.Fatalf("decode consume: %v", err)
 	}
-	if !consResp.Consumed { t.Fatalf("expected consumed true") }
+	if !consResp.Consumed {
+		t.Fatalf("expected consumed true")
+	}
 
 	// consume again -> false
 	req2b := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
@@ -173,20 +187,28 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	req2b.Header.Set("Content-Type", "application/json")
 	rec3 := httptest.NewRecorder()
 	e.ServeHTTP(rec3, req2b)
-	if rec3.Code != http.StatusOK { t.Fatalf("re-consume expected 200, got %d: %s", rec3.Code, rec3.Body.String()) }
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("re-consume expected 200, got %d: %s", rec3.Code, rec3.Body.String())
+	}
 	var consResp2 mfaBackupConsumeResp
 	if err := json.NewDecoder(bytes.NewReader(rec3.Body.Bytes())).Decode(&consResp2); err != nil {
 		t.Fatalf("decode re-consume: %v", err)
 	}
-	if consResp2.Consumed { t.Fatalf("expected consumed false on second attempt") }
+	if consResp2.Consumed {
+		t.Fatalf("expected consumed false on second attempt")
+	}
 
 	// count -> 4
 	rec4 := httptest.NewRecorder()
 	e.ServeHTTP(rec4, reqC)
-	if rec4.Code != http.StatusOK { t.Fatalf("count2 expected 200, got %d: %s", rec4.Code, rec4.Body.String()) }
+	if rec4.Code != http.StatusOK {
+		t.Fatalf("count2 expected 200, got %d: %s", rec4.Code, rec4.Body.String())
+	}
 	var cntResp2 mfaBackupCountResp
 	if err := json.NewDecoder(bytes.NewReader(rec4.Body.Bytes())).Decode(&cntResp2); err != nil {
 		t.Fatalf("decode count2: %v", err)
 	}
-	if cntResp2.Count != 4 { t.Fatalf("expected count 4, got %d", cntResp2.Count) }
+	if cntResp2.Count != 4 {
+		t.Fatalf("expected count 4, got %d", cntResp2.Count)
+	}
 }
