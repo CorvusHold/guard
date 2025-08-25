@@ -1,0 +1,67 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - errcheck
+    - misspell
+    - gocritic
+    - revive
+  disable:
+    # Disable heavy or noisy linters initially; can be enabled later after baselining
+    - funlen
+    - gocyclo
+    - dupl
+    - lll
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: exported
+          disabled: true
+        - name: indent-error-flow
+        - name: import-shadowing
+          disabled: true
+        - name: increment-decrement
+        - name: package-comments
+          disabled: true
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unused-parameter
+          disabled: true
+
+    gocritic:
+      disabled-checks:
+        - exitAfterDefer
+
+ 
+
+issues:
+  exclude-use-default: false
+  # Exclude test files from some style checks
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - revive
+
+output:
+  format: colored-line-number
