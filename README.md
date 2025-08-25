@@ -25,6 +25,15 @@ cp .env.example .env
 # then edit .env as needed
 ```
 
+### Server hardening and readiness
+
+- BODY_LIMIT: max HTTP request body size (default: 2M).
+- HANDLER_TIMEOUT: per-request timeout (default: 10s).
+- Readiness: `/readyz` checks Postgres and Redis. Make targets gate on readiness:
+  - `test-e2e`, `test-rbac-admin`, and `test-fga` depend on `api-test-wait` (polls `/readyz`).
+  - `docker-compose.test.yml` defines a healthcheck on `api_test` that hits `/readyz`.
+- Override these via `.env` or per-service `environment` in compose.
+
 ## Development
 ```bash
 make dev
@@ -42,6 +51,51 @@ make migrate-status # list
 ```bash
 make sqlc
 ```
+
+## Code quality
+
+Local targets to keep the repo clean and consistent:
+
+- `make fmt-check` — verify files are formatted with `gofmt -s` (CI enforces this)
+- `make tidy-check` — verify `go mod tidy` produces no changes (CI enforces this)
+- `make lint` — run `golangci-lint` (or fallback to `go vet` if not installed)
+- `make lint-fix` — attempt auto-fixes via `golangci-lint --fix`
+- `make unit-cover` — run unit tests with race detector and coverage
+- `make qa` — run `fmt-check`, `tidy-check`, `lint`, and `unit-cover`
+
+Typical workflow:
+
+```bash
+# format sources in-place
+make fmt
+
+# ensure go.mod/go.sum are tidy
+make tidy
+
+# auto-fix what linters can fix (optional)
+make lint-fix
+
+# run all quality gates
+make qa
+```
+
+CI runs the same gates and also performs security scans (`gosec`, `gitleaks`) and uploads coverage.
+
+### Linter baseline (golangci-lint v2)
+
+We use golangci-lint v2 with a pragmatic baseline to reduce noise while keeping meaningful signals. See `.golangci.yml`.
+
+- __errcheck__
+  - `check-blank: false` — allow intentionally ignored errors (e.g., best‑effort telemetry/audit publishes).
+- __revive__ (selected rules disabled)
+  - `exported`, `package-comments`, `unused-parameter`, `import-shadowing` — disabled to avoid churn and unblock incremental refactors.
+- __gocritic__
+  - `exitAfterDefer` — disabled (flagged some intentional early exits in tooling/entrypoints).
+
+Notes:
+
+- CI uses `golangci/golangci-lint-action@v6` with `version: latest`, which supports the v2 config schema.
+- We may tighten the baseline incrementally (e.g., re‑enable specific revive rules or blank error checks) as the codebase evolves. PRs are welcome to flip rules back on alongside remediation.
 
 ## Tests
 ```bash
