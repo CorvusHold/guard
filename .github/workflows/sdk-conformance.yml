@@ -28,6 +28,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'sdk/ts/package-lock.json'
+
       - name: Cache npm (sdk/ts)
         uses: actions/cache@v4
         with:
@@ -35,6 +42,26 @@ jobs:
           key: npm-cache-${{ runner.os }}-${{ hashFiles('sdk/ts/package-lock.json') }}
           restore-keys: |
             npm-cache-${{ runner.os }}-
+
+      - name: Install dependencies (SDK)
+        working-directory: sdk/ts
+        run: |
+          npm ci
+
+      - name: Lint (ESLint)
+        working-directory: sdk/ts
+        run: |
+          npm run lint
+
+      - name: Format check (Prettier)
+        working-directory: sdk/ts
+        run: |
+          npx prettier --check .
+
+      - name: Typecheck (tsc)
+        working-directory: sdk/ts
+        run: |
+          npm run typecheck
 
       - name: Run SDK conformance (${{ matrix.display }})
         env:
