@@ -18,6 +18,8 @@ export interface GuardClientOptions {
 // OpenAPI component schema aliases
 type TokensResp = OpenAPIComponents['schemas']['controller.tokensResp'];
 type MfaChallengeResp = OpenAPIComponents['schemas']['controller.mfaChallengeResp'];
+// Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract
+type PortalLink = OpenAPIComponents['schemas']['domain.PortalLink'] & { link: string };
 
 // Type guards to help narrow union results in consumers
 export function isTokensResp(data: unknown): data is TokensResp {
@@ -31,6 +33,10 @@ export function isMfaChallengeResp(data: unknown): data is MfaChallengeResp {
 }
 type MfaVerifyReq = OpenAPIComponents['schemas']['controller.mfaVerifyReq'];
 type RefreshReq = OpenAPIComponents['schemas']['controller.refreshReq'];
+
+// Minimal response types for tenant discovery
+export interface TenantSummary { id: string; name?: string }
+export interface DiscoverTenantsResp { tenants: TenantSummary[] }
 type UserProfile = OpenAPIComponents['schemas']['domain.UserProfile'];
 type Introspection = OpenAPIComponents['schemas']['domain.Introspection'];
 type MagicSendReq = OpenAPIComponents['schemas']['controller.magicSendReq'];
@@ -225,6 +231,12 @@ export class GuardClient {
     return this.request<UserProfile>('/v1/auth/me', { method: 'GET' });
   }
 
+  // Tenants: Discover tenants for a given email (used by login tenant selection)
+  async discoverTenants(params: { email: string }): Promise<ResponseWrapper<DiscoverTenantsResp>> {
+    const qs = this.buildQuery({ email: params.email });
+    return this.request<DiscoverTenantsResp>(`/v1/auth/tenants${qs}`, { method: 'GET' });
+  }
+
   // Auth: Introspect token (from header or body)
   async introspect(body?: { token?: string }): Promise<ResponseWrapper<Introspection>> {
     return this.request<Introspection>('/v1/auth/introspect', {
@@ -352,5 +364,22 @@ export class GuardClient {
     const res = await this.request<TokensResp>(`/v1/auth/sso/${provider}/callback${qs}`, { method: 'GET' });
     if (res.meta.status === 200) this.persistTokensFrom(res.data);
     return res;
+  }
+
+  // SSO: WorkOS Organization Portal link (admin-only on server)
+  async getSsoOrganizationPortalLink(provider: SsoProvider, params: {
+    tenant_id?: string;
+    organization_id: string;
+    intent?: string;
+  }): Promise<ResponseWrapper<PortalLink>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    if (!params?.organization_id) throw new Error('organization_id is required');
+    const qs = this.buildQuery({
+      tenant_id: tenant,
+      organization_id: params.organization_id,
+      intent: params.intent,
+    });
+    return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
   }
 }

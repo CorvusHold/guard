@@ -28,6 +28,7 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	emailSender := emailsvc.NewRouter(settings, cfg)
 	magic := svc.NewMagic(r, cfg, settings, emailSender)
 	sso := svc.NewSSO(r, cfg, settings)
+	sso.SetLogger(logger.New(cfg.AppEnv))
 	pub := evsvc.NewLogger()
 	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rl.NewRedisStore(cfg)).WithPublisher(pub)
 	c.Register(e)

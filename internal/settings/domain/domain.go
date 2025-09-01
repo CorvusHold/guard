@@ -43,6 +43,8 @@ const (
 	KeyWorkOSAPIKey    = "sso.workos.api_key"
 	KeyWorkOSClientID  = "sso.workos.client_id"
 	KeyWorkOSClientSecret = "sso.workos.client_secret"
+    // API base URL for WorkOS, default https://api.workos.com
+    KeyWorkOSAPIBaseURL = "sso.workos.api_base_url"
     // Optional defaults to target a WorkOS SSO flow without passing query params on start
     KeyWorkOSDefaultConnectionID  = "sso.workos.default_connection_id"
     KeyWorkOSDefaultOrganizationID = "sso.workos.default_organization_id"

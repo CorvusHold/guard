@@ -20,6 +20,7 @@ import (
     "github.com/google/uuid"
     "strings"
     "github.com/redis/go-redis/v9"
+    "github.com/rs/zerolog"
 )
 
 // SSO implements domain.SSOService with a dev adapter (local/testing).
@@ -29,15 +30,19 @@ type SSO struct{
     settings sdomain.Service
     redis    *redis.Client
     pub      evdomain.Publisher
+    log      zerolog.Logger
 }
 
 func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service) *SSO {
     rc := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, DB: cfg.RedisDB})
-    return &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger()}
+    return &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop()}
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
 func (s *SSO) SetPublisher(p evdomain.Publisher) { s.pub = p }
+
+// SetLogger allows injection of a structured logger for SSO flows.
+func (s *SSO) SetLogger(l zerolog.Logger) { s.log = l }
 
 // Start builds a local callback URL with a signed one-time code.
 func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error) {
@@ -290,4 +295,21 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
         Time:     time.Now(),
     })
     return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
+}
+
+func (s *SSO) OrganizationPortalLinkGenerator(ctx context.Context, in domain.SSOOrganizationPortalLinkGeneratorInput) (plink domain.PortalLink, err error) {
+    defer func() {
+        if err == nil {
+            metrics.IncAuthOutcome("sso.organization_portal_link_generator", "success")
+            metrics.IncSSOOutcome(in.Provider, "success")
+        } else {
+            metrics.IncAuthOutcome("sso.organization_portal_link_generator", "failure")
+            metrics.IncSSOOutcome(in.Provider, "failure")
+        }
+    }()
+    if in.Provider != "workos" {
+        return domain.PortalLink{}, errors.New("unsupported provider")
+    }
+	plink, err = s.OrganizationPortalLinkGeneratorWorkOS(ctx, in)
+	return plink, err
 }

@@ -7,6 +7,7 @@ export RATE_LIMIT_RETRIES ?= 2
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        k6-portal-link-smoke k6-rate-limit-portal-link \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
@@ -218,6 +219,20 @@ k6-rate-limit-login:
 
 k6-mfa-invalid:
 	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
+
+k6-portal-link-smoke:
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
+		-e K6_INTENT="$${K6_INTENT:-sso}" \
+		k6 "k6 run /scripts/portal_link_smoke.js"'
+
+k6-rate-limit-portal-link:
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
+		-e K6_INTENT="$${K6_INTENT:-sso}" -e K6_ITERATIONS="$$K6_ITERATIONS" \
+		k6 "k6 run /scripts/rate_limit_portal_link.js"'
 
 # ---- Seeding helpers ----
 

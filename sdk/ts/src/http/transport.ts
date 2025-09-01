@@ -20,8 +20,10 @@ export class HttpClient {
 
   constructor(opts: TransportOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
-    this.fetchImpl = opts.fetchImpl ?? (globalThis.fetch as FetchLike);
-    if (!this.fetchImpl) throw new Error('No fetch implementation provided and global fetch is unavailable');
+    const fiRaw = (opts.fetchImpl ?? (globalThis.fetch as any));
+    if (!fiRaw) throw new Error('No fetch implementation provided and global fetch is unavailable');
+    // Bind fetch to globalThis to satisfy WebKit where unbound Window.fetch throws
+    this.fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => (fiRaw as any).call(globalThis, input, init)) as FetchLike;
     this.interceptors = opts.interceptors;
     this.clientHeader = opts.clientHeader ?? 'ts-sdk';
     this.defaultHeaders = { ...(opts.defaultHeaders ?? {}) };

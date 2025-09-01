@@ -1,0 +1,8 @@
+export DATABASE_URL='postgres://guard:guard@db:5432/guard?sslmode=disable'
+export GOLANG_VERSION='1.24.6'
+export GOPATH='/go'
+export GOTOOLCHAIN='auto'
+export HOME='/root'
+export HOSTNAME='174988ec39db'
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PWD='/app'

@@ -7,6 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
+type PortalLink struct {
+	Link string `json:"link"`
+}
 // AccessTokens represents the issued tokens payload.
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -181,10 +184,18 @@ type SSOCallbackInput struct {
 	IP        string
 }
 
+type SSOOrganizationPortalLinkGeneratorInput struct {
+	Provider string
+	TenantID uuid.UUID
+	Intent   string
+	OrganizationID string
+}
+
 // SSOService defines the contract for SSO/Social login flows.
 type SSOService interface {
 	Start(ctx context.Context, in SSOStartInput) (authURL string, err error)
 	Callback(ctx context.Context, in SSOCallbackInput) (AccessTokens, error)
+	OrganizationPortalLinkGenerator(ctx context.Context, in SSOOrganizationPortalLinkGeneratorInput) (PortalLink, error)
 }
 
 // Repository abstracts data access needed by the auth service.

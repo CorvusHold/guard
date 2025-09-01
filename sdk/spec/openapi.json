@@ -2944,6 +2944,93 @@
                 }
             }
         },
+        "/v1/auth/sso/{provider}/portal-link": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates a link to the organization portal for the given provider and organization ID (admin-only)",
+                "tags": [
+                    "auth.sso"
+                ],
+                "summary": "Generate organization portal link",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "SSO provider (workos)",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Organization identifier",
+                        "name": "organization_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management)",
+                        "name": "intent",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PortalLink"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/sso/{provider}/start": {
             "get": {
                 "description": "Initiates an SSO flow for the given provider and redirects to the provider authorization URL",
@@ -4016,6 +4103,14 @@
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PortalLink": {
+            "type": "object",
+            "properties": {
+                "link": {
                     "type": "string"
                 }
             }

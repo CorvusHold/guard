@@ -44,11 +44,20 @@ async function main() {
     process.exit(2);
   }
 
-  // Configure dev SSO and allowlist to Next.js app origin
+  // Configure SSO settings and allowlist to Next.js app origin
+  // If WORKOS_API_KEY is provided, switch provider to 'workos' and upsert keys.
+  const provider = process.env.WORKOS_API_KEY ? 'workos' : 'dev';
   const payload = {
-    sso_provider: 'dev',
-    sso_redirect_allowlist: 'http://localhost:3001'
+    sso_provider: provider,
+    sso_redirect_allowlist: 'http://localhost:3002'
   };
+  if (provider === 'workos') {
+    payload.workos_api_key = process.env.WORKOS_API_KEY;
+    if (process.env.WORKOS_CLIENT_ID) payload.workos_client_id = process.env.WORKOS_CLIENT_ID;
+    if (process.env.WORKOS_CLIENT_SECRET) payload.workos_client_secret = process.env.WORKOS_CLIENT_SECRET;
+    if (process.env.WORKOS_DEFAULT_CONN) payload.workos_default_connection_id = process.env.WORKOS_DEFAULT_CONN;
+    if (process.env.WORKOS_DEFAULT_ORG) payload.workos_default_organization_id = process.env.WORKOS_DEFAULT_ORG;
+  }
   const { res: putRes, json: putJson } = await fetchWithRetry(`${base}/v1/tenants/${tenantId}/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${adminAccess}` },
@@ -58,7 +67,7 @@ async function main() {
     console.error('Configure SSO failed', putJson || { status: putRes.status });
     process.exit(3);
   }
-  console.log('Configured SSO dev provider and allowlist.');
+  console.log(`Configured SSO provider=${provider} and allowlist.`);
 }
 
 if (typeof fetch !== 'function') {

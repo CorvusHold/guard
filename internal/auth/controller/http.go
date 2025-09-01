@@ -542,6 +542,7 @@ func (h *Controller) Register(e *echo.Echo) {
 	// SSO / Social providers
 	g.GET("/sso/:provider/start", h.ssoStart, rlSSO)
 	g.GET("/sso/:provider/callback", h.ssoCallback, rlSSO)
+	g.GET("/sso/:provider/portal-link", h.ssoOrganizationPortalLinkGenerator, rlSSO)
 
 	// Token lifecycle
 	g.POST("/refresh", h.refresh, rlToken)
@@ -1436,6 +1437,19 @@ var allowedProviders = map[string]struct{}{
     "workos":  {},
 }
 
+var allowedSSOOrganizationPortalIntents = map[string]struct{}{
+	// FROM WorkOS requirement
+	"sso": {},
+	"dsync": {},
+	"audit_logs": {},
+	"log_streams": {},
+	"domain_verification": {},
+	"certificate_renewal": {},
+
+	//Corvus custom intents
+	"user_management": {},
+}
+
 // SSO Start godoc
 // @Summary      Start SSO/OAuth flow
 // @Description  Initiates an SSO flow for the given provider and redirects to the provider authorization URL
@@ -1497,6 +1511,86 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+}
+
+// SSO Organization Portal Link Generator godoc
+// @Summary      Generate organization portal link
+// @Description  Generates a link to the organization portal for the given provider and organization ID (admin-only)
+// @Tags         auth.sso
+// @Security     BearerAuth
+// @Param        provider  path   string  true  "SSO provider (workos)"
+// @Param        organization_id  query   string  true  "Organization identifier"
+// @Param        tenant_id  query   string  true  "Tenant ID (UUID)"
+// @Param        intent  query   string  false  "Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management)"
+// @Success      200  {object}  domain.PortalLink
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/sso/{provider}/portal-link [get]
+func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
+    p := c.Param("provider")
+    if _, ok := allowedProviders[p]; !ok {
+        c.Logger().Errorf("sso.portal_link: unsupported provider p=%s ip=%s ua=%s", p, c.RealIP(), c.Request().UserAgent())
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
+    }
+    // TEMPORARY: only workos supported
+    if p != "workos" {
+        c.Logger().Errorf("sso.portal_link: only workos supported p=%s ip=%s ua=%s", p, c.RealIP(), c.Request().UserAgent())
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "only workos supported"})
+    }
+    ua := c.Request().UserAgent()
+    ip := c.RealIP()
+    // RBAC: admin only
+    tok := bearerToken(c)
+    if tok == "" {
+        c.Logger().Errorf("sso.portal_link: missing bearer token ip=%s ua=%s", ip, ua)
+        return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+    }
+    inTok, err := h.svc.Introspect(c.Request().Context(), tok)
+    if err != nil || !inTok.Active {
+        c.Logger().Errorf("sso.portal_link: invalid token ip=%s ua=%s err=%v", ip, ua, err)
+        return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+    }
+    isAdmin := false
+    for _, r := range inTok.Roles { if strings.EqualFold(r, "admin") { isAdmin = true; break } }
+    if !isAdmin {
+        c.Logger().Errorf("sso.portal_link: forbidden (non-admin) tenant_id=%s user_id=%s ip=%s ua=%s", inTok.TenantID.String(), inTok.UserID.String(), ip, ua)
+        return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+    }
+
+    // Validate inputs
+    tenIDStr := c.QueryParam("tenant_id")
+    tenID, err := uuid.Parse(tenIDStr)
+    if err != nil {
+        c.Logger().Errorf("sso.portal_link: invalid tenant_id tenant_id_q=%s user_id=%s ip=%s ua=%s", tenIDStr, inTok.UserID.String(), ip, ua)
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+    }
+    // Optional: ensure admin acts within same tenant
+    if inTok.TenantID != tenID {
+        c.Logger().Errorf("sso.portal_link: forbidden (tenant mismatch) token_tenant=%s tenant_id_q=%s user_id=%s ip=%s ua=%s", inTok.TenantID.String(), tenIDStr, inTok.UserID.String(), ip, ua)
+        return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+    }
+    orgID := c.QueryParam("organization_id")
+    if orgID == "" {
+        c.Logger().Errorf("sso.portal_link: organization_id required tenant_id=%s user_id=%s ip=%s ua=%s", tenID.String(), inTok.UserID.String(), ip, ua)
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id required"})
+    }
+    intentStr := strings.TrimSpace(c.QueryParam("intent"))
+    if intentStr != "" {
+        if _, ok := allowedSSOOrganizationPortalIntents[intentStr]; !ok {
+            c.Logger().Errorf("sso.portal_link: unsupported intent tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua)
+            return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported intent"})
+        }
+    }
+    c.Logger().Infof("sso.portal_link: generating tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua)
+    link, err := h.sso.OrganizationPortalLinkGenerator(c.Request().Context(), domain.SSOOrganizationPortalLinkGeneratorInput{Provider: p, OrganizationID: orgID, TenantID: tenID, Intent: intentStr})
+    if err != nil {
+        c.Logger().Errorf("sso.portal_link: generation failed tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s err=%v", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua, err)
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    c.Logger().Infof("sso.portal_link: success tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua)
+    return c.JSON(http.StatusOK, link)
 }
 
 // ---- MFA: TOTP ----
