@@ -188,8 +188,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.12.0'
-          cache: 'pnpm'
-          cache-dependency-path: ui/pnpm-lock.yaml
+          # Note: do not enable 'cache: pnpm' here because it invokes pnpm
+          # before we activate it via Corepack, causing a 'pnpm not found' error.
 
       - name: Enable Corepack
         run: corepack enable
