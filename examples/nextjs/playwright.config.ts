@@ -12,16 +12,16 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://localhost:3002',
     trace: 'retain-on-failure',
   },
   reporter: 'list',
   webServer: {
     command: 'npm run dev',
-    port: 3001,
+    port: 3002,
     reuseExistingServer: false,
     env: {
-      PORT: '3001',
+      PORT: '3002',
       ENABLE_TEST_ROUTES: 'true',
       NEXT_TELEMETRY_DISABLE: '1',
       // GUARD_BASE_URL and GUARD_TENANT_ID are read by Next from .env.local
