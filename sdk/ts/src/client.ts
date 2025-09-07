@@ -13,6 +13,7 @@ export interface GuardClientOptions {
   fetchImpl?: FetchLike;
   storage?: TokenStorage;
   defaultHeaders?: Record<string, string>;
+  authMode?: 'bearer' | 'cookie';
 }
 
 // OpenAPI component schema aliases
@@ -33,6 +34,39 @@ export function isMfaChallengeResp(data: unknown): data is MfaChallengeResp {
 }
 type MfaVerifyReq = OpenAPIComponents['schemas']['controller.mfaVerifyReq'];
 type RefreshReq = OpenAPIComponents['schemas']['controller.refreshReq'];
+
+// RBAC v2 (admin) OpenAPI schema aliases
+type RbacPermissionsResp = OpenAPIComponents['schemas']['controller.rbacPermissionsResp'];
+type RbacRolesResp = OpenAPIComponents['schemas']['controller.rbacRolesResp'];
+type RbacRoleItem = OpenAPIComponents['schemas']['controller.rbacRoleItem'];
+type RbacCreateRoleReq = OpenAPIComponents['schemas']['controller.rbacCreateRoleReq'];
+type RbacUpdateRoleReq = OpenAPIComponents['schemas']['controller.rbacUpdateRoleReq'];
+type RbacRolePermissionReq = OpenAPIComponents['schemas']['controller.rbacRolePermissionReq'];
+type RbacUserRolesResp = OpenAPIComponents['schemas']['controller.rbacUserRolesResp'];
+type RbacModifyUserRoleReq = OpenAPIComponents['schemas']['controller.rbacModifyUserRoleReq'];
+type RbacResolvedPermissionsResp = OpenAPIComponents['schemas']['controller.rbacResolvedPermissionsResp'];
+
+// FGA (admin) DTOs (controller uses snake_case JSON)
+export type FgaGroup = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+};
+export type FgaGroupsResp = { groups: FgaGroup[] };
+export type FgaAclTuple = {
+  id: string;
+  tenant_id: string;
+  subject_type: string;
+  subject_id: string;
+  permission_key?: string;
+  object_type: string;
+  object_id?: string | null;
+  created_by?: string | null;
+  created_at: string;
+};
 
 // Minimal response types for tenant discovery
 export interface TenantSummary { id: string; name?: string }
@@ -114,12 +148,15 @@ export class GuardClient {
     this.tenantId = opts.tenantId;
     this.storage = opts.storage ?? new InMemoryStorage();
 
+    const mode = opts.authMode ?? 'bearer';
     const authHeaderInterceptor: RequestInterceptor = async (input: RequestInfo | URL, init: RequestInit) => {
       const headers = new Headers(init.headers || {});
-      // Attach Authorization if present
-      const token = await Promise.resolve(this.storage.getAccessToken());
-      if (token && !headers.has('authorization')) {
-        headers.set('authorization', `Bearer ${token}`);
+      if (mode === 'bearer') {
+        // Attach Authorization if present
+        const token = await Promise.resolve(this.storage.getAccessToken());
+        if (token && !headers.has('authorization')) {
+          headers.set('authorization', `Bearer ${token}`);
+        }
       }
       return [input, { ...init, headers }];
     };
@@ -134,6 +171,7 @@ export class GuardClient {
       clientHeader,
       defaultHeaders,
       interceptors: { request: [authHeaderInterceptor] },
+      credentials: mode === 'cookie' ? 'include' : undefined,
     } as TransportOptions);
   }
 
@@ -381,5 +419,144 @@ export class GuardClient {
       intent: params.intent,
     });
     return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+  }
+
+  // ==============================
+  // RBAC v2 (Admin-only endpoints)
+  // ==============================
+
+  // RBAC: List all permissions (admin-only)
+  async rbacListPermissions(): Promise<ResponseWrapper<RbacPermissionsResp>> {
+    return this.request<RbacPermissionsResp>('/v1/auth/admin/rbac/permissions', { method: 'GET' });
+  }
+
+  // RBAC: List roles for a tenant
+  async rbacListRoles(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<RbacRolesResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacRolesResp>(`/v1/auth/admin/rbac/roles${qs}`, { method: 'GET' });
+  }
+
+  // RBAC: Create role
+  async rbacCreateRole(body: Omit<RbacCreateRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<RbacRoleItem>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacCreateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacCreateRoleReq;
+    return this.request<RbacRoleItem>('/v1/auth/admin/rbac/roles', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Update role
+  async rbacUpdateRole(id: string, body: Omit<RbacUpdateRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<RbacRoleItem>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacUpdateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacUpdateRoleReq;
+    return this.request<RbacRoleItem>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Delete role
+  async rbacDeleteRole(id: string, params: { tenant_id?: string } = {}): Promise<ResponseWrapper<unknown>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+  }
+
+  // RBAC: List user roles
+  async rbacListUserRoles(userId: string, params: { tenant_id?: string } = {}): Promise<ResponseWrapper<RbacUserRolesResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacUserRolesResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles${qs}`, { method: 'GET' });
+  }
+
+  // RBAC: Add user role
+  async rbacAddUserRole(userId: string, body: Omit<RbacModifyUserRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
+    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Remove user role
+  async rbacRemoveUserRole(userId: string, body: Omit<RbacModifyUserRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
+    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Upsert role permission
+  async rbacUpsertRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  // RBAC: Delete role permission
+  async rbacDeleteRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'DELETE', body: JSON.stringify(body) });
+  }
+
+  // RBAC: Resolve user permissions
+  async rbacResolveUserPermissions(userId: string, params: { tenant_id?: string }): Promise<ResponseWrapper<RbacResolvedPermissionsResp>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacResolvedPermissionsResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/permissions/resolve${qs}`, { method: 'GET' });
+  }
+
+  // ==============================
+  // FGA (Admin-only endpoints)
+  // ==============================
+
+  // Groups: list
+  async fgaListGroups(params: { tenant_id?: string }): Promise<ResponseWrapper<FgaGroupsResp>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<FgaGroupsResp>(`/v1/auth/admin/fga/groups${qs}`, { method: 'GET' });
+  }
+
+  // Groups: create
+  async fgaCreateGroup(body: { tenant_id?: string; name: string; description?: string | null }): Promise<ResponseWrapper<FgaGroup>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { tenant_id: tenant, name: body.name, description: body?.description ?? null } as any;
+    return this.request<FgaGroup>(`/v1/auth/admin/fga/groups`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // Groups: delete
+  async fgaDeleteGroup(id: string, params: { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+  }
+
+  // Group membership: add
+  async fgaAddGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
+    const payload = { user_id: body.user_id } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'POST', body: JSON.stringify(payload) });
+    }
+
+  // Group membership: remove
+  async fgaRemoveGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
+    const payload = { user_id: body.user_id } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // ACL tuples: create
+  async fgaCreateAclTuple(body: { tenant_id?: string; subject_type: string; subject_id: string; permission_key: string; object_type: string; object_id?: string | null; created_by?: string | null }): Promise<ResponseWrapper<FgaAclTuple>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { ...body, tenant_id: tenant } as any;
+    return this.request<FgaAclTuple>(`/v1/auth/admin/fga/acl/tuples`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // ACL tuples: delete
+  async fgaDeleteAclTuple(body: { tenant_id?: string; subject_type: string; subject_id: string; permission_key: string; object_type: string; object_id?: string | null }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { ...body, tenant_id: tenant } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
   }
 }

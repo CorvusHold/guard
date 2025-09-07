@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getClient } from "@/lib/sdk";
-import { ensureRuntimeConfigFromQuery } from "@/lib/runtime";
+import { ensureRuntimeConfigFromQuery, getRuntimeConfig } from "@/lib/runtime";
+import RolesPanel from "./rbac/RolesPanel";
+import RolePermissionsPanel from "./rbac/RolePermissionsPanel";
+import UserRolesPanel from "./rbac/UserRolesPanel";
+import PermissionsViewer from "./rbac/PermissionsViewer";
+import UsersPanel from "./users/UsersPanel";
+import MySessionsPanel from "./users/MySessionsPanel";
+import GroupsPanel from "./fga/GroupsPanel";
+import GroupMembersPanel from "./fga/GroupMembersPanel";
+import ACLPanel from "./fga/ACLPanel";
 
 interface SettingsForm {
   sso_provider: string;
@@ -27,6 +36,7 @@ const INTENTS = [
 
 export default function AdminSettings() {
   const [tenantId, setTenantId] = useState("");
+  const [fgaGroupId, setFgaGroupId] = useState("");
   const [loading, setLoading] = useState<"load" | "save" | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -117,7 +127,30 @@ export default function AdminSettings() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-start p-6">
       <div className="w-full max-w-3xl space-y-6">
-        <h1 className="text-xl font-semibold">Admin Settings</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Admin Settings</h1>
+          <Button
+            variant="secondary"
+            data-testid="admin-logout"
+            onClick={async () => {
+              try {
+                const c = getClient();
+                await c.logout();
+              } catch (_) {}
+              // Proactively clear local bearer tokens if present
+              try {
+                const cfg = getRuntimeConfig();
+                if (cfg?.auth_mode === 'bearer') {
+                  localStorage.removeItem('guard_ui:guard_access_token');
+                  localStorage.removeItem('guard_ui:guard_refresh_token');
+                }
+              } catch (_) {}
+              window.location.href = "/";
+            }}
+          >
+            Logout
+          </Button>
+        </div>
 
         <div className="rounded-xl border p-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
@@ -274,6 +307,64 @@ export default function AdminSettings() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-3">
+          <h2 className="text-base font-medium">Users Management</h2>
+          <div className="text-sm text-muted-foreground">List users for this tenant, update names, and block/unblock accounts.</div>
+          {!tenantId ? (
+            <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage users.</div>
+          ) : (
+            <UsersPanel tenantId={tenantId} />
+          )}
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-3">
+          <h2 className="text-base font-medium">My Sessions</h2>
+          <div className="text-sm text-muted-foreground">View and revoke your active sessions for the current tenant.</div>
+          <MySessionsPanel />
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-4">
+          <h2 className="text-base font-medium">FGA (Groups & ACL)</h2>
+          <div className="space-y-6">
+            {!tenantId ? (
+              <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage groups and ACL.</div>
+            ) : (
+              <>
+                <GroupsPanel tenantId={tenantId} />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Manage Group Members</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input
+                      data-testid="fga-members-group-id"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      placeholder="Group ID"
+                      value={fgaGroupId}
+                      onChange={(e) => setFgaGroupId(e.target.value)}
+                    />
+                  </div>
+                  {fgaGroupId ? (
+                    <GroupMembersPanel groupId={fgaGroupId} />
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Enter a Group ID to add/remove members.</div>
+                  )}
+                </div>
+                <ACLPanel tenantId={tenantId} />
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-4">
+          <h2 className="text-base font-medium">RBAC</h2>
+          <div className="text-sm text-muted-foreground">Manage roles and permissions for the tenant.</div>
+          <div className="space-y-6">
+            <PermissionsViewer />
+            <RolesPanel tenantId={tenantId} />
+            <RolePermissionsPanel tenantId={tenantId} />
+            <UserRolesPanel tenantId={tenantId} />
+          </div>
         </div>
       </div>
     </div>
