@@ -202,6 +202,14 @@ jobs:
       - name: Prepare pnpm 9
         run: corepack prepare pnpm@9 --activate
 
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('ui/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
       - name: Install dependencies
         working-directory: ui
         run: pnpm install
@@ -220,7 +228,7 @@ jobs:
 
   ui-e2e:
     name: UI E2E (Playwright)
-    needs: changes
+    needs: [changes, ui-verify]
     if: needs.changes.outputs.ui == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
