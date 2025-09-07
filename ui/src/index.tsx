@@ -3,6 +3,8 @@ import './global.css'
 import App from '@/components/App'
 import SSOCallback from '@/components/auth/Callback'
 import AdminSettings from '@/components/admin/Settings'
+import { AuthProvider, RequireAuth } from '@/lib/auth'
+import { TenantProvider } from '@/lib/tenant'
 
 const container = document.getElementById('root') as HTMLDivElement
 const root = createRoot(container)
@@ -12,7 +14,17 @@ let element: React.ReactNode = <App />
 if (path.startsWith('/auth/callback')) {
   element = <SSOCallback />
 } else if (path.startsWith('/admin')) {
-  element = <AdminSettings />
+  element = (
+    <RequireAuth>
+      <AdminSettings />
+    </RequireAuth>
+  )
 }
 
-root.render(element)
+root.render(
+  <TenantProvider>
+    <AuthProvider>
+      {element}
+    </AuthProvider>
+  </TenantProvider>
+)

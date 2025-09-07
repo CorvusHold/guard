@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getClient } from "@/lib/sdk";
 import { ensureRuntimeConfigFromQuery, getRuntimeConfig } from "@/lib/runtime";
+import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import RolesPanel from "./rbac/RolesPanel";
 import RolePermissionsPanel from "./rbac/RolePermissionsPanel";
 import UserRolesPanel from "./rbac/UserRolesPanel";
@@ -36,7 +38,9 @@ const INTENTS = [
 ];
 
 export default function AdminSettings() {
-  const [tenantId, setTenantId] = useState("");
+  const { user } = useAuth();
+  const { tenantId, setTenantId } = useTenant();
+  const [activeTab, setActiveTab] = useState<"settings" | "users" | "account" | "fga" | "rbac">("settings");
   const [fgaGroupId, setFgaGroupId] = useState("");
   const [loading, setLoading] = useState<"load" | "save" | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +55,7 @@ export default function AdminSettings() {
   }, []);
 
   const canSave = useMemo(() => !!tenantId && !!form, [tenantId, form]);
+  const isAdmin = useMemo(() => Array.isArray((user as any)?.roles) && (user as any).roles.includes("admin"), [user]);
 
   async function loadSettings() {
     setError(null); setMessage(null); setPortalLink(null);
@@ -175,12 +180,30 @@ export default function AdminSettings() {
           )}
         </div>
 
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-base font-medium">Tenant SSO Settings</h2>
-          {!form ? (
-            <div className="text-sm text-muted-foreground">Load settings to view and edit.</div>
-          ) : (
-            <div className="space-y-3">
+        {/* Tabs */}
+        <div className="rounded-xl border p-2">
+          <div className="flex flex-wrap gap-2 p-1">
+            <Button variant={activeTab === 'settings' ? 'default' : 'secondary'} size="sm" onClick={() => setActiveTab('settings')} data-testid="tab-settings">Settings</Button>
+            {isAdmin && (
+              <Button variant={activeTab === 'users' ? 'default' : 'secondary'} size="sm" onClick={() => setActiveTab('users')} data-testid="tab-users">Users</Button>
+            )}
+            <Button variant={activeTab === 'account' ? 'default' : 'secondary'} size="sm" onClick={() => setActiveTab('account')} data-testid="tab-account">My Account</Button>
+            {isAdmin && (
+              <Button variant={activeTab === 'fga' ? 'default' : 'secondary'} size="sm" onClick={() => setActiveTab('fga')} data-testid="tab-fga">FGA</Button>
+            )}
+            {isAdmin && (
+              <Button variant={activeTab === 'rbac' ? 'default' : 'secondary'} size="sm" onClick={() => setActiveTab('rbac')} data-testid="tab-rbac">RBAC</Button>
+            )}
+          </div>
+        </div>
+
+        {activeTab === 'settings' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">Tenant SSO Settings</h2>
+            {!form ? (
+              <div className="text-sm text-muted-foreground">Load settings to view and edit.</div>
+            ) : (
+              <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium">SSO Provider</label>
@@ -267,112 +290,123 @@ export default function AdminSettings() {
           )}
         </div>
 
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-base font-medium">WorkOS Admin Portal</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium">Organization ID</label>
-              <input
-                data-testid="admin-portal-org-input"
-                className="w-full rounded-md border px-3 py-2 text-sm"
-                placeholder="org_123"
-                value={portalOrg}
-                onChange={(e) => setPortalOrg(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Intent</label>
-              <select
-                data-testid="admin-portal-intent-select"
-                className="w-full rounded-md border px-3 py-2 text-sm"
-                value={portalIntent}
-                onChange={(e) => setPortalIntent(e.target.value)}
-              >
-                {INTENTS.map((it) => (
-                  <option key={it} value={it}>{it}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end">
-              <Button data-testid="admin-generate-portal-link" disabled={loading !== null} onClick={generatePortalLink}>
-                {loading === "portal" ? "Generating..." : "Generate Link"}
-              </Button>
-            </div>
-          </div>
-          {portalLink && (
-            <div className="rounded-md border p-3 text-sm">
-              <div className="font-medium">Portal Link</div>
-              <div className="break-all" data-testid="admin-portal-link-output">{portalLink}</div>
-              <div className="pt-2">
-                <Button variant="secondary" onClick={() => window.open(portalLink, "_blank", "noopener,noreferrer")}>Open</Button>
+        {activeTab === 'settings' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">WorkOS Admin Portal</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium">Organization ID</label>
+                <input
+                  data-testid="admin-portal-org-input"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  placeholder="org_123"
+                  value={portalOrg}
+                  onChange={(e) => setPortalOrg(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Intent</label>
+                <select
+                  data-testid="admin-portal-intent-select"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  value={portalIntent}
+                  onChange={(e) => setPortalIntent(e.target.value)}
+                >
+                  {INTENTS.map((it) => (
+                    <option key={it} value={it}>{it}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button data-testid="admin-generate-portal-link" disabled={loading !== null} onClick={generatePortalLink}>
+                  {loading === "portal" ? "Generating..." : "Generate Link"}
+                </Button>
               </div>
             </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-base font-medium">Users Management</h2>
-          <div className="text-sm text-muted-foreground">List users for this tenant, update names, and block/unblock accounts.</div>
-          {!tenantId ? (
-            <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage users.</div>
-          ) : (
-            <UsersPanel tenantId={tenantId} />
-          )}
-        </div>
-
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-base font-medium">My Sessions</h2>
-          <div className="text-sm text-muted-foreground">View and revoke your active sessions for the current tenant.</div>
-          <MySessionsPanel />
-        </div>
-
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-base font-medium">My MFA</h2>
-          <div className="text-sm text-muted-foreground">Enroll and manage TOTP and backup codes.</div>
-          <MyMfaPanel />
-        </div>
-
-        <div className="rounded-xl border p-4 space-y-4">
-          <h2 className="text-base font-medium">FGA (Groups & ACL)</h2>
-          <div className="space-y-6">
-            {!tenantId ? (
-              <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage groups and ACL.</div>
-            ) : (
-              <>
-                <GroupsPanel tenantId={tenantId} />
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">Manage Group Members</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <input
-                      data-testid="fga-members-group-id"
-                      className="w-full rounded-md border px-3 py-2 text-sm"
-                      placeholder="Group ID"
-                      value={fgaGroupId}
-                      onChange={(e) => setFgaGroupId(e.target.value)}
-                    />
-                  </div>
-                  {fgaGroupId ? (
-                    <GroupMembersPanel groupId={fgaGroupId} />
-                  ) : (
-                    <div className="text-sm text-muted-foreground">Enter a Group ID to add/remove members.</div>
-                  )}
+            {portalLink && (
+              <div className="rounded-md border p-3 text-sm">
+                <div className="font-medium">Portal Link</div>
+                <div className="break-all" data-testid="admin-portal-link-output">{portalLink}</div>
+                <div className="pt-2">
+                  <Button variant="secondary" onClick={() => window.open(portalLink, "_blank", "noopener,noreferrer")}>Open</Button>
                 </div>
-                <ACLPanel tenantId={tenantId} />
-              </>
+              </div>
             )}
           </div>
-        </div>
+        )}
 
-        <div className="rounded-xl border p-4 space-y-4">
-          <h2 className="text-base font-medium">RBAC</h2>
-          <div className="text-sm text-muted-foreground">Manage roles and permissions for the tenant.</div>
-          <div className="space-y-6">
-            <PermissionsViewer />
-            <RolesPanel tenantId={tenantId} />
-            <RolePermissionsPanel tenantId={tenantId} />
-            <UserRolesPanel tenantId={tenantId} />
+        {activeTab === 'users' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">Users Management</h2>
+            <div className="text-sm text-muted-foreground">List users for this tenant, update names, and block/unblock accounts.</div>
+            {!tenantId ? (
+              <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage users.</div>
+            ) : (
+              <UsersPanel tenantId={tenantId} />
+            )}
           </div>
-        </div>
+        )}
+
+        {activeTab === 'account' && (
+          <>
+            <div className="rounded-xl border p-4 space-y-3">
+              <h2 className="text-base font-medium">My Sessions</h2>
+              <div className="text-sm text-muted-foreground">View and revoke your active sessions for the current tenant.</div>
+              <MySessionsPanel />
+            </div>
+            <div className="rounded-xl border p-4 space-y-3">
+              <h2 className="text-base font-medium">My MFA</h2>
+              <div className="text-sm text-muted-foreground">Enroll and manage TOTP and backup codes.</div>
+              <MyMfaPanel />
+            </div>
+          </>
+        )}
+
+        {activeTab === 'fga' && (
+          <div className="rounded-xl border p-4 space-y-4">
+            <h2 className="text-base font-medium">FGA (Groups & ACL)</h2>
+            <div className="space-y-6">
+              {!tenantId ? (
+                <div className="text-sm text-muted-foreground">Enter a tenant ID above and click Load to manage groups and ACL.</div>
+              ) : (
+                <>
+                  <GroupsPanel tenantId={tenantId} />
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Manage Group Members</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        data-testid="fga-members-group-id"
+                        className="w-full rounded-md border px-3 py-2 text-sm"
+                        placeholder="Group ID"
+                        value={fgaGroupId}
+                        onChange={(e) => setFgaGroupId(e.target.value)}
+                      />
+                    </div>
+                    {fgaGroupId ? (
+                      <GroupMembersPanel groupId={fgaGroupId} />
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Enter a Group ID to add/remove members.</div>
+                    )}
+                  </div>
+                  <ACLPanel tenantId={tenantId} />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'rbac' && (
+          <div className="rounded-xl border p-4 space-y-4">
+            <h2 className="text-base font-medium">RBAC</h2>
+            <div className="text-sm text-muted-foreground">Manage roles and permissions for the tenant.</div>
+            <div className="space-y-6">
+              <PermissionsViewer />
+              <RolesPanel tenantId={tenantId} />
+              <RolePermissionsPanel tenantId={tenantId} />
+              <UserRolesPanel tenantId={tenantId} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
