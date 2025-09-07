@@ -46,6 +46,7 @@ jobs:
     outputs:
       rbac: ${{ steps.filter.outputs.rbac }}
       fga: ${{ steps.filter.outputs.fga }}
+      ui: ${{ steps.filter.outputs.ui }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,6 +77,10 @@ jobs:
               - 'go.mod'
               - 'go.sum'
               - 'Makefile'
+              - '.github/workflows/ci.yml'
+            ui:
+              - 'ui/**'
+              - 'sdk/ts/**'
               - '.github/workflows/ci.yml'
 
   rbac-admin:
@@ -177,8 +182,10 @@ jobs:
         run: |
           make test-e2e
 
-  ui-e2e:
-    name: UI E2E (Playwright)
+  ui-verify:
+    name: UI Verify (lint/typecheck/unit)
+    needs: changes
+    if: needs.changes.outputs.ui == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -187,7 +194,43 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.12.x'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare pnpm 9
+        run: corepack prepare pnpm@9 --activate
+
+      - name: Install dependencies
+        working-directory: ui
+        run: pnpm install
+
+      - name: Typecheck
+        working-directory: ui
+        run: pnpm run typecheck
+
+      - name: Lint
+        working-directory: ui
+        run: pnpm run lint
+
+      - name: Unit tests
+        working-directory: ui
+        run: pnpm run test -- --reporter=verbose
+
+  ui-e2e:
+    name: UI E2E (Playwright)
+    needs: changes
+    if: needs.changes.outputs.ui == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.x'
           # Note: do not enable 'cache: pnpm' here because it invokes pnpm
           # before we activate it via Corepack, causing a 'pnpm not found' error.
 
