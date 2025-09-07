@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
+import { useToast } from '@/lib/toast';
 
 interface GroupsPanelProps {
   tenantId: string;
@@ -20,6 +21,7 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [groups, setGroups] = useState<FgaGroup[]>([]);
+  const { show } = useToast();
 
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -36,11 +38,14 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
       if (res.meta.status >= 200 && res.meta.status < 300) {
         const list = (res.data as any)?.groups ?? [];
         setGroups(list as FgaGroup[]);
+        show({ variant: 'success', title: 'Groups refreshed' });
       } else {
         setError('Failed to load groups');
+        show({ variant: 'error', title: 'Failed to load groups' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally {
       setLoading(false);
     }
@@ -56,9 +61,11 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
       await c.fgaCreateGroup({ tenant_id: tenantId, name: newName.trim(), description: newDesc.trim() || null });
       setNewName(''); setNewDesc('');
       setMessage('Group created');
+      show({ variant: 'success', title: 'Group created' });
       await load();
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Create failed', description: e?.message || String(e) });
     }
   }
 
@@ -66,11 +73,14 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
     setMessage(null); setError(null);
     try {
       const c = getClient();
+      if (!window.confirm('Delete this group?')) return;
       await c.fgaDeleteGroup(id, { tenant_id: tenantId });
       setMessage('Group deleted');
+      show({ variant: 'success', title: 'Group deleted' });
       await load();
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Delete failed', description: e?.message || String(e) });
     }
   }
 

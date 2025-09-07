@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
+import { useToast } from '@/lib/toast';
 
 interface GroupMembersPanelProps {
   groupId: string;
@@ -11,6 +12,7 @@ export default function GroupMembersPanel({ groupId }: GroupMembersPanelProps): 
   const [loading, setLoading] = useState<'add' | 'remove' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
 
   async function onAdd() {
     setMessage(null); setError(null);
@@ -21,11 +23,14 @@ export default function GroupMembersPanel({ groupId }: GroupMembersPanelProps): 
       const res = await c.fgaAddGroupMember(groupId, { user_id: userId });
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setMessage('Member added');
+        show({ variant: 'success', title: 'Member added' });
       } else {
         setError('Failed to add member');
+        show({ variant: 'error', title: 'Add failed' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally {
       setLoading(null);
     }
@@ -40,11 +45,14 @@ export default function GroupMembersPanel({ groupId }: GroupMembersPanelProps): 
       const res = await c.fgaRemoveGroupMember(groupId, { user_id: userId });
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setMessage('Member removed');
+        show({ variant: 'success', title: 'Member removed' });
       } else {
         setError('Failed to remove member');
+        show({ variant: 'error', title: 'Remove failed' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally {
       setLoading(null);
     }

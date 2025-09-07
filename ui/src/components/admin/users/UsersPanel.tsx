@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
+import { useToast } from '@/lib/toast';
+import { Modal } from '@/components/ui/modal';
 
 interface UsersPanelProps {
   tenantId: string;
@@ -22,6 +24,10 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const { show } = useToast();
+  const [editing, setEditing] = useState<AdminUserItem | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   const canLoad = useMemo(() => !!tenantId, [tenantId]);
 
@@ -35,11 +41,14 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
       if (res.meta.status >= 200 && res.meta.status < 300) {
         const list = (res.data as any)?.users ?? [];
         setUsers(list as AdminUserItem[]);
+        show({ variant: 'success', title: 'Users refreshed' });
       } else {
         setError('Failed to load users');
+        show({ variant: 'error', title: 'Failed to load users' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally {
       setLoading(false);
     }
@@ -53,27 +62,36 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
       const c = getClient();
       if (u.is_active) {
         await c.blockUser(u.id);
+        show({ variant: 'success', title: 'User blocked' });
       } else {
         await c.unblockUser(u.id);
+        show({ variant: 'success', title: 'User unblocked' });
       }
       await load();
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Action failed', description: e?.message || String(e) });
     }
   }
 
-  async function onEditNames(u: AdminUserItem) {
-    const first = prompt('First name', u.first_name ?? '');
-    if (first === null) return;
-    const last = prompt('Last name', u.last_name ?? '');
-    if (last === null) return;
+  function openEdit(u: AdminUserItem) {
+    setEditing(u);
+    setFirstName(u.first_name || '');
+    setLastName(u.last_name || '');
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
     setError(null);
     try {
       const c = getClient();
-      await c.updateUserNames(u.id, { first_name: first, last_name: last });
+      await c.updateUserNames(editing.id, { first_name: firstName, last_name: lastName });
+      show({ variant: 'success', title: 'Names updated' });
+      setEditing(null);
       await load();
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Update failed', description: e?.message || String(e) });
     }
   }
 
@@ -122,7 +140,7 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
                   <td className="py-2 pr-3">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '-'}</td>
                   <td className="py-2 pr-3">
                     <div className="flex gap-2">
-                      <Button data-testid={`users-edit-${u.id}`} variant="secondary" size="sm" onClick={() => onEditNames(u)}>Edit</Button>
+                      <Button data-testid={`users-edit-${u.id}`} variant="secondary" size="sm" onClick={() => openEdit(u)}>Edit</Button>
                       <Button data-testid={`users-toggle-${u.id}`} variant={u.is_active ? 'destructive' : 'secondary'} size="sm" onClick={() => onToggleActive(u)}>
                         {u.is_active ? 'Block' : 'Unblock'}
                       </Button>
@@ -134,6 +152,22 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
           </table>
         </div>
       )}
+      <Modal open={!!editing} title="Edit Names" onClose={() => setEditing(null)}>
+        <div className="space-y-2">
+          <div>
+            <label className="block text-sm font-medium">First name</label>
+            <input className="w-full rounded-md border px-3 py-2 text-sm" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Last name</label>
+            <input className="w-full rounded-md border px-3 py-2 text-sm" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          </div>
+          <div className="pt-2 text-right">
+            <Button size="sm" variant="secondary" className="mr-2" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button size="sm" onClick={() => void saveEdit()}>Save</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
