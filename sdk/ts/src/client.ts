@@ -269,6 +269,27 @@ export class GuardClient {
     return this.request<UserProfile>('/v1/auth/me', { method: 'GET' });
   }
 
+  // --- MFA self-service ---
+  async mfaStartTotp(): Promise<ResponseWrapper<{ secret: string; otpauth_url: string }>> {
+    return this.request<{ secret: string; otpauth_url: string }>('/v1/auth/mfa/totp/start', { method: 'POST' });
+  }
+
+  async mfaActivateTotp(body: { code: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/mfa/totp/activate', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async mfaDisableTotp(): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/mfa/totp/disable', { method: 'POST' });
+  }
+
+  async mfaGenerateBackupCodes(body: { count?: number } = {}): Promise<ResponseWrapper<{ codes: string[] }>> {
+    return this.request<{ codes: string[] }>('/v1/auth/mfa/backup/generate', { method: 'POST', body: JSON.stringify({ count: body.count ?? 5 }) });
+  }
+
+  async mfaCountBackupCodes(): Promise<ResponseWrapper<{ count: number }>> {
+    return this.request<{ count: number }>('/v1/auth/mfa/backup/count', { method: 'GET' });
+  }
+
   // Tenants: Discover tenants for a given email (used by login tenant selection)
   async discoverTenants(params: { email: string }): Promise<ResponseWrapper<DiscoverTenantsResp>> {
     const qs = this.buildQuery({ email: params.email });

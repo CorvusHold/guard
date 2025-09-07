@@ -8,6 +8,7 @@ import UserRolesPanel from "./rbac/UserRolesPanel";
 import PermissionsViewer from "./rbac/PermissionsViewer";
 import UsersPanel from "./users/UsersPanel";
 import MySessionsPanel from "./users/MySessionsPanel";
+import MyMfaPanel from "./users/MyMfaPanel";
 import GroupsPanel from "./fga/GroupsPanel";
 import GroupMembersPanel from "./fga/GroupMembersPanel";
 import ACLPanel from "./fga/ACLPanel";
@@ -323,6 +324,12 @@ export default function AdminSettings() {
           <h2 className="text-base font-medium">My Sessions</h2>
           <div className="text-sm text-muted-foreground">View and revoke your active sessions for the current tenant.</div>
           <MySessionsPanel />
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-3">
+          <h2 className="text-base font-medium">My MFA</h2>
+          <div className="text-sm text-muted-foreground">Enroll and manage TOTP and backup codes.</div>
+          <MyMfaPanel />
         </div>
 
         <div className="rounded-xl border p-4 space-y-4">
