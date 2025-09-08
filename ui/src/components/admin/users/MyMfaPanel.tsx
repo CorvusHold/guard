@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
+import { useToast } from '@/lib/toast';
 
 export default function MyMfaPanel(): React.JSX.Element {
   const [loading, setLoading] = useState<'start' | 'activate' | 'disable' | 'generate' | 'count' | null>(null);
@@ -10,6 +11,7 @@ export default function MyMfaPanel(): React.JSX.Element {
   const [otpauth, setOtpauth] = useState<string | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [code, setCode] = useState('');
+  const { show } = useToast();
 
   async function startTotp() {
     setError(null); setMessage(null);
@@ -21,11 +23,14 @@ export default function MyMfaPanel(): React.JSX.Element {
         setSecret((res.data as any)?.secret || null);
         setOtpauth((res.data as any)?.otpauth_url || null);
         setMessage('TOTP secret generated');
+        show({ variant: 'success', title: 'TOTP secret generated' });
       } else {
         setError('Failed to start TOTP enrollment');
+        show({ variant: 'error', title: 'Failed to start TOTP' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally { setLoading(null); }
   }
 
@@ -37,11 +42,14 @@ export default function MyMfaPanel(): React.JSX.Element {
       const res = await c.mfaActivateTotp({ code });
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setMessage('TOTP activated');
+        show({ variant: 'success', title: 'TOTP activated' });
       } else {
         setError('Failed to activate TOTP');
+        show({ variant: 'error', title: 'Failed to activate TOTP' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally { setLoading(null); }
   }
 
@@ -53,11 +61,14 @@ export default function MyMfaPanel(): React.JSX.Element {
       const res = await c.mfaDisableTotp();
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setMessage('TOTP disabled');
+        show({ variant: 'success', title: 'TOTP disabled' });
       } else {
         setError('Failed to disable TOTP');
+        show({ variant: 'error', title: 'Failed to disable TOTP' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally { setLoading(null); }
   }
 
@@ -70,11 +81,14 @@ export default function MyMfaPanel(): React.JSX.Element {
       if (res.meta.status >= 200 && res.meta.status < 300) {
         const codes = (res.data as any)?.codes || [];
         setMessage(`Generated ${codes.length} codes`);
+        show({ variant: 'success', title: 'Backup codes generated', description: `${(res.data as any)?.codes?.length ?? 0} codes` });
       } else {
         setError('Failed to generate backup codes');
+        show({ variant: 'error', title: 'Failed to generate backup codes' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally { setLoading(null); }
   }
 
@@ -86,11 +100,14 @@ export default function MyMfaPanel(): React.JSX.Element {
       const res = await c.mfaCountBackupCodes();
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setCount((res.data as any)?.count ?? null);
+        show({ variant: 'success', title: 'Backup code count updated' });
       } else {
         setError('Failed to fetch backup count');
+        show({ variant: 'error', title: 'Failed to fetch backup count' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally { setLoading(null); }
   }
 

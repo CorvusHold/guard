@@ -29,8 +29,68 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     page.on('response', async (res) => { if (res.url().includes('/v1/')) console.log('RES', res.status(), res.url()); });
   });
 
+  test('FGA errors show banners and toasts', async ({ page }) => {
+    const TENANT = 'tenant_fga';
+
+    // Mock admin user for tab visibility
+    await page.route('**/v1/auth/me', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return;
+      return route.fulfill({ status: 200, body: JSON.stringify({ 
+        email: 'admin@example.com', 
+        first_name: 'Admin', 
+        last_name: 'User',
+        roles: ['admin']
+      }), headers: cors({ 'content-type': 'application/json' }) });
+    });
+
+    // Groups list -> 500
+    await page.route('**/v1/auth/admin/fga/groups?tenant_id=*', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return;
+      return route.fulfill({ status: 500, body: JSON.stringify({ message: 'server error' }), headers: cors({ 'content-type': 'application/json' }) });
+    });
+
+    await page.goto(`${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=fga`, { waitUntil: 'domcontentloaded' });
+    
+    // Wait for admin user to load and tabs to render
+    await page.waitForSelector('[data-testid="tab-fga"]', { timeout: 10000 });
+    
+    await page.getByTestId('admin-tenant-input').fill(TENANT);
+
+    // Trigger refresh and expect error banner
+    await page.getByTestId('fga-groups-refresh').click();
+    await expect(page.getByTestId('fga-groups-error')).toBeVisible();
+
+    // ACL create -> 400
+    await page.route('**/v1/auth/admin/fga/acl/tuples', async (route) => {
+      if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return;
+      const req = route.request();
+      if (req.method() === 'POST') {
+        return route.fulfill({ status: 400, body: JSON.stringify({ message: 'bad request' }), headers: cors({ 'content-type': 'application/json' }) });
+      }
+      return route.fallback();
+    });
+    await page.getByTestId('fga-acl-subject-type').selectOption('user');
+    await page.getByTestId('fga-acl-subject-id').fill('u_err');
+    await page.getByTestId('fga-acl-permission-key').fill('users.read');
+    await page.getByTestId('fga-acl-object-type').fill('tenant');
+    await page.getByTestId('fga-acl-object-id').fill(TENANT);
+    await page.getByTestId('fga-acl-create').click();
+    await expect(page.getByTestId('fga-acl-error')).toBeVisible();
+  });
+
   test('groups CRUD, membership add/remove, ACL create/delete', async ({ page }) => {
     const TENANT = 'tenant_fga';
+
+    // Mock admin user for tab visibility
+    await page.route('**/v1/auth/me', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return;
+      return route.fulfill({ status: 200, body: JSON.stringify({ 
+        email: 'admin@example.com', 
+        first_name: 'Admin', 
+        last_name: 'User',
+        roles: ['admin']
+      }), headers: cors({ 'content-type': 'application/json' }) });
+    });
 
     // Initial groups empty, then reflect created
     await page.route('**/v1/auth/admin/fga/groups?tenant_id=*', async (route) => {
@@ -92,6 +152,9 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     await page.goto(`${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=fga`, { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/+admin$/);
 
+    // Wait for admin user to load and tabs to render
+    await page.waitForSelector('[data-testid="tab-fga"]', { timeout: 10000 });
+
     // Enter tenant and load
     await page.getByTestId('admin-tenant-input').fill(TENANT);
 
@@ -141,9 +204,11 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
       return route.fulfill({ status: 204, headers: cors({}) });
     });
 
-    // Click delete button in table
+    // Click delete button in table, then confirm in modal
     const deleteButton = page.getByRole('button', { name: 'Delete' }).first();
     await deleteButton.click();
+    // Confirm modal delete
+    await page.getByRole('button', { name: 'Delete' }).last().click();
     await expect(page.getByTestId('fga-groups-empty')).toBeVisible({ timeout: 10000 });
   });
 });

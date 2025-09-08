@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
 import { useToast } from '@/lib/toast';
+import { Modal } from '@/components/ui/modal';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface GroupsPanelProps {
   tenantId: string;
@@ -22,6 +24,7 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
   const [error, setError] = useState<string | null>(null);
   const [groups, setGroups] = useState<FgaGroup[]>([]);
   const { show } = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -73,7 +76,7 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
     setMessage(null); setError(null);
     try {
       const c = getClient();
-      if (!window.confirm('Delete this group?')) return;
+      if (!id) return;
       await c.fgaDeleteGroup(id, { tenant_id: tenantId });
       setMessage('Group deleted');
       show({ variant: 'success', title: 'Group deleted' });
@@ -117,7 +120,28 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
         />
         <Button data-testid="fga-group-create" onClick={() => onCreate()} disabled={!newName.trim()}>Create</Button>
       </div>
-      {!groups.length && !loading ? (
+      {loading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="py-2 pr-3">Name</th>
+                <th className="py-2 pr-3">Description</th>
+                <th className="py-2 pr-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1,2,3].map((i) => (
+                <tr key={i} className="border-b last:border-b-0">
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-40" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-64" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-8 w-24" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : !groups.length ? (
         <div className="text-sm text-muted-foreground" data-testid="fga-groups-empty">No groups found.</div>
       ) : (
         <div className="overflow-x-auto">
@@ -135,7 +159,7 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
                   <td className="py-2 pr-3">{g.name}</td>
                   <td className="py-2 pr-3">{g.description || '-'}</td>
                   <td className="py-2 pr-3">
-                    <Button variant="destructive" size="sm" onClick={() => onDelete(g.id)}>Delete</Button>
+                    <Button variant="destructive" size="sm" onClick={() => setDeletingId(g.id)}>Delete</Button>
                   </td>
                 </tr>
               ))}
@@ -143,6 +167,15 @@ export default function GroupsPanel({ tenantId }: GroupsPanelProps): React.JSX.E
           </table>
         </div>
       )}
+      <Modal open={!!deletingId} title="Delete Group" onClose={() => setDeletingId(null)}>
+        <div className="space-y-2">
+          <div className="text-sm">Are you sure you want to delete this group?</div>
+          <div className="pt-2 text-right">
+            <Button size="sm" variant="secondary" className="mr-2" onClick={() => setDeletingId(null)}>Cancel</Button>
+            <Button size="sm" variant="destructive" onClick={() => { const id = deletingId!; setDeletingId(null); void onDelete(id); }}>Delete</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

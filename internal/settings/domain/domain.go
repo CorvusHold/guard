@@ -55,6 +55,11 @@ const (
     // Example: "https://app.example.com,https://staging.example.com"
     KeySSORedirectAllowlist = "sso.redirect_allowlist"
 
+    // Per-tenant CORS allowlist for browser apps calling the API.
+    // Comma-separated list of exact origins, e.g., "https://app.example.com,https://staging.example.com".
+    // This augments the global env CORS_ALLOWED_ORIGINS. Endpoints without a tenant context still rely on the global list.
+    KeyAppCORSAllowedOrigins = "app.cors_allowed_origins"
+
     // Rate limiting keys (per-endpoint). All are optional and support tenant overrides.
     // Windows use Go duration strings (e.g., "1m", "10s"). Limits are integers.
     KeyRLSignupLimit  = "auth.ratelimit.signup.limit"

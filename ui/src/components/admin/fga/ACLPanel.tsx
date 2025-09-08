@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
 import { useToast } from '@/lib/toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ACLPanelProps {
   tenantId: string;
@@ -81,6 +82,7 @@ export default function ACLPanel({ tenantId }: ACLPanelProps): React.JSX.Element
   return (
     <div className="space-y-3" data-testid="fga-acl">
       <h3 className="text-sm font-medium">ACL Tuples</h3>
+      {loading && <Skeleton className="h-4 w-full" />}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
         <select
           data-testid="fga-acl-subject-type"

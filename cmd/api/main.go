@@ -29,8 +29,12 @@ import (
 	_ "github.com/corvusHold/guard/docs" // side-effect import of generated docs
 	auth "github.com/corvusHold/guard/internal/auth"
 	settings "github.com/corvusHold/guard/internal/settings"
+	settdomain "github.com/corvusHold/guard/internal/settings/domain"
+	settrepo "github.com/corvusHold/guard/internal/settings/repository"
+	settsvc "github.com/corvusHold/guard/internal/settings/service"
 	echoSwagger "github.com/swaggo/echo-swagger"
 	pprof "net/http/pprof"
+	"github.com/google/uuid"
 )
 
 // @title           Guard CAS API
@@ -41,6 +45,95 @@ import (
 // @securityDefinitions.apikey BearerAuth
 // @in              header
 // @name            Authorization
+
+// dynamicTenantCORS configures CORS per request by checking:
+// 1) global env CORS_ALLOWED_ORIGINS
+// 2) per-tenant app.cors_allowed_origins (if tenant context is present)
+func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareFunc {
+    // normalize global origins
+    glob := make([]string, 0, len(cfg.CORSAllowedOrigins))
+    allowAny := false
+    for _, o := range cfg.CORSAllowedOrigins {
+        o = strings.TrimSpace(o)
+        if o == "" { continue }
+        if o == "*" { allowAny = true }
+        glob = append(glob, o)
+    }
+
+    allowMethods := strings.Join([]string{
+        http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions,
+    }, ", ")
+    allowHeaders := strings.Join([]string{
+        echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Guard-Client",
+    }, ", ")
+
+    return func(next echo.HandlerFunc) echo.HandlerFunc {
+        return func(c echo.Context) error {
+            req := c.Request()
+            origin := req.Header.Get(echo.HeaderOrigin)
+            if origin == "" {
+                return next(c)
+            }
+
+            // Helper to set CORS headers for a specific allowed origin
+            setHeaders := func() {
+                res := c.Response().Header()
+                res.Set(echo.HeaderVary, echo.HeaderOrigin)
+                res.Set(echo.HeaderAccessControlAllowOrigin, origin)
+                res.Set(echo.HeaderAccessControlAllowMethods, allowMethods)
+                res.Set(echo.HeaderAccessControlAllowHeaders, allowHeaders)
+                res.Set(echo.HeaderAccessControlAllowCredentials, "true")
+            }
+
+            // 1) Allow any/global match first
+            allowed := allowAny
+            if !allowed {
+                for _, o := range glob {
+                    if origin == o { allowed = true; break }
+                }
+            }
+
+            // 2) If not globally allowed, attempt per-tenant lookup
+            if !allowed {
+                if tid := resolveTenantID(c); tid != nil {
+                    if val, err := s.GetString(c.Request().Context(), settdomain.KeyAppCORSAllowedOrigins, tid, ""); err == nil && val != "" {
+                        for _, p := range strings.Split(val, ",") {
+                            if strings.TrimSpace(p) == origin { allowed = true; break }
+                        }
+                    }
+                }
+            }
+
+            if allowed {
+                setHeaders()
+                if req.Method == http.MethodOptions {
+                    return c.NoContent(http.StatusNoContent)
+                }
+            }
+            return next(c)
+        }
+    }
+}
+
+// resolveTenantID tries to find a tenant UUID from query or route params.
+func resolveTenantID(c echo.Context) *uuid.UUID {
+    // Common: ?tenant_id=
+    if v := strings.TrimSpace(c.QueryParam("tenant_id")); v != "" {
+        if id, err := uuid.Parse(v); err == nil { return &id }
+    }
+    // Route param patterns used in this API
+    // e.g. /v1/tenants/:id/settings
+    if strings.HasPrefix(c.Path(), "/v1/tenants/") {
+        if v := strings.TrimSpace(c.Param("id")); v != "" {
+            if id, err := uuid.Parse(v); err == nil { return &id }
+        }
+        if v := strings.TrimSpace(c.Param("tenant_id")); v != "" {
+            if id, err := uuid.Parse(v); err == nil { return &id }
+        }
+    }
+    // admin RBAC endpoints typically use tenant_id in query; nothing else to do
+    return nil
+}
 
 func main() {
 	_ = godotenv.Load()
@@ -132,17 +225,18 @@ func main() {
         }
     }
 
+	// Instantiate Settings service for dynamic CORS decisions
+	srepo := settrepo.New(pgPool)
+	sservice := settsvc.New(srepo)
+
 	// Middlewares
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Logger())
 	e.Use(httpmetrics.HTTPMiddleware())
 	e.Use(middleware.Secure())
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: cfg.CORSAllowedOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
-	}))
+	// Dynamic, per-tenant CORS (augments global env allowlist)
+	e.Use(dynamicTenantCORS(cfg, sservice))
 
 	// Validator
 	e.Validator = validation.New()

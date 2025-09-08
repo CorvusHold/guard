@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
+import { useToast } from '@/lib/toast';
 
 interface SessionItem {
   id: string;
@@ -15,6 +16,7 @@ export default function MySessionsPanel(): React.JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const { show } = useToast();
 
   async function load() {
     setError(null);
@@ -25,11 +27,14 @@ export default function MySessionsPanel(): React.JSX.Element {
       if (res.meta.status >= 200 && res.meta.status < 300) {
         const list = (res.data as any)?.sessions ?? [];
         setSessions(list as SessionItem[]);
+        show({ variant: 'success', title: 'Sessions refreshed' });
       } else {
         setError('Failed to load sessions');
+        show({ variant: 'error', title: 'Failed to load sessions' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     } finally {
       setLoading(false);
     }
@@ -44,11 +49,14 @@ export default function MySessionsPanel(): React.JSX.Element {
       const res = await c.revokeSession(id);
       if (res.meta.status === 204) {
         await load();
+        show({ variant: 'success', title: 'Session revoked' });
       } else {
         setError('Failed to revoke session');
+        show({ variant: 'error', title: 'Failed to revoke session' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      show({ variant: 'error', title: 'Error', description: e?.message || String(e) });
     }
   }
 

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/sdk';
 import { useToast } from '@/lib/toast';
 import { Modal } from '@/components/ui/modal';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UsersPanelProps {
   tenantId: string;
@@ -108,7 +109,34 @@ export default function UsersPanel({ tenantId }: UsersPanelProps): React.JSX.Ele
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700" data-testid="users-error">{error}</div>
       )}
-      {!users.length && !loading ? (
+      {loading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="py-2 pr-3">Name</th>
+                <th className="py-2 pr-3">Email Verified</th>
+                <th className="py-2 pr-3">Active</th>
+                <th className="py-2 pr-3">Roles</th>
+                <th className="py-2 pr-3">Last Login</th>
+                <th className="py-2 pr-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1,2,3].map((i) => (
+                <tr key={i} className="border-b last:border-b-0">
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-40" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-16" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-16" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-4 w-32" /></td>
+                  <td className="py-2 pr-3"><Skeleton className="h-8 w-28" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : !users.length ? (
         <div className="text-sm text-muted-foreground">No users found.</div>
       ) : (
         <div className="overflow-x-auto">

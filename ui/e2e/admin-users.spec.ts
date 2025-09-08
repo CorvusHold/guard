@@ -29,6 +29,34 @@ test.describe('Admin Users & Sessions', () => {
     page.on('response', async (res) => { if (res.url().includes('/v1/')) console.log('RES', res.status(), res.url()); });
   });
 
+  test('users and sessions errors show banners and toasts', async ({ page }) => {
+    const TENANT = 'tenant_users';
+
+    // Users list -> 500
+    await page.route('**/v1/auth/admin/users?tenant_id=*', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return;
+      return route.fulfill({ status: 500, body: JSON.stringify({ message: 'server error' }), headers: cors({ 'content-type': 'application/json' }) });
+    });
+    // Sessions list -> 500
+    await page.route('**/v1/auth/sessions', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return;
+      return route.fulfill({ status: 500, headers: cors({}) });
+    });
+
+    await page.goto(`${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=users`, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('admin-tenant-input').fill(TENANT);
+
+    // Trigger users refresh -> expect error banner and toast text
+    await page.getByTestId('users-refresh').click();
+    await expect(page.getByTestId('users-error')).toBeVisible();
+    await expect(page.getByText(/Failed to load users/i)).toBeVisible();
+
+    // Navigate to My Account tab and verify sessions error path shows toast/banner
+    await page.getByTestId('tab-account').click();
+    await expect(page.getByText(/My Sessions/i)).toBeVisible();
+    await expect(page.getByText(/Failed to load sessions/i)).toBeVisible();
+  });
+
   test('users list, edit names, block/unblock; my sessions list/revoke', async ({ page }) => {
     const TENANT = 'tenant_users';
 
@@ -108,14 +136,11 @@ test.describe('Admin Users & Sessions', () => {
     await page.getByTestId('users-refresh').click();
     await expect(page.getByTestId('users-item-u_1')).toBeVisible({ timeout: 10000 });
 
-    // Edit names -> prompts: simulate via page.evaluate to stub prompt
-    await page.addInitScript(() => {
-      // @ts-ignore
-      window.__prompts = ['A2', 'One2'];
-      // @ts-ignore
-      window.prompt = (msg, def) => (window.__prompts || []).shift() ?? def ?? '';
-    });
+    // Edit names via modal
     await page.getByTestId('users-edit-u_1').click();
+    await page.getByLabel('First name').fill('A2');
+    await page.getByLabel('Last name').fill('One2');
+    await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByTestId('users-item-u_1')).toContainText('A2 One2', { timeout: 10000 });
 
     // Block

@@ -57,6 +57,46 @@ export default function AdminSettings() {
   const canSave = useMemo(() => !!tenantId && !!form, [tenantId, form]);
   const isAdmin = useMemo(() => Array.isArray((user as any)?.roles) && (user as any).roles.includes("admin"), [user]);
 
+  // --- Tab hash persistence (#tab=<name>) ---
+  useEffect(() => {
+    const applyFromHash = () => {
+      try {
+        const hash = window.location.hash || '';
+        const m = hash.match(/tab=([a-z]+)/i);
+        const val = (m?.[1] || '').toLowerCase();
+        const allowed = ['settings','users','account','fga','rbac'];
+        if (allowed.includes(val)) {
+          setActiveTab(val as typeof activeTab);
+        }
+      } catch {}
+    };
+    // If no hash-provided tab, allow ?source=<tab> to set initial tab
+    try {
+      if (!window.location.hash || !window.location.hash.includes('tab=')) {
+        const params = new URLSearchParams(window.location.search);
+        const src = (params.get('source') || '').toLowerCase();
+        const allowed = ['settings','users','account','fga','rbac'];
+        if (allowed.includes(src)) {
+          setActiveTab(src as typeof activeTab);
+        }
+      }
+    } catch {}
+    applyFromHash();
+    window.addEventListener('hashchange', applyFromHash);
+    return () => window.removeEventListener('hashchange', applyFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      const cur = `#tab=${activeTab}`;
+      const hasTabHash = typeof window !== 'undefined' && window.location.hash.includes('tab=');
+      if (hasTabHash && window.location.hash !== cur) {
+        window.location.hash = cur;
+      }
+    } catch {}
+  }, [activeTab]);
+
   async function loadSettings() {
     setError(null); setMessage(null); setPortalLink(null);
     if (!tenantId) { setError("tenant_id is required"); return; }
@@ -204,134 +244,134 @@ export default function AdminSettings() {
               <div className="text-sm text-muted-foreground">Load settings to view and edit.</div>
             ) : (
               <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">SSO Provider</label>
-                  <select
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.sso_provider}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), sso_provider: e.target.value })}
-                  >
-                    <option value="">(none)</option>
-                    <option value="dev">dev</option>
-                    <option value="workos">workos</option>
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium">SSO Provider</label>
+                    <select
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.sso_provider}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), sso_provider: e.target.value })}
+                    >
+                      <option value="">(none)</option>
+                      <option value="dev">dev</option>
+                      <option value="workos">workos</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">WorkOS Client ID</label>
+                    <input
+                      data-testid="admin-workos-client-id"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.workos_client_id}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), workos_client_id: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">WorkOS Client Secret</label>
+                    <input
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      type="password"
+                      value={form.workos_client_secret || ""}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), workos_client_secret: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">WorkOS API Key</label>
+                    <input
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      type="password"
+                      value={form.workos_api_key || ""}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), workos_api_key: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Default Connection ID</label>
+                    <input
+                      data-testid="admin-workos-conn-id"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.workos_default_connection_id || ""}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), workos_default_connection_id: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Default Organization ID</label>
+                    <input
+                      data-testid="admin-workos-org-id"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.workos_default_organization_id || ""}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), workos_default_organization_id: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">State TTL (e.g. 10m)</label>
+                    <input
+                      data-testid="admin-sso-state-ttl"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.sso_state_ttl}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), sso_state_ttl: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Redirect Allowlist (comma-separated)</label>
+                    <input
+                      data-testid="admin-sso-redirect-allowlist"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={form.sso_redirect_allowlist}
+                      onChange={(e) => setForm({ ...(form as SettingsForm), sso_redirect_allowlist: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium">WorkOS Client ID</label>
-                  <input
-                    data-testid="admin-workos-client-id"
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.workos_client_id}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), workos_client_id: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">WorkOS Client Secret</label>
-                  <input
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    type="password"
-                    value={form.workos_client_secret || ""}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), workos_client_secret: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">WorkOS API Key</label>
-                  <input
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    type="password"
-                    value={form.workos_api_key || ""}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), workos_api_key: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Default Connection ID</label>
-                  <input
-                    data-testid="admin-workos-conn-id"
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.workos_default_connection_id || ""}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), workos_default_connection_id: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Default Organization ID</label>
-                  <input
-                    data-testid="admin-workos-org-id"
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.workos_default_organization_id || ""}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), workos_default_organization_id: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">State TTL (e.g. 10m)</label>
-                  <input
-                    data-testid="admin-sso-state-ttl"
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.sso_state_ttl}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), sso_state_ttl: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Redirect Allowlist (comma-separated)</label>
-                  <input
-                    data-testid="admin-sso-redirect-allowlist"
-                    className="w-full rounded-md border px-3 py-2 text-sm"
-                    value={form.sso_redirect_allowlist}
-                    onChange={(e) => setForm({ ...(form as SettingsForm), sso_redirect_allowlist: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button data-testid="admin-save-settings" disabled={!canSave || loading !== null} onClick={saveSettings}>
-                  {loading === "save" ? "Saving..." : "Save Settings"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {activeTab === 'settings' && (
-          <div className="rounded-xl border p-4 space-y-3">
-            <h2 className="text-base font-medium">WorkOS Admin Portal</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Organization ID</label>
-                <input
-                  data-testid="admin-portal-org-input"
-                  className="w-full rounded-md border px-3 py-2 text-sm"
-                  placeholder="org_123"
-                  value={portalOrg}
-                  onChange={(e) => setPortalOrg(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Intent</label>
-                <select
-                  data-testid="admin-portal-intent-select"
-                  className="w-full rounded-md border px-3 py-2 text-sm"
-                  value={portalIntent}
-                  onChange={(e) => setPortalIntent(e.target.value)}
-                >
-                  {INTENTS.map((it) => (
-                    <option key={it} value={it}>{it}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <Button data-testid="admin-generate-portal-link" disabled={loading !== null} onClick={generatePortalLink}>
-                  {loading === "portal" ? "Generating..." : "Generate Link"}
-                </Button>
-              </div>
-            </div>
-            {portalLink && (
-              <div className="rounded-md border p-3 text-sm">
-                <div className="font-medium">Portal Link</div>
-                <div className="break-all" data-testid="admin-portal-link-output">{portalLink}</div>
-                <div className="pt-2">
-                  <Button variant="secondary" onClick={() => window.open(portalLink, "_blank", "noopener,noreferrer")}>Open</Button>
+                <div className="flex gap-2">
+                  <Button data-testid="admin-save-settings" disabled={!canSave || loading !== null} onClick={saveSettings}>
+                    {loading === "save" ? "Saving..." : "Save Settings"}
+                  </Button>
                 </div>
               </div>
             )}
+
+            {/* WorkOS Admin Portal (within settings tab) */}
+            <div className="rounded-xl border p-4 space-y-3 mt-4">
+              <h2 className="text-base font-medium">WorkOS Admin Portal</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium">Organization ID</label>
+                  <input
+                    data-testid="admin-portal-org-input"
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="org_123"
+                    value={portalOrg}
+                    onChange={(e) => setPortalOrg(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Intent</label>
+                  <select
+                    data-testid="admin-portal-intent-select"
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    value={portalIntent}
+                    onChange={(e) => setPortalIntent(e.target.value)}
+                  >
+                    {INTENTS.map((it) => (
+                      <option key={it} value={it}>{it}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button data-testid="admin-generate-portal-link" disabled={loading !== null} onClick={generatePortalLink}>
+                    {loading === "portal" ? "Generating..." : "Generate Link"}
+                  </Button>
+                </div>
+              </div>
+              {portalLink && (
+                <div className="rounded-md border p-3 text-sm">
+                  <div className="font-medium">Portal Link</div>
+                  <div className="break-all" data-testid="admin-portal-link-output">{portalLink}</div>
+                  <div className="pt-2">
+                    <Button variant="secondary" onClick={() => window.open(portalLink, "_blank", "noopener,noreferrer")}>Open</Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -9,6 +9,7 @@ export interface TransportOptions {
   interceptors?: Interceptors;
   clientHeader?: string; // e.g., "ts-sdk/<version>"
   defaultHeaders?: Record<string, string>;
+  credentials?: RequestCredentials; // e.g., 'include' for cookie-based auth
 }
 
 export class HttpClient {
@@ -17,6 +18,7 @@ export class HttpClient {
   private readonly interceptors?: Interceptors;
   private readonly clientHeader?: string;
   private readonly defaultHeaders: Record<string, string>;
+  private readonly credentials?: RequestCredentials;
 
   constructor(opts: TransportOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
@@ -27,6 +29,7 @@ export class HttpClient {
     this.interceptors = opts.interceptors;
     this.clientHeader = opts.clientHeader ?? 'ts-sdk';
     this.defaultHeaders = { ...(opts.defaultHeaders ?? {}) };
+    this.credentials = opts.credentials;
   }
 
   private buildUrl(path: string): string {
@@ -52,6 +55,9 @@ export class HttpClient {
     }
 
     const reqInit: RequestInit = { ...init, headers };
+    if (!('credentials' in reqInit) && this.credentials) {
+      reqInit.credentials = this.credentials;
+    }
     const [finalUrl, finalInit] = await applyRequestInterceptors(url, reqInit, this.interceptors?.request as any);
 
     const res = await this.fetchImpl(finalUrl, finalInit);
@@ -114,6 +120,9 @@ export class HttpClient {
     }
 
     const reqInit: RequestInit = { ...init, headers };
+    if (!('credentials' in reqInit) && this.credentials) {
+      reqInit.credentials = this.credentials;
+    }
     const [finalUrl, finalInit] = await applyRequestInterceptors(url, reqInit, this.interceptors?.request as any);
 
     const res = await this.fetchImpl(finalUrl, finalInit);

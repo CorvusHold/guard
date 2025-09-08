@@ -4,29 +4,23 @@ import App from './App'
 
 describe('<App />', () => {
   it('should render the App', () => {
-    const { container } = render(<App />)
+    render(<App />)
 
+    // Heading
     expect(
       screen.getByRole('heading', {
-        name: /Welcome!/i,
+        name: /Configure Guard/i,
         level: 1
       })
     ).toBeInTheDocument()
 
-    expect(
-      screen.getByText(
-        /This is a boilerplate build with Vite, React 18, TypeScript, Vitest, Testing Library, TailwindCSS 3, Eslint and Prettier./i
-      )
-    ).toBeInTheDocument()
+    // Base URL input and Auth Mode select present
+    expect(screen.getByTestId('base-url-input')).toBeInTheDocument()
+    expect(screen.getByTestId('auth-mode-select')).toBeInTheDocument()
 
-    expect(
-      screen.getByRole('link', {
-        name: /start building for free/i
-      })
-    ).toBeInTheDocument()
-
-    expect(screen.getByRole('img')).toBeInTheDocument()
-
-    expect(container.firstChild).toBeInTheDocument()
+    // Save button initially disabled (no base URL)
+    const saveBtn = screen.getByTestId('save-config') as HTMLButtonElement
+    expect(saveBtn).toBeInTheDocument()
+    expect(saveBtn.disabled).toBe(true)
   })
 })

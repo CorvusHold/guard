@@ -7,6 +7,7 @@ function App() {
   const [baseUrl, setBaseUrl] = useState("");
   const [configured, setConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [authMode, setAuthMode] = useState<'bearer' | 'cookie'>('bearer');
 
   useEffect(() => {
     // Attempt to persist config from query params (redirect flow)
@@ -14,6 +15,7 @@ function App() {
     const cfg = getRuntimeConfig();
     if (cfg) {
       setBaseUrl(cfg.guard_base_url);
+      setAuthMode(cfg.auth_mode || 'bearer');
       setConfigured(true);
     }
   }, []);
@@ -22,7 +24,7 @@ function App() {
     e.preventDefault();
     if (!baseUrl.trim()) return;
     setSaving(true);
-    setRuntimeConfig({ guard_base_url: baseUrl.trim(), source: "direct" });
+    setRuntimeConfig({ guard_base_url: baseUrl.trim(), source: "direct", auth_mode: authMode });
     setConfigured(true);
     setSaving(false);
   }
@@ -52,6 +54,18 @@ function App() {
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
             />
+            <div>
+              <label className="block text-sm font-medium">Auth Mode</label>
+              <select
+                data-testid="auth-mode-select"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={authMode}
+                onChange={(e) => setAuthMode((e.target.value as 'bearer' | 'cookie') || 'bearer')}
+              >
+                <option value="bearer">Bearer tokens (localStorage)</option>
+                <option value="cookie">HTTP-only cookies</option>
+              </select>
+            </div>
             <Button data-testid="save-config" type="submit" disabled={saving || !baseUrl.trim()}>
               {saving ? "Saving..." : "Save"}
             </Button>
@@ -69,6 +83,12 @@ function App() {
           <span>Configured Base URL:&nbsp;</span>
           <code data-testid="configured-base-url" className="rounded bg-secondary px-1 py-0.5">
             {baseUrl}
+          </code>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          <span>Auth Mode:&nbsp;</span>
+          <code data-testid="configured-auth-mode" className="rounded bg-secondary px-1 py-0.5">
+            {authMode}
           </code>
         </div>
         <div className="flex gap-2">

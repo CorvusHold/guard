@@ -1,6 +1,7 @@
 export type RuntimeConfig = {
   guard_base_url: string;
   source: string; // "redirect" | "direct" | other
+  auth_mode: 'bearer' | 'cookie';
 };
 
 const RUNTIME_KEY = "guard_runtime";
@@ -11,7 +12,8 @@ export function getRuntimeConfig(): RuntimeConfig | null {
     if (!raw) return null;
     const obj = JSON.parse(raw);
     if (typeof obj?.guard_base_url === "string" && obj.guard_base_url.length > 0) {
-      return { guard_base_url: obj.guard_base_url, source: String(obj.source || "") };
+      const mode = obj.auth_mode === 'cookie' ? 'cookie' : 'bearer';
+      return { guard_base_url: obj.guard_base_url, source: String(obj.source || ""), auth_mode: mode };
     }
   } catch (_) {
     // ignore
@@ -41,8 +43,10 @@ export function ensureRuntimeConfigFromQuery(): void {
   const base = usp.get("guard-base-url");
   if (!base) return;
   const source = usp.get("source") || "redirect";
+  const rawMode = (usp.get('auth-mode') || '').toLowerCase();
+  const mode: 'bearer' | 'cookie' = rawMode === 'cookie' ? 'cookie' : 'bearer';
   try {
-    setRuntimeConfig({ guard_base_url: base, source });
+    setRuntimeConfig({ guard_base_url: base, source, auth_mode: mode });
   } catch (_) {
     // invalid url -> ignore persistence
   }

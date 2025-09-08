@@ -5,6 +5,7 @@ import SSOCallback from '@/components/auth/Callback'
 import AdminSettings from '@/components/admin/Settings'
 import { AuthProvider, RequireAuth } from '@/lib/auth'
 import { TenantProvider } from '@/lib/tenant'
+import { ToastProvider } from '@/lib/toast'
 
 const container = document.getElementById('root') as HTMLDivElement
 const root = createRoot(container)
@@ -22,9 +23,11 @@ if (path.startsWith('/auth/callback')) {
 }
 
 root.render(
-  <TenantProvider>
-    <AuthProvider>
-      {element}
-    </AuthProvider>
-  </TenantProvider>
+  <ToastProvider>
+    <TenantProvider>
+      <AuthProvider>
+        {element}
+      </AuthProvider>
+    </TenantProvider>
+  </ToastProvider>
 )
