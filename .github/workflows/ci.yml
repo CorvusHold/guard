@@ -202,8 +202,10 @@ jobs:
         with:
           node-version: '22.12.x'
           cache: 'pnpm'
+          cache-dependency-path: 'ui/pnpm-lock.yaml'
 
       - name: Install dependencies
+        working-directory: ui
         run: pnpm install
 
 
@@ -239,15 +241,13 @@ jobs:
         with:
           node-version: '22.12.x'
           cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install
+          cache-dependency-path: 'ui/pnpm-lock.yaml'
 
       - name: Install dependencies
         working-directory: ui
         run: pnpm install
 
-      - name: Install Playwright browsers
+      - name: Install   Playwright browsers
         working-directory: ui
         run: pnpm exec playwright install --with-deps
 
