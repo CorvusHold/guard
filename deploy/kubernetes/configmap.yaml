@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guard-config
+  namespace: guard
+  labels:
+    app.kubernetes.io/name: guard
+    app.kubernetes.io/instance: guard
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: corvus-guard
+data:
+  # Database configuration
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "guard"
+  DB_USER: "guard_user"
+  DB_SSL_MODE: "require"
+  DB_MAX_OPEN_CONNS: "25"
+  DB_MAX_IDLE_CONNS: "5"
+  DB_CONN_MAX_LIFETIME: "300s"
+  DB_CONN_MAX_IDLE_TIME: "60s"
+  
+  # Redis configuration
+  REDIS_URL: "redis://redis-service:6379/0"
+  REDIS_MAX_RETRIES: "3"
+  REDIS_RETRY_DELAY: "100ms"
+  
+  # Server configuration
+  PORT: "8080"
+  HOST: "0.0.0.0"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LOG_OUTPUT: "stdout"
+  
+  # Security configuration
+  TLS_MIN_VERSION: "1.2"
+  SECURITY_HSTS_MAX_AGE: "31536000"
+  SECURITY_CONTENT_TYPE_NOSNIFF: "true"
+  SECURITY_FRAME_DENY: "true"
+  SECURITY_XSS_PROTECTION: "true"
+  
+  # CORS configuration
+  CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
+  CORS_ALLOWED_HEADERS: "Authorization,Content-Type,X-Tenant-ID"
+  CORS_MAX_AGE: "86400"
+  
+  # Rate limiting defaults
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_STORE: "redis"
+  
+  # Email configuration (defaults)
+  EMAIL_PROVIDER: "smtp"
+  EMAIL_SMTP_PORT: "587"
+  EMAIL_SMTP_FROM: "Guard <noreply@guard.example.com>"
+  
+  # Monitoring
+  METRICS_ENABLED: "true"
+  METRICS_PATH: "/metrics"
+  HEALTH_CHECK_PATH: "/health"
+  
+  # Feature flags
+  ENABLE_PPROF: "false"
+  DEBUG_MODE: "false"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guard-ui-config
+  namespace: guard
+  labels:
+    app.kubernetes.io/name: guard-ui
+    app.kubernetes.io/instance: guard
+    app.kubernetes.io/component: ui-config
+    app.kubernetes.io/part-of: corvus-guard
+data:
+  # UI configuration
+  NEXT_PUBLIC_GUARD_API_URL: "https://api.guard.example.com"
+  NEXT_PUBLIC_APP_NAME: "Corvus Guard"
+  NEXT_PUBLIC_APP_VERSION: "1.0.0"
+  
+  # Runtime configuration
+  runtime-config.json: |
+    {
+      "guard_base_url": "https://api.guard.example.com",
+      "app_name": "Corvus Guard",
+      "version": "1.0.0",
+      "features": {
+        "mfa_enabled": true,
+        "sso_enabled": true,
+        "rbac_enabled": true,
+        "fga_enabled": true
+      },
+      "ui": {
+        "theme": "light",
+        "logo_url": "/favicon.svg",
+        "support_email": "support@guard.example.com"
+      }
+    }

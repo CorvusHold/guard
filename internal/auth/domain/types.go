@@ -121,6 +121,10 @@ type Service interface {
 	// HasPermission checks whether user has a permission, optionally scoped to an object.
 	HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error)
 
+	// Email discovery methods
+	FindTenantsByUserEmail(ctx context.Context, email string) ([]TenantInfo, error)
+	GetUserByEmail(ctx context.Context, email, tenantID string) (*User, error)
+
     // --- FGA ---
     // Group management
     CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
@@ -263,6 +267,9 @@ type Repository interface {
 	ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]PermissionGrant, error)
 	ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]GroupPermissionGrant, error)
 
+	// Email discovery methods
+	FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]AuthIdentity, error)
+
     // --- FGA repository methods (groups, memberships, ACL tuples) ---
     // Groups
     CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
@@ -394,4 +401,10 @@ type GroupPermissionGrant struct {
 // ResolvedPermissions aggregates all grants for a user.
 type ResolvedPermissions struct {
 	Grants []PermissionGrant
+}
+
+// TenantInfo represents basic tenant information for discovery
+type TenantInfo struct {
+	ID   string
+	Name string
 }

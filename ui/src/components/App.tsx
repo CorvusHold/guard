@@ -1,38 +1,47 @@
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { ensureRuntimeConfigFromQuery, getRuntimeConfig, setRuntimeConfig, clearRuntimeConfig } from "@/lib/runtime";
-import Login from "@/components/auth/Login";
+import { useEffect, useState } from 'react'
+import Login from '@/components/auth/Login'
+import { Button } from '@/components/ui/button'
+import {
+  clearRuntimeConfig,
+  ensureRuntimeConfigFromQuery,
+  getRuntimeConfig,
+  setRuntimeConfig
+} from '@/lib/runtime'
 
 function App() {
-  const [baseUrl, setBaseUrl] = useState("");
-  const [configured, setConfigured] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [authMode, setAuthMode] = useState<'bearer' | 'cookie'>('bearer');
+  const [baseUrl, setBaseUrl] = useState('')
+  const [configured, setConfigured] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [authMode, setAuthMode] = useState<'bearer' | 'cookie'>('bearer')
 
   useEffect(() => {
     // Attempt to persist config from query params (redirect flow)
-    ensureRuntimeConfigFromQuery();
-    const cfg = getRuntimeConfig();
+    ensureRuntimeConfigFromQuery()
+    const cfg = getRuntimeConfig()
     if (cfg) {
-      setBaseUrl(cfg.guard_base_url);
-      setAuthMode(cfg.auth_mode || 'bearer');
-      setConfigured(true);
+      setBaseUrl(cfg.guard_base_url)
+      setAuthMode(cfg.auth_mode || 'bearer')
+      setConfigured(true)
     }
-  }, []);
+  }, [])
 
   function onSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!baseUrl.trim()) return;
-    setSaving(true);
-    setRuntimeConfig({ guard_base_url: baseUrl.trim(), source: "direct", auth_mode: authMode });
-    setConfigured(true);
-    setSaving(false);
+    e.preventDefault()
+    if (!baseUrl.trim()) return
+    setSaving(true)
+    setRuntimeConfig({
+      guard_base_url: baseUrl.trim(),
+      source: 'direct',
+      auth_mode: authMode
+    })
+    setConfigured(true)
+    setSaving(false)
   }
 
   function onReset() {
-    clearRuntimeConfig();
-    setConfigured(false);
-    setBaseUrl("");
+    clearRuntimeConfig()
+    setConfigured(false)
+    setBaseUrl('')
   }
 
   if (!configured) {
@@ -60,19 +69,27 @@ function App() {
                 data-testid="auth-mode-select"
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 value={authMode}
-                onChange={(e) => setAuthMode((e.target.value as 'bearer' | 'cookie') || 'bearer')}
+                onChange={(e) =>
+                  setAuthMode(
+                    (e.target.value as 'bearer' | 'cookie') || 'bearer'
+                  )
+                }
               >
                 <option value="bearer">Bearer tokens (localStorage)</option>
                 <option value="cookie">HTTP-only cookies</option>
               </select>
             </div>
-            <Button data-testid="save-config" type="submit" disabled={saving || !baseUrl.trim()}>
-              {saving ? "Saving..." : "Save"}
+            <Button
+              data-testid="save-config"
+              type="submit"
+              disabled={saving || !baseUrl.trim()}
+            >
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </form>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -81,25 +98,37 @@ function App() {
         <h1 className="text-xl font-semibold">Guard Admin</h1>
         <div className="text-sm text-muted-foreground">
           <span>Configured Base URL:&nbsp;</span>
-          <code data-testid="configured-base-url" className="rounded bg-secondary px-1 py-0.5">
+          <code
+            data-testid="configured-base-url"
+            className="rounded bg-secondary px-1 py-0.5"
+          >
             {baseUrl}
           </code>
         </div>
         <div className="text-sm text-muted-foreground">
           <span>Auth Mode:&nbsp;</span>
-          <code data-testid="configured-auth-mode" className="rounded bg-secondary px-1 py-0.5">
+          <code
+            data-testid="configured-auth-mode"
+            className="rounded bg-secondary px-1 py-0.5"
+          >
             {authMode}
           </code>
         </div>
         <div className="flex gap-2">
-          <Button data-testid="reset-config" variant="secondary" onClick={onReset}>Reset config</Button>
+          <Button
+            data-testid="reset-config"
+            variant="secondary"
+            onClick={onReset}
+          >
+            Reset config
+          </Button>
         </div>
       </div>
       <div className="mt-4">
         <Login />
       </div>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

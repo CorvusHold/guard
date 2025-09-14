@@ -45,6 +45,9 @@ func (f *fakeRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (domain.Us
 func (f *fakeRepo) GetAuthIdentitiesByUser(ctx context.Context, userID uuid.UUID) ([]domain.AuthIdentity, error) {
 	return nil, nil
 }
+func (f *fakeRepo) FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]domain.AuthIdentity, error) {
+	return nil, nil
+}
 func (f *fakeRepo) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles []string) error {
 	f.capturedUserID = userID
 	f.capturedRoles = append([]string{}, roles...)

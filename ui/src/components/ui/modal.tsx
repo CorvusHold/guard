@@ -1,13 +1,18 @@
-import { PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react'
 
 interface ModalProps {
-  open: boolean;
-  title?: string;
-  onClose: () => void;
+  open: boolean
+  title?: string
+  onClose: () => void
 }
 
-export function Modal({ open, title, onClose, children }: PropsWithChildren<ModalProps>): React.JSX.Element | null {
-  if (!open) return null;
+export function Modal({
+  open,
+  title,
+  onClose,
+  children
+}: PropsWithChildren<ModalProps>): React.JSX.Element | null {
+  if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -15,9 +20,14 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<Moda
         {title && <div className="text-base font-medium mb-2">{title}</div>}
         <div>{children}</div>
         <div className="mt-3 text-right">
-          <button className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm" onClick={onClose}>Close</button>
+          <button
+            className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm"
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
-  );
+  )
 }

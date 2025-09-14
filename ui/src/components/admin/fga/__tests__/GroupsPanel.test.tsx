@@ -1,28 +1,34 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import GroupsPanel from '../GroupsPanel';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import GroupsPanel from '../GroupsPanel'
 
-const listGroups = vi.fn().mockResolvedValue({ meta: { status: 200 }, data: { groups: [] } });
-const createGroup = vi.fn().mockResolvedValue({ meta: { status: 201 }, data: { id: 'g1' } });
+const listGroups = vi
+  .fn()
+  .mockResolvedValue({ meta: { status: 200 }, data: { groups: [] } })
+const createGroup = vi
+  .fn()
+  .mockResolvedValue({ meta: { status: 201 }, data: { id: 'g1' } })
 
 vi.mock('@/lib/sdk', () => ({
   getClient: () => ({ fgaListGroups: listGroups, fgaCreateGroup: createGroup })
-}));
+}))
 
-vi.mock('@/lib/toast', () => ({ useToast: () => ({ show: () => {} }) }));
+vi.mock('@/lib/toast', () => ({ useToast: () => ({ show: () => {} }) }))
 
 describe('GroupsPanel', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   it('renders and creates a group', async () => {
-    render(<GroupsPanel tenantId="t1" />);
-    await waitFor(() => expect(listGroups).toHaveBeenCalled());
+    render(<GroupsPanel tenantId="t1" />)
+    await waitFor(() => expect(listGroups).toHaveBeenCalled())
 
-    fireEvent.change(screen.getByTestId('fga-group-name'), { target: { value: 'team' } });
-    fireEvent.click(screen.getByTestId('fga-group-create'));
+    fireEvent.change(screen.getByTestId('fga-group-name'), {
+      target: { value: 'team' }
+    })
+    fireEvent.click(screen.getByTestId('fga-group-create'))
 
-    await waitFor(() => expect(createGroup).toHaveBeenCalled());
-  });
-});
+    await waitFor(() => expect(createGroup).toHaveBeenCalled())
+  })
+})

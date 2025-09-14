@@ -1,8 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import './global.css'
 import App from '@/components/App'
-import SSOCallback from '@/components/auth/Callback'
 import AdminSettings from '@/components/admin/Settings'
+import SSOCallback from '@/components/auth/Callback'
 import { AuthProvider, RequireAuth } from '@/lib/auth'
 import { TenantProvider } from '@/lib/tenant'
 import { ToastProvider } from '@/lib/toast'
@@ -25,9 +25,7 @@ if (path.startsWith('/auth/callback')) {
 root.render(
   <ToastProvider>
     <TenantProvider>
-      <AuthProvider>
-        {element}
-      </AuthProvider>
+      <AuthProvider>{element}</AuthProvider>
     </TenantProvider>
   </ToastProvider>
 )

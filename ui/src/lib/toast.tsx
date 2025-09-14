@@ -1,27 +1,43 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState
+} from 'react'
 
-export type ToastVariant = 'default' | 'success' | 'error';
-export interface ToastItem { id: string; title?: string; description?: string; variant?: ToastVariant; }
-
-interface ToastContextValue {
-  show: (t: Omit<ToastItem, 'id'>) => void;
+export type ToastVariant = 'default' | 'success' | 'error' | 'info'
+export interface ToastItem {
+  id: string
+  title?: string
+  description?: string
+  variant?: ToastVariant
 }
 
-const ToastCtx = createContext<ToastContextValue | null>(null);
+interface ToastContextValue {
+  show: (t: Omit<ToastItem, 'id'>) => void
+}
 
-export function ToastProvider({ children }: PropsWithChildren): React.JSX.Element {
-  const [items, setItems] = useState<ToastItem[]>([]);
+const ToastCtx = createContext<ToastContextValue | null>(null)
+
+export function ToastProvider({
+  children
+}: PropsWithChildren): React.JSX.Element {
+  const [items, setItems] = useState<ToastItem[]>([])
 
   const show = useCallback((t: Omit<ToastItem, 'id'>) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const it: ToastItem = { id, ...t };
-    setItems((prev) => [...prev, it]);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const it: ToastItem = { id, ...t }
+    setItems((prev) => [...prev, it])
     // Auto-dismiss after 3s
-    window.setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== id)), 3000);
-  }, []);
+    window.setTimeout(
+      () => setItems((prev) => prev.filter((x) => x.id !== id)),
+      3000
+    )
+  }, [])
 
-  const value = useMemo<ToastContextValue>(() => ({ show }), [show]);
+  const value = useMemo<ToastContextValue>(() => ({ show }), [show])
 
   return (
     <ToastCtx.Provider value={value}>
@@ -36,21 +52,25 @@ export function ToastProvider({ children }: PropsWithChildren): React.JSX.Elemen
               (t.variant === 'success'
                 ? 'border-green-200 bg-green-50 text-green-800'
                 : t.variant === 'error'
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-muted bg-background')
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : t.variant === 'info'
+                    ? 'border-blue-200 bg-blue-50 text-blue-800'
+                    : 'border-muted bg-background')
             }
           >
             {t.title && <div className="font-medium">{t.title}</div>}
-            {t.description && <div className="mt-0.5 opacity-90">{t.description}</div>}
+            {t.description && (
+              <div className="mt-0.5 opacity-90">{t.description}</div>
+            )}
           </div>
         ))}
       </div>
     </ToastCtx.Provider>
-  );
+  )
 }
 
 export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastCtx);
-  if (!ctx) throw new Error('useToast must be used within <ToastProvider>');
-  return ctx;
+  const ctx = useContext(ToastCtx)
+  if (!ctx) throw new Error('useToast must be used within <ToastProvider>')
+  return ctx
 }

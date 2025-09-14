@@ -29,8 +29,8 @@
   "devDependencies": {
     "@types/node": "^20.12.12",
     "@types/react": "^18.2.66",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.5",
+    "eslint": "9.35.0",
+    "eslint-config-next": "15.5.2",
     "typescript": "^5.5.4",
     "@playwright/test": "^1.45.0",
     "dotenv": "^16.4.5",
