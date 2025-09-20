@@ -13,31 +13,28 @@ async function seedTenantContext(page, id: string, name: string) {
 }
 
 async function seedGuardConfigFromQuery(page, baseUrl: string) {
-  // Ensure runtime config from query by visiting with ?guard-base-url=...
-  // Some parts of the app also read localStorage 'guard_config'. Set it too.
   await page.addInitScript((url) => {
     localStorage.setItem('guard_config', JSON.stringify({ guard_base_url: url }))
   }, baseUrl)
 }
 
-test.describe('Toast Provider integration', () => {
+test.describe('Toast Provider integration (error case)', () => {
   test('shows error toast on failed settings save with data-testid', async ({ page }) => {
-    await seedTenantContext(page, 'tenant_abc', 'Acme Inc')
+    await seedTenantContext(page, 'tenant_err', 'Error Inc')
     await seedGuardConfigFromQuery(page, 'http://localhost:4173')
 
     // Mock load settings
-    await page.route('**/v1/tenants/tenant_abc/settings', async route => {
+    await page.route('**/v1/tenants/tenant_err/settings', async route => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            sso_provider: '',
-            workos_client_id: '',
-            sso_state_ttl: '15m',
-            auth_access_token_ttl: '15m',
-            auth_refresh_token_ttl: '720h',
-            app_cors_allowed_origins: 'https://app.example.com'
+            settings: {
+              auth_access_token_ttl: '15m',
+              auth_refresh_token_ttl: '720h',
+              app_cors_allowed_origins: 'https://app.example.com'
+            }
           })
         })
       } else {
@@ -45,29 +42,26 @@ test.describe('Toast Provider integration', () => {
       }
     })
 
-    // Mock update to succeed (SDK uses PUT for updateTenantSettings)
-    await page.route('**/v1/tenants/tenant_abc/settings', async route => {
+    // Mock update to fail (PUT 500)
+    await page.route('**/v1/tenants/tenant_err/settings', async route => {
       if (route.request().method() === 'PUT') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) })
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'boom' }) })
       } else {
         await route.fallback()
       }
     })
 
-    await page.goto(`${UI_BASE}/admin/tenants/tenant_abc/settings?guard-base-url=${encodeURIComponent('http://localhost:4173')}`)
+    await page.goto(`${UI_BASE}/admin/tenants/tenant_err/settings?guard-base-url=${encodeURIComponent('http://localhost:4173')}`)
 
-    // Wait for settings panel to finish loading
     await expect(page.locator('[data-testid="settings-loading"]')).not.toBeVisible()
 
-    // Wait for security tab controls to be present (default tab)
+    // Trigger unsaved changes
     await expect(page.locator('[data-testid="access-token-ttl"]')).toBeVisible()
-
-    // Make a change to trigger unsaved changes banner
     await page.selectOption('[data-testid="access-token-ttl"]', '30m')
     await expect(page.locator('[data-testid="unsaved-changes"]')).toBeVisible()
 
-    // Attempt to save => should show success toast
+    // Save and expect error toast
     await page.click('[data-testid="save-settings"]')
-    await expect(page.getByTestId('settings-saved-toast')).toBeVisible()
+    await expect(page.getByTestId('settings-error-toast')).toBeVisible()
   })
 })

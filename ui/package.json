@@ -20,7 +20,7 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "lint": "eslint src --max-warnings=0",
+    "lint": "biome check src",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {

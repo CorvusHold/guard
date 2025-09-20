@@ -48,6 +48,18 @@ make sqlc
 make test
 ```
 
+### Testing Protocol (UI + Backend)
+
+See `docs/TEST_PROTOCOL.md` for the complete testing playbook, including:
+
+- Backend unit and integration tests (with `make test-integration`).
+- UI Playwright E2E, lint, and typecheck commands.
+- Deterministic selector/toast conventions and network mocking tips.
+
+### Agent Guide
+
+AI contributors should also read `docs/agents.md` for conventions on writing tests, using `data-testid` selectors, and keeping the default `go test ./...` run green.
+
 ### Integration/E2E tests (dockerized)
 
 Run all packages against the dedicated test stack (Postgres/Valkey/MailHog/API):

@@ -11,7 +11,7 @@ export RATE_LIMIT_RETRIES ?= 2
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
-        test-rbac-admin test-fga
+        test-rbac-admin test-fga test-integration
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up -d --remove-orphans
@@ -67,6 +67,11 @@ test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
 # Run only FGA authorization integration tests against the dockerized test stack
 test-fga: compose-up-test db-wait-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
+	make compose-down-test
+
+# Run Go integration tests (build tag 'integration') against dockerized test stack
+test-integration: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./...'
 	make compose-down-test
 
 lint:
