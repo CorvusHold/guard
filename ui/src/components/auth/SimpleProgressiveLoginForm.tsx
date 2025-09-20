@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react'
 import { useToast } from '@/lib/toast'
 import { getClient } from '@/lib/sdk'
+import { useTenant } from '@/lib/tenant'
 
 interface EmailDiscoveryResponse {
   found: boolean
@@ -33,6 +34,17 @@ export default function SimpleProgressiveLoginForm({
   const [loginLoading, setLoginLoading] = useState(false)
   const { show: showToast } = useToast()
   const passwordInputRef = useRef<HTMLInputElement>(null)
+  const { tenantId, setTenantId, tenantName } = useTenant()
+
+  // Hydrate tenant from URL if present
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search)
+      const tid = usp.get('tenant_id')
+      if (tid && !tenantId) setTenantId(tid)
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto-focus password input when step changes to password
   useEffect(() => {
@@ -67,27 +79,11 @@ export default function SimpleProgressiveLoginForm({
 
     try {
       const client = getClient()
-      const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null
-      
-      const headers: Record<string, string> = {}
-      if (tenantId) {
-        headers['X-Tenant-ID'] = tenantId
-      }
-
-      const response = await fetch('/v1/auth/email/discover', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers
-        },
-        body: JSON.stringify({ email: emailToCheck })
-      })
-
-      if (!response.ok) {
+      const res = await client.emailDiscover({ email: emailToCheck, tenant_id: tenantId || undefined })
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
         throw new Error('Failed to check email')
       }
-
-      const result: EmailDiscoveryResponse = await response.json()
+      const result: EmailDiscoveryResponse = res.data as any
       setDiscoveryResult(result)
 
       if (result.found && result.user_exists) {
@@ -95,8 +91,13 @@ export default function SimpleProgressiveLoginForm({
       } else {
         setStep('options')
       }
-    } catch (error) {
-      setEmailError('Failed to check email. Please try again.')
+    } catch (error: any) {
+      const msg = error?.message || ''
+      if (msg.includes('Guard base URL') || msg.toLowerCase().includes('not configured')) {
+        setEmailError('Guard configuration not found')
+      } else {
+        setEmailError('Failed to check email. Please try again.')
+      }
       console.error('Email discovery error:', error)
     } finally {
       setEmailDiscovering(false)
@@ -126,12 +127,12 @@ export default function SimpleProgressiveLoginForm({
 
     try {
       const client = getClient()
-      const tenantId = discoveryResult?.tenant_id || (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null)
+      const tid = discoveryResult?.tenant_id || tenantId
       
       const res = await client.passwordLogin({
         email: email.trim(),
         password: password.trim(),
-        tenant_id: tenantId || undefined
+        tenant_id: tid || undefined
       })
 
       if (res.meta.status >= 200 && res.meta.status < 300) {
@@ -163,21 +164,35 @@ export default function SimpleProgressiveLoginForm({
 
   const handleCreateTenant = () => {
     if (typeof window !== 'undefined') {
-      window.location.href = '/tenant/create'
+      const usp = new URLSearchParams()
+      if (email) usp.set('email', email)
+      // Derive a default org name from email domain (optional)
+      try {
+        const at = email.indexOf('@')
+        if (at > 0) {
+          const domain = email.slice(at + 1).split('.')?.[0] || ''
+          if (domain) usp.set('name', domain)
+        }
+      } catch {}
+      window.location.href = `/tenant/create?${usp.toString()}`
     }
   }
 
   const handleJoinOrganization = () => {
     showToast({
       title: 'Contact your organization',
-      description: 'Please contact your organization administrator to get access.',
+      description: 'Please contact your organization administrator for an invitation',
       variant: 'info'
     })
   }
 
   const handleCreateAccount = () => {
     if (typeof window !== 'undefined') {
-      window.location.href = '/signup'
+      const usp = new URLSearchParams()
+      if (email) usp.set('email', email)
+      const tid = discoveryResult?.tenant_id || tenantId
+      if (tid) usp.set('tenant_id', tid)
+      window.location.href = `/signup?${usp.toString()}`
     }
   }
 
@@ -192,7 +207,7 @@ export default function SimpleProgressiveLoginForm({
     <div data-testid="login-form" className="w-full max-w-md space-y-4">
       <div data-testid="status-live-region" aria-live="polite" className="sr-only">
         {step === 'email' && 'Enter your email address'}
-        {step === 'password' && 'Enter your password'}
+        {step === 'password' && 'Email verified. Please enter your password.'}
         {step === 'options' && 'Choose how to proceed'}
       </div>
 
@@ -200,7 +215,7 @@ export default function SimpleProgressiveLoginForm({
       {step === 'email' && (
         <form onSubmit={handleEmailSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">Email Address</Label>
             <Input
               id="email"
               data-testid="email-input"
@@ -208,7 +223,7 @@ export default function SimpleProgressiveLoginForm({
               value={email}
               onChange={handleEmailChange}
               placeholder="Enter your email"
-              aria-label="Email address"
+              aria-label="Email Address"
               disabled={emailDiscovering}
               required
             />
@@ -250,7 +265,7 @@ export default function SimpleProgressiveLoginForm({
           )}
           {discoveryResult.suggestions && discoveryResult.suggestions.length > 0 && (
             <div data-testid="multiple-orgs-info" className="text-sm text-blue-600">
-              You also have access to: {discoveryResult.suggestions.join(', ')}
+              Your email was found in multiple organizations. You also have access to: {discoveryResult.suggestions.join(', ')}
             </div>
           )}
           
@@ -328,7 +343,7 @@ export default function SimpleProgressiveLoginForm({
       {step === 'options' && discoveryResult && (
         <div className="space-y-4">
           <div data-testid="email-not-found" className="text-sm text-gray-600">
-            No account found for {email}
+            We couldn't find an account for {email}
           </div>
 
           {discoveryResult.suggestions && discoveryResult.suggestions.length > 0 && (
@@ -356,7 +371,7 @@ export default function SimpleProgressiveLoginForm({
                 onClick={handleCreateAccount}
                 className="w-full"
               >
-                Create Account in {discoveryResult.tenant_id}
+                Create Account in {discoveryResult.tenant_name || tenantName || discoveryResult.tenant_id}
               </Button>
             ) : (
               <>

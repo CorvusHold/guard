@@ -11,19 +11,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
 
-	"github.com/corvusHold/guard/internal/config"
 	adb "github.com/corvusHold/guard/internal/auth/domain"
 	arepo "github.com/corvusHold/guard/internal/auth/repository"
 	asvc "github.com/corvusHold/guard/internal/auth/service"
+	"github.com/corvusHold/guard/internal/config"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
-	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 	tdomain "github.com/corvusHold/guard/internal/tenants/domain"
+	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 	tsvc "github.com/corvusHold/guard/internal/tenants/service"
 )
 
@@ -265,8 +265,8 @@ func main() {
 
 		// Only print non-secret confirmations
 		printEnv(map[string]string{
-			"TENANT_ID": tenantID.String(),
-			"SSO_PROVIDER": "workos",
+			"TENANT_ID":            tenantID.String(),
+			"SSO_PROVIDER":         "workos",
 			"WORKOS_CLIENT_ID_SET": "true",
 		})
 		stderr("WorkOS SSO settings configured for tenant %s", tenantID)
@@ -425,8 +425,12 @@ func envOr(k, def string) string {
 
 func envOrBool(k string, def bool) bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(k)))
-	if v == "true" || v == "1" || v == "yes" { return true }
-	if v == "false" || v == "0" || v == "no" { return false }
+	if v == "true" || v == "1" || v == "yes" {
+		return true
+	}
+	if v == "false" || v == "0" || v == "no" {
+		return false
+	}
 	return def
 }
 

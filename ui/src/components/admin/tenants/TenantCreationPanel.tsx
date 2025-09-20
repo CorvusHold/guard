@@ -78,44 +78,23 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
       }
       const client = getClient()
 
-      // Step 1: Create tenant
-      const tenantResponse = await fetch(`${config.guard_base_url}/tenants`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken || ''}`
-        },
-        body: JSON.stringify({
-          name: form.tenantName.trim()
-        })
-      })
-
-      if (!tenantResponse.ok) {
-        const errorData = await tenantResponse.json()
-        throw new Error(errorData.error || 'Failed to create tenant')
+      // Step 1: Create tenant via SDK
+      const tRes = await client.createTenant({ name: form.tenantName.trim() })
+      if (!(tRes.meta.status >= 200 && tRes.meta.status < 300)) {
+        throw new Error('Failed to create tenant')
       }
+      const tenantId = (tRes.data as any).id as string
 
-      const tenant = await tenantResponse.json()
-      const tenantId = tenant.id
-
-      // Step 2: Create admin user via direct API call
-      const signupResponse = await fetch(`${config.guard_base_url}/v1/auth/password/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          email: form.adminEmail.trim(),
-          password: form.adminPassword,
-          first_name: form.adminFirstName.trim(),
-          last_name: form.adminLastName.trim()
-        })
+      // Step 2: Create admin user via SDK
+      const sRes = await client.passwordSignup({
+        tenant_id: tenantId,
+        email: form.adminEmail.trim(),
+        password: form.adminPassword,
+        first_name: form.adminFirstName.trim(),
+        last_name: form.adminLastName.trim()
       })
-
-      if (!signupResponse.ok) {
-        const errorData = await signupResponse.json()
-        throw new Error(errorData.error || 'Failed to create admin user')
+      if (!(sRes.meta.status >= 200 && sRes.meta.status < 300)) {
+        throw new Error('Failed to create admin user')
       }
 
       console.log('Tenant and admin user created successfully.')

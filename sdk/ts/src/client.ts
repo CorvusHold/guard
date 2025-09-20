@@ -165,13 +165,34 @@ export class GuardClient {
     // Tenancy today is via body/query. Header will be added later when server adopts it.
 
     const clientHeader = `ts-sdk/${(pkg as any).version ?? '0.0.0'}`;
+    // In cookie mode, sending credentials to a different origin requires specific CORS headers.
+    // To keep local dev/tests simple, only attach credentials when the API is same-origin.
+    let credentialsOpt: RequestCredentials | undefined = undefined;
+    if (mode === 'cookie') {
+      try {
+        if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
+          const api = new URL(opts.baseUrl);
+          const appOrigin = new URL(window.location.origin);
+          if (api.origin === appOrigin.origin) {
+            credentialsOpt = 'include';
+          }
+        } else {
+          // Non-browser contexts (SSR/node) can include credentials
+          credentialsOpt = 'include';
+        }
+      } catch (_) {
+        // If URL parsing fails, default to no credentials to avoid CORS issues
+        credentialsOpt = undefined;
+      }
+    }
+
     this.http = new HttpClient({
       baseUrl: opts.baseUrl,
       fetchImpl: opts.fetchImpl,
       clientHeader,
       defaultHeaders,
       interceptors: { request: [authHeaderInterceptor] },
-      credentials: mode === 'cookie' ? 'include' : undefined,
+      credentials: credentialsOpt,
     } as TransportOptions);
   }
 
@@ -269,6 +290,25 @@ export class GuardClient {
     return this.request<UserProfile>('/v1/auth/me', { method: 'GET' });
   }
 
+  // Auth: Email discovery (progressive login)
+  async emailDiscover(body: { email: string; tenant_id?: string }): Promise<ResponseWrapper<{
+    found: boolean;
+    has_tenant: boolean;
+    tenant_id?: string;
+    tenant_name?: string;
+    user_exists: boolean;
+    suggestions?: string[];
+  }>> {
+    const headers: Record<string, string> = {};
+    const tid = body.tenant_id ?? this.tenantId;
+    if (tid) headers['X-Tenant-ID'] = String(tid);
+    return this.request(`/v1/auth/email/discover`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: body.email })
+    });
+  }
+
   // --- MFA self-service ---
   async mfaStartTotp(): Promise<ResponseWrapper<{ secret: string; otpauth_url: string }>> {
     return this.request<{ secret: string; otpauth_url: string }>('/v1/auth/mfa/totp/start', { method: 'POST' });
@@ -294,6 +334,27 @@ export class GuardClient {
   async discoverTenants(params: { email: string }): Promise<ResponseWrapper<DiscoverTenantsResp>> {
     const qs = this.buildQuery({ email: params.email });
     return this.request<DiscoverTenantsResp>(`/v1/auth/tenants${qs}`, { method: 'GET' });
+  }
+
+  // Tenants: Create
+  async createTenant(body: { name: string }): Promise<ResponseWrapper<{ id: string; name: string; is_active?: boolean; created_at?: string; updated_at?: string }>> {
+    return this.request(`/tenants`, { method: 'POST', body: JSON.stringify({ name: body.name }) });
+  }
+
+  // Tenants: Get by ID
+  async getTenant(id: string): Promise<ResponseWrapper<{ id: string; name: string; is_active: boolean; created_at: string; updated_at: string }>> {
+    return this.request(`/tenants/${encodeURIComponent(id)}`, { method: 'GET' });
+  }
+
+  // Tenants: List (admin)
+  async listTenants(params: { q?: string; page?: number; page_size?: number; active?: number | boolean } = {}): Promise<ResponseWrapper<{ items: Array<{ id: string; name: string; is_active: boolean; created_at: string; updated_at: string }>; total: number; page: number; page_size: number; total_pages: number }>> {
+    const qs = this.buildQuery({
+      q: params.q,
+      page: params.page,
+      page_size: params.page_size,
+      active: typeof params.active === 'boolean' ? (params.active ? 1 : 0) : params.active
+    });
+    return this.request(`/tenants${qs}`, { method: 'GET' });
   }
 
   // Auth: Introspect token (from header or body)

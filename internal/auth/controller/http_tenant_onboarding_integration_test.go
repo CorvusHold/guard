@@ -2,7 +2,6 @@ package controller
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/corvushold/guard/internal/auth/domain"
-	"github.com/corvushold/guard/internal/tenants/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,16 +88,16 @@ func TestTenantOnboardingIntegration(t *testing.T) {
 
 		// Step 4: Configure tenant settings
 		settings := map[string]interface{}{
-			"auth_access_token_ttl":     "30m",
-			"auth_refresh_token_ttl":    "720h",
-			"app_cors_allowed_origins":  "https://app.testcompany.com,https://admin.testcompany.com",
-			"sso_provider":              "workos",
-			"sso_workos_client_id":      "client_test123",
-			"sso_workos_client_secret":  "wk_test_secret",
-			"email_provider":            "smtp",
-			"email_smtp_host":           "smtp.gmail.com",
-			"email_smtp_port":           "587",
-			"email_smtp_from":           "Test Company <noreply@testcompany.com>",
+			"auth_access_token_ttl":    "30m",
+			"auth_refresh_token_ttl":   "720h",
+			"app_cors_allowed_origins": "https://app.testcompany.com,https://admin.testcompany.com",
+			"sso_provider":             "workos",
+			"sso_workos_client_id":     "client_test123",
+			"sso_workos_client_secret": "wk_test_secret",
+			"email_provider":           "smtp",
+			"email_smtp_host":          "smtp.gmail.com",
+			"email_smtp_port":          "587",
+			"email_smtp_from":          "Test Company <noreply@testcompany.com>",
 		}
 
 		settingsBody, _ := json.Marshal(settings)
@@ -372,9 +369,9 @@ func TestTenantOnboardingIntegration(t *testing.T) {
 
 		// Configure tenant with specific auth settings
 		settings := map[string]interface{}{
-			"auth_access_token_ttl":  "5m",
-			"auth_refresh_token_ttl": "24h",
-			"auth_ratelimit_login_limit": "5",
+			"auth_access_token_ttl":       "5m",
+			"auth_refresh_token_ttl":      "24h",
+			"auth_ratelimit_login_limit":  "5",
 			"auth_ratelimit_login_window": "1m",
 		}
 

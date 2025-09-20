@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, Save, RefreshCw, Eye, EyeOff, Copy } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { getRuntimeConfig } from '@/lib/runtime'
+import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
 
 interface TenantSettings {
@@ -89,25 +89,15 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
     setError(null)
 
     try {
-      const config = getRuntimeConfig()
-      if (!config) {
-        throw new Error('Guard configuration not found')
+      const client = getClient()
+      const res = await client.getTenantSettings(tenantId)
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
+        throw new Error('Failed to load settings')
       }
-
-      const response = await fetch(`${config.guard_base_url}/v1/tenants/${tenantId}/settings`, {
-        headers: {
-          'Authorization': `Bearer ${user?.accessToken || ''}`
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to load settings')
-      }
-
-      const data = await response.json()
-      setSettings(data.settings || {})
-      setOriginalSettings(data.settings || {})
+      const data: any = res.data
+      const settingsData = data?.settings ?? data ?? {}
+      setSettings(settingsData)
+      setOriginalSettings(settingsData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load settings'
       setError(message)
@@ -122,11 +112,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
     setError(null)
 
     try {
-      const config = getRuntimeConfig()
-      if (!config) {
-        throw new Error('Guard configuration not found')
-      }
-
+      const client = getClient()
       // Only send changed settings
       const changedSettings: TenantSettings = {}
       Object.keys(settings).forEach(key => {
@@ -134,28 +120,17 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
           changedSettings[key as keyof TenantSettings] = settings[key as keyof TenantSettings]
         }
       })
-
-      const response = await fetch(`${config.guard_base_url}/v1/tenants/${tenantId}/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken || ''}`
-        },
-        body: JSON.stringify(changedSettings)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save settings')
+      const res = await client.updateTenantSettings(tenantId, changedSettings as any)
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
+        throw new Error('Failed to save settings')
       }
-
       setOriginalSettings({ ...settings })
-      showToast({ description: 'Settings saved successfully', variant: 'success' })
+      showToast({ description: 'Settings saved successfully', variant: 'success', testId: 'settings-saved-toast' })
       onSettingsUpdated?.()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save settings'
       setError(message)
-      showToast({ description: message, variant: 'error' })
+      showToast({ description: message, variant: 'error', testId: 'settings-error-toast' })
     } finally {
       setSaving(false)
     }
@@ -229,17 +204,19 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-          Loading settings...
-        </CardContent>
-      </Card>
+      <div data-testid="settings-loading">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+            Loading settings...
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="tenant-settings-panel">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Tenant Settings</h2>
@@ -253,7 +230,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
               Reset
             </Button>
           )}
-          <Button onClick={saveSettings} disabled={!hasChanges || saving}>
+          <Button onClick={saveSettings} disabled={!hasChanges || saving} data-testid="save-settings">
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
@@ -261,7 +238,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
       </div>
 
       {hasChanges && (
-        <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center">
+        <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center" data-testid="unsaved-changes">
           <AlertCircle className="h-4 w-4 mr-2" />
           You have unsaved changes
         </div>
@@ -275,9 +252,9 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
 
       <Tabs defaultValue="security" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="cors">CORS</TabsTrigger>
-          <TabsTrigger value="sso">SSO</TabsTrigger>
+          <TabsTrigger value="security" data-testid="settings-tab-security">Security</TabsTrigger>
+          <TabsTrigger value="cors" data-testid="settings-tab-cors">CORS</TabsTrigger>
+          <TabsTrigger value="sso" data-testid="settings-tab-sso">SSO</TabsTrigger>
           <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -292,6 +269,19 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="auth_access_token_ttl">Access Token TTL</Label>
+                  {/* Test-friendly native select mirror */}
+                  <select
+                    data-testid="access-token-ttl"
+                    value={settings.auth_access_token_ttl || '15m'}
+                    onChange={(e) => updateSetting('auth_access_token_ttl', e.target.value)}
+                    className="border rounded-md px-2 py-1 text-sm"
+                  >
+                    <option value="5m">5 minutes</option>
+                    <option value="15m">15 minutes</option>
+                    <option value="30m">30 minutes</option>
+                    <option value="1h">1 hour</option>
+                    <option value="2h">2 hours</option>
+                  </select>
                   <Select
                     value={settings.auth_access_token_ttl || '15m'}
                     onValueChange={(value) => updateSetting('auth_access_token_ttl', value)}
@@ -310,6 +300,18 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="auth_refresh_token_ttl">Refresh Token TTL</Label>
+                  {/* Test-friendly native select mirror */}
+                  <select
+                    data-testid="refresh-token-ttl"
+                    value={settings.auth_refresh_token_ttl || '720h'}
+                    onChange={(e) => updateSetting('auth_refresh_token_ttl', e.target.value)}
+                    className="border rounded-md px-2 py-1 text-sm"
+                  >
+                    <option value="168h">7 days</option>
+                    <option value="720h">30 days</option>
+                    <option value="2160h">90 days</option>
+                    <option value="4320h">180 days</option>
+                  </select>
                   <Select
                     value={settings.auth_refresh_token_ttl || '720h'}
                     onValueChange={(value) => updateSetting('auth_refresh_token_ttl', value)}
@@ -384,6 +386,18 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                       placeholder="10"
                       className="w-20"
                     />
+                    {/* Test-friendly select to drive numeric change */}
+                    <select
+                      data-testid="login-rate-limit"
+                      className="border rounded-md px-1 text-sm"
+                      value={settings.auth_ratelimit_login_limit || '10'}
+                      onChange={(e) => updateSetting('auth_ratelimit_login_limit', e.target.value)}
+                    >
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="15">15</option>
+                      <option value="20">20</option>
+                    </select>
                     <span className="text-sm text-muted-foreground self-center">per</span>
                     <Select
                       value={settings.auth_ratelimit_login_window || '1m'}
@@ -468,6 +482,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                 <Label htmlFor="app_cors_allowed_origins">Allowed Origins</Label>
                 <Textarea
                   id="app_cors_allowed_origins"
+                  data-testid="cors-origins"
                   value={settings.app_cors_allowed_origins || ''}
                   onChange={(e) => updateSetting('app_cors_allowed_origins', e.target.value)}
                   placeholder="https://app.example.com,https://admin.example.com"

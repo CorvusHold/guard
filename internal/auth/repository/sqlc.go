@@ -154,7 +154,7 @@ func mapUser(u db.User) domain.User {
     }
 }
 
-func New(pg *pgxpool.Pool) *SQLCRepository { return &SQLCRepository{q: db.New(pg)} }
+func New(pg *pgxpool.Pool) *SQLCRepository { return &SQLCRepository{q: db.New(pg), pool: pg} }
 
 func toPgUUID(u uuid.UUID) pgtype.UUID { return pgtype.UUID{Bytes: u, Valid: true} }
 func toPgText(s string) pgtype.Text   { return pgtype.Text{String: s, Valid: s != ""} }
@@ -595,31 +595,34 @@ func (r *SQLCRepository) ListACLPermissionKeysForGroups(ctx context.Context, ten
 
 // FindAuthIdentitiesByEmail finds all auth identities with the given email across all tenants
 func (r *SQLCRepository) FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]domain.AuthIdentity, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, tenant_id, email, password_hash 
-		FROM auth_identities 
-		WHERE email = $1
-	`, email)
+    if r.pool == nil {
+        return nil, errors.New("repository pool is nil")
+    }
+    rows, err := r.pool.Query(ctx, `
+        SELECT id, user_id, tenant_id, email, password_hash 
+        FROM auth_identities 
+        WHERE email = $1
+    `, email)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var identities []domain.AuthIdentity
-	for rows.Next() {
-		var identity domain.AuthIdentity
-		err := rows.Scan(
-			&identity.ID,
-			&identity.UserID,
-			&identity.TenantID,
-			&identity.Email,
-			&identity.PasswordHash,
-		)
-		if err != nil {
-			return nil, err
-		}
-		identities = append(identities, identity)
-	}
+    var identities []domain.AuthIdentity
+    for rows.Next() {
+        var identity domain.AuthIdentity
+        err := rows.Scan(
+            &identity.ID,
+            &identity.UserID,
+            &identity.TenantID,
+            &identity.Email,
+            &identity.PasswordHash,
+        )
+        if err != nil {
+            return nil, err
+        }
+        identities = append(identities, identity)
+    }
 
-	return identities, rows.Err()
+    return identities, rows.Err()
 }

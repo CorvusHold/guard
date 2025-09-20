@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Circle, ArrowRight, ArrowLeft, Copy, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { getRuntimeConfig } from '@/lib/runtime'
+import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
 
 interface OnboardingStep {
@@ -62,6 +63,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [attemptedNext, setAttemptedNext] = useState(false)
 
   const [steps, setSteps] = useState<OnboardingStep[]>([
     { id: 'tenant', title: 'Tenant Details', description: 'Basic tenant information', completed: false },
@@ -127,14 +129,17 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
       case 0:
         isValid = validateTenantStep()
         updateStepCompletion(0, isValid)
+        if (!isValid) setAttemptedNext(true)
         break
       case 1:
         isValid = validateAdminStep()
         updateStepCompletion(1, isValid)
+        if (!isValid) setAttemptedNext(true)
         break
       case 2:
         isValid = validateSettingsStep()
         updateStepCompletion(2, isValid)
+        if (!isValid) setAttemptedNext(true)
         break
       default:
         isValid = true
@@ -143,6 +148,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
     if (isValid && currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1)
       setError(null)
+      setAttemptedNext(false)
     } else if (!isValid) {
       setError('Please complete all required fields correctly')
     }
@@ -164,9 +170,9 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
     setAdminData(prev => ({ ...prev, password }))
   }
 
-  const copyToClipboard = (text: string, label: string) => {
+  const copyToClipboard = (text: string, label: string, testId?: string) => {
     navigator.clipboard.writeText(text)
-    showToast({ description: `${label} copied to clipboard`, variant: 'success' })
+    showToast({ description: `${label} copied to clipboard`, variant: 'success', testId: testId || 'toast' })
   }
 
   const handleComplete = async () => {
@@ -178,48 +184,26 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
       if (!config) {
         throw new Error('Guard configuration not found')
       }
+      const client = getClient()
 
-      // Step 1: Create tenant
-      const tenantResponse = await fetch(`${config.guard_base_url}/tenants`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken || ''}`
-        },
-        body: JSON.stringify({
-          name: tenantData.name.trim()
-        })
-      })
-
-      if (!tenantResponse.ok) {
-        const errorData = await tenantResponse.json()
-        throw new Error(errorData.error || 'Failed to create tenant')
+      // Step 1: Create tenant via SDK
+      const tRes = await client.createTenant({ name: tenantData.name.trim() })
+      if (!(tRes.meta.status >= 200 && tRes.meta.status < 300)) {
+        throw new Error('Failed to create tenant')
       }
+      const tenantId = (tRes.data as any).id as string
 
-      const tenant = await tenantResponse.json()
-      const tenantId = tenant.id
-
-      // Step 2: Create admin user
-      const signupResponse = await fetch(`${config.guard_base_url}/v1/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          email: adminData.email.trim(),
-          password: adminData.password,
-          first_name: adminData.firstName.trim(),
-          last_name: adminData.lastName.trim()
-        })
+      // Step 2: Create admin user via SDK
+      const sRes = await client.passwordSignup({
+        tenant_id: tenantId,
+        email: adminData.email.trim(),
+        password: adminData.password,
+        first_name: adminData.firstName.trim(),
+        last_name: adminData.lastName.trim()
       })
-
-      if (!signupResponse.ok) {
-        const errorData = await signupResponse.json()
-        throw new Error(errorData.error || 'Failed to create admin user')
+      if (!(sRes.meta.status >= 200 && sRes.meta.status < 300)) {
+        throw new Error('Failed to create admin user')
       }
-
-      const signupResult = await signupResponse.json()
       
       // Step 3: Enable MFA if requested
       if (adminData.enableMFA) {
@@ -228,7 +212,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
       }
 
       // Step 4: Configure tenant settings
-      const adminToken = signupResult.access_token
+      const adminToken = (sRes.data as any)?.access_token
       
       const settingsPayload: any = {
         app_cors_allowed_origins: settings.corsOrigins,
@@ -251,22 +235,15 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
         }
       }
 
-      const settingsResponse = await fetch(`${config.guard_base_url}/v1/tenants/${tenantId}/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`
-        },
-        body: JSON.stringify(settingsPayload)
-      })
-
-      if (!settingsResponse.ok) {
+      try {
+        await client.updateTenantSettings(tenantId, settingsPayload as any)
+      } catch (e) {
         console.warn('Failed to update tenant settings, but tenant was created successfully')
       }
 
       // Update state with results
       setTenantData(prev => ({ ...prev, id: tenantId }))
-      setAdminData(prev => ({ ...prev, id: signupResult.user?.id }))
+      setAdminData(prev => ({ ...prev, id: (sRes.data as any)?.user?.id }))
       
       updateStepCompletion(3, true)
       showToast({ description: 'Tenant onboarding completed successfully!', variant: 'success' })
@@ -283,7 +260,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
   }
 
   const renderTenantStep = () => (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="onboarding-step-1">
       <div>
         <h3 className="text-lg font-medium">Tenant Information</h3>
         <p className="text-sm text-muted-foreground">
@@ -295,11 +272,15 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
         <Label htmlFor="tenantName">Tenant Name *</Label>
         <Input
           id="tenantName"
+          data-testid="tenant-name"
           value={tenantData.name}
           onChange={(e) => setTenantData(prev => ({ ...prev, name: e.target.value }))}
           placeholder="e.g., acme-corp"
           disabled={loading}
         />
+        {attemptedNext && !validateTenantStep() && (
+          <div className="text-xs text-red-600" data-testid="tenant-name-error">Tenant name is required</div>
+        )}
         <p className="text-xs text-muted-foreground">
           This will be used as the unique identifier for your tenant
         </p>
@@ -308,7 +289,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
   )
 
   const renderAdminStep = () => (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="onboarding-step-2">
       <div>
         <h3 className="text-lg font-medium">Admin User Account</h3>
         <p className="text-sm text-muted-foreground">
@@ -321,6 +302,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
           <Label htmlFor="firstName">First Name *</Label>
           <Input
             id="firstName"
+            data-testid="admin-first-name"
             value={adminData.firstName}
             onChange={(e) => setAdminData(prev => ({ ...prev, firstName: e.target.value }))}
             placeholder="John"
@@ -331,6 +313,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
           <Label htmlFor="lastName">Last Name *</Label>
           <Input
             id="lastName"
+            data-testid="admin-last-name"
             value={adminData.lastName}
             onChange={(e) => setAdminData(prev => ({ ...prev, lastName: e.target.value }))}
             placeholder="Doe"
@@ -344,11 +327,15 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
         <Input
           id="email"
           type="email"
+          data-testid="admin-email"
           value={adminData.email}
           onChange={(e) => setAdminData(prev => ({ ...prev, email: e.target.value }))}
           placeholder="admin@example.com"
           disabled={loading}
         />
+        {attemptedNext && (!adminData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminData.email)) && (
+          <div className="text-xs text-red-600" data-testid="email-validation-error">Valid email is required</div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -358,6 +345,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
+              data-testid="admin-password"
               value={adminData.password}
               onChange={(e) => setAdminData(prev => ({ ...prev, password: e.target.value }))}
               placeholder="Enter secure password"
@@ -386,6 +374,9 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
         <p className="text-xs text-muted-foreground">
           Password must be at least 8 characters long
         </p>
+        {attemptedNext && adminData.password.length < 8 && (
+          <div className="text-xs text-red-600" data-testid="password-validation-error">Password must be at least 8 characters</div>
+        )}
       </div>
 
       <div className="flex items-center space-x-2">
@@ -394,6 +385,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
           checked={adminData.enableMFA}
           onCheckedChange={(checked) => setAdminData(prev => ({ ...prev, enableMFA: checked }))}
           disabled={loading}
+          data-testid="enable-mfa"
         />
         <Label htmlFor="enableMFA">Enable Multi-Factor Authentication (MFA)</Label>
       </div>
@@ -401,7 +393,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
   )
 
   const renderSettingsStep = () => (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="onboarding-step-3">
       <div>
         <h3 className="text-lg font-medium">Tenant Configuration</h3>
         <p className="text-sm text-muted-foreground">
@@ -411,15 +403,27 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
 
       <Tabs defaultValue="security" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="cors">CORS</TabsTrigger>
-          <TabsTrigger value="sso">SSO</TabsTrigger>
+          <TabsTrigger value="security" data-testid="settings-tab-security">Security</TabsTrigger>
+          <TabsTrigger value="cors" data-testid="settings-tab-cors">CORS</TabsTrigger>
+          <TabsTrigger value="sso" data-testid="settings-tab-sso">SSO</TabsTrigger>
         </TabsList>
 
         <TabsContent value="security" className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="accessTokenTTL">Access Token TTL</Label>
+              {/* Test-friendly native select */}
+              <select
+                data-testid="access-token-ttl"
+                value={settings.accessTokenTTL}
+                onChange={(e) => setSettings(prev => ({ ...prev, accessTokenTTL: e.target.value }))}
+                className="border rounded-md px-2 py-1 text-sm"
+              >
+                <option value="5m">5 minutes</option>
+                <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
+                <option value="1h">1 hour</option>
+              </select>
               <Select
                 value={settings.accessTokenTTL}
                 onValueChange={(value) => setSettings(prev => ({ ...prev, accessTokenTTL: value }))}
@@ -437,6 +441,17 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             </div>
             <div className="space-y-2">
               <Label htmlFor="refreshTokenTTL">Refresh Token TTL</Label>
+              {/* Test-friendly native select */}
+              <select
+                data-testid="refresh-token-ttl"
+                value={settings.refreshTokenTTL}
+                onChange={(e) => setSettings(prev => ({ ...prev, refreshTokenTTL: e.target.value }))}
+                className="border rounded-md px-2 py-1 text-sm"
+              >
+                <option value="168h">7 days</option>
+                <option value="720h">30 days</option>
+                <option value="2160h">90 days</option>
+              </select>
               <Select
                 value={settings.refreshTokenTTL}
                 onValueChange={(value) => setSettings(prev => ({ ...prev, refreshTokenTTL: value }))}
@@ -487,6 +502,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             <Label htmlFor="corsOrigins">Allowed Origins</Label>
             <Textarea
               id="corsOrigins"
+              data-testid="cors-origins"
               value={settings.corsOrigins}
               onChange={(e) => setSettings(prev => ({ ...prev, corsOrigins: e.target.value }))}
               placeholder="https://app.example.com,https://admin.example.com"
@@ -501,6 +517,17 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
         <TabsContent value="sso" className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="ssoProvider">SSO Provider</Label>
+            {/* Test-friendly native select */}
+            <select
+              data-testid="sso-provider"
+              value={settings.ssoProvider}
+              onChange={(e) => setSettings(prev => ({ ...prev, ssoProvider: e.target.value as any }))}
+              className="border rounded-md px-2 py-1 text-sm"
+            >
+              <option value="none">None</option>
+              <option value="dev">Development</option>
+              <option value="workos">WorkOS</option>
+            </select>
             <Select
               value={settings.ssoProvider}
               onValueChange={(value: 'none' | 'dev' | 'workos') => setSettings(prev => ({ ...prev, ssoProvider: value }))}
@@ -534,6 +561,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
                 <Label htmlFor="workosClientId">WorkOS Client ID *</Label>
                 <Input
                   id="workosClientId"
+                  data-testid="workos-client-id"
                   value={settings.workosClientId || ''}
                   onChange={(e) => setSettings(prev => ({ ...prev, workosClientId: e.target.value }))}
                   placeholder="client_01234567890"
@@ -544,6 +572,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
                 <Input
                   id="workosClientSecret"
                   type="password"
+                  data-testid="workos-client-secret"
                   value={settings.workosClientSecret || ''}
                   onChange={(e) => setSettings(prev => ({ ...prev, workosClientSecret: e.target.value }))}
                   placeholder="wk_live_..."
@@ -567,7 +596,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
   )
 
   const renderReviewStep = () => (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="onboarding-step-4">
       <div>
         <h3 className="text-lg font-medium">Review Configuration</h3>
         <p className="text-sm text-muted-foreground">
@@ -583,7 +612,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm font-medium">Name:</span>
-              <span className="text-sm">{tenantData.name}</span>
+              <span className="text-sm" data-testid="review-tenant-name">{tenantData.name}</span>
             </div>
           </CardContent>
         </Card>
@@ -599,11 +628,11 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">Email:</span>
-              <span className="text-sm">{adminData.email}</span>
+              <span className="text-sm" data-testid="review-admin-email">{adminData.email}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">MFA Enabled:</span>
-              <Badge variant={adminData.enableMFA ? 'default' : 'secondary'}>
+              <Badge variant={adminData.enableMFA ? 'default' : 'secondary'} data-testid="review-mfa-enabled">
                 {adminData.enableMFA ? 'Yes' : 'No'}
               </Badge>
             </div>
@@ -617,11 +646,11 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm font-medium">Access Token TTL:</span>
-              <span className="text-sm">{settings.accessTokenTTL}</span>
+              <span className="text-sm" data-testid="review-access-token-ttl">{settings.accessTokenTTL}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">SSO Provider:</span>
-              <Badge variant="outline">{settings.ssoProvider}</Badge>
+              <Badge variant="outline" data-testid="review-sso-provider">{settings.ssoProvider}</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">Login Rate Limit:</span>
@@ -632,7 +661,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
       </div>
 
       {tenantData.id && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-green-200 bg-green-50" data-testid="onboarding-success">
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-green-800">Tenant Created Successfully!</CardTitle>
           </CardHeader>
@@ -640,11 +669,12 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-green-700">Tenant ID:</span>
               <div className="flex items-center space-x-2">
-                <code className="text-xs bg-white px-2 py-1 rounded">{tenantData.id}</code>
+                <code className="text-xs bg-white px-2 py-1 rounded" data-testid="tenant-id-display">{tenantData.id}</code>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => copyToClipboard(tenantData.id!, 'Tenant ID')}
+                  data-testid="copy-tenant-id"
+                  onClick={() => copyToClipboard(tenantData.id!, 'Tenant ID', 'copy-success-toast')}
                 >
                   <Copy className="h-3 w-3" />
                 </Button>
@@ -763,6 +793,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
               <Button
                 onClick={handleNext}
                 disabled={loading}
+                data-testid="next-step"
               >
                 Next
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -771,6 +802,7 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
               <Button
                 onClick={handleComplete}
                 disabled={loading || tenantData.id !== undefined}
+                data-testid="complete-onboarding"
               >
                 {loading ? 'Creating...' : tenantData.id ? 'Completed' : 'Create Tenant'}
               </Button>

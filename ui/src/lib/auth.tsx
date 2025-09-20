@@ -2,6 +2,7 @@ import type { PropsWithChildren } from 'react'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { getRuntimeConfig } from '@/lib/runtime'
 import { getClient } from '@/lib/sdk'
+import { useToast } from './toast'
 
 export type AuthStatus =
   | 'idle'
@@ -23,13 +24,14 @@ export function AuthProvider({
 }: PropsWithChildren): React.JSX.Element {
   const [status, setStatus] = useState<AuthStatus>('idle')
   const [user, setUser] = useState<any | null>(null)
+  const { show: showToast } = useToast()
   const cfg = getRuntimeConfig()
 
   const isCookieMode = cfg?.auth_mode === 'cookie'
 
   const refresh = async () => {
     if (!isCookieMode) {
-      // In bearer mode we don't require an initial me() fetch for now
+      // In bearer mode we don't require an initial me() fetch
       setStatus('authenticated')
       setUser(null)
       return
@@ -44,6 +46,12 @@ export function AuthProvider({
       } else {
         setUser(null)
         setStatus('unauthenticated')
+        showToast({
+          title: 'Session expired',
+          description: 'Please log in again.',
+          variant: 'error'
+        })
+        await logout()
       }
     } catch {
       setUser(null)
@@ -90,15 +98,15 @@ export function RequireAuth({
   const isCookieMode = cfg?.auth_mode === 'cookie'
 
   useEffect(() => {
-    if (!isCookieMode) return // no-op in bearer mode
-    if (status === 'unauthenticated') {
+    console.log('status', status)
+    // Only enforce redirect in cookie mode; bearer mode should not gate UI
+    if (isCookieMode && status === 'unauthenticated') {
       try {
         window.location.href = '/'
       } catch {}
     }
   }, [status, isCookieMode])
 
-  if (!isCookieMode) return children as React.JSX.Element
   if (status === 'loading' || status === 'idle')
     return (
       <div className="p-6 text-sm text-muted-foreground">

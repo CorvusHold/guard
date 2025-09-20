@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth'
 import { useTenant } from '@/lib/tenant'
-import { getRuntimeConfig } from '@/lib/runtime'
+import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
 
 interface Tenant {
@@ -47,32 +47,17 @@ export default function TenantListPanel({ onTenantSelected }: TenantListPanelPro
     setError(null)
 
     try {
-      const config = getRuntimeConfig()
-      if (!config) {
-        throw new Error('Guard configuration not found')
-      }
-      const params = new URLSearchParams({
-        page: pageNum.toString(),
-        page_size: '10',
-        active: '1' // Only show active tenants
+      const client = getClient()
+      const res = await client.listTenants({
+        q: searchQ.trim() || undefined,
+        page: pageNum,
+        page_size: 10,
+        active: 1
       })
-      
-      if (searchQ.trim()) {
-        params.append('q', searchQ.trim())
-      }
-
-      const response = await fetch(`${config.guard_base_url}/tenants?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${user.accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
         throw new Error('Failed to fetch tenants')
       }
-
-      const data: TenantListResponse = await response.json()
+      const data = res.data as TenantListResponse
       setTenants(data.items)
       setTotalPages(data.total_pages)
     } catch (err) {

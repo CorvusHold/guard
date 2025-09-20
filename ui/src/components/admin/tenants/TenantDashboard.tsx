@@ -18,7 +18,7 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { getRuntimeConfig } from '@/lib/runtime'
+import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
 import TenantSettingsPanel from './TenantSettingsPanel'
 
@@ -62,25 +62,12 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
     setError(null)
 
     try {
-      const config = getRuntimeConfig()
-      if (!config) {
-        throw new Error('Guard configuration not found')
+      const client = getClient()
+      const res = await client.getTenant(tenantId)
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
+        throw new Error('Failed to load tenant info')
       }
-
-      // Load tenant info
-      const tenantResponse = await fetch(`${config.guard_base_url}/tenants/${tenantId}`, {
-        headers: {
-          'Authorization': `Bearer ${user?.accessToken || ''}`
-        }
-      })
-
-      if (!tenantResponse.ok) {
-        const errorData = await tenantResponse.json()
-        throw new Error(errorData.error || 'Failed to load tenant info')
-      }
-
-      const tenant = await tenantResponse.json()
-      setTenantInfo(tenant)
+      setTenantInfo(res.data as any)
 
       // Load tenant statistics (mock data for now - would need actual endpoints)
       const mockStats: TenantStats = {
@@ -129,18 +116,18 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
     if (!tenantInfo || !tenantStats) return null
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" data-testid="tenant-overview">
         {/* Tenant Info Card */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  {tenantInfo.name}
-                  {getStatusBadge(tenantInfo.is_active)}
+                  <span data-testid="tenant-name">{tenantInfo.name}</span>
+                  <span data-testid="tenant-status">{getStatusBadge(tenantInfo.is_active)}</span>
                 </CardTitle>
                 <CardDescription>
-                  Tenant ID: {tenantInfo.id}
+                  Tenant ID: <span data-testid="tenant-id">{tenantInfo.id}</span>
                 </CardDescription>
               </div>
             </div>
@@ -167,10 +154,21 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{tenantStats.total_users}</div>
+              <div className="text-2xl font-bold" data-testid="total-users-stat">{tenantStats.total_users}</div>
               <p className="text-xs text-muted-foreground">
                 {tenantStats.active_users} active
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="active-users-stat">{tenantStats.active_users}</div>
+              <p className="text-xs text-muted-foreground">Currently active</p>
             </CardContent>
           </Card>
 
@@ -180,27 +178,27 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{tenantStats.total_logins_today}</div>
+              <div className="text-2xl font-bold" data-testid="logins-today-stat">{tenantStats.total_logins_today}</div>
               <p className="text-xs text-muted-foreground">
                 {tenantStats.failed_logins_today} failed
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="mfa-users-stat-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">MFA Users</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{tenantStats.mfa_enabled_users}</div>
+              <div className="text-2xl font-bold" data-testid="mfa-users-stat">{tenantStats.mfa_enabled_users}</div>
               <p className="text-xs text-muted-foreground">
                 {Math.round((tenantStats.mfa_enabled_users / tenantStats.total_users) * 100)}% of users
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="sso-status-stat-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">SSO Status</CardTitle>
               <Key className="h-4 w-4 text-muted-foreground" />
@@ -231,6 +229,7 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
               <Button
                 variant="outline"
                 className="h-20 flex flex-col items-center gap-2"
+                data-testid="quick-action-settings"
                 onClick={() => setActiveTab('settings')}
               >
                 <Settings className="h-6 w-6" />
@@ -383,8 +382,8 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="overview" data-testid="overview-tab">Overview</TabsTrigger>
+          <TabsTrigger value="settings" data-testid="settings-tab">Settings</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>

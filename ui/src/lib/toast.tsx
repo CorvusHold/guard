@@ -13,6 +13,7 @@ export interface ToastItem {
   title?: string
   description?: string
   variant?: ToastVariant
+  testId?: string
 }
 
 interface ToastContextValue {
@@ -47,6 +48,7 @@ export function ToastProvider({
         {items.map((t) => (
           <div
             key={t.id}
+            data-testid={t.testId ?? 'toast'}
             className={
               'min-w-64 max-w-sm rounded-md border px-3 py-2 text-sm shadow-sm ' +
               (t.variant === 'success'

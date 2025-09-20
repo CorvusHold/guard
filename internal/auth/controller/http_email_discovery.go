@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	domain "github.com/corvusHold/guard/internal/auth/domain"
 )
 
 // EmailDiscoveryRequest represents the request to discover user/tenant by email
@@ -48,9 +47,9 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 
 	// Get tenant ID from header if provided
 	tenantID := c.Request().Header.Get("X-Tenant-ID")
-	
+
 	var response EmailDiscoveryResponse
-	
+
 	if tenantID != "" {
 		// Tenant is specified, check if user exists in this tenant
 		_, err := h.svc.GetUserByEmail(c.Request().Context(), req.Email, tenantID)
@@ -107,7 +106,7 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 			for _, t := range tenants {
 				suggestions = append(suggestions, t.Name)
 			}
-			
+
 			response = EmailDiscoveryResponse{
 				Found:       true,
 				HasTenant:   true,
@@ -122,36 +121,36 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// generateEmailSuggestions generates helpful suggestions for email typos
-func generateEmailSuggestions(email string) []string {
-	// Common email domain typos and suggestions
-	commonDomains := []string{
-		"gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
-		"icloud.com", "protonmail.com",
-	}
-	
-	// Extract domain from email
-	atIndex := strings.LastIndex(email, "@")
-	if atIndex == -1 {
-		return nil // No @ found
-	}
-	
-	localPart := email[:atIndex]
-	domain := email[atIndex+1:]
-	
-	var suggestions []string
-	
-	// Suggest common domains if current domain is uncommon or potentially misspelled
-	for _, commonDomain := range commonDomains {
-		if domain != commonDomain {
-			suggestions = append(suggestions, localPart+"@"+commonDomain)
-		}
-	}
-	
-	// Limit suggestions
-	if len(suggestions) > 3 {
-		suggestions = suggestions[:3]
-	}
-	
-	return suggestions
-}
+// // generateEmailSuggestions generates helpful suggestions for email typos
+// func generateEmailSuggestions(email string) []string {
+// 	// Common email domain typos and suggestions
+// 	commonDomains := []string{
+// 		"gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
+// 		"icloud.com", "protonmail.com",
+// 	}
+
+// 	// Extract domain from email
+// 	atIndex := strings.LastIndex(email, "@")
+// 	if atIndex == -1 {
+// 		return nil // No @ found
+// 	}
+
+// 	localPart := email[:atIndex]
+// 	domain := email[atIndex+1:]
+
+// 	var suggestions []string
+
+// 	// Suggest common domains if current domain is uncommon or potentially misspelled
+// 	for _, commonDomain := range commonDomains {
+// 		if domain != commonDomain {
+// 			suggestions = append(suggestions, localPart+"@"+commonDomain)
+// 		}
+// 	}
+
+// 	// Limit suggestions
+// 	if len(suggestions) > 3 {
+// 		suggestions = suggestions[:3]
+// 	}
+
+// 	return suggestions
+// }
