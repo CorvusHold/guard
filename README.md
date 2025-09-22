@@ -2,7 +2,43 @@
 
 [![CI](https://github.com/corvusHold/guard/actions/workflows/ci.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/ci.yml)
 
+[![SDK Spec](https://github.com/corvusHold/guard/actions/workflows/sdk-spec.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/sdk-spec.yml)
+[![SDK Conformance](https://github.com/corvusHold/guard/actions/workflows/sdk-conformance.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/sdk-conformance.yml)
+[![Go Lint](https://github.com/corvusHold/guard/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/golangci-lint.yml)
+[![govulncheck](https://github.com/corvusHold/guard/actions/workflows/govulncheck.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/govulncheck.yml)
+[![CodeQL](https://github.com/corvusHold/guard/actions/workflows/codeql.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/codeql.yml)
+[![OSV](https://github.com/corvusHold/guard/actions/workflows/osv-scanner.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/osv-scanner.yml)
+[![Trivy](https://github.com/corvusHold/guard/actions/workflows/trivy.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/trivy.yml)
+[![Next.js Example E2E](https://github.com/corvusHold/guard/actions/workflows/examples-nextjs-e2e.yml/badge.svg)](https://github.com/corvusHold/guard/actions/workflows/examples-nextjs-e2e.yml)
+
 Central Authentication Service (multi-tenant). See `PROJECT.md` for architecture and API spec.
+
+## Continuous Integration & Security
+
+The repo uses GitHub Actions with path-based change detection and concurrency guards to keep CI efficient:
+
+- **ci.yml**
+  - Go: unit tests, `go vet`, RBAC admin tests, FGA tests, E2E/integration
+  - UI: lint, typecheck, unit, Playwright E2E (with browsers installation)
+  - SDK TS: lint, typecheck, unit
+  - Perf: k6 smoke and short rate-limit scenarios
+  - Consistency: timeouts, Docker logs on failure
+- **sdk-spec.yml**
+  - Validates `docs/swagger.json` and `sdk/spec/openapi.json`, generates operation manifests, and diffs contracts to block breaking changes
+- **sdk-conformance.yml**
+  - Containerized conformance scenarios with retries, logs, and teardown
+- **golangci-lint.yml**
+  - Go linters including `staticcheck`
+- **govulncheck.yml** and **gosec.yml**
+  - Go vulnerability checks and security scanning
+- **codeql.yml**
+  - CodeQL analysis for Go and JS/TS
+- **osv-scanner.yml** and **trivy.yml**
+  - Dependency and filesystem/config/secret scanning with SARIF upload to code scanning
+- **dependency-review.yml**
+  - Fails PRs on high severity dependency risks
+- **dependabot.yml**
+  - Weekly updates for GitHub Actions, Go modules, and npm workspaces (`ui/`, `sdk/ts/`, `examples/nextjs/`)
 
 ## Prerequisites
 - Go (>= 1.21)

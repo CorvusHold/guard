@@ -1,0 +1,33 @@
+name: Go Lint (golangci-lint)
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m --out-format=colored-line-number --enable=staticcheck

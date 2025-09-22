@@ -1,0 +1,35 @@
+name: Go Vulnerability Check (govulncheck)
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 5 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: govulncheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod

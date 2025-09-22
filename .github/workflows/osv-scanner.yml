@@ -1,0 +1,38 @@
+name: OSV Scanner
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  schedule:
+    - cron: '0 1 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: osv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv:
+    name: OSV Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install OSV Scanner
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/google/osv-scanner/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run OSV Scanner
+        run: |
+          osv-scanner --recursive --format sarif --output osv-results.sarif .
+
+      - name: Upload SARIF results to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: osv-results.sarif
