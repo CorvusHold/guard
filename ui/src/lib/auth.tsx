@@ -13,7 +13,7 @@ export type AuthStatus =
 export interface AuthContextValue {
   status: AuthStatus
   user: any | null
-  refresh: () => Promise<void>
+  refresh: () => Promise<any | null>
   logout: () => Promise<void>
 }
 
@@ -29,13 +29,13 @@ export function AuthProvider({
 
   const isCookieMode = cfg?.auth_mode === 'cookie'
 
-  const refresh = async () => {
-    if (!isCookieMode) {
-      // In bearer mode we don't require an initial me() fetch
-      setStatus('authenticated')
+  const refresh = async (): Promise<any | null> => {
+    if (!cfg) {
       setUser(null)
-      return
+      setStatus('unauthenticated')
+      return null
     }
+    const wasAuthenticated = status === 'authenticated'
     setStatus('loading')
     try {
       const c = getClient()
@@ -43,19 +43,19 @@ export function AuthProvider({
       if (me.meta.status === 200) {
         setUser(me.data as any)
         setStatus('authenticated')
-      } else {
-        setUser(null)
-        setStatus('unauthenticated')
+        return me.data
+      }
+      throw new Error(`unexpected status ${me.meta.status}`)
+    } catch {
+      if (isCookieMode && wasAuthenticated) {
         showToast({
           title: 'Session expired',
           description: 'Please log in again.',
           variant: 'error'
         })
-        await logout()
       }
-    } catch {
-      setUser(null)
-      setStatus('unauthenticated')
+      await logout()
+      return null
     }
   }
 
@@ -79,7 +79,7 @@ export function AuthProvider({
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, user, refresh, logout }),
-    [status, user]
+    [status, user, refresh, logout]
   )
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }

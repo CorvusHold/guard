@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
@@ -18,7 +18,7 @@ export default function MySessionsPanel(): React.JSX.Element {
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const { show } = useToast()
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null)
     setLoading(true)
     try {
@@ -27,7 +27,6 @@ export default function MySessionsPanel(): React.JSX.Element {
       if (res.meta.status >= 200 && res.meta.status < 300) {
         const list = (res.data as any)?.sessions ?? []
         setSessions(list as SessionItem[])
-        show({ variant: 'success', title: 'Sessions refreshed' })
       } else {
         setError('Failed to load sessions')
         show({ variant: 'error', title: 'Failed to load sessions' })
@@ -42,7 +41,7 @@ export default function MySessionsPanel(): React.JSX.Element {
     } finally {
       setLoading(false)
     }
-  }
+  }, [show])
 
   useEffect(() => {
     void load()
@@ -74,7 +73,15 @@ export default function MySessionsPanel(): React.JSX.Element {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">My Sessions</h3>
-        <Button variant="secondary" onClick={() => load()} disabled={loading}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            if (!loading) {
+              void load()
+            }
+          }}
+          disabled={loading}
+        >
           {loading ? 'Loading...' : 'Refresh'}
         </Button>
       </div>

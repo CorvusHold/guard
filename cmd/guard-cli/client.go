@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -19,14 +20,14 @@ type TenantResponse struct {
 }
 
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	IsActive  bool      `json:"is_active"`
-	MFAEnabled bool     `json:"mfa_enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	FirstName  string    `json:"first_name"`
+	LastName   string    `json:"last_name"`
+	IsActive   bool      `json:"is_active"`
+	MFAEnabled bool      `json:"mfa_enabled"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type SettingsResponse struct {
@@ -49,7 +50,7 @@ type ErrorResponse struct {
 // HTTP client methods
 func (c *GuardClient) makeRequest(method, path string, body interface{}) (*http.Response, error) {
 	var reqBody io.Reader
-	
+
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
 		if err != nil {
@@ -57,15 +58,15 @@ func (c *GuardClient) makeRequest(method, path string, body interface{}) (*http.
 		}
 		reqBody = bytes.NewBuffer(jsonBody)
 	}
-	
+
 	url := c.BaseURL + path
 	logVerbose("Making %s request to %s", method, url)
-	
+
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -76,25 +77,25 @@ func (c *GuardClient) makeRequest(method, path string, body interface{}) (*http.
 	if c.Tenant != "" {
 		req.Header.Set("X-Tenant-ID", c.Tenant)
 	}
-	
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	
+
 	logVerbose("Response status: %s", resp.Status)
 	return resp, nil
 }
 
 func (c *GuardClient) handleResponse(resp *http.Response, target interface{}) error {
 	defer resp.Body.Close()
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
-	
+
 	if resp.StatusCode >= 400 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(body, &errResp); err == nil {
@@ -102,13 +103,13 @@ func (c *GuardClient) handleResponse(resp *http.Response, target interface{}) er
 		}
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	if target != nil {
 		if err := json.Unmarshal(body, target); err != nil {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -118,12 +119,12 @@ func (c *GuardClient) ListTenants() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var tenants []TenantResponse
 	if err := c.handleResponse(resp, &tenants); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("%-36s %-20s %-8s %-20s\n", "ID", "NAME", "ACTIVE", "CREATED")
 		fmt.Println(strings.Repeat("-", 84))
@@ -132,17 +133,17 @@ func (c *GuardClient) ListTenants() error {
 			if tenant.IsActive {
 				status = "Yes"
 			}
-			fmt.Printf("%-36s %-20s %-8s %-20s\n", 
-				tenant.ID, 
-				tenant.Name, 
-				status, 
+			fmt.Printf("%-36s %-20s %-8s %-20s\n",
+				tenant.ID,
+				tenant.Name,
+				status,
 				tenant.CreatedAt.Format("2006-01-02 15:04:05"))
 		}
 		fmt.Printf("\nTotal: %d tenants\n", len(tenants))
 	} else {
 		return formatOutput(tenants)
 	}
-	
+
 	return nil
 }
 
@@ -150,17 +151,17 @@ func (c *GuardClient) CreateTenant(name string) error {
 	payload := map[string]interface{}{
 		"name": name,
 	}
-	
+
 	resp, err := c.makeRequest("POST", "/tenants", payload)
 	if err != nil {
 		return err
 	}
-	
+
 	var tenant TenantResponse
 	if err := c.handleResponse(resp, &tenant); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("Tenant created successfully:\n")
 		fmt.Printf("ID: %s\n", tenant.ID)
@@ -170,7 +171,7 @@ func (c *GuardClient) CreateTenant(name string) error {
 	} else {
 		return formatOutput(tenant)
 	}
-	
+
 	return nil
 }
 
@@ -179,12 +180,12 @@ func (c *GuardClient) GetTenant(tenantID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var tenant TenantResponse
 	if err := c.handleResponse(resp, &tenant); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("Tenant Details:\n")
 		fmt.Printf("ID: %s\n", tenant.ID)
@@ -195,7 +196,7 @@ func (c *GuardClient) GetTenant(tenantID string) error {
 	} else {
 		return formatOutput(tenant)
 	}
-	
+
 	return nil
 }
 
@@ -204,11 +205,11 @@ func (c *GuardClient) DeleteTenant(tenantID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.handleResponse(resp, nil); err != nil {
 		return err
 	}
-	
+
 	fmt.Printf("Tenant %s deleted successfully\n", tenantID)
 	return nil
 }
@@ -219,12 +220,12 @@ func (c *GuardClient) ListUsers() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var users []UserResponse
 	if err := c.handleResponse(resp, &users); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("%-36s %-30s %-20s %-20s %-8s %-8s\n", "ID", "EMAIL", "FIRST NAME", "LAST NAME", "ACTIVE", "MFA")
 		fmt.Println(strings.Repeat("-", 130))
@@ -237,19 +238,19 @@ func (c *GuardClient) ListUsers() error {
 			if user.MFAEnabled {
 				mfa = "Yes"
 			}
-			fmt.Printf("%-36s %-30s %-20s %-20s %-8s %-8s\n", 
-				user.ID, 
-				user.Email, 
-				user.FirstName, 
-				user.LastName, 
-				active, 
+			fmt.Printf("%-36s %-30s %-20s %-20s %-8s %-8s\n",
+				user.ID,
+				user.Email,
+				user.FirstName,
+				user.LastName,
+				active,
 				mfa)
 		}
 		fmt.Printf("\nTotal: %d users\n", len(users))
 	} else {
 		return formatOutput(users)
 	}
-	
+
 	return nil
 }
 
@@ -260,29 +261,29 @@ func (c *GuardClient) CreateUser(email, password, firstName, lastName string, en
 		"first_name": firstName,
 		"last_name":  lastName,
 	}
-	
+
 	resp, err := c.makeRequest("POST", "/v1/auth/password/signup", payload)
 	if err != nil {
 		return err
 	}
-	
+
 	var result map[string]interface{}
 	if err := c.handleResponse(resp, &result); err != nil {
 		return err
 	}
-	
+
 	userID, ok := result["user_id"].(string)
 	if !ok {
 		return fmt.Errorf("failed to get user ID from response")
 	}
-	
+
 	// Enable MFA if requested
 	if enableMFA {
 		if err := c.enableUserMFA(userID); err != nil {
 			fmt.Printf("Warning: Failed to enable MFA for user: %v\n", err)
 		}
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("User created successfully:\n")
 		fmt.Printf("User ID: %s\n", userID)
@@ -292,7 +293,7 @@ func (c *GuardClient) CreateUser(email, password, firstName, lastName string, en
 	} else {
 		return formatOutput(result)
 	}
-	
+
 	return nil
 }
 
@@ -300,12 +301,12 @@ func (c *GuardClient) enableUserMFA(userID string) error {
 	payload := map[string]interface{}{
 		"user_id": userID,
 	}
-	
+
 	resp, err := c.makeRequest("POST", "/v1/admin/users/"+userID+"/mfa/enable", payload)
 	if err != nil {
 		return err
 	}
-	
+
 	return c.handleResponse(resp, nil)
 }
 
@@ -314,12 +315,12 @@ func (c *GuardClient) GetUser(userID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var user UserResponse
 	if err := c.handleResponse(resp, &user); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("User Details:\n")
 		fmt.Printf("ID: %s\n", user.ID)
@@ -333,7 +334,7 @@ func (c *GuardClient) GetUser(userID string) error {
 	} else {
 		return formatOutput(user)
 	}
-	
+
 	return nil
 }
 
@@ -342,11 +343,11 @@ func (c *GuardClient) DeleteUser(userID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.handleResponse(resp, nil); err != nil {
 		return err
 	}
-	
+
 	fmt.Printf("User %s deleted successfully\n", userID)
 	return nil
 }
@@ -357,12 +358,12 @@ func (c *GuardClient) GetSettings() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var settings SettingsResponse
 	if err := c.handleResponse(resp, &settings); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("Tenant Settings for %s:\n", c.Tenant)
 		fmt.Println(strings.Repeat("-", 50))
@@ -377,7 +378,7 @@ func (c *GuardClient) GetSettings() error {
 	} else {
 		return formatOutput(settings.Settings)
 	}
-	
+
 	return nil
 }
 
@@ -385,16 +386,16 @@ func (c *GuardClient) SetSetting(key, value string) error {
 	payload := map[string]interface{}{
 		key: value,
 	}
-	
+
 	resp, err := c.makeRequest("PUT", "/v1/tenants/"+c.Tenant+"/settings", payload)
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.handleResponse(resp, nil); err != nil {
 		return err
 	}
-	
+
 	fmt.Printf("Setting '%s' updated successfully\n", key)
 	return nil
 }
@@ -405,18 +406,18 @@ func (c *GuardClient) CheckHealth() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var health HealthResponse
 	if err := c.handleResponse(resp, &health); err != nil {
 		return err
 	}
-	
+
 	if outputFmt == "table" {
 		fmt.Printf("Guard API Health Status:\n")
 		fmt.Printf("Status: %s\n", health.Status)
 		fmt.Printf("Version: %s\n", health.Version)
 		fmt.Printf("Timestamp: %s\n", health.Timestamp.Format("2006-01-02 15:04:05"))
-		
+
 		if len(health.Checks) > 0 {
 			fmt.Println("\nHealth Checks:")
 			for check, status := range health.Checks {
@@ -426,7 +427,7 @@ func (c *GuardClient) CheckHealth() error {
 	} else {
 		return formatOutput(health)
 	}
-	
+
 	return nil
 }
 
@@ -437,7 +438,7 @@ func isSensitiveKey(key string) bool {
 		"sso_workos_client_secret", "sso_workos_api_key",
 		"email_smtp_password", "email_brevo_api_key",
 	}
-	
+
 	keyLower := strings.ToLower(key)
 	for _, sensitive := range sensitiveKeys {
 		if strings.Contains(keyLower, sensitive) {

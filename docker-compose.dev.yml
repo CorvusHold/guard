@@ -40,45 +40,6 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    image: golang:1.24
-    container_name: guard_dev_api
-    working_dir: /app
-    command: sh -c "go mod download && go run ./cmd/api"
-    environment:
-      APP_ENV: dev
-      APP_ADDR: ":8080"
-      DATABASE_URL: "postgres://guard:guard@db:5432/guard?sslmode=disable"
-      REDIS_ADDR: "valkey:6379"
-      REDIS_DB: 0
-      JWT_SIGNING_KEY: "dev-secret-change-me-in-production"
-      GOTOOLCHAIN: auto
-      # Allow local UI development
-      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://localhost:8080"
-      # Email via MailHog for development
-      EMAIL_PROVIDER: "smtp"
-      SMTP_HOST: "mailhog"
-      SMTP_PORT: 1025
-      SMTP_FROM: "no-reply@dev.local"
-    volumes:
-      - ./:/app
-      - /app/node_modules  # Prevent overwriting node_modules
-    ports:
-      - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      mailhog:
-        condition: service_started
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/readyz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   mailhog:
     image: mailhog/mailhog:latest
     container_name: guard_dev_mailhog
@@ -86,49 +47,49 @@ services:
       - "1025:1025"   # SMTP
       - "8025:8025"   # Web UI at http://localhost:8025
 
-  # Monitoring Stack (Optional - use profile to enable)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: guard_dev_prometheus
-    profiles: ["monitoring"]
-    volumes:
-      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - guard_dev_prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    depends_on:
-      api:
-        condition: service_healthy
+  # # Monitoring Stack (Optional - use profile to enable)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: guard_dev_prometheus
+  #   profiles: ["monitoring"]
+  #   volumes:
+  #     - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+  #     - guard_dev_prometheus_data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: guard_dev_grafana
-    profiles: ["monitoring"]
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_DEFAULT_THEME: light
-    volumes:
-      - guard_dev_grafana_data:/var/lib/grafana
-      - ./ops/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./ops/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: guard_dev_grafana
+  #   profiles: ["monitoring"]
+  #   environment:
+  #     GF_SECURITY_ADMIN_USER: admin
+  #     GF_SECURITY_ADMIN_PASSWORD: admin
+  #     GF_USERS_DEFAULT_THEME: light
+  #   volumes:
+  #     - guard_dev_grafana_data:/var/lib/grafana
+  #     - ./ops/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+  #     - ./ops/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+  #     - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - prometheus
 
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: guard_dev_alertmanager
-    profiles: ["monitoring"]
-    volumes:
-      - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports:
-      - "9093:9093"
-    depends_on:
-      - prometheus
+  # alertmanager:
+  #   image: prom/alertmanager:latest
+  #   container_name: guard_dev_alertmanager
+  #   profiles: ["monitoring"]
+  #   volumes:
+  #     - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  #   ports:
+  #     - "9093:9093"
+  #   depends_on:
+  #     - prometheus
 
 volumes:
   guard_dev_db_data:

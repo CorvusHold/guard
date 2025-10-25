@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import QRCode from 'react-qr-code'
 import { Button } from '@/components/ui/button'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
@@ -126,7 +127,7 @@ export default function MyMfaPanel(): React.JSX.Element {
     }
   }
 
-  async function refreshCount() {
+  const refreshCount = useCallback(async (opts?: { silent?: boolean }) => {
     setError(null)
     setMessage(null)
     setLoading('count')
@@ -135,7 +136,9 @@ export default function MyMfaPanel(): React.JSX.Element {
       const res = await c.mfaCountBackupCodes()
       if (res.meta.status >= 200 && res.meta.status < 300) {
         setCount((res.data as any)?.count ?? null)
-        show({ variant: 'success', title: 'Backup code count updated' })
+        if (!opts?.silent) {
+          show({ variant: 'success', title: 'Backup code count updated' })
+        }
       } else {
         setError('Failed to fetch backup count')
         show({ variant: 'error', title: 'Failed to fetch backup count' })
@@ -150,10 +153,10 @@ export default function MyMfaPanel(): React.JSX.Element {
     } finally {
       setLoading(null)
     }
-  }
+  }, [show])
 
   useEffect(() => {
-    void refreshCount()
+    void refreshCount({ silent: true })
   }, [refreshCount])
 
   return (
@@ -220,6 +223,14 @@ export default function MyMfaPanel(): React.JSX.Element {
               <div className="mt-1 break-all">
                 <span className="font-medium">otpauth:</span>{' '}
                 <span data-testid="mfa-otpauth">{otpauth}</span>
+              </div>
+            )}
+            {otpauth && (
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <QRCode value={otpauth} size={160} data-testid="mfa-qr" />
+                <span className="text-xs text-muted-foreground">
+                  Scan this QR code with your authenticator app
+                </span>
               </div>
             )}
           </div>

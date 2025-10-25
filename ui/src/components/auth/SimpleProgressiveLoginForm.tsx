@@ -23,7 +23,7 @@ interface ProgressiveLoginFormProps {
 export default function SimpleProgressiveLoginForm({
   onLoginSuccess
 }: ProgressiveLoginFormProps) {
-  const [step, setStep] = useState<'email' | 'password' | 'options'>('email')
+  const [step, setStep] = useState<'email' | 'password' | 'options' | 'mfa'>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -32,6 +32,12 @@ export default function SimpleProgressiveLoginForm({
   const [emailError, setEmailError] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
+  const [challengeToken, setChallengeToken] = useState<string | null>(null)
+  const [challengeMethods, setChallengeMethods] = useState<string[]>([])
+  const [challengeMethod, setChallengeMethod] = useState<'totp' | 'backup_code'>('totp')
+  const [challengeCode, setChallengeCode] = useState('')
+  const [challengeLoading, setChallengeLoading] = useState(false)
+  const [challengeError, setChallengeError] = useState<string | null>(null)
   const { show: showToast } = useToast()
   const passwordInputRef = useRef<HTMLInputElement>(null)
   const { tenantId, setTenantId, tenantName } = useTenant()
@@ -122,13 +128,12 @@ export default function SimpleProgressiveLoginForm({
     e.preventDefault()
     if (!password.trim()) return
 
-    setLoginError('')
     setLoginLoading(true)
 
     try {
       const client = getClient()
       const tid = discoveryResult?.tenant_id || tenantId
-      
+
       const res = await client.passwordLogin({
         email: email.trim(),
         password: password.trim(),
@@ -136,15 +141,37 @@ export default function SimpleProgressiveLoginForm({
       })
 
       if (res.meta.status >= 200 && res.meta.status < 300) {
-        const meRes = await client.me()
-        if (meRes.meta.status === 200 && onLoginSuccess) {
-          onLoginSuccess(meRes.data)
+        if (res.data && (res.data as any)?.challenge_token) {
+          const token = (res.data as any).challenge_token as string
+          const methods = Array.isArray((res.data as any).methods)
+            ? ((res.data as any).methods as string[])
+            : []
+          setChallengeToken(token)
+          setChallengeMethods(methods)
+          if (methods.includes('totp')) {
+            setChallengeMethod('totp')
+          } else if (methods.includes('backup_code')) {
+            setChallengeMethod('backup_code')
+          }
+          setChallengeCode('')
+          setChallengeError(null)
+          setStep('mfa')
+          showToast({
+            title: 'Additional verification required',
+            description: 'Enter your authentication code to continue.',
+            variant: 'info'
+          })
+        } else {
+          const meRes = await client.me()
+          if (meRes.meta.status === 200 && onLoginSuccess) {
+            onLoginSuccess(meRes.data)
+          }
+          showToast({
+            title: 'Login successful',
+            description: 'Welcome back!',
+            variant: 'success'
+          })
         }
-        showToast({ 
-          title: 'Login successful', 
-          description: 'Welcome back!',
-          variant: 'success'
-        })
       } else {
         setLoginError('Invalid credentials. Please try again.')
       }
@@ -153,6 +180,47 @@ export default function SimpleProgressiveLoginForm({
       console.error('Login error:', error)
     } finally {
       setLoginLoading(false)
+    }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!challengeToken) return
+    if (!challengeCode.trim()) {
+      setChallengeError('Please enter a verification code')
+      return
+    }
+
+    setChallengeLoading(true)
+    setChallengeError(null)
+
+    try {
+      const client = getClient()
+      const res = await client.mfaVerify({
+        challenge_token: challengeToken,
+        method: challengeMethod,
+        code: challengeCode.trim()
+      })
+
+      if (res.meta.status >= 200 && res.meta.status < 300) {
+        const meRes = await client.me()
+        if (meRes.meta.status === 200 && onLoginSuccess) {
+          onLoginSuccess(meRes.data)
+        }
+        showToast({
+          title: 'Verification successful',
+          description: 'You are now signed in.',
+          variant: 'success'
+        })
+      } else {
+        setChallengeError('Verification failed. Try again.')
+      }
+    } catch (error: any) {
+      const message = error?.message || 'Verification failed. Try again.'
+      setChallengeError(message)
+      console.error('MFA verify error:', error)
+    } finally {
+      setChallengeLoading(false)
     }
   }
 
@@ -337,6 +405,83 @@ export default function SimpleProgressiveLoginForm({
             </div>
           </form>
         </div>
+      )}
+
+      {/* MFA Challenge Step */}
+      {step === 'mfa' && challengeToken && (
+        <form onSubmit={handleMfaSubmit} className="space-y-4" data-testid="mfa-challenge-form">
+          <div className="space-y-2">
+            <div className="text-sm text-gray-600">
+              Additional verification is required for {email}.
+            </div>
+            {challengeMethods.length > 1 && (
+              <div className="space-y-1" data-testid="mfa-method-selector">
+                <div className="text-sm font-medium">Choose a method</div>
+                <div className="flex gap-2">
+                  {challengeMethods.map((method) => (
+                    <Button
+                      key={method}
+                      type="button"
+                      variant={challengeMethod === method ? 'default' : 'outline'}
+                      size="sm"
+                      disabled={challengeLoading}
+                      onClick={() => setChallengeMethod(method as 'totp' | 'backup_code')}
+                    >
+                      {method === 'totp' ? 'Authenticator app' : 'Backup code'}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Label htmlFor="mfa-code">
+              {challengeMethod === 'backup_code' ? 'Backup code' : 'Authenticator code'}
+            </Label>
+            <Input
+              id="mfa-code"
+              data-testid="mfa-code-input"
+              value={challengeCode}
+              onChange={(e) => setChallengeCode(e.target.value)}
+              placeholder={challengeMethod === 'backup_code' ? 'Enter backup code' : '123456'}
+              autoComplete="one-time-code"
+              disabled={challengeLoading}
+            />
+            {challengeError && (
+              <div data-testid="mfa-error" className="text-sm text-red-600">
+                {challengeError}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setChallengeToken(null)
+                setChallengeCode('')
+                setChallengeError(null)
+                setStep('password')
+              }}
+              disabled={challengeLoading}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={challengeLoading || !challengeCode.trim()}
+            >
+              {challengeLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify'
+              )}
+            </Button>
+          </div>
+        </form>
       )}
 
       {/* Options Step */}

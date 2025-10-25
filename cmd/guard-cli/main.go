@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -166,18 +164,18 @@ var tenantDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken}
-		
+
 		// Confirmation prompt
 		fmt.Printf("Are you sure you want to delete tenant '%s'? This action cannot be undone.\n", args[0])
 		fmt.Print("Type 'yes' to confirm: ")
 		var confirmation string
 		fmt.Scanln(&confirmation)
-		
+
 		if confirmation != "yes" {
 			fmt.Println("Operation cancelled.")
 			return nil
 		}
-		
+
 		return client.DeleteTenant(args[0])
 	},
 }
@@ -218,11 +216,11 @@ var userCreateCmd = &cobra.Command{
 		if tenantID == "" {
 			return fmt.Errorf("tenant ID is required (use --tenant flag)")
 		}
-		
+
 		firstName, _ := cmd.Flags().GetString("first-name")
 		lastName, _ := cmd.Flags().GetString("last-name")
 		enableMFA, _ := cmd.Flags().GetBool("enable-mfa")
-		
+
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken, Tenant: tenantID}
 		return client.CreateUser(args[0], args[1], firstName, lastName, enableMFA)
 	},
@@ -251,20 +249,20 @@ var userDeleteCmd = &cobra.Command{
 		if tenantID == "" {
 			return fmt.Errorf("tenant ID is required (use --tenant flag)")
 		}
-		
+
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken, Tenant: tenantID}
-		
+
 		// Confirmation prompt
 		fmt.Printf("Are you sure you want to delete user '%s'?\n", args[0])
 		fmt.Print("Type 'yes' to confirm: ")
 		var confirmation string
 		fmt.Scanln(&confirmation)
-		
+
 		if confirmation != "yes" {
 			fmt.Println("Operation cancelled.")
 			return nil
 		}
-		
+
 		return client.DeleteUser(args[0])
 	},
 }
@@ -274,7 +272,7 @@ func init() {
 	userCmd.AddCommand(userCreateCmd)
 	userCmd.AddCommand(userGetCmd)
 	userCmd.AddCommand(userDeleteCmd)
-	
+
 	// User create flags
 	userCreateCmd.Flags().String("first-name", "", "User's first name")
 	userCreateCmd.Flags().String("last-name", "", "User's last name")
@@ -365,9 +363,9 @@ func init() {
 func initializeConfig() error {
 	fmt.Println("Guard CLI Configuration Setup")
 	fmt.Println("=============================")
-	
+
 	var config Config
-	
+
 	fmt.Print("Guard API URL [http://localhost:8080]: ")
 	var url string
 	fmt.Scanln(&url)
@@ -375,32 +373,32 @@ func initializeConfig() error {
 		url = "http://localhost:8080"
 	}
 	config.APIURL = url
-	
+
 	fmt.Print("API Token: ")
 	var token string
 	fmt.Scanln(&token)
 	config.APIToken = token
-	
+
 	fmt.Print("Default Tenant ID (optional): ")
 	var tenant string
 	fmt.Scanln(&tenant)
 	config.TenantID = tenant
-	
+
 	// Save configuration
 	viper.Set("api_url", config.APIURL)
 	viper.Set("api_token", config.APIToken)
 	viper.Set("tenant_id", config.TenantID)
-	
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	configPath := fmt.Sprintf("%s/.guard-cli.yaml", home)
 	if err := viper.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	fmt.Printf("Configuration saved to %s\n", configPath)
 	return nil
 }
@@ -410,11 +408,11 @@ func showConfig() error {
 	fmt.Printf("API URL: %s\n", viper.GetString("api_url"))
 	fmt.Printf("API Token: %s\n", maskToken(viper.GetString("api_token")))
 	fmt.Printf("Default Tenant ID: %s\n", viper.GetString("tenant_id"))
-	
+
 	if viper.ConfigFileUsed() != "" {
 		fmt.Printf("Config file: %s\n", viper.ConfigFileUsed())
 	}
-	
+
 	return nil
 }
 

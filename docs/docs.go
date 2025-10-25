@@ -1789,6 +1789,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/auth/email/discover": {
+            "post": {
+                "description": "Check if an email exists in any tenant and provide guidance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Discover user/tenant by email",
+                "parameters": [
+                    {
+                        "description": "Email to discover",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.EmailDiscoveryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.EmailDiscoveryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/introspect": {
             "post": {
                 "description": "Validate and parse JWT token either from Authorization header or request body",
@@ -3244,6 +3296,43 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "controller.EmailDiscoveryRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.EmailDiscoveryResponse": {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean"
+                },
+                "has_tenant": {
+                    "type": "boolean"
+                },
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "tenant_name": {
+                    "type": "string"
+                },
+                "user_exists": {
+                    "type": "boolean"
+                }
+            }
+        },
         "controller.adminUpdateNamesReq": {
             "type": "object",
             "properties": {
@@ -3707,6 +3796,10 @@ const docTemplate = `{
         "controller.putSettingsRequest": {
             "type": "object",
             "properties": {
+                "app_cors_allowed_origins": {
+                    "description": "App",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "type": "string"
                 },
@@ -3990,6 +4083,10 @@ const docTemplate = `{
         "controller.settingsResponse": {
             "type": "object",
             "properties": {
+                "app_cors_allowed_origins": {
+                    "description": "App",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "description": "SSO",
                     "type": "string"

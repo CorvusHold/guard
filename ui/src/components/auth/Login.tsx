@@ -33,7 +33,7 @@ export default function Login() {
   const handleLoginSuccess = (userData: any) => {
     setMe(userData)
   }
-
+  
   return (
     <div className="w-full max-w-lg space-y-4 rounded-xl border p-6">
       <h2 className="text-lg font-semibold">Login</h2>

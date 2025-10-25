@@ -1,5 +1,29 @@
 basePath: /
 definitions:
+  controller.EmailDiscoveryRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  controller.EmailDiscoveryResponse:
+    properties:
+      found:
+        type: boolean
+      has_tenant:
+        type: boolean
+      suggestions:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      tenant_name:
+        type: string
+      user_exists:
+        type: boolean
+    type: object
   controller.adminUpdateNamesReq:
     properties:
       first_name:
@@ -312,6 +336,9 @@ definitions:
     type: object
   controller.putSettingsRequest:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
@@ -498,6 +525,9 @@ definitions:
     type: object
   controller.settingsResponse:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         description: SSO
         type: string
@@ -1761,6 +1791,40 @@ paths:
       security:
       - BearerAuth: []
       summary: Authorization decision
+      tags:
+      - auth
+  /v1/auth/email/discover:
+    post:
+      consumes:
+      - application/json
+      description: Check if an email exists in any tenant and provide guidance
+      parameters:
+      - description: Email to discover
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.EmailDiscoveryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.EmailDiscoveryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Discover user/tenant by email
       tags:
       - auth
   /v1/auth/introspect:
