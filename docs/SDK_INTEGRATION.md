@@ -4,6 +4,7 @@ This guide shows how to integrate Corvus Guard SDKs with newly onboarded tenants
 
 ## Table of Contents
 
+- [OAuth2 Discovery & Auto-Configuration](#oauth2-discovery--auto-configuration)
 - [TypeScript/JavaScript SDK](#typescriptjavascript-sdk)
 - [Go SDK](#go-sdk)
 - [Rust SDK](#rust-sdk)
@@ -11,6 +12,105 @@ This guide shows how to integrate Corvus Guard SDKs with newly onboarded tenants
 - [Authentication Flows](#authentication-flows)
 - [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
+
+## OAuth2 Discovery & Auto-Configuration
+
+Guard implements [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth 2.0 Authorization Server Metadata, allowing clients to automatically discover server capabilities and authentication configuration.
+
+### Discovery Endpoint
+
+**Endpoint**: `GET /.well-known/oauth-authorization-server`
+
+**No authentication required** - this is a public endpoint.
+
+### Response Example
+
+```json
+{
+  "issuer": "https://api.example.com",
+  "token_endpoint": "https://api.example.com/v1/auth/refresh",
+  "introspection_endpoint": "https://api.example.com/v1/auth/introspect",
+  "revocation_endpoint": "https://api.example.com/v1/auth/revoke",
+  "userinfo_endpoint": "https://api.example.com/v1/auth/me",
+  "response_types_supported": ["token"],
+  "grant_types_supported": [
+    "password",
+    "refresh_token",
+    "urn:guard:params:oauth:grant-type:magic-link",
+    "urn:guard:params:oauth:grant-type:sso"
+  ],
+  "scopes_supported": ["openid", "profile", "email"],
+
+  // Guard-specific extensions
+  "guard_auth_modes_supported": ["bearer", "cookie"],
+  "guard_auth_mode_default": "bearer",
+  "guard_version": "1.0.0"
+}
+```
+
+### Using Discovery in TypeScript/JavaScript
+
+```typescript
+import { GuardClient } from '@corvushold/guard-sdk';
+
+// Auto-discover server capabilities
+const metadata = await GuardClient.discover('https://api.example.com');
+
+console.log('Supported auth modes:', metadata.guard_auth_modes_supported);
+console.log('Default auth mode:', metadata.guard_auth_mode_default);
+console.log('Grant types:', metadata.grant_types_supported);
+
+// Create client with discovered configuration
+const client = new GuardClient({
+  baseUrl: 'https://api.example.com',
+  tenantId: 'your-tenant-id',
+  authMode: metadata.guard_auth_mode_default as 'bearer' | 'cookie'
+});
+```
+
+### Authentication Modes
+
+Guard supports two authentication modes:
+
+#### Bearer Token Mode (Default)
+
+Tokens are stored client-side and sent via `Authorization: Bearer <token>` header.
+
+```typescript
+const client = new GuardClient({
+  baseUrl: 'https://api.example.com',
+  authMode: 'bearer', // explicit
+  storage: new WebLocalStorage('myapp')
+});
+```
+
+**Best for**: SPAs, mobile apps, native applications
+
+#### Cookie Mode
+
+Tokens are stored server-side in HTTP-only cookies and sent automatically by the browser.
+
+```typescript
+const client = new GuardClient({
+  baseUrl: 'https://api.example.com',
+  authMode: 'cookie'
+});
+```
+
+**Best for**: Traditional server-rendered applications, same-origin deployments
+
+**Note**: Cookie mode requires same-origin or proper CORS configuration with `credentials: 'include'`.
+
+### Server Configuration
+
+Set the default authentication mode via environment variable:
+
+```bash
+# .env
+DEFAULT_AUTH_MODE=bearer  # or "cookie"
+```
+
+If not set, defaults to `bearer`.
 
 ## TypeScript/JavaScript SDK
 

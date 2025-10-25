@@ -32,6 +32,8 @@ type Config struct {
 	EmailProvider string // smtp | brevo
 	BrevoAPIKey   string
 	BrevoSender   string
+
+	DefaultAuthMode string // bearer | cookie
 }
 
 func Load() (Config, error) {
@@ -60,6 +62,14 @@ func Load() (Config, error) {
 	c.EmailProvider = strings.ToLower(getEnv("EMAIL_PROVIDER", "smtp"))
 	c.BrevoAPIKey = getEnv("BREVO_API_KEY", "")
 	c.BrevoSender = getEnv("BREVO_SENDER", c.SMTPFrom)
+
+	// Default auth mode: bearer | cookie
+	authMode := strings.ToLower(getEnv("DEFAULT_AUTH_MODE", "bearer"))
+	if authMode != "bearer" && authMode != "cookie" {
+		authMode = "bearer" // fallback to bearer if invalid value
+	}
+	c.DefaultAuthMode = authMode
+
 	return c, nil
 }
 

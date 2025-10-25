@@ -7,12 +7,20 @@ import {
   getRuntimeConfig,
   setRuntimeConfig
 } from '@/lib/runtime'
+import { GuardClient } from '../../../sdk/ts/src/client'
+import { useTokenRefresh } from '@/lib/useTokenRefresh'
 
 function App() {
   const [baseUrl, setBaseUrl] = useState('')
   const [configured, setConfigured] = useState(false)
   const [saving, setSaving] = useState(false)
   const [authMode, setAuthMode] = useState<'bearer' | 'cookie'>('bearer')
+  const [discovering, setDiscovering] = useState(false)
+  const [discoveredMode, setDiscoveredMode] = useState<string | null>(null)
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null)
+
+  // Auto-refresh tokens in bearer mode (every 14 minutes, before 15min expiry)
+  useTokenRefresh(14)
 
   useEffect(() => {
     // Attempt to persist config from query params (redirect flow)
@@ -24,6 +32,37 @@ function App() {
       setConfigured(true)
     }
   }, [])
+
+  async function discoverAuthMode() {
+    if (!baseUrl.trim()) return
+
+    setDiscovering(true)
+    setDiscoveryError(null)
+    setDiscoveredMode(null)
+
+    try {
+      const metadata = await GuardClient.discover(baseUrl.trim())
+      const recommended = metadata.guard_auth_mode_default
+      setDiscoveredMode(recommended || 'bearer')
+
+      // Auto-apply the discovered mode
+      if (recommended) {
+        setAuthMode(recommended as 'bearer' | 'cookie')
+      }
+    } catch (error: any) {
+      setDiscoveryError(error?.message || 'Failed to discover server configuration')
+      console.error('Discovery error:', error)
+    } finally {
+      setDiscovering(false)
+    }
+  }
+
+  function handleBaseUrlChange(url: string) {
+    setBaseUrl(url)
+    // Reset discovery state when URL changes
+    setDiscoveredMode(null)
+    setDiscoveryError(null)
+  }
 
   function onSave(e: React.FormEvent) {
     e.preventDefault()
@@ -53,16 +92,47 @@ function App() {
             Enter your Guard API Base URL to continue.
           </p>
           <form onSubmit={onSave} className="space-y-3">
-            <label className="block text-sm font-medium">API Base URL</label>
-            <input
-              data-testid="base-url-input"
-              type="url"
-              required
-              placeholder="http://localhost:8081"
-              className="w-full rounded-md border px-3 py-2 text-sm"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-            />
+            <div>
+              <label className="block text-sm font-medium">API Base URL</label>
+              <input
+                data-testid="base-url-input"
+                type="url"
+                required
+                placeholder="http://localhost:8081"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={baseUrl}
+                onChange={(e) => handleBaseUrlChange(e.target.value)}
+              />
+              {baseUrl.trim() && (
+                <Button
+                  data-testid="discover-button"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={discoverAuthMode}
+                  disabled={discovering || !baseUrl.trim()}
+                >
+                  {discovering ? 'Discovering...' : 'Auto-discover settings'}
+                </Button>
+              )}
+              {discoveredMode && (
+                <div
+                  data-testid="discovered-mode"
+                  className="mt-2 rounded-md bg-blue-50 border border-blue-200 p-2 text-sm text-blue-700"
+                >
+                  ✓ Server recommends: <strong>{discoveredMode}</strong> mode
+                </div>
+              )}
+              {discoveryError && (
+                <div
+                  data-testid="discovery-error"
+                  className="mt-2 rounded-md bg-yellow-50 border border-yellow-200 p-2 text-sm text-yellow-700"
+                >
+                  ⚠ {discoveryError}
+                </div>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-medium">Auth Mode</label>
               <select

@@ -15,6 +15,26 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/.well-known/oauth-authorization-server": {
+            "get": {
+                "description": "RFC 8414 compliant discovery endpoint that returns server metadata including supported authentication modes",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "OAuth 2.0 Authorization Server Metadata",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.oauth2MetadataResp"
+                        }
+                    }
+                }
+            }
+        },
         "/tenants": {
             "get": {
                 "description": "Lists tenants with optional filters and pagination",
@@ -3776,6 +3796,75 @@ const docTemplate = `{
                         "totp",
                         "backup_code"
                     ]
+                }
+            }
+        },
+        "controller.oauth2MetadataResp": {
+            "type": "object",
+            "properties": {
+                "grant_types_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "guard_auth_mode_default": {
+                    "type": "string"
+                },
+                "guard_auth_modes_supported": {
+                    "description": "Guard-specific extensions",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "guard_version": {
+                    "type": "string"
+                },
+                "introspection_endpoint": {
+                    "type": "string"
+                },
+                "introspection_endpoint_auth_methods_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "response_types_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "revocation_endpoint": {
+                    "type": "string"
+                },
+                "revocation_endpoint_auth_methods_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scopes_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_endpoint": {
+                    "type": "string"
+                },
+                "token_endpoint_auth_methods_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "userinfo_endpoint": {
+                    "type": "string"
                 }
             }
         },
