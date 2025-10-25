@@ -33,6 +33,6 @@ jobs:
           osv-scanner --recursive --format sarif --output osv-results.sarif .
 
       - name: Upload SARIF results to code scanning
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: osv-results.sarif
