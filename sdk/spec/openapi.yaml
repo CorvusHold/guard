@@ -579,6 +579,11 @@ definitions:
       user_id:
         type: string
     type: object
+  domain.PortalLink:
+    properties:
+      link:
+        type: string
+    type: object
   domain.UserProfile:
     properties:
       email:
@@ -2513,6 +2518,65 @@ paths:
               type: string
             type: object
       summary: Handle SSO/OAuth callback
+      tags:
+      - auth.sso
+  /v1/auth/sso/{provider}/portal-link:
+    get:
+      description: Generates a link to the organization portal for the given provider
+        and organization ID (admin-only)
+      parameters:
+      - description: SSO provider (workos)
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Organization identifier
+        in: query
+        name: organization_id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      - description: Intent (sso, dsync, audit_logs, log_streams, domain_verification,
+          certificate_renewal, user_management)
+        in: query
+        name: intent
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PortalLink'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate organization portal link
       tags:
       - auth.sso
   /v1/auth/sso/{provider}/start:

@@ -1785,6 +1785,58 @@
                 }
             }
         },
+        "/v1/auth/email/discover": {
+            "post": {
+                "description": "Check if an email exists in any tenant and provide guidance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Discover user/tenant by email",
+                "parameters": [
+                    {
+                        "description": "Email to discover",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.EmailDiscoveryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.EmailDiscoveryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/introspect": {
             "post": {
                 "description": "Validate and parse JWT token either from Authorization header or request body",
@@ -2944,6 +2996,93 @@
                 }
             }
         },
+        "/v1/auth/sso/{provider}/portal-link": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates a link to the organization portal for the given provider and organization ID (admin-only)",
+                "tags": [
+                    "auth.sso"
+                ],
+                "summary": "Generate organization portal link",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "SSO provider (workos)",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Organization identifier",
+                        "name": "organization_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management)",
+                        "name": "intent",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PortalLink"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/sso/{provider}/start": {
             "get": {
                 "description": "Initiates an SSO flow for the given provider and redirects to the provider authorization URL",
@@ -3153,6 +3292,43 @@
         }
     },
     "definitions": {
+        "controller.EmailDiscoveryRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.EmailDiscoveryResponse": {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean"
+                },
+                "has_tenant": {
+                    "type": "boolean"
+                },
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "tenant_name": {
+                    "type": "string"
+                },
+                "user_exists": {
+                    "type": "boolean"
+                }
+            }
+        },
         "controller.adminUpdateNamesReq": {
             "type": "object",
             "properties": {
@@ -3616,6 +3792,10 @@
         "controller.putSettingsRequest": {
             "type": "object",
             "properties": {
+                "app_cors_allowed_origins": {
+                    "description": "App",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "type": "string"
                 },
@@ -3899,6 +4079,10 @@
         "controller.settingsResponse": {
             "type": "object",
             "properties": {
+                "app_cors_allowed_origins": {
+                    "description": "App",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "description": "SSO",
                     "type": "string"
@@ -4016,6 +4200,14 @@
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PortalLink": {
+            "type": "object",
+            "properties": {
+                "link": {
                     "type": "string"
                 }
             }

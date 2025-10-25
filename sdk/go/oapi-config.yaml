@@ -1,0 +1,11 @@
+package: guard
+output: api.gen.go
+generate:
+  - types
+  - client
+compatibility:
+  # Keep zero-values predictable and avoid pointers for simple primitives unless required by spec
+  # (oapi-codegen v2 defaults are generally fine; adjust if we need nullable semantics)
+  # enums-as-const: true
+  # skip-fmt: false
+  # skip-prune: false

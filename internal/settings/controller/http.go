@@ -127,6 +127,8 @@ type settingsResponse struct {
 	WorkOSDefaultOrganizationID string `json:"workos_default_organization_id,omitempty"`
 	SSOStateTTL           string `json:"sso_state_ttl"`
 	SSORedirectAllowlist  string `json:"sso_redirect_allowlist"`
+	// App
+	AppCORSAllowedOrigins string `json:"app_cors_allowed_origins"`
 }
 
 type putSettingsRequest struct {
@@ -138,6 +140,8 @@ type putSettingsRequest struct {
 	WorkOSDefaultOrganizationID *string `json:"workos_default_organization_id"`
 	SSOStateTTL           *string `json:"sso_state_ttl"`
 	SSORedirectAllowlist  *string `json:"sso_redirect_allowlist"`
+	// App
+	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
 }
 
 // Get Tenant Settings godoc
@@ -172,6 +176,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	defOrg, _ := h.service.GetString(c.Request().Context(), sdomain.KeyWorkOSDefaultOrganizationID, &id, "")
 	stateTTL, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSOStateTTL, &id, "")
 	allow, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSORedirectAllowlist, &id, "")
+	corsAllow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyAppCORSAllowedOrigins, &id, "")
 	// Mask secrets if present
 	mask := func(s string) string {
 		if s == "" { return "" }
@@ -187,6 +192,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 		WorkOSDefaultOrganizationID: defOrg,
 		SSOStateTTL:          stateTTL,
 		SSORedirectAllowlist: allow,
+		AppCORSAllowedOrigins: corsAllow,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -255,6 +261,17 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 			}
 		}
 	}
+	if req.AppCORSAllowedOrigins != nil {
+		list := strings.Split(*req.AppCORSAllowedOrigins, ",")
+		for _, raw := range list {
+			s := strings.TrimSpace(raw)
+			if s == "" { continue }
+			u, err := url.Parse(s)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid app_cors_allowed_origins"})
+			}
+		}
+	}
 
 	// Upsert allowed keys and track changes
 	changed := make([]string, 0, 8)
@@ -307,6 +324,12 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		changed = append(changed, sdomain.KeySSORedirectAllowlist)
+	}
+	if req.AppCORSAllowedOrigins != nil {
+		if err := h.repo.Upsert(ctx, sdomain.KeyAppCORSAllowedOrigins, &id, *req.AppCORSAllowedOrigins, false); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeyAppCORSAllowedOrigins)
 	}
 	// Publish audit event (redact secrets)
 	if h.pub != nil && len(changed) > 0 {

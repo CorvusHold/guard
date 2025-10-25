@@ -1,5 +1,29 @@
 basePath: /
 definitions:
+  controller.EmailDiscoveryRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  controller.EmailDiscoveryResponse:
+    properties:
+      found:
+        type: boolean
+      has_tenant:
+        type: boolean
+      suggestions:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      tenant_name:
+        type: string
+      user_exists:
+        type: boolean
+    type: object
   controller.adminUpdateNamesReq:
     properties:
       first_name:
@@ -312,6 +336,9 @@ definitions:
     type: object
   controller.putSettingsRequest:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
@@ -498,6 +525,9 @@ definitions:
     type: object
   controller.settingsResponse:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         description: SSO
         type: string
@@ -577,6 +607,11 @@ definitions:
       tenant_id:
         type: string
       user_id:
+        type: string
+    type: object
+  domain.PortalLink:
+    properties:
+      link:
         type: string
     type: object
   domain.UserProfile:
@@ -1758,6 +1793,40 @@ paths:
       summary: Authorization decision
       tags:
       - auth
+  /v1/auth/email/discover:
+    post:
+      consumes:
+      - application/json
+      description: Check if an email exists in any tenant and provide guidance
+      parameters:
+      - description: Email to discover
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.EmailDiscoveryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.EmailDiscoveryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Discover user/tenant by email
+      tags:
+      - auth
   /v1/auth/introspect:
     post:
       consumes:
@@ -2513,6 +2582,65 @@ paths:
               type: string
             type: object
       summary: Handle SSO/OAuth callback
+      tags:
+      - auth.sso
+  /v1/auth/sso/{provider}/portal-link:
+    get:
+      description: Generates a link to the organization portal for the given provider
+        and organization ID (admin-only)
+      parameters:
+      - description: SSO provider (workos)
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Organization identifier
+        in: query
+        name: organization_id
+        required: true
+        type: string
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      - description: Intent (sso, dsync, audit_logs, log_streams, domain_verification,
+          certificate_renewal, user_management)
+        in: query
+        name: intent
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PortalLink'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate organization portal link
       tags:
       - auth.sso
   /v1/auth/sso/{provider}/start:

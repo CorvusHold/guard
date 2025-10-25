@@ -7,16 +7,17 @@ export RATE_LIMIT_RETRIES ?= 2
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
         swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        k6-portal-link-smoke k6-rate-limit-portal-link \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
-        test-rbac-admin test-fga
+        test-rbac-admin test-fga test-integration
 
 compose-up:
-	docker compose up -d --remove-orphans
+	docker compose -f docker-compose.dev.yml up -d --remove-orphans
 
 compose-down:
-	docker compose down
+	docker compose -f docker-compose.dev.yml down
 
 # Test stack (dedicated Postgres/Redis for integration/E2E)
 compose-up-test:
@@ -66,6 +67,11 @@ test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
 # Run only FGA authorization integration tests against the dockerized test stack
 test-fga: compose-up-test db-wait-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
+	make compose-down-test
+
+# Run Go integration tests (build tag 'integration') against dockerized test stack
+test-integration: compose-up-test db-wait-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./...'
 	make compose-down-test
 
 lint:
@@ -141,10 +147,10 @@ swagger:
 
 # Quick checks for local services (dockerized, no host tools required)
 db-check:
-	docker compose exec -T db pg_isready -U guard || true
+	docker compose -f docker-compose.dev.yml exec -T db pg_isready -U guard || true
 
 redis-ping:
-	docker compose exec -T valkey valkey-cli ping || true
+	docker compose -f docker-compose.dev.yml exec -T valkey valkey-cli ping || true
 
 db-test-check:
 	docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard || true
@@ -158,10 +164,10 @@ redis-test-ping:
 # ---- Observability stack helpers ----
 
 obsv-up:
-	docker compose up -d --remove-orphans db valkey api prometheus grafana alertmanager am-receiver
+	docker compose -f docker-compose.dev.yml --profile monitoring up -d --remove-orphans
 
 obsv-down:
-	docker compose down -v
+	docker compose -f docker-compose.dev.yml --profile monitoring down -v
 
 grafana-url:
 	@echo "Grafana: http://localhost:3000 (admin/admin)"
@@ -179,7 +185,7 @@ mailhog-url:
 
 # Bring up the examples stack using the classic compose file, with API on :8081 and SMTP via MailHog.
 examples-up:
-	docker compose up -d --remove-orphans db valkey mailhog examples_setup api_examples
+	docker compose -f docker-compose.dev.yml up -d --remove-orphans db valkey mailhog examples_setup api_examples
 
 # Wait until the examples API is ready
 examples-wait:
@@ -187,11 +193,11 @@ examples-wait:
 
 # Re-run seeding/migrations for examples (idempotent). Also updates examples/nextjs/.env.local
 examples-seed:
-	docker compose run --rm examples_setup
+	docker compose -f docker-compose.dev.yml run --rm examples_setup
 
 # Tear down the examples stack
 examples-down:
-	docker compose down -v
+	docker compose -f docker-compose.dev.yml down -v
 
 # Quick URLs
 examples-url:
@@ -201,23 +207,37 @@ examples-url:
 # ---- k6 scenarios (via compose service 'k6') ----
 
 k6-smoke:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"'
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"'
 
 k6-login-stress:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm \
 		-e K6_BASE_URL=http://api:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
 		k6 "k6 run /scripts/login_stress.js"'
 
 k6-rate-limit-login:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose run --rm \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.dev.yml run --rm \
 		-e K6_BASE_URL=http://api:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
 		-e K6_ITERATIONS="$$K6_ITERATIONS" \
 		k6 "k6 run /scripts/rate_limit_login.js"'
 
 k6-mfa-invalid:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
+
+k6-portal-link-smoke:
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
+		-e K6_INTENT="$${K6_INTENT:-sso}" \
+		k6 "k6 run /scripts/portal_link_smoke.js"'
+
+k6-rate-limit-portal-link:
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.dev.yml run --rm \
+		-e K6_BASE_URL=http://api:8080 \
+		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
+		-e K6_INTENT="$${K6_INTENT:-sso}" -e K6_ITERATIONS="$$K6_ITERATIONS" \
+		k6 "k6 run /scripts/rate_limit_portal_link.js"'
 
 # ---- Seeding helpers ----
 

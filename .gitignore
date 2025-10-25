@@ -26,3 +26,9 @@ trace.zip
 examples/nextjs/test-results/
 examples/nextjs/playwright-report/
 examples/nextjs/blob-report/
+examples/nextjs/test-results/
+
+test-results
+playwright-report
+.last-run.json
+TODO.md

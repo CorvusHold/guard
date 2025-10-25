@@ -1,0 +1,98 @@
+# Development Environment
+# Usage: docker-compose -f docker-compose.dev.yml up
+# 
+# This configuration provides:
+# - PostgreSQL database on port 5433
+# - Valkey (Redis) on port 6380  
+# - Guard API on port 8080 with hot reload
+# - Monitoring stack (Prometheus, Grafana, AlertManager)
+# - MailHog for email testing
+# - Development-friendly settings and CORS
+
+services:
+  db:
+    image: postgres:17
+    container_name: guard_dev_postgres
+    environment:
+      POSTGRES_USER: guard
+      POSTGRES_PASSWORD: guard
+      POSTGRES_DB: guard
+    ports:
+      - "5433:5432"
+    volumes:
+      - guard_dev_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: guard_dev_valkey
+    ports:
+      - "6380:6379"
+    volumes:
+      - guard_dev_valkey_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: guard_dev_mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI at http://localhost:8025
+
+  # # Monitoring Stack (Optional - use profile to enable)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: guard_dev_prometheus
+  #   profiles: ["monitoring"]
+  #   volumes:
+  #     - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+  #     - guard_dev_prometheus_data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: guard_dev_grafana
+  #   profiles: ["monitoring"]
+  #   environment:
+  #     GF_SECURITY_ADMIN_USER: admin
+  #     GF_SECURITY_ADMIN_PASSWORD: admin
+  #     GF_USERS_DEFAULT_THEME: light
+  #   volumes:
+  #     - guard_dev_grafana_data:/var/lib/grafana
+  #     - ./ops/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+  #     - ./ops/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+  #     - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - prometheus
+
+  # alertmanager:
+  #   image: prom/alertmanager:latest
+  #   container_name: guard_dev_alertmanager
+  #   profiles: ["monitoring"]
+  #   volumes:
+  #     - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  #   ports:
+  #     - "9093:9093"
+  #   depends_on:
+  #     - prometheus
+
+volumes:
+  guard_dev_db_data:
+  guard_dev_valkey_data:
+  guard_dev_prometheus_data:
+  guard_dev_grafana_data:

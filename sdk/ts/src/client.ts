@@ -13,11 +13,14 @@ export interface GuardClientOptions {
   fetchImpl?: FetchLike;
   storage?: TokenStorage;
   defaultHeaders?: Record<string, string>;
+  authMode?: 'bearer' | 'cookie';
 }
 
 // OpenAPI component schema aliases
 type TokensResp = OpenAPIComponents['schemas']['controller.tokensResp'];
 type MfaChallengeResp = OpenAPIComponents['schemas']['controller.mfaChallengeResp'];
+// Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract
+type PortalLink = OpenAPIComponents['schemas']['domain.PortalLink'] & { link: string };
 
 // Type guards to help narrow union results in consumers
 export function isTokensResp(data: unknown): data is TokensResp {
@@ -31,6 +34,43 @@ export function isMfaChallengeResp(data: unknown): data is MfaChallengeResp {
 }
 type MfaVerifyReq = OpenAPIComponents['schemas']['controller.mfaVerifyReq'];
 type RefreshReq = OpenAPIComponents['schemas']['controller.refreshReq'];
+
+// RBAC v2 (admin) OpenAPI schema aliases
+type RbacPermissionsResp = OpenAPIComponents['schemas']['controller.rbacPermissionsResp'];
+type RbacRolesResp = OpenAPIComponents['schemas']['controller.rbacRolesResp'];
+type RbacRoleItem = OpenAPIComponents['schemas']['controller.rbacRoleItem'];
+type RbacCreateRoleReq = OpenAPIComponents['schemas']['controller.rbacCreateRoleReq'];
+type RbacUpdateRoleReq = OpenAPIComponents['schemas']['controller.rbacUpdateRoleReq'];
+type RbacRolePermissionReq = OpenAPIComponents['schemas']['controller.rbacRolePermissionReq'];
+type RbacUserRolesResp = OpenAPIComponents['schemas']['controller.rbacUserRolesResp'];
+type RbacModifyUserRoleReq = OpenAPIComponents['schemas']['controller.rbacModifyUserRoleReq'];
+type RbacResolvedPermissionsResp = OpenAPIComponents['schemas']['controller.rbacResolvedPermissionsResp'];
+
+// FGA (admin) DTOs (controller uses snake_case JSON)
+export type FgaGroup = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+};
+export type FgaGroupsResp = { groups: FgaGroup[] };
+export type FgaAclTuple = {
+  id: string;
+  tenant_id: string;
+  subject_type: string;
+  subject_id: string;
+  permission_key?: string;
+  object_type: string;
+  object_id?: string | null;
+  created_by?: string | null;
+  created_at: string;
+};
+
+// Minimal response types for tenant discovery
+export interface TenantSummary { id: string; name?: string }
+export interface DiscoverTenantsResp { tenants: TenantSummary[] }
 type UserProfile = OpenAPIComponents['schemas']['domain.UserProfile'];
 type Introspection = OpenAPIComponents['schemas']['domain.Introspection'];
 type MagicSendReq = OpenAPIComponents['schemas']['controller.magicSendReq'];
@@ -108,12 +148,15 @@ export class GuardClient {
     this.tenantId = opts.tenantId;
     this.storage = opts.storage ?? new InMemoryStorage();
 
+    const mode = opts.authMode ?? 'bearer';
     const authHeaderInterceptor: RequestInterceptor = async (input: RequestInfo | URL, init: RequestInit) => {
       const headers = new Headers(init.headers || {});
-      // Attach Authorization if present
-      const token = await Promise.resolve(this.storage.getAccessToken());
-      if (token && !headers.has('authorization')) {
-        headers.set('authorization', `Bearer ${token}`);
+      if (mode === 'bearer') {
+        // Attach Authorization if present
+        const token = await Promise.resolve(this.storage.getAccessToken());
+        if (token && !headers.has('authorization')) {
+          headers.set('authorization', `Bearer ${token}`);
+        }
       }
       return [input, { ...init, headers }];
     };
@@ -122,12 +165,34 @@ export class GuardClient {
     // Tenancy today is via body/query. Header will be added later when server adopts it.
 
     const clientHeader = `ts-sdk/${(pkg as any).version ?? '0.0.0'}`;
+    // In cookie mode, sending credentials to a different origin requires specific CORS headers.
+    // To keep local dev/tests simple, only attach credentials when the API is same-origin.
+    let credentialsOpt: RequestCredentials | undefined = undefined;
+    if (mode === 'cookie') {
+      try {
+        if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
+          const api = new URL(opts.baseUrl);
+          const appOrigin = new URL(window.location.origin);
+          if (api.origin === appOrigin.origin) {
+            credentialsOpt = 'include';
+          }
+        } else {
+          // Non-browser contexts (SSR/node) can include credentials
+          credentialsOpt = 'include';
+        }
+      } catch (_) {
+        // If URL parsing fails, default to no credentials to avoid CORS issues
+        credentialsOpt = undefined;
+      }
+    }
+
     this.http = new HttpClient({
       baseUrl: opts.baseUrl,
       fetchImpl: opts.fetchImpl,
       clientHeader,
       defaultHeaders,
       interceptors: { request: [authHeaderInterceptor] },
+      credentials: credentialsOpt,
     } as TransportOptions);
   }
 
@@ -223,6 +288,73 @@ export class GuardClient {
   // Auth: Current user profile
   async me(): Promise<ResponseWrapper<UserProfile>> {
     return this.request<UserProfile>('/v1/auth/me', { method: 'GET' });
+  }
+
+  // Auth: Email discovery (progressive login)
+  async emailDiscover(body: { email: string; tenant_id?: string }): Promise<ResponseWrapper<{
+    found: boolean;
+    has_tenant: boolean;
+    tenant_id?: string;
+    tenant_name?: string;
+    user_exists: boolean;
+    suggestions?: string[];
+  }>> {
+    const headers: Record<string, string> = {};
+    const tid = body.tenant_id ?? this.tenantId;
+    if (tid) headers['X-Tenant-ID'] = String(tid);
+    return this.request(`/v1/auth/email/discover`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: body.email })
+    });
+  }
+
+  // --- MFA self-service ---
+  async mfaStartTotp(): Promise<ResponseWrapper<{ secret: string; otpauth_url: string }>> {
+    return this.request<{ secret: string; otpauth_url: string }>('/v1/auth/mfa/totp/start', { method: 'POST' });
+  }
+
+  async mfaActivateTotp(body: { code: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/mfa/totp/activate', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async mfaDisableTotp(): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/mfa/totp/disable', { method: 'POST' });
+  }
+
+  async mfaGenerateBackupCodes(body: { count?: number } = {}): Promise<ResponseWrapper<{ codes: string[] }>> {
+    return this.request<{ codes: string[] }>('/v1/auth/mfa/backup/generate', { method: 'POST', body: JSON.stringify({ count: body.count ?? 5 }) });
+  }
+
+  async mfaCountBackupCodes(): Promise<ResponseWrapper<{ count: number }>> {
+    return this.request<{ count: number }>('/v1/auth/mfa/backup/count', { method: 'GET' });
+  }
+
+  // Tenants: Discover tenants for a given email (used by login tenant selection)
+  async discoverTenants(params: { email: string }): Promise<ResponseWrapper<DiscoverTenantsResp>> {
+    const qs = this.buildQuery({ email: params.email });
+    return this.request<DiscoverTenantsResp>(`/v1/auth/tenants${qs}`, { method: 'GET' });
+  }
+
+  // Tenants: Create
+  async createTenant(body: { name: string }): Promise<ResponseWrapper<{ id: string; name: string; is_active?: boolean; created_at?: string; updated_at?: string }>> {
+    return this.request(`/tenants`, { method: 'POST', body: JSON.stringify({ name: body.name }) });
+  }
+
+  // Tenants: Get by ID
+  async getTenant(id: string): Promise<ResponseWrapper<{ id: string; name: string; is_active: boolean; created_at: string; updated_at: string }>> {
+    return this.request(`/tenants/${encodeURIComponent(id)}`, { method: 'GET' });
+  }
+
+  // Tenants: List (admin)
+  async listTenants(params: { q?: string; page?: number; page_size?: number; active?: number | boolean } = {}): Promise<ResponseWrapper<{ items: Array<{ id: string; name: string; is_active: boolean; created_at: string; updated_at: string }>; total: number; page: number; page_size: number; total_pages: number }>> {
+    const qs = this.buildQuery({
+      q: params.q,
+      page: params.page,
+      page_size: params.page_size,
+      active: typeof params.active === 'boolean' ? (params.active ? 1 : 0) : params.active
+    });
+    return this.request(`/tenants${qs}`, { method: 'GET' });
   }
 
   // Auth: Introspect token (from header or body)
@@ -352,5 +484,161 @@ export class GuardClient {
     const res = await this.request<TokensResp>(`/v1/auth/sso/${provider}/callback${qs}`, { method: 'GET' });
     if (res.meta.status === 200) this.persistTokensFrom(res.data);
     return res;
+  }
+
+  // SSO: WorkOS Organization Portal link (admin-only on server)
+  async getSsoOrganizationPortalLink(provider: SsoProvider, params: {
+    tenant_id?: string;
+    organization_id: string;
+    intent?: string;
+  }): Promise<ResponseWrapper<PortalLink>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    if (!params?.organization_id) throw new Error('organization_id is required');
+    const qs = this.buildQuery({
+      tenant_id: tenant,
+      organization_id: params.organization_id,
+      intent: params.intent,
+    });
+    return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+  }
+
+  // ==============================
+  // RBAC v2 (Admin-only endpoints)
+  // ==============================
+
+  // RBAC: List all permissions (admin-only)
+  async rbacListPermissions(): Promise<ResponseWrapper<RbacPermissionsResp>> {
+    return this.request<RbacPermissionsResp>('/v1/auth/admin/rbac/permissions', { method: 'GET' });
+  }
+
+  // RBAC: List roles for a tenant
+  async rbacListRoles(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<RbacRolesResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacRolesResp>(`/v1/auth/admin/rbac/roles${qs}`, { method: 'GET' });
+  }
+
+  // RBAC: Create role
+  async rbacCreateRole(body: Omit<RbacCreateRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<RbacRoleItem>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacCreateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacCreateRoleReq;
+    return this.request<RbacRoleItem>('/v1/auth/admin/rbac/roles', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Update role
+  async rbacUpdateRole(id: string, body: Omit<RbacUpdateRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<RbacRoleItem>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacUpdateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacUpdateRoleReq;
+    return this.request<RbacRoleItem>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Delete role
+  async rbacDeleteRole(id: string, params: { tenant_id?: string } = {}): Promise<ResponseWrapper<unknown>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+  }
+
+  // RBAC: List user roles
+  async rbacListUserRoles(userId: string, params: { tenant_id?: string } = {}): Promise<ResponseWrapper<RbacUserRolesResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacUserRolesResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles${qs}`, { method: 'GET' });
+  }
+
+  // RBAC: Add user role
+  async rbacAddUserRole(userId: string, body: Omit<RbacModifyUserRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
+    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Remove user role
+  async rbacRemoveUserRole(userId: string, body: Omit<RbacModifyUserRoleReq, 'tenant_id'> & { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
+    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // RBAC: Upsert role permission
+  async rbacUpsertRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  // RBAC: Delete role permission
+  async rbacDeleteRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'DELETE', body: JSON.stringify(body) });
+  }
+
+  // RBAC: Resolve user permissions
+  async rbacResolveUserPermissions(userId: string, params: { tenant_id?: string }): Promise<ResponseWrapper<RbacResolvedPermissionsResp>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<RbacResolvedPermissionsResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/permissions/resolve${qs}`, { method: 'GET' });
+  }
+
+  // ==============================
+  // FGA (Admin-only endpoints)
+  // ==============================
+
+  // Groups: list
+  async fgaListGroups(params: { tenant_id?: string }): Promise<ResponseWrapper<FgaGroupsResp>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<FgaGroupsResp>(`/v1/auth/admin/fga/groups${qs}`, { method: 'GET' });
+  }
+
+  // Groups: create
+  async fgaCreateGroup(body: { tenant_id?: string; name: string; description?: string | null }): Promise<ResponseWrapper<FgaGroup>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { tenant_id: tenant, name: body.name, description: body?.description ?? null } as any;
+    return this.request<FgaGroup>(`/v1/auth/admin/fga/groups`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // Groups: delete
+  async fgaDeleteGroup(id: string, params: { tenant_id?: string }): Promise<ResponseWrapper<unknown>> {
+    const tenant = params?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+  }
+
+  // Group membership: add
+  async fgaAddGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
+    const payload = { user_id: body.user_id } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'POST', body: JSON.stringify(payload) });
+    }
+
+  // Group membership: remove
+  async fgaRemoveGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
+    const payload = { user_id: body.user_id } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // ACL tuples: create
+  async fgaCreateAclTuple(body: { tenant_id?: string; subject_type: string; subject_id: string; permission_key: string; object_type: string; object_id?: string | null; created_by?: string | null }): Promise<ResponseWrapper<FgaAclTuple>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { ...body, tenant_id: tenant } as any;
+    return this.request<FgaAclTuple>(`/v1/auth/admin/fga/acl/tuples`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // ACL tuples: delete
+  async fgaDeleteAclTuple(body: { tenant_id?: string; subject_type: string; subject_id: string; permission_key: string; object_type: string; object_id?: string | null }): Promise<ResponseWrapper<unknown>> {
+    const tenant = body?.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required');
+    const payload = { ...body, tenant_id: tenant } as any;
+    return this.request<unknown>(`/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
   }
 }

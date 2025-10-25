@@ -9,6 +9,7 @@ export interface TransportOptions {
   interceptors?: Interceptors;
   clientHeader?: string; // e.g., "ts-sdk/<version>"
   defaultHeaders?: Record<string, string>;
+  credentials?: RequestCredentials; // e.g., 'include' for cookie-based auth
 }
 
 export class HttpClient {
@@ -17,14 +18,18 @@ export class HttpClient {
   private readonly interceptors?: Interceptors;
   private readonly clientHeader?: string;
   private readonly defaultHeaders: Record<string, string>;
+  private readonly credentials?: RequestCredentials;
 
   constructor(opts: TransportOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
-    this.fetchImpl = opts.fetchImpl ?? (globalThis.fetch as FetchLike);
-    if (!this.fetchImpl) throw new Error('No fetch implementation provided and global fetch is unavailable');
+    const fiRaw = (opts.fetchImpl ?? (globalThis.fetch as any));
+    if (!fiRaw) throw new Error('No fetch implementation provided and global fetch is unavailable');
+    // Bind fetch to globalThis to satisfy WebKit where unbound Window.fetch throws
+    this.fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => (fiRaw as any).call(globalThis, input, init)) as FetchLike;
     this.interceptors = opts.interceptors;
     this.clientHeader = opts.clientHeader ?? 'ts-sdk';
     this.defaultHeaders = { ...(opts.defaultHeaders ?? {}) };
+    this.credentials = opts.credentials;
   }
 
   private buildUrl(path: string): string {
@@ -50,6 +55,9 @@ export class HttpClient {
     }
 
     const reqInit: RequestInit = { ...init, headers };
+    if (!('credentials' in reqInit) && this.credentials) {
+      reqInit.credentials = this.credentials;
+    }
     const [finalUrl, finalInit] = await applyRequestInterceptors(url, reqInit, this.interceptors?.request as any);
 
     const res = await this.fetchImpl(finalUrl, finalInit);
@@ -112,6 +120,9 @@ export class HttpClient {
     }
 
     const reqInit: RequestInit = { ...init, headers };
+    if (!('credentials' in reqInit) && this.credentials) {
+      reqInit.credentials = this.credentials;
+    }
     const [finalUrl, finalInit] = await applyRequestInterceptors(url, reqInit, this.interceptors?.request as any);
 
     const res = await this.fetchImpl(finalUrl, finalInit);

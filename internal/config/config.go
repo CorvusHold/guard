@@ -32,10 +32,6 @@ type Config struct {
 	EmailProvider string // smtp | brevo
 	BrevoAPIKey   string
 	BrevoSender   string
-
-	WorkOSAPIKey       string
-	WorkOSClientID     string
-	WorkOSClientSecret string
 }
 
 func Load() (Config, error) {
@@ -64,11 +60,6 @@ func Load() (Config, error) {
 	c.EmailProvider = strings.ToLower(getEnv("EMAIL_PROVIDER", "smtp"))
 	c.BrevoAPIKey = getEnv("BREVO_API_KEY", "")
 	c.BrevoSender = getEnv("BREVO_SENDER", c.SMTPFrom)
-
-	c.WorkOSAPIKey = getEnv("WORKOS_API_KEY", "")
-	c.WorkOSClientID = getEnv("WORKOS_CLIENT_ID", "")
-	c.WorkOSClientSecret = getEnv("WORKOS_CLIENT_SECRET", "")
-
 	return c, nil
 }
 

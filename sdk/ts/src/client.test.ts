@@ -157,4 +157,45 @@ describe('GuardClient', () => {
     // Ensure token is in query string
     expect(calls[0].input).toBe(`${baseUrl}/v1/auth/magic/verify?token=tok-1`);
   });
+
+  it('sso portal link builds query with default tenant, includes intent, parses link, and sends Authorization', async () => {
+    const storage = new InMemoryStorage();
+    storage.setAccessToken('acc-admin');
+    const { fetchMock, calls } = makeFetchMock([
+      mockResponse({
+        status: 200,
+        headers: { 'content-type': 'application/json', 'x-request-id': 'rid-portal' },
+        jsonBody: { link: 'https://portal.example.com/org_1?sso' },
+      }),
+    ]);
+
+    const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock, tenantId: 't-1' });
+    const res = await client.getSsoOrganizationPortalLink('workos', {
+      organization_id: 'org_1',
+      intent: 'sso',
+    });
+    expect(res.meta.status).toBe(200);
+    expect(res.data.link).toBe('https://portal.example.com/org_1?sso');
+
+    // URL and headers
+    expect(calls[0].input).toBe(`${baseUrl}/v1/auth/sso/workos/portal-link?tenant_id=t-1&organization_id=org_1&intent=sso`);
+    const hdrs = new Headers(calls[0].init?.headers);
+    expect(hdrs.get('authorization')).toBe('Bearer acc-admin');
+  });
+
+  it('sso portal link throws when tenant_id missing', async () => {
+    const storage = new InMemoryStorage();
+    storage.setAccessToken('acc-admin');
+    const { fetchMock } = makeFetchMock([]);
+    const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock });
+    await expect(() => client.getSsoOrganizationPortalLink('workos', { organization_id: 'org_1' } as any)).rejects.toThrow('tenant_id is required');
+  });
+
+  it('sso portal link throws when organization_id missing', async () => {
+    const storage = new InMemoryStorage();
+    storage.setAccessToken('acc-admin');
+    const { fetchMock } = makeFetchMock([]);
+    const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock, tenantId: 't-1' });
+    await expect(() => client.getSsoOrganizationPortalLink('workos', { tenant_id: 't-1' } as any)).rejects.toThrow('organization_id is required');
+  });
 });

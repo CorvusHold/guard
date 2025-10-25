@@ -43,6 +43,8 @@ const (
 	KeyWorkOSAPIKey    = "sso.workos.api_key"
 	KeyWorkOSClientID  = "sso.workos.client_id"
 	KeyWorkOSClientSecret = "sso.workos.client_secret"
+    // API base URL for WorkOS, default https://api.workos.com
+    KeyWorkOSAPIBaseURL = "sso.workos.api_base_url"
     // Optional defaults to target a WorkOS SSO flow without passing query params on start
     KeyWorkOSDefaultConnectionID  = "sso.workos.default_connection_id"
     KeyWorkOSDefaultOrganizationID = "sso.workos.default_organization_id"
@@ -52,6 +54,11 @@ const (
     // KeySSORedirectAllowlist is a comma-separated list of allowed redirect URL prefixes for SSO start requests.
     // Example: "https://app.example.com,https://staging.example.com"
     KeySSORedirectAllowlist = "sso.redirect_allowlist"
+
+    // Per-tenant CORS allowlist for browser apps calling the API.
+    // Comma-separated list of exact origins, e.g., "https://app.example.com,https://staging.example.com".
+    // This augments the global env CORS_ALLOWED_ORIGINS. Endpoints without a tenant context still rely on the global list.
+    KeyAppCORSAllowedOrigins = "app.cors_allowed_origins"
 
     // Rate limiting keys (per-endpoint). All are optional and support tenant overrides.
     // Windows use Go duration strings (e.g., "1m", "10s"). Limits are integers.

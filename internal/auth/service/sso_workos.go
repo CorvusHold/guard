@@ -1,12 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +21,47 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+var compatibleWorkOSIntents = map[string]struct{}{"sso": {}, "dsync": {}, "audit_logs": {}, "log_streams": {}, "domain_verification": {}, "certificate_renewal": {}}
+
+// httpDoWithRetry executes the request builder up to 3 attempts with a short
+// exponential backoff on transient network errors or 5xx responses.
+func httpDoWithRetry(ctx context.Context, client *http.Client, build func() (*http.Request, error)) (*http.Response, error) {
+    const maxAttempts = 3
+    backoffs := []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+    for attempt := 1; attempt <= maxAttempts; attempt++ {
+        req, err := build()
+        if err != nil {
+            return nil, err
+        }
+        resp, err := client.Do(req)
+        if err != nil {
+            // Retry network timeouts/temporary errors
+            if ne, ok := err.(net.Error); ok && (ne.Timeout() || ne.Temporary()) {
+                if attempt < maxAttempts {
+                    if attempt-1 < len(backoffs) { time.Sleep(backoffs[attempt-1]) } else { time.Sleep(1 * time.Second) }
+                    continue
+                }
+            }
+            // Non-network error: try again if attempts remain
+            if attempt < maxAttempts {
+                if attempt-1 < len(backoffs) { time.Sleep(backoffs[attempt-1]) } else { time.Sleep(1 * time.Second) }
+                continue
+            }
+            return nil, err
+        }
+        // Retry on 5xx
+        if resp.StatusCode >= 500 && resp.StatusCode <= 599 && attempt < maxAttempts {
+            // drain and close before retry
+            _, _ = io.Copy(io.Discard, resp.Body)
+            _ = resp.Body.Close()
+            if attempt-1 < len(backoffs) { time.Sleep(backoffs[attempt-1]) } else { time.Sleep(1 * time.Second) }
+            continue
+        }
+        return resp, nil
+    }
+    return nil, errors.New("exhausted retries")
+}
 
 // startWorkOS builds the WorkOS authorization URL using tenant-scoped settings.
 // It stores the state in Redis for CSRF protection and supports both connection_id and organization_id.
@@ -84,7 +128,11 @@ func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string,
 		}
 	}
 
-	u, _ := url.Parse("https://api.workos.com/sso/authorize")
+	// Build WorkOS authorize URL using tenant-scoped API base
+	apiBase, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSAPIBaseURL, &in.TenantID, "https://api.workos.com")
+	u, _ := url.Parse(strings.TrimRight(apiBase, "/"))
+	u.Path = "/sso/authorize"
+	// u, _ := url.Parse("https://api.workos.com/sso/authorize")
 	q := u.Query()
 	q.Set("client_id", clientID)
 	// WorkOS requires response_type=code
@@ -208,15 +256,18 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	form.Set("code", code)
 	form.Set("redirect_uri", redirectURI)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.workos.com/sso/token", strings.NewReader(form.Encode()))
-	if err != nil {
-		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_build_error"}, Time: time.Now()})
-		return domain.AccessTokens{}, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	apiBase, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSAPIBaseURL, &tenantID, "https://api.workos.com")
+	tokenURL := strings.TrimRight(apiBase, "/") + "/sso/token"
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	resp, err := httpClient.Do(req)
+	buildReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+		if err != nil { return nil, err }
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return req, nil
+	}
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpDoWithRetry(ctx, httpClient, buildReq)
 	if err != nil {
 		_ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.login.failure", TenantID: tenantID, Meta: map[string]string{"provider": in.Provider, "reason": "token_exchange_transport_error"}, Time: time.Now()})
 		return domain.AccessTokens{}, err
@@ -305,4 +356,132 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		Time:     time.Now(),
 	})
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
+}
+
+func (s *SSO) OrganizationPortalLinkGeneratorWorkOS(ctx context.Context, in domain.SSOOrganizationPortalLinkGeneratorInput) (plink domain.PortalLink, err error) {
+    s.log.Info().
+        Str("provider", in.Provider).
+        Str("tenant_id", in.TenantID.String()).
+        Str("organization_id", in.OrganizationID).
+        Str("intent", strings.TrimSpace(in.Intent)).
+        Msg("sso.portal_link:start")
+    if in.Provider != "workos" {
+        s.log.Error().Str("provider", in.Provider).Msg("sso.portal_link:error:provider_not_supported")
+        return domain.PortalLink{}, errors.New("provider not supported")
+    }
+    orgID := in.OrganizationID
+    if orgID == "" {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Msg("sso.portal_link:error:organization_id_required")
+        return domain.PortalLink{}, errors.New("organization ID not provided")
+    }
+    tenantID := in.TenantID.String()
+    if tenantID == "" {
+        s.log.Error().Msg("sso.portal_link:error:tenant_id_required")
+        return domain.PortalLink{}, errors.New("tenant ID not provided")
+    }
+    // GET TENANT SSO CONFIG
+    settingProvider, err := s.settings.GetString(ctx, sdomain.KeySSOProvider, &in.TenantID, "")
+    if err != nil {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Err(err).Msg("sso.portal_link:error:get_sso_provider")
+        return domain.PortalLink{}, err
+    }
+    if settingProvider != "workos" {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Str("sso_provider", settingProvider).Msg("sso.portal_link:error:tenant_provider_mismatch")
+        return domain.PortalLink{}, errors.New("provider not workos")
+    }
+    apiKey, err := s.settings.GetString(ctx, sdomain.KeyWorkOSAPIKey, &in.TenantID, "")
+    if err != nil {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Err(err).Msg("sso.portal_link:error:get_api_key")
+        return domain.PortalLink{}, err
+    }
+    if apiKey == "" {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Msg("sso.portal_link:error:api_key_missing")
+        return domain.PortalLink{}, errors.New("workos api key not configured")
+    }
+    // Map custom intents and default when empty
+    intent := strings.TrimSpace(in.Intent)
+    if intent == "" { intent = "sso" }
+    if intent == "user_management" { intent = "sso" }
+    if _, ok := compatibleWorkOSIntents[intent]; !ok {
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Str("intent", intent).Msg("sso.portal_link:error:intent_incompatible")
+        return domain.PortalLink{}, errors.New("intent not compatible with workos")
+    }
+    s.log.Debug().
+        Str("tenant_id", in.TenantID.String()).
+        Str("organization_id", orgID).
+        Str("intent", intent).
+        Msg("sso.portal_link:build_payload")
+    type payload struct {
+        Organization string `json:"organization"`
+        Intent       string `json:"intent"`
+    }
+    p := &payload{Organization: orgID, Intent: intent}
+    b, err := json.Marshal(p)
+    if err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "json_marshalling_error"}, Time: time.Now()})
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Err(err).Msg("sso.portal_link:error:json_marshal")
+        return domain.PortalLink{}, err
+    }
+    apiBase, _ := s.settings.GetString(ctx, sdomain.KeyWorkOSAPIBaseURL, &in.TenantID, "https://api.workos.com")
+    portalURL := strings.TrimRight(apiBase, "/") + "/portal/generate_link"
+    s.log.Debug().Str("tenant_id", in.TenantID.String()).Str("portal_url", portalURL).Msg("sso.portal_link:http_request:build")
+    buildReq := func() (*http.Request, error) {
+        req, err := http.NewRequestWithContext(ctx, http.MethodPost, portalURL, bytes.NewReader(b))
+        if err != nil { return nil, err }
+        req.Header.Set("Authorization", "Bearer "+apiKey)
+        req.Header.Set("Content-Type", "application/json")
+        return req, nil
+    }
+
+    httpClient := &http.Client{Timeout: 5 * time.Second}
+    resp, err := httpDoWithRetry(ctx, httpClient, buildReq)
+    if err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_transport_error", "intent": intent}, Time: time.Now()})
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Str("intent", intent).Err(err).Msg("sso.portal_link:error:http_transport")
+        return domain.PortalLink{}, err
+    }
+    defer func() { _ = resp.Body.Close() }()
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_read_error", "intent": intent}, Time: time.Now()})
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Str("intent", intent).Err(err).Msg("sso.portal_link:error:http_read")
+        return domain.PortalLink{}, err
+    }
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_failed", "status": resp.Status, "intent": intent}, Time: time.Now()})
+        s.log.Error().
+            Str("tenant_id", in.TenantID.String()).
+            Str("intent", intent).
+            Int("status_code", resp.StatusCode).
+            Msg("sso.portal_link:error:http_status")
+        return domain.PortalLink{}, errors.New(string(body))
+    }
+    var result map[string]interface{}
+    if err := json.Unmarshal(body, &result); err != nil {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_unmarshal_error", "intent": intent}, Time: time.Now()})
+        s.log.Error().Str("tenant_id", in.TenantID.String()).Str("intent", intent).Err(err).Msg("sso.portal_link:error:unmarshal")
+        return domain.PortalLink{}, err
+    }
+    if link, ok := result["link"].(string); ok {
+        _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.success", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "link": link, "intent": intent}, Time: time.Now()})
+        // Avoid logging the full link; capture host only for observability
+        if u, err := url.Parse(link); err == nil {
+            s.log.Info().
+                Str("tenant_id", in.TenantID.String()).
+                Str("intent", intent).
+                Str("organization_id", orgID).
+                Str("link_host", u.Host).
+                Msg("sso.portal_link:success")
+        } else {
+            s.log.Info().
+                Str("tenant_id", in.TenantID.String()).
+                Str("intent", intent).
+                Str("organization_id", orgID).
+                Msg("sso.portal_link:success")
+        }
+        return domain.PortalLink{Link: link}, nil
+    }
+    _ = s.pub.Publish(ctx, evdomain.Event{Type: "auth.sso.portal_link_generator.failure", TenantID: in.TenantID, Meta: map[string]string{"provider": in.Provider, "reason": "http_request_invalid_response", "response": string(body), "intent": intent}, Time: time.Now()})
+    s.log.Error().Str("tenant_id", in.TenantID.String()).Str("intent", intent).Msg("sso.portal_link:error:invalid_response")
+    return domain.PortalLink{}, errors.New("workos http request invalid response")
 }

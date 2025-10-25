@@ -7,6 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
+type PortalLink struct {
+	Link string `json:"link"`
+}
 // AccessTokens represents the issued tokens payload.
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -118,6 +121,10 @@ type Service interface {
 	// HasPermission checks whether user has a permission, optionally scoped to an object.
 	HasPermission(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, key, objectType string, objectID *string) (bool, error)
 
+	// Email discovery methods
+	FindTenantsByUserEmail(ctx context.Context, email string) ([]TenantInfo, error)
+	GetUserByEmail(ctx context.Context, email, tenantID string) (*User, error)
+
     // --- FGA ---
     // Group management
     CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
@@ -181,10 +188,18 @@ type SSOCallbackInput struct {
 	IP        string
 }
 
+type SSOOrganizationPortalLinkGeneratorInput struct {
+	Provider string
+	TenantID uuid.UUID
+	Intent   string
+	OrganizationID string
+}
+
 // SSOService defines the contract for SSO/Social login flows.
 type SSOService interface {
 	Start(ctx context.Context, in SSOStartInput) (authURL string, err error)
 	Callback(ctx context.Context, in SSOCallbackInput) (AccessTokens, error)
+	OrganizationPortalLinkGenerator(ctx context.Context, in SSOOrganizationPortalLinkGeneratorInput) (PortalLink, error)
 }
 
 // Repository abstracts data access needed by the auth service.
@@ -251,6 +266,9 @@ type Repository interface {
 	ListUserGroups(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 	ListACLPermissionKeysForUser(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) ([]PermissionGrant, error)
 	ListACLPermissionKeysForGroups(ctx context.Context, tenantID uuid.UUID, groupIDs []uuid.UUID) ([]GroupPermissionGrant, error)
+
+	// Email discovery methods
+	FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]AuthIdentity, error)
 
     // --- FGA repository methods (groups, memberships, ACL tuples) ---
     // Groups
@@ -383,4 +401,10 @@ type GroupPermissionGrant struct {
 // ResolvedPermissions aggregates all grants for a user.
 type ResolvedPermissions struct {
 	Grants []PermissionGrant
+}
+
+// TenantInfo represents basic tenant information for discovery
+type TenantInfo struct {
+	ID   string
+	Name string
 }

@@ -1,6 +1,6 @@
 {
-  "count": 54,
-  "generatedAt": "2025-08-23T16:45:17.799Z",
+  "count": 55,
+  "generatedAt": "2025-09-02T06:52:59.179Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -822,6 +822,60 @@
         "status": "200"
       },
       "summary": "Handle SSO/OAuth callback",
+      "tags": [
+        "auth.sso"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_v1_auth_sso_by_provider_portal_link",
+      "path": "/v1/auth/sso/{provider}/portal-link",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.PortalLink"
+        },
+        "status": "200"
+      },
+      "summary": "Generate organization portal link",
       "tags": [
         "auth.sso"
       ]

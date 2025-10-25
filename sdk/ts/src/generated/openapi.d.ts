@@ -3498,6 +3498,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/sso/{provider}/portal-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Generate organization portal link
+         * @description Generates a link to the organization portal for the given provider and organization ID (admin-only)
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Organization identifier */
+                    organization_id: string;
+                    /** @description Tenant ID (UUID) */
+                    tenant_id: string;
+                    /** @description Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management) */
+                    intent?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description SSO provider (workos) */
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["domain.PortalLink"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Too Many Requests */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/sso/{provider}/start": {
         parameters: {
             query?: never;
@@ -3982,6 +4075,9 @@ export interface components {
             roles?: string[];
             tenant_id?: string;
             user_id?: string;
+        };
+        "domain.PortalLink": {
+            link?: string;
         };
         "domain.UserProfile": {
             email?: string;
