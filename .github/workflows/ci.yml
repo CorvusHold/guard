@@ -349,8 +349,8 @@ jobs:
             ui/test-results
             ui/playwright-report
 
-  perf:
-    name: Performance (k6)
+  perf-smoke:
+    name: Performance - Smoke (k6)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -381,25 +381,167 @@ jobs:
         run: |
           make k6-smoke
 
-      - name: k6 rate limit (short)
+  perf-rate-limit-login:
+    name: Performance - Login Rate Limit (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run login rate limit (short)
         env:
           K6_ITERATIONS: '120'
         run: |
           make k6-rate-limit-login
-      
-      - name: k6 login stress
+
+  perf-login-stress:
+    name: Performance - Login Stress (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run login stress
         run: |
           make k6-login-stress
 
-      - name: k6 mfa invalid
+  perf-mfa-invalid:
+    name: Performance - MFA Invalid (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run MFA invalid scenario
         run: |
           make k6-mfa-invalid
 
-      - name: k6 portal link smoke
+  perf-portal-link-smoke:
+    name: Performance - Portal Link Smoke (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run portal link smoke
         run: |
           make k6-portal-link-smoke
 
-      - name: k6 rate limit portal link
+  perf-rate-limit-portal-link:
+    name: Performance - Portal Link Rate Limit (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run portal link rate limit
+        env:
+          K6_ITERATIONS: '120'
         run: |
           make k6-rate-limit-portal-link
 
