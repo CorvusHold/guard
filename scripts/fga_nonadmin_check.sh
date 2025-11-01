@@ -23,19 +23,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BASE=${BASE:-http://localhost:8080}
-
-# Read TENANT_ID from .env.fga if not provided
-if [[ -z "${TENANT_ID:-}" ]] && [[ -f .env.fga ]]; then
-  # shellcheck disable=SC1091
-  source .env.fga
-fi
-: "${TENANT_ID:?TENANT_ID is required. Run scripts/fga_smoke.sh first or export TENANT_ID.}"
-
-ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-Password123!}
-NONADMIN_EMAIL=${NONADMIN_EMAIL:-user1@example.com}
-NONADMIN_PASSWORD=${NONADMIN_PASSWORD:-Password123!}
+BASE=${BASE:-http://localhost:8081}
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "This script requires jq. Install jq and re-run." >&2
@@ -72,13 +60,32 @@ for i in {1..60}; do
   if (( i == 60 )); then echo "API not ready after timeout" >&2; exit 1; fi
 done
 
+# Always create fresh tenant and admin for isolated test
+echo "Creating fresh tenant and admin for test..."
+TENANT_NAME=${TENANT_NAME:-test}
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-Password123!}
+
+TENANT_LINE=$(go run ./cmd/seed tenant --name "$TENANT_NAME" | grep -m1 '^TENANT_ID=')
+TENANT_ID=${TENANT_LINE#TENANT_ID=}
+echo "TENANT_ID=$TENANT_ID" > .env.fga
+
+go run ./cmd/seed user --tenant-id "$TENANT_ID" \
+  --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" --roles admin >/dev/null || true
+
+echo "Created tenant $TENANT_ID and admin $ADMIN_EMAIL"
+
+NONADMIN_EMAIL=${NONADMIN_EMAIL:-user1@example.com}
+NONADMIN_PASSWORD=${NONADMIN_PASSWORD:-Password123!}
+
 # 1) Ensure non-admin user exists (idempotent)
 GOFLAGS=${GOFLAGS:-}
-if ! go run $GOFLAGS ./cmd/seed user --tenant-id "$TENANT_ID" \
-  --email "$NONADMIN_EMAIL" --password "$NONADMIN_PASSWORD" >/dev/null 2>&1; then
-  echo "Ensured non-admin (may already exist): $NONADMIN_EMAIL"
-else
+if go run $GOFLAGS ./cmd/seed user --tenant-id "$TENANT_ID" \
+  --email "$NONADMIN_EMAIL" --password "$NONADMIN_PASSWORD" 2>&1 | grep -q 'created user\|existing user'; then
   echo "Created non-admin: $NONADMIN_EMAIL"
+else
+  echo "Failed to create non-admin user" >&2
+  exit 1
 fi
 
 # 2) Login non-admin and get id (with 429-aware retry)
