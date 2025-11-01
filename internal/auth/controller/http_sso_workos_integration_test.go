@@ -445,7 +445,7 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 			b, _ := io.ReadAll(r.Body)
 			_ = r.Body.Close()
 			formVals, _ := url.ParseQuery(string(b))
-			expectedRedirect := os.Getenv("PUBLIC_BASE_URL") + "/v1/auth/sso/google/callback"
+			expectedRedirect := cfg.PublicBaseURL + "/v1/auth/sso/google/callback"
 			if formVals.Get("redirect_uri") != expectedRedirect {
 				return httpmock.NewStringResponse(400, `{"error":"bad_redirect_uri"}`), nil
 			}
@@ -514,10 +514,10 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 		t.Fatalf("exp out of expected window: got %d not in [%d,%d]", exp, min, max)
 	}
     // iss/aud should match PUBLIC_BASE_URL
-    if iss, _ := claims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") {
-        t.Fatalf("iss mismatch: %v", claims["iss"]) }
-    if aud, _ := claims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") {
-        t.Fatalf("aud mismatch: %v", claims["aud"]) }
+    if iss, _ := claims["iss"].(string); iss != cfg.PublicBaseURL {
+        t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["iss"]) }
+    if aud, _ := claims["aud"].(string); aud != cfg.PublicBaseURL {
+        t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["aud"]) }
 
     // audit event published
     if len(events) == 0 { t.Fatalf("expected an audit event") }

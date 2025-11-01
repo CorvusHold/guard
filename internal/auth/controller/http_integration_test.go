@@ -468,8 +468,8 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
     if err != nil { t.Fatalf("decode jwt payload: %v", err) }
     var sclaims map[string]any
     if err := json.Unmarshal(spayload, &sclaims); err != nil { t.Fatalf("unmarshal claims: %v", err) }
-    if iss, _ := sclaims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("iss mismatch: %v", sclaims["iss"]) }
-    if aud, _ := sclaims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("aud mismatch: %v", sclaims["aud"]) }
+    if iss, _ := sclaims["iss"].(string); iss != cfg.PublicBaseURL { t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, sclaims["iss"]) }
+    if aud, _ := sclaims["aud"].(string); aud != cfg.PublicBaseURL { t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, sclaims["aud"]) }
 
     // POST /v1/auth/password/login
     lBody := map[string]string{
@@ -500,8 +500,8 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
     if err != nil { t.Fatalf("decode jwt payload: %v", err) }
     var lclaims map[string]any
     if err := json.Unmarshal(lpayload, &lclaims); err != nil { t.Fatalf("unmarshal claims: %v", err) }
-    if iss, _ := lclaims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("iss mismatch: %v", lclaims["iss"]) }
-    if aud, _ := lclaims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("aud mismatch: %v", lclaims["aud"]) }
+    if iss, _ := lclaims["iss"].(string); iss != cfg.PublicBaseURL { t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, lclaims["iss"]) }
+    if aud, _ := lclaims["aud"].(string); aud != cfg.PublicBaseURL { t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, lclaims["aud"]) }
 
     // Assert audit event for password login
     foundLogin := false
