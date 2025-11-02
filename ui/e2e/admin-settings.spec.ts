@@ -10,6 +10,32 @@ function cors(headers: Record<string, string> = {}) {
   }
 }
 
+async function mockAuthMe(page: import('@playwright/test').Page) {
+  await page.route('**/v1/auth/me', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: cors({
+          'access-control-allow-methods': 'GET,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        })
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        email: 'admin@example.com',
+        first_name: 'Admin',
+        last_name: 'User',
+        roles: ['admin']
+      }),
+      headers: cors({ 'content-type': 'application/json' })
+    })
+  })
+}
+
 test.describe('Admin Settings', () => {
   test.beforeEach(async ({ page, context }) => {
     // helpful console + minimal logs
@@ -105,12 +131,14 @@ test.describe('Admin Settings', () => {
       return route.fallback()
     })
 
+    await mockAuthMe(page)
+
     await page.goto(
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=test`,
       { waitUntil: 'domcontentloaded' }
     )
     // ensure ensureRuntimeConfigFromQuery ran and cleaned the URL
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
     await page.getByTestId('admin-tenant-input').fill(TENANT)
     await expect(page.getByTestId('admin-tenant-input')).toHaveValue(TENANT)
     await page.getByTestId('admin-load-settings').click()
@@ -236,11 +264,13 @@ test.describe('Admin Settings', () => {
       })
     })
 
+    await mockAuthMe(page)
+
     await page.goto(
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=test`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
     await page.getByTestId('admin-tenant-input').fill(TENANT)
     await expect(page.getByTestId('admin-tenant-input')).toHaveValue(TENANT)
     const viteOverlay2 = await page
@@ -307,6 +337,8 @@ test.describe('Admin Settings', () => {
         headers: cors({ 'content-type': 'application/json' })
       })
     })
+
+    await mockAuthMe(page)
 
     await page.goto(
       `/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=redirect`

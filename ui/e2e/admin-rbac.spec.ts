@@ -172,7 +172,7 @@ test.describe('Admin RBAC', () => {
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=rbac-roles`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
     await page.getByTestId('admin-tenant-input').fill(TENANT)
     await page.getByTestId('rbac-roles-refresh').click()
     await expect(page.getByTestId('rbac-roles-empty')).toBeVisible()
@@ -254,7 +254,7 @@ test.describe('Admin RBAC', () => {
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=rbac-perms`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
     await page.getByTestId('admin-tenant-input').fill(TENANT)
 
     // Load roles for permissions panel
@@ -331,7 +331,7 @@ test.describe('Admin RBAC', () => {
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=rbac-user-roles`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
     await page.getByTestId('admin-tenant-input').fill(TENANT)
 
     // List roles
@@ -386,7 +386,7 @@ test.describe('Admin RBAC', () => {
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=rbac-permissions`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
 
     // Trigger load
     await page.getByTestId('rbac-permissions-refresh').click()

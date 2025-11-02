@@ -57,10 +57,16 @@ export function ensureRuntimeConfigFromQuery(): void {
   } catch (_) {
     // invalid url -> ignore persistence
   }
-  // Clean the URL to remove secrets/params
+  // Clean the URL to remove secrets/params, but preserve 'source' for tab navigation
   try {
     const { pathname, hash } = window.location
-    const newUrl = pathname + (hash || '')
+    const currentParams = new URLSearchParams(window.location.search)
+    const source = currentParams.get('source')
+    let newUrl = pathname
+    if (source) {
+      newUrl += `?source=${encodeURIComponent(source)}`
+    }
+    newUrl += hash || ''
     window.history.replaceState({}, '', newUrl)
   } catch (_) {
     // ignore

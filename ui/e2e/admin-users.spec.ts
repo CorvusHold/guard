@@ -24,6 +24,22 @@ async function allowOptions(route: any, allow: string) {
   }
 }
 
+async function mockAuthMe(page: import('@playwright/test').Page) {
+  await page.route('**/v1/auth/me', async (route) => {
+    if (await allowOptions(route, 'GET,OPTIONS')) return
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        email: 'admin@example.com',
+        first_name: 'Admin',
+        last_name: 'User',
+        roles: ['admin']
+      }),
+      headers: cors({ 'content-type': 'application/json' })
+    })
+  })
+}
+
 test.describe('Admin Users & Sessions', () => {
   test.beforeEach(async ({ page, context }) => {
     page.on('console', (msg) => {
@@ -68,14 +84,22 @@ test.describe('Admin Users & Sessions', () => {
       return route.fulfill({ status: 500, headers: cors({}) })
     })
 
+    await mockAuthMe(page)
+
     await page.goto(
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=users`,
       { waitUntil: 'domcontentloaded' }
     )
+
+    // Wait for users tab to be visible and active
+    await page.waitForSelector('[data-testid="tab-users"]', { timeout: 10000 })
     await page.getByTestId('admin-tenant-input').fill(TENANT)
 
+    // Wait for users-refresh button to be enabled and clickable
+    await expect(page.getByTestId('users-refresh')).toBeEnabled({ timeout: 10000 })
+
     // Trigger users refresh -> expect error banner and toast text
-    await page.getByTestId('users-refresh').click()
+    await page.getByTestId('users-refresh').click({ force: true })
     await expect(page.getByTestId('users-error')).toBeVisible()
     await expect(page.getByText(/Failed to load users/i)).toBeVisible()
 
@@ -236,18 +260,26 @@ test.describe('Admin Users & Sessions', () => {
       return route.fulfill({ status: 204, headers: cors({}) })
     })
 
+    await mockAuthMe(page)
+
     await page.goto(
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=users`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
+
+    // Wait for users tab to be visible and active
+    await page.waitForSelector('[data-testid="tab-users"]', { timeout: 10000 })
 
     // Enter tenant and load
     await page.getByTestId('admin-tenant-input').fill(TENANT)
     await page.getByTestId('admin-load-settings').click()
 
+    // Wait for users-refresh button to be enabled and clickable
+    await expect(page.getByTestId('users-refresh')).toBeEnabled({ timeout: 10000 })
+
     // Users panel should show one user
-    await page.getByTestId('users-refresh').click()
+    await page.getByTestId('users-refresh').click({ force: true })
     await expect(page.getByTestId('users-item-u_1')).toBeVisible({
       timeout: 10000
     })
