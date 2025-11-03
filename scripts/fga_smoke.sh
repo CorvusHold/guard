@@ -33,7 +33,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BASE="http://localhost:8080"
+BASE="http://localhost:8081"
 TENANT_NAME=${TENANT_NAME:-test}
 ADMIN_EMAIL=${EMAIL:-admin@example.com}
 ADMIN_PASSWORD=${PASSWORD:-Password123!}

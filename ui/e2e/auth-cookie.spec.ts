@@ -65,7 +65,7 @@ test.describe('Cookie auth mode: guard + logout', () => {
       { waitUntil: 'domcontentloaded' }
     )
     // Expect redirect to login screen
-    await expect(page).toHaveURL(/\/+$/)
+    await expect(page).toHaveURL(/\/+(\?|$)/)
   })
 
   test('logout in cookie mode calls API and redirects home', async ({
@@ -131,7 +131,7 @@ test.describe('Cookie auth mode: guard + logout', () => {
     await page.getByTestId('admin-logout').click()
 
     // Ensure we navigated back to home and API was called
-    await expect(page).toHaveURL(/\/+$/)
+    await expect(page).toHaveURL(/\/+(\?|$)/)
     expect(logoutCalled).toBeTruthy()
   })
 })

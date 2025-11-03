@@ -109,7 +109,7 @@ services:
         condition: service_healthy
 
   # Load Testing (Optional - use profile to enable)
-  k6_test:
+  k6:
     image: grafana/k6:latest
     container_name: guard_test_k6
     profiles: ["load-test"]

@@ -1,6 +1,6 @@
 {
-  "count": 55,
-  "generatedAt": "2025-09-02T06:52:59.179Z",
+  "count": 57,
+  "generatedAt": "2025-11-02T16:25:39.092Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -957,6 +957,23 @@
       ]
     },
     {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_well_known_oauth_authorization_server",
+      "path": "/.well-known/oauth-authorization-server",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.oauth2MetadataResp"
+        },
+        "status": "200"
+      },
+      "summary": "OAuth 2.0 Authorization Server Metadata",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -1577,6 +1594,44 @@
         "status": "200"
       },
       "summary": "Authorization decision",
+      "tags": [
+        "auth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_v1_auth_email_discover",
+      "path": "/v1/auth/email/discover",
+      "requestBody": {
+        "$ref": "#/definitions/controller.EmailDiscoveryRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.EmailDiscoveryResponse"
+        },
+        "status": "200"
+      },
+      "summary": "Discover user/tenant by email",
       "tags": [
         "auth"
       ]

@@ -1,5 +1,29 @@
 basePath: /
 definitions:
+  controller.EmailDiscoveryRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  controller.EmailDiscoveryResponse:
+    properties:
+      found:
+        type: boolean
+      has_tenant:
+        type: boolean
+      suggestions:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      tenant_name:
+        type: string
+      user_exists:
+        type: boolean
+    type: object
   controller.adminUpdateNamesReq:
     properties:
       first_name:
@@ -301,6 +325,52 @@ definitions:
     - code
     - method
     type: object
+  controller.oauth2MetadataResp:
+    properties:
+      grant_types_supported:
+        items:
+          type: string
+        type: array
+      guard_auth_mode_default:
+        type: string
+      guard_auth_modes_supported:
+        description: Guard-specific extensions
+        items:
+          type: string
+        type: array
+      guard_version:
+        type: string
+      introspection_endpoint:
+        type: string
+      introspection_endpoint_auth_methods_supported:
+        items:
+          type: string
+        type: array
+      issuer:
+        type: string
+      response_types_supported:
+        items:
+          type: string
+        type: array
+      revocation_endpoint:
+        type: string
+      revocation_endpoint_auth_methods_supported:
+        items:
+          type: string
+        type: array
+      scopes_supported:
+        items:
+          type: string
+        type: array
+      token_endpoint:
+        type: string
+      token_endpoint_auth_methods_supported:
+        items:
+          type: string
+        type: array
+      userinfo_endpoint:
+        type: string
+    type: object
   controller.permissionGrantItem:
     properties:
       key:
@@ -312,6 +382,9 @@ definitions:
     type: object
   controller.putSettingsRequest:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
@@ -498,6 +571,9 @@ definitions:
     type: object
   controller.settingsResponse:
     properties:
+      app_cors_allowed_origins:
+        description: App
+        type: string
       sso_provider:
         description: SSO
         type: string
@@ -613,6 +689,20 @@ info:
   title: Guard CAS API
   version: "1.0"
 paths:
+  /.well-known/oauth-authorization-server:
+    get:
+      description: RFC 8414 compliant discovery endpoint that returns server metadata
+        including supported authentication modes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.oauth2MetadataResp'
+      summary: OAuth 2.0 Authorization Server Metadata
+      tags:
+      - auth
   /tenants:
     get:
       description: Lists tenants with optional filters and pagination
@@ -1761,6 +1851,40 @@ paths:
       security:
       - BearerAuth: []
       summary: Authorization decision
+      tags:
+      - auth
+  /v1/auth/email/discover:
+    post:
+      consumes:
+      - application/json
+      description: Check if an email exists in any tenant and provide guidance
+      parameters:
+      - description: Email to discover
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.EmailDiscoveryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.EmailDiscoveryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Discover user/tenant by email
       tags:
       - auth
   /v1/auth/introspect:

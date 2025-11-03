@@ -96,8 +96,8 @@ func TestMagic_Flow_Integration(t *testing.T) {
 	if err != nil { t.Fatalf("decode jwt payload: %v", err) }
 	var claims map[string]any
 	if err := json.Unmarshal(payload, &claims); err != nil { t.Fatalf("unmarshal claims: %v", err) }
-	if iss, _ := claims["iss"].(string); iss != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("iss mismatch: %v", claims["iss"]) }
-	if aud, _ := claims["aud"].(string); aud != os.Getenv("PUBLIC_BASE_URL") { t.Fatalf("aud mismatch: %v", claims["aud"]) }
+	if iss, _ := claims["iss"].(string); iss != cfg.PublicBaseURL { t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["iss"]) }
+	if aud, _ := claims["aud"].(string); aud != cfg.PublicBaseURL { t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["aud"]) }
 
 	// Audit event published
 	if len(events) == 0 { t.Fatalf("expected an audit event") }

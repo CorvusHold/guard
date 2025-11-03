@@ -349,8 +349,8 @@ jobs:
             ui/test-results
             ui/playwright-report
 
-  perf:
-    name: Performance (k6)
+  perf-smoke:
+    name: Performance - Smoke (k6)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -377,70 +377,173 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl
 
-      - name: Start data services (db, valkey)
-        run: |
-          docker compose up -d db valkey
-
-      - name: Wait for Postgres readiness
-        run: |
-          for i in {1..120}; do \
-            if docker compose exec -T db pg_isready -U guard >/dev/null 2>&1; then echo "Postgres ready"; break; fi; \
-            echo "Waiting for Postgres... ($i)"; sleep 1; \
-            if [ "$i" -eq 120 ]; then echo "Postgres not ready" >&2; exit 1; fi; \
-          done
-
-      - name: Run DB migrations
-        env:
-          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
-        run: |
-          go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$DATABASE_URL" up
-
-      - name: Start API
-        run: |
-          docker compose up -d api
-
-      - name: Wait for API readiness
-        run: |
-          for i in {1..120}; do \
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz || true); \
-            if [ "$code" = "200" ]; then echo "API ready"; break; fi; \
-            echo "Waiting for API... ($i)"; sleep 1; \
-            if [ "$i" -eq 120 ]; then echo "API not ready" >&2; exit 1; fi; \
-          done
-
-      - name: Seed test data for k6 (.env.k6)
-        env:
-          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
-          REDIS_ADDR: localhost:6380
-        run: |
-          make seed-test
-
-      - name: k6 smoke
+      - name: Run smoke tests
         run: |
           make k6-smoke
 
-      - name: k6 rate limit (short)
+  perf-rate-limit-login:
+    name: Performance - Login Rate Limit (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run login rate limit (short)
         env:
           K6_ITERATIONS: '120'
         run: |
           make k6-rate-limit-login
 
-      - name: Collect docker logs on failure
-        if: failure()
-        run: |
-          docker compose logs --no-color > perf-logs.txt || true
+  perf-login-stress:
+    name: Performance - Login Stress (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Upload logs artifact (perf)
-        if: failure()
-        uses: actions/upload-artifact@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          name: perf-logs
-          path: perf-logs.txt
+          go-version: '1.24.x'
 
-      - name: Tear down stack
-        if: always()
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
         run: |
-          docker compose down -v
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run login stress
+        run: |
+          make k6-login-stress
+
+  perf-mfa-invalid:
+    name: Performance - MFA Invalid (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run MFA invalid scenario
+        run: |
+          make k6-mfa-invalid
+
+  perf-portal-link-smoke:
+    name: Performance - Portal Link Smoke (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run portal link smoke
+        run: |
+          make k6-portal-link-smoke
+
+  perf-rate-limit-portal-link:
+    name: Performance - Portal Link Rate Limit (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Run portal link rate limit
+        env:
+          K6_ITERATIONS: '120'
+        run: |
+          make k6-rate-limit-portal-link
 
   fga-smoke:
     name: FGA Smoke
@@ -471,62 +574,7 @@ jobs:
           sudo apt-get install -y curl jq
 
       - name: Start data services (db, valkey)
-        run: |
-          docker compose up -d db valkey
-
-      - name: Wait for Postgres readiness
-        run: |
-          for i in {1..120}; do \
-            if docker compose exec -T db pg_isready -U guard >/dev/null 2>&1; then echo "Postgres ready"; break; fi; \
-            echo "Waiting for Postgres... ($i)"; sleep 1; \
-            if [ "$i" -eq 120 ]; then echo "Postgres not ready" >&2; exit 1; fi; \
-          done
-
-      - name: Run DB migrations
-        env:
-          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
-        run: |
-          go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$DATABASE_URL" up
-
-      - name: Start API
-        run: |
-          docker compose up -d api
-
-      - name: Wait for API readiness
-        run: |
-          for i in {1..120}; do \
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz || true); \
-            if [ "$code" = "200" ]; then echo "API ready"; break; fi; \
-            echo "Waiting for API... ($i)"; sleep 1; \
-            if [ "$i" -eq 120 ]; then echo "API not ready" >&2; exit 1; fi; \
-          done
-
-      - name: Go mod download
-        run: go mod download
-
-      - name: Run FGA smoke script
-        env:
-          DATABASE_URL: postgres://guard:guard@localhost:5433/guard?sslmode=disable
-        run: |
-          bash scripts/fga_smoke.sh
+        run: make test-fga-smoke
 
       - name: Run non-admin helper check (deny → allow)
-        run: |
-          bash scripts/fga_nonadmin_check.sh
-
-      - name: Collect docker logs on failure
-        if: failure()
-        run: |
-          docker compose logs --no-color > fga-smoke-logs.txt || true
-
-      - name: Upload logs artifact (fga-smoke)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fga-smoke-logs
-          path: fga-smoke-logs.txt
-
-      - name: Tear down stack
-        if: always()
-        run: |
-          docker compose down -v
+        run: make test-fga-nonadmin-check

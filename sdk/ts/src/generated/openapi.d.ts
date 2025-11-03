@@ -4,6 +4,45 @@
  */
 
 export interface paths {
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OAuth 2.0 Authorization Server Metadata
+         * @description RFC 8414 compliant discovery endpoint that returns server metadata including supported authentication modes
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.oauth2MetadataResp"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants": {
         parameters: {
             query?: never;
@@ -2003,6 +2042,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/email/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover user/tenant by email
+         * @description Check if an email exists in any tenant and provide guidance
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Email to discover */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.EmailDiscoveryRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.EmailDiscoveryResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/introspect": {
         parameters: {
             query?: never;
@@ -3816,6 +3921,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        "controller.EmailDiscoveryRequest": {
+            email: string;
+        };
+        "controller.EmailDiscoveryResponse": {
+            found?: boolean;
+            has_tenant?: boolean;
+            suggestions?: string[];
+            tenant_id?: string;
+            tenant_name?: string;
+            user_exists?: boolean;
+        };
         "controller.adminUpdateNamesReq": {
             first_name?: string;
             last_name?: string;
@@ -3945,12 +4061,31 @@ export interface components {
             /** @enum {string} */
             method: "totp" | "backup_code";
         };
+        "controller.oauth2MetadataResp": {
+            grant_types_supported?: string[];
+            guard_auth_mode_default?: string;
+            /** @description Guard-specific extensions */
+            guard_auth_modes_supported?: string[];
+            guard_version?: string;
+            introspection_endpoint?: string;
+            introspection_endpoint_auth_methods_supported?: string[];
+            issuer?: string;
+            response_types_supported?: string[];
+            revocation_endpoint?: string;
+            revocation_endpoint_auth_methods_supported?: string[];
+            scopes_supported?: string[];
+            token_endpoint?: string;
+            token_endpoint_auth_methods_supported?: string[];
+            userinfo_endpoint?: string;
+        };
         "controller.permissionGrantItem": {
             key?: string;
             object_id?: string;
             object_type?: string;
         };
         "controller.putSettingsRequest": {
+            /** @description App */
+            app_cors_allowed_origins?: string;
             sso_provider?: string;
             sso_redirect_allowlist?: string;
             sso_state_ttl?: string;
@@ -4035,6 +4170,8 @@ export interface components {
             sessions?: components["schemas"]["controller.sessionItem"][];
         };
         "controller.settingsResponse": {
+            /** @description App */
+            app_cors_allowed_origins?: string;
             /** @description SSO */
             sso_provider?: string;
             sso_redirect_allowlist?: string;

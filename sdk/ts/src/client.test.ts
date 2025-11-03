@@ -198,4 +198,133 @@ describe('GuardClient', () => {
     const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock, tenantId: 't-1' });
     await expect(() => client.getSsoOrganizationPortalLink('workos', { tenant_id: 't-1' } as any)).rejects.toThrow('organization_id is required');
   });
+
+  describe('OAuth2 Discovery', () => {
+    it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
+      const storage = new InMemoryStorage();
+      const { fetchMock, calls } = makeFetchMock([
+        mockResponse({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          jsonBody: {
+            issuer: 'https://api.example.com',
+            token_endpoint: 'https://api.example.com/v1/auth/refresh',
+            introspection_endpoint: 'https://api.example.com/v1/auth/introspect',
+            revocation_endpoint: 'https://api.example.com/v1/auth/revoke',
+            userinfo_endpoint: 'https://api.example.com/v1/auth/me',
+            response_types_supported: ['token'],
+            grant_types_supported: ['password', 'refresh_token'],
+            scopes_supported: ['openid', 'profile', 'email'],
+            guard_auth_modes_supported: ['bearer', 'cookie'],
+            guard_auth_mode_default: 'bearer',
+            guard_version: '1.0.0',
+          },
+        }),
+      ]);
+
+      const client = new GuardClient({ baseUrl, storage, fetchImpl: fetchMock });
+      const res = await client.getOAuth2Metadata();
+
+      expect(res.meta.status).toBe(200);
+      expect(res.data.issuer).toBe('https://api.example.com');
+      expect(res.data.guard_auth_modes_supported).toEqual(['bearer', 'cookie']);
+      expect(res.data.guard_auth_mode_default).toBe('bearer');
+      expect(res.data.guard_version).toBe('1.0.0');
+
+      // Verify endpoint called
+      expect(calls[0].input).toBe(`${baseUrl}/.well-known/oauth-authorization-server`);
+      expect(calls[0].init?.method).toBe('GET');
+    });
+
+    it('static discover() fetches metadata without creating client instance', async () => {
+      const mockMetadata = {
+        issuer: 'https://api.example.com',
+        token_endpoint: 'https://api.example.com/v1/auth/refresh',
+        introspection_endpoint: 'https://api.example.com/v1/auth/introspect',
+        revocation_endpoint: 'https://api.example.com/v1/auth/revoke',
+        userinfo_endpoint: 'https://api.example.com/v1/auth/me',
+        response_types_supported: ['token'],
+        grant_types_supported: ['password', 'refresh_token', 'urn:guard:params:oauth:grant-type:magic-link', 'urn:guard:params:oauth:grant-type:sso'],
+        scopes_supported: ['openid', 'profile', 'email'],
+        guard_auth_modes_supported: ['bearer', 'cookie'],
+        guard_auth_mode_default: 'cookie',
+        guard_version: '1.0.0',
+      };
+
+      const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(`${baseUrl}/.well-known/oauth-authorization-server`);
+        expect(init?.method).toBe('GET');
+        return mockResponse({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          jsonBody: mockMetadata,
+        });
+      };
+
+      const metadata = await GuardClient.discover(baseUrl, mockFetch);
+
+      expect(metadata.issuer).toBe('https://api.example.com');
+      expect(metadata.guard_auth_modes_supported).toEqual(['bearer', 'cookie']);
+      expect(metadata.guard_auth_mode_default).toBe('cookie');
+      expect(metadata.guard_version).toBe('1.0.0');
+      expect(metadata.grant_types_supported).toContain('password');
+      expect(metadata.grant_types_supported).toContain('urn:guard:params:oauth:grant-type:magic-link');
+    });
+
+    it('static discover() throws on non-ok response', async () => {
+      const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const response = mockResponse({
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+          jsonBody: { error: 'not found' },
+        });
+        // Add statusText property
+        Object.defineProperty(response, 'statusText', { value: 'Not Found' });
+        return response;
+      };
+
+      await expect(() => GuardClient.discover(baseUrl, mockFetch)).rejects.toThrow('Discovery failed: 404 Not Found');
+    });
+
+    it('can use discovered metadata to auto-configure client', async () => {
+      const mockMetadata = {
+        issuer: 'https://api.example.com',
+        guard_auth_modes_supported: ['bearer', 'cookie'],
+        guard_auth_mode_default: 'cookie',
+        guard_version: '1.0.0',
+      };
+
+      const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/.well-known/oauth-authorization-server')) {
+          return mockResponse({
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            jsonBody: mockMetadata,
+          });
+        }
+        // Login request
+        return mockResponse({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          jsonBody: { access_token: 'acc-1', refresh_token: 'ref-1' },
+        });
+      };
+
+      // Discover first
+      const metadata = await GuardClient.discover(baseUrl, mockFetch);
+      expect(metadata.guard_auth_mode_default).toBe('cookie');
+
+      // Then create client with discovered mode
+      const client = new GuardClient({
+        baseUrl,
+        authMode: metadata.guard_auth_mode_default as 'bearer' | 'cookie',
+        fetchImpl: mockFetch,
+      });
+
+      // Verify client works
+      const res = await client.passwordLogin({ email: 'test@example.com', password: 'pw' });
+      expect(res.meta.status).toBe(200);
+    });
+  });
 });

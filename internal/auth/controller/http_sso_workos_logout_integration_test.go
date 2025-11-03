@@ -98,7 +98,7 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 			b, _ := io.ReadAll(r.Body)
 			_ = r.Body.Close()
 			formVals, _ := url.ParseQuery(string(b))
-			expectedRedirect := os.Getenv("PUBLIC_BASE_URL") + "/v1/auth/sso/google/callback"
+			expectedRedirect := cfg.PublicBaseURL + "/v1/auth/sso/google/callback"
 			if formVals.Get("redirect_uri") != expectedRedirect {
 				return httpmock.NewStringResponse(400, `{"error":"bad_redirect_uri"}`), nil
 			}

@@ -55,22 +55,30 @@ test:
 	go test ./...
 
 # Run E2E/integration tests against test stack. No extra host tools required.
-test-e2e: compose-up-test db-wait-test migrate-up-test-dc
+test-e2e: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test ./...'
 	make compose-down-test
 
 # Run only the RBAC admin controller tests against the dockerized test stack
-test-rbac-admin: compose-up-test db-wait-test migrate-up-test-dc
+test-rbac-admin: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run HTTP_RBAC_Admin'
 	make compose-down-test
 
 # Run only FGA authorization integration tests against the dockerized test stack
-test-fga: compose-up-test db-wait-test migrate-up-test-dc
+test-fga: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -v ./internal/auth/controller -run ^TestHTTP_Authorize_'
 	make compose-down-test
 
+test-fga-smoke: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; SMOKE_WRITE_ENV=1 bash scripts/fga_smoke.sh'
+	make compose-down-test
+
+test-fga-nonadmin-check: compose-up-test db-wait-test db-purge-test  migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; PRE_CLEAN=1 PRE_CLEAN_MEMBERSHIP=1 bash scripts/fga_nonadmin_check.sh'
+	make compose-down-test
+
 # Run Go integration tests (build tag 'integration') against dockerized test stack
-test-integration: compose-up-test db-wait-test migrate-up-test-dc
+test-integration: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./...'
 	make compose-down-test
 
@@ -158,6 +166,10 @@ db-test-check:
 db-wait-test:
 	bash -lc 'for i in {1..60}; do docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard >/dev/null 2>&1 && echo "Postgres is ready" && exit 0; echo "Waiting for Postgres... ($$i)"; sleep 1; done; echo "Postgres not ready after timeout" >&2; exit 1'
 
+# Clean up test DB schema to avoid data pollution between runs
+db-purge-test:
+	docker compose -f docker-compose.test.yml exec -T db_test psql -U guard -d guard_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
 redis-test-ping:
 	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli ping || true
 
@@ -207,34 +219,34 @@ examples-url:
 # ---- k6 scenarios (via compose service 'k6') ----
 
 k6-smoke:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/smoke.js"'
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.test.yml run --rm -e K6_BASE_URL=http://api_test:8080 k6 "k6 run /scripts/smoke.js"'
 
 k6-login-stress:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm \
-		-e K6_BASE_URL=http://api:8080 \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.test.yml run --rm \
+		-e K6_BASE_URL=http://api_test:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
 		k6 "k6 run /scripts/login_stress.js"'
 
 k6-rate-limit-login:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.dev.yml run --rm \
-		-e K6_BASE_URL=http://api:8080 \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.test.yml run --rm \
+		-e K6_BASE_URL=http://api_test:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_EMAIL="$$K6_EMAIL" -e K6_PASSWORD="$$K6_PASSWORD" \
 		-e K6_ITERATIONS="$$K6_ITERATIONS" \
 		k6 "k6 run /scripts/rate_limit_login.js"'
 
 k6-mfa-invalid:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm -e K6_BASE_URL=http://api:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.test.yml run --rm -e K6_BASE_URL=http://api_test:8080 k6 "k6 run /scripts/mfa_verify_invalid.js"'
 
 k6-portal-link-smoke:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.dev.yml run --rm \
-		-e K6_BASE_URL=http://api:8080 \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.test.yml run --rm \
+		-e K6_BASE_URL=http://api_test:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
 		-e K6_INTENT="$${K6_INTENT:-sso}" \
 		k6 "k6 run /scripts/portal_link_smoke.js"'
 
 k6-rate-limit-portal-link:
-	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.dev.yml run --rm \
-		-e K6_BASE_URL=http://api:8080 \
+	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; : $${K6_ITERATIONS:=300}; set +a; docker compose -f docker-compose.test.yml run --rm \
+		-e K6_BASE_URL=http://api_test:8080 \
 		-e K6_TENANT_ID="$$K6_TENANT_ID" -e K6_ORG_ID="$$K6_ORG_ID" -e K6_ADMIN_TOKEN="$$K6_ADMIN_TOKEN" \
 		-e K6_INTENT="$${K6_INTENT:-sso}" -e K6_ITERATIONS="$$K6_ITERATIONS" \
 		k6 "k6 run /scripts/rate_limit_portal_link.js"'

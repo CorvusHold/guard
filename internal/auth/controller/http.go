@@ -694,8 +694,68 @@ func (h *Controller) WithRateLimit(settings sdomain.Service, store ratelimit.Sto
 // WithPublisher injects an audit event publisher for controller-level event emission.
 func (h *Controller) WithPublisher(p evdomain.Publisher) *Controller { h.pub = p; return h }
 
+// OAuth2Metadata godoc
+// @Summary      OAuth 2.0 Authorization Server Metadata
+// @Description  RFC 8414 compliant discovery endpoint that returns server metadata including supported authentication modes
+// @Tags         auth
+// @Produce      json
+// @Success      200  {object}  oauth2MetadataResp
+// @Router       /.well-known/oauth-authorization-server [get]
+func (h *Controller) OAuth2Metadata(c echo.Context) error {
+	baseURL := h.cfg.PublicBaseURL
+	if baseURL == "" {
+		// Fallback to constructing from request
+		scheme := "https"
+		if c.Request().TLS == nil {
+			scheme = "http"
+		}
+		baseURL = scheme + "://" + c.Request().Host
+	}
+
+	resp := oauth2MetadataResp{
+		Issuer:                baseURL,
+		TokenEndpoint:         baseURL + "/v1/auth/refresh",
+		IntrospectionEndpoint: baseURL + "/v1/auth/introspect",
+		RevocationEndpoint:    baseURL + "/v1/auth/revoke",
+		UserinfoEndpoint:      baseURL + "/v1/auth/me",
+		ResponseTypesSupported: []string{
+			"token", // Direct token response (password, magic link, SSO)
+		},
+		GrantTypesSupported: []string{
+			"password",      // /v1/auth/password/login, /v1/auth/password/signup
+			"refresh_token", // /v1/auth/refresh
+			// Custom grant types
+			"urn:guard:params:oauth:grant-type:magic-link", // /v1/auth/magic/verify
+			"urn:guard:params:oauth:grant-type:sso",        // /v1/auth/sso/:provider/callback
+		},
+		TokenEndpointAuthMethodsSupported: []string{
+			"none", // Public client, no client authentication required
+		},
+		IntrospectionEndpointAuthMethodsSupported: []string{
+			"bearer", // Requires Bearer token in Authorization header
+		},
+		RevocationEndpointAuthMethodsSupported: []string{
+			"bearer", // Requires Bearer token in Authorization header
+		},
+		ScopesSupported: []string{
+			"openid",  // OpenID Connect compatible
+			"profile", // User profile information
+			"email",   // User email
+		},
+		// Guard-specific extensions
+		GuardAuthModesSupported: []string{"bearer", "cookie"},
+		GuardAuthModeDefault:    h.cfg.DefaultAuthMode,
+		GuardVersion:            "1.0.0",
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
 // Register mounts all auth routes under /v1/auth with multi-method structure.
 func (h *Controller) Register(e *echo.Echo) {
+	// RFC 8414 OAuth 2.0 Authorization Server Metadata (well-known endpoint)
+	e.GET("/.well-known/oauth-authorization-server", h.OAuth2Metadata)
+
 	g := e.Group("/v1/auth")
 
 	// Rate limits (fixed-window, per-tenant-or-IP)
@@ -837,6 +897,25 @@ type refreshReq struct {
 type tokensResp struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+// oauth2MetadataResp follows RFC 8414 OAuth 2.0 Authorization Server Metadata
+type oauth2MetadataResp struct {
+	Issuer                                     string   `json:"issuer"`
+	TokenEndpoint                              string   `json:"token_endpoint,omitempty"`
+	IntrospectionEndpoint                      string   `json:"introspection_endpoint,omitempty"`
+	RevocationEndpoint                         string   `json:"revocation_endpoint,omitempty"`
+	UserinfoEndpoint                           string   `json:"userinfo_endpoint,omitempty"`
+	ResponseTypesSupported                     []string `json:"response_types_supported,omitempty"`
+	GrantTypesSupported                        []string `json:"grant_types_supported,omitempty"`
+	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	IntrospectionEndpointAuthMethodsSupported  []string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
+	RevocationEndpointAuthMethodsSupported     []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
+	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	// Guard-specific extensions
+	GuardAuthModesSupported []string `json:"guard_auth_modes_supported,omitempty"`
+	GuardAuthModeDefault    string   `json:"guard_auth_mode_default,omitempty"`
+	GuardVersion            string   `json:"guard_version,omitempty"`
 }
 
 type introspectReq struct {

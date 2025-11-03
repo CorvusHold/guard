@@ -238,7 +238,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
       `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}&source=fga`,
       { waitUntil: 'domcontentloaded' }
     )
-    await expect(page).toHaveURL(/\/+admin$/)
+    await expect(page).toHaveURL(/\/+admin(\?|$)/)
 
     // Wait for admin user to load and tabs to render
     await page.waitForSelector('[data-testid="tab-fga"]', { timeout: 10000 })

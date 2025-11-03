@@ -19,6 +19,7 @@ export interface GuardClientOptions {
 // OpenAPI component schema aliases
 type TokensResp = OpenAPIComponents['schemas']['controller.tokensResp'];
 type MfaChallengeResp = OpenAPIComponents['schemas']['controller.mfaChallengeResp'];
+type OAuth2MetadataResp = OpenAPIComponents['schemas']['controller.oauth2MetadataResp'];
 // Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract
 type PortalLink = OpenAPIComponents['schemas']['domain.PortalLink'] & { link: string };
 
@@ -640,5 +641,47 @@ export class GuardClient {
     if (!tenant) throw new Error('tenant_id is required');
     const payload = { ...body, tenant_id: tenant } as any;
     return this.request<unknown>(`/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // ==============================
+  // OAuth2 Discovery (RFC 8414)
+  // ==============================
+
+  /**
+   * Fetch OAuth 2.0 Authorization Server Metadata (RFC 8414)
+   * Returns server capabilities including supported auth modes, endpoints, and grant types.
+   * This endpoint is public and does not require authentication.
+   */
+  async getOAuth2Metadata(): Promise<ResponseWrapper<OAuth2MetadataResp>> {
+    return this.request<OAuth2MetadataResp>('/.well-known/oauth-authorization-server', { method: 'GET' });
+  }
+
+  /**
+   * Static helper to discover OAuth2 metadata from any Guard API base URL.
+   * Useful for auto-configuration before creating a GuardClient instance.
+   *
+   * @example
+   * ```ts
+   * const metadata = await GuardClient.discover('https://api.example.com');
+   * console.log(metadata.guard_auth_modes_supported); // ['bearer', 'cookie']
+   * console.log(metadata.guard_auth_mode_default);    // 'bearer'
+   *
+   * // Create client with discovered default auth mode
+   * const client = new GuardClient({
+   *   baseUrl: 'https://api.example.com',
+   *   authMode: metadata.guard_auth_mode_default as 'bearer' | 'cookie'
+   * });
+   * ```
+   */
+  static async discover(baseUrl: string, fetchImpl?: FetchLike): Promise<OAuth2MetadataResp> {
+    const fetch = fetchImpl ?? (typeof window !== 'undefined' ? window.fetch.bind(window) : globalThis.fetch);
+    const url = `${baseUrl}/.well-known/oauth-authorization-server`;
+    const response = await fetch(url, { method: 'GET' });
+
+    if (!response.ok) {
+      throw new Error(`Discovery failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
   }
 }

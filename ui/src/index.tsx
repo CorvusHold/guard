@@ -12,6 +12,10 @@ import Signup from '@/components/onboarding/Signup'
 import { AuthProvider, RequireAuth } from '@/lib/auth'
 import { TenantProvider } from '@/lib/tenant'
 import { ToastProvider } from '@/lib/toast'
+import { ensureRuntimeConfigFromQuery } from '@/lib/runtime'
+
+// Ensure runtime config from query params is persisted BEFORE React renders
+ensureRuntimeConfigFromQuery()
 
 const container = document.getElementById('root') as HTMLDivElement
 const root = createRoot(container)
