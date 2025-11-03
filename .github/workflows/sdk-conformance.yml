@@ -27,7 +27,7 @@ jobs:
             display: ts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Cache npm (sdk/ts)
         uses: actions/cache@v4
