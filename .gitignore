@@ -20,6 +20,7 @@ node_modules
 .env.conformance
 .env.k6
 .env.local
+.env.fga
 trace.zip
 
 # Playwright artifacts (Next.js example)
@@ -32,3 +33,4 @@ test-results
 playwright-report
 .last-run.json
 TODO.md
+guard-cli
