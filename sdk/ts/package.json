@@ -69,7 +69,7 @@
     "eslint-plugin-vitest": "^0.5.4",
     "openapi-typescript": "^7.4.1",
     "prettier": "^3.3.3",
-    "rimraf": "^6.0.1",
+    "rimraf": "^6.1.0",
     "swagger2openapi": "^7.0.8",
     "tsup": "^8.2.4",
     "typescript": "^5.5.4",
