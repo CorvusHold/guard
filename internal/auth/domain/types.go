@@ -10,6 +10,7 @@ import (
 type PortalLink struct {
 	Link string `json:"link"`
 }
+
 // AccessTokens represents the issued tokens payload.
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -33,17 +34,17 @@ type MFASecret struct {
 }
 
 type SignupInput struct {
-	TenantID   uuid.UUID
-	Email      string
-	Password   string
-	FirstName  string
-	LastName   string
+	TenantID  uuid.UUID
+	Email     string
+	Password  string
+	FirstName string
+	LastName  string
 }
 
 type LoginInput struct {
-	TenantID uuid.UUID
-	Email    string
-	Password string
+	TenantID  uuid.UUID
+	Email     string
+	Password  string
 	UserAgent string
 	IP        string
 }
@@ -134,19 +135,19 @@ type Service interface {
 	FindTenantsByUserEmail(ctx context.Context, email string) ([]TenantInfo, error)
 	GetUserByEmail(ctx context.Context, email, tenantID string) (*User, error)
 
-    // --- FGA ---
-    // Group management
-    CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
-    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
-    DeleteGroup(ctx context.Context, groupID uuid.UUID, tenantID uuid.UUID) error
-    // Group membership
-    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-    // ACL tuples
-    CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
-    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
-    // Authorization decision
-    Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
+	// --- FGA ---
+	// Group management
+	CreateGroup(ctx context.Context, tenantID uuid.UUID, name, description string) (Group, error)
+	ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+	DeleteGroup(ctx context.Context, groupID uuid.UUID, tenantID uuid.UUID) error
+	// Group membership
+	AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	// ACL tuples
+	CreateACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
+	// Authorization decision
+	Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
 }
 
 // Magic-link inputs
@@ -182,11 +183,11 @@ type MagicLinkService interface {
 
 // SSO inputs
 type SSOStartInput struct {
-	Provider    string
-	TenantID    uuid.UUID
-	RedirectURL string
-	State       string
-	ConnectionID string
+	Provider       string
+	TenantID       uuid.UUID
+	RedirectURL    string
+	State          string
+	ConnectionID   string
 	OrganizationID string
 }
 
@@ -198,9 +199,9 @@ type SSOCallbackInput struct {
 }
 
 type SSOOrganizationPortalLinkGeneratorInput struct {
-	Provider string
-	TenantID uuid.UUID
-	Intent   string
+	Provider       string
+	TenantID       uuid.UUID
+	Intent         string
 	OrganizationID string
 }
 
@@ -279,32 +280,32 @@ type Repository interface {
 	// Email discovery methods
 	FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]AuthIdentity, error)
 
-    // --- FGA repository methods (groups, memberships, ACL tuples) ---
-    // Groups
-    CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
-    ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
-    DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
-    // Group membership
-    AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-    RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
-    // ACL tuples
-    CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
-    DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
+	// --- FGA repository methods (groups, memberships, ACL tuples) ---
+	// Groups
+	CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
+	ListGroups(ctx context.Context, tenantID uuid.UUID) ([]Group, error)
+	DeleteGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
+	// Group membership
+	AddGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	RemoveGroupMember(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	// ACL tuples
+	CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
+	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
 }
 
 type AuthIdentity struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	Email     string
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	TenantID     uuid.UUID
+	Email        string
 	PasswordHash string
 }
 
 type RefreshToken struct {
-	ID       uuid.UUID
-	UserID   uuid.UUID
-	TenantID uuid.UUID
-	Revoked  bool
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TenantID  uuid.UUID
+	Revoked   bool
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	UserAgent string
@@ -312,54 +313,54 @@ type RefreshToken struct {
 }
 
 type MagicLink struct {
-	ID         uuid.UUID
-	UserID     *uuid.UUID
-	TenantID   uuid.UUID
-	Email      string
-	TokenHash  string
+	ID          uuid.UUID
+	UserID      *uuid.UUID
+	TenantID    uuid.UUID
+	Email       string
+	TokenHash   string
 	RedirectURL string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	ConsumedAt *time.Time
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	ConsumedAt  *time.Time
 }
 
 // User reflects the users table record.
 type User struct {
-	ID           uuid.UUID
+	ID            uuid.UUID
 	EmailVerified bool
-	IsActive     bool
-	FirstName    string
-	LastName     string
-	Roles        []string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	LastLoginAt  *time.Time
+	IsActive      bool
+	FirstName     string
+	LastName      string
+	Roles         []string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	LastLoginAt   *time.Time
 }
 
 // UserProfile is returned by the Me endpoint.
 type UserProfile struct {
-	ID           uuid.UUID `json:"id"`
-	TenantID     uuid.UUID `json:"tenant_id"`
-	Email        string    `json:"email"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Roles        []string  `json:"roles"`
-	MFAEnabled   bool      `json:"mfa_enabled"`
-	EmailVerified bool     `json:"email_verified"`
-	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	ID            uuid.UUID  `json:"id"`
+	TenantID      uuid.UUID  `json:"tenant_id"`
+	Email         string     `json:"email"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	Roles         []string   `json:"roles"`
+	MFAEnabled    bool       `json:"mfa_enabled"`
+	EmailVerified bool       `json:"email_verified"`
+	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 }
 
 // Introspection is the response for /auth/introspect.
 type Introspection struct {
-	Active       bool       `json:"active"`
-	UserID       uuid.UUID  `json:"user_id"`
-	TenantID     uuid.UUID  `json:"tenant_id"`
-	Email        string     `json:"email"`
-	Roles        []string   `json:"roles"`
-	MFAVerified  bool       `json:"mfa_verified"`
+	Active        bool      `json:"active"`
+	UserID        uuid.UUID `json:"user_id"`
+	TenantID      uuid.UUID `json:"tenant_id"`
+	Email         string    `json:"email"`
+	Roles         []string  `json:"roles"`
+	MFAVerified   bool      `json:"mfa_verified"`
 	EmailVerified bool      `json:"email_verified"`
-	Exp          int64      `json:"exp"`
-	Iat          int64      `json:"iat"`
+	Exp           int64     `json:"exp"`
+	Iat           int64     `json:"iat"`
 }
 
 // --- RBAC v2 domain types ---

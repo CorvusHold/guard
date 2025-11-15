@@ -1905,8 +1905,7 @@ paths:
         - auth.password
   /v1/auth/password/signup:
     post:
-      description: Creates a new user for a tenant with email and password and returns
-        access/refresh tokens
+      description: Creates a new user for a tenant with email and password and returns access/refresh tokens
       requestBody:
         content:
           application/json:
@@ -1940,6 +1939,68 @@ paths:
       summary: Password signup
       tags:
         - auth.password
+  /v1/auth/email/discover:
+    post:
+      description: Check if an email exists in any tenant and provide guidance for progressive login flows
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.emailDiscoveryReq"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.emailDiscoveryResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+      summary: Discover user/tenant by email
+      tags:
+        - auth.progressive
+  /v1/auth/tenants:
+    get:
+      description: Lists tenants associated with an email for progressive login tenant selection
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.authTenantListResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+      summary: Discover tenants by email
+      tags:
+        - auth.progressive
   /v1/auth/refresh:
     post:
       description: Exchanges a refresh token for new access and refresh tokens
@@ -2612,6 +2673,50 @@ components:
         - password
         - tenant_id
       type: object
+    controller.authTenantListResp:
+      properties:
+        tenants:
+          items:
+            $ref: "#/components/schemas/controller.authTenantSummary"
+          type: array
+      type: object
+    controller.authTenantSummary:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+      type: object
+    controller.emailDiscoveryReq:
+      properties:
+        email:
+          type: string
+        tenant_id:
+          description: Optional tenant ID hint to scope the lookup
+          type: string
+      required:
+        - email
+      type: object
+    controller.emailDiscoveryResp:
+      properties:
+        found:
+          type: boolean
+        has_tenant:
+          type: boolean
+        tenant_id:
+          type: string
+        tenant_name:
+          type: string
+        user_exists:
+          type: boolean
+        suggestions:
+          items:
+            type: string
+          type: array
+      type: object
     controller.magicSendReq:
       properties:
         email:
@@ -2869,6 +2974,8 @@ components:
         token:
           type: string
         token_type:
+          enum:
+            - refresh
           type: string
       required:
         - token

@@ -26,11 +26,15 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp); err != nil {
 		t.Fatalf("decode start: %v", err)
 	}
-	if startResp.Secret == "" { t.Fatalf("missing secret") }
+	if startResp.Secret == "" {
+		t.Fatalf("missing secret")
+	}
 
 	// Activate
 	code, err := totp.GenerateCode(startResp.Secret, time.Now())
-	if err != nil { t.Fatalf("generate code: %v", err) }
+	if err != nil {
+		t.Fatalf("generate code: %v", err)
+	}
 	ab, _ := json.Marshal(map[string]string{"code": code})
 	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+toks.AccessToken)
@@ -59,11 +63,15 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(recLogin.Body.Bytes())).Decode(&ch); err != nil {
 		t.Fatalf("decode challenge: %v", err)
 	}
-	if ch.ChallengeToken == "" { t.Fatalf("missing challenge token") }
+	if ch.ChallengeToken == "" {
+		t.Fatalf("missing challenge token")
+	}
 
 	// 3) Verify MFA using TOTP
 	code2, err := totp.GenerateCode(startResp.Secret, time.Now())
-	if err != nil { t.Fatalf("generate code2: %v", err) }
+	if err != nil {
+		t.Fatalf("generate code2: %v", err)
+	}
 	vb, _ := json.Marshal(map[string]string{
 		"challenge_token": ch.ChallengeToken,
 		"method":          "totp",
@@ -123,7 +131,9 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(recGen.Body.Bytes())).Decode(&genResp); err != nil {
 		t.Fatalf("decode generate: %v", err)
 	}
-	if len(genResp.Codes) != 1 { t.Fatalf("expected 1 code, got %d", len(genResp.Codes)) }
+	if len(genResp.Codes) != 1 {
+		t.Fatalf("expected 1 code, got %d", len(genResp.Codes))
+	}
 
 	// Password login -> 202 challenge
 	loginBody := map[string]string{
@@ -143,7 +153,9 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(recLogin.Body.Bytes())).Decode(&ch); err != nil {
 		t.Fatalf("decode challenge: %v", err)
 	}
-	if ch.ChallengeToken == "" { t.Fatalf("missing challenge token") }
+	if ch.ChallengeToken == "" {
+		t.Fatalf("missing challenge token")
+	}
 
 	// Verify using backup code
 	vb, _ := json.Marshal(map[string]string{

@@ -9,15 +9,15 @@ import (
 
 // createProviderRequest is the request body for creating an SSO provider.
 type createProviderRequest struct {
-	TenantID           uuid.UUID               `json:"tenant_id"`
-	Name               string                  `json:"name"`
-	Slug               string                  `json:"slug"`
-	ProviderType       domain.ProviderType     `json:"provider_type"`
-	Enabled            bool                    `json:"enabled"`
-	AllowSignup        bool                    `json:"allow_signup"`
-	TrustEmailVerified bool                    `json:"trust_email_verified"`
-	Domains            []string                `json:"domains"`
-	AttributeMapping   map[string][]string     `json:"attribute_mapping"`
+	TenantID           uuid.UUID           `json:"tenant_id"`
+	Name               string              `json:"name"`
+	Slug               string              `json:"slug"`
+	ProviderType       domain.ProviderType `json:"provider_type"`
+	Enabled            bool                `json:"enabled"`
+	AllowSignup        bool                `json:"allow_signup"`
+	TrustEmailVerified bool                `json:"trust_email_verified"`
+	Domains            []string            `json:"domains"`
+	AttributeMapping   map[string][]string `json:"attribute_mapping"`
 
 	// OIDC/OAuth2 fields
 	Issuer                string   `json:"issuer,omitempty"`
@@ -52,12 +52,12 @@ type createProviderRequest struct {
 
 // updateProviderRequest is the request body for updating an SSO provider.
 type updateProviderRequest struct {
-	Name               *string                  `json:"name,omitempty"`
-	Enabled            *bool                    `json:"enabled,omitempty"`
-	AllowSignup        *bool                    `json:"allow_signup,omitempty"`
-	TrustEmailVerified *bool                    `json:"trust_email_verified,omitempty"`
-	Domains            []string                 `json:"domains,omitempty"`
-	AttributeMapping   map[string][]string      `json:"attribute_mapping,omitempty"`
+	Name               *string             `json:"name,omitempty"`
+	Enabled            *bool               `json:"enabled,omitempty"`
+	AllowSignup        *bool               `json:"allow_signup,omitempty"`
+	TrustEmailVerified *bool               `json:"trust_email_verified,omitempty"`
+	Domains            []string            `json:"domains,omitempty"`
+	AttributeMapping   map[string][]string `json:"attribute_mapping,omitempty"`
 
 	// OIDC/OAuth2 fields
 	Issuer                *string  `json:"issuer,omitempty"`

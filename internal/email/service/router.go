@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	edomain "github.com/corvusHold/guard/internal/email/domain"
 	"github.com/corvusHold/guard/internal/config"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
 )

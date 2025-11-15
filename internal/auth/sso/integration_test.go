@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package sso_test
@@ -36,15 +37,15 @@ import (
 
 // TestEnv holds the test environment dependencies
 type TestEnv struct {
-	pool         *pgxpool.Pool
-	redis        *goredis.Client
-	cfg          config.Config
-	authService  domain.Service
-	ssoService   *service.SSOService
+	pool          *pgxpool.Pool
+	redis         *goredis.Client
+	cfg           config.Config
+	authService   domain.Service
+	ssoService    *service.SSOService
 	ssoController *controller.SSOController
-	echo         *echo.Echo
-	tenantID     uuid.UUID
-	cleanup      func()
+	echo          *echo.Echo
+	tenantID      uuid.UUID
+	cleanup       func()
 }
 
 // setupTestEnvironment creates a complete test environment with database, Redis, and services
@@ -117,14 +118,14 @@ func setupTestEnvironment(t *testing.T) *TestEnv {
 	ssoController.Register(e)
 
 	env := &TestEnv{
-		pool:         pool,
-		redis:        redisClient,
-		cfg:          cfg,
-		authService:  authService,
-		ssoService:   ssoService,
+		pool:          pool,
+		redis:         redisClient,
+		cfg:           cfg,
+		authService:   authService,
+		ssoService:    ssoService,
 		ssoController: ssoController,
-		echo:         e,
-		tenantID:     tenantID,
+		echo:          e,
+		tenantID:      tenantID,
 		cleanup: func() {
 			// Cleanup test data
 			redisClient.FlushDB(ctx)

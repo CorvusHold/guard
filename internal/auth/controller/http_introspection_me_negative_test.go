@@ -9,8 +9,8 @@ import (
 	"os"
 	"testing"
 
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	"github.com/corvusHold/guard/internal/platform/validation"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
@@ -23,10 +23,14 @@ import (
 // They require DATABASE_URL for wiring services but do not depend on DB state.
 
 func TestHTTP_Introspect_MissingToken(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)
@@ -51,10 +55,14 @@ func TestHTTP_Introspect_MissingToken(t *testing.T) {
 }
 
 func TestHTTP_Introspect_InvalidToken(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)
@@ -80,10 +88,14 @@ func TestHTTP_Introspect_InvalidToken(t *testing.T) {
 }
 
 func TestHTTP_Me_MissingBearer(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)
@@ -108,10 +120,14 @@ func TestHTTP_Me_MissingBearer(t *testing.T) {
 }
 
 func TestHTTP_Me_InvalidToken(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)
@@ -137,10 +153,14 @@ func TestHTTP_Me_InvalidToken(t *testing.T) {
 }
 
 func TestHTTP_Revoke_ValidationErrors(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	repo := authrepo.New(pool)

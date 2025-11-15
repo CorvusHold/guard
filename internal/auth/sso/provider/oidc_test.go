@@ -227,12 +227,12 @@ func TestOIDCProvider_Start(t *testing.T) {
 	discoveryServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			discovery := map[string]interface{}{
-				"issuer":                 discoveryServer.URL,
-				"authorization_endpoint": discoveryServer.URL + "/authorize",
-				"token_endpoint":         discoveryServer.URL + "/token",
-				"jwks_uri":              discoveryServer.URL + "/jwks",
-				"response_types_supported": []string{"code"},
-				"subject_types_supported":  []string{"public"},
+				"issuer":                                discoveryServer.URL,
+				"authorization_endpoint":                discoveryServer.URL + "/authorize",
+				"token_endpoint":                        discoveryServer.URL + "/token",
+				"jwks_uri":                              discoveryServer.URL + "/jwks",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -527,12 +527,12 @@ func TestOIDCProvider_Callback_Errors(t *testing.T) {
 	discoveryServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			discovery := map[string]interface{}{
-				"issuer":                 discoveryServer.URL,
-				"authorization_endpoint": discoveryServer.URL + "/authorize",
-				"token_endpoint":         discoveryServer.URL + "/token",
-				"jwks_uri":              discoveryServer.URL + "/jwks",
-				"response_types_supported": []string{"code"},
-				"subject_types_supported":  []string{"public"},
+				"issuer":                                discoveryServer.URL,
+				"authorization_endpoint":                discoveryServer.URL + "/authorize",
+				"token_endpoint":                        discoveryServer.URL + "/token",
+				"jwks_uri":                              discoveryServer.URL + "/jwks",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -654,12 +654,12 @@ func TestNewOIDCProvider_DefaultScopes(t *testing.T) {
 	discoveryServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			discovery := map[string]interface{}{
-				"issuer":                 discoveryServer.URL,
-				"authorization_endpoint": discoveryServer.URL + "/authorize",
-				"token_endpoint":         discoveryServer.URL + "/token",
-				"jwks_uri":              discoveryServer.URL + "/jwks",
-				"response_types_supported": []string{"code"},
-				"subject_types_supported":  []string{"public"},
+				"issuer":                                discoveryServer.URL,
+				"authorization_endpoint":                discoveryServer.URL + "/authorize",
+				"token_endpoint":                        discoveryServer.URL + "/token",
+				"jwks_uri":                              discoveryServer.URL + "/jwks",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")

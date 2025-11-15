@@ -121,8 +121,8 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 
 			// Verify grant types
 			expectedGrantTypes := map[string]bool{
-				"password":                                     true,
-				"refresh_token":                                true,
+				"password":      true,
+				"refresh_token": true,
 				"urn:guard:params:oauth:grant-type:magic-link": true,
 				"urn:guard:params:oauth:grant-type:sso":        true,
 			}

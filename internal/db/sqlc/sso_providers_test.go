@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -233,7 +234,7 @@ func TestFindSSOProviderByDomain(t *testing.T) {
 	// Find by domain
 	provider, err := q.FindSSOProviderByDomain(ctx, FindSSOProviderByDomainParams{
 		TenantID: toPgUUID(tenantID),
-		Column2:  "acme.com",
+		Domains:  []string{"acme.com"},
 	})
 	if err != nil {
 		t.Fatalf("FindSSOProviderByDomain() error = %v", err)
@@ -246,7 +247,7 @@ func TestFindSSOProviderByDomain(t *testing.T) {
 	// Test with second domain
 	provider2, err := q.FindSSOProviderByDomain(ctx, FindSSOProviderByDomainParams{
 		TenantID: toPgUUID(tenantID),
-		Column2:  "acme.io",
+		Domains:  []string{"acme.io"},
 	})
 	if err != nil {
 		t.Fatalf("FindSSOProviderByDomain() error = %v", err)
@@ -292,6 +293,8 @@ func TestSSOAuthAttempts(t *testing.T) {
 		t.Fatalf("failed to create SSO provider: %v", err)
 	}
 
+	ip := netip.MustParseAddr("192.168.1.1")
+
 	// Create an auth attempt
 	state := uuid.New().String()
 	attempt, err := q.CreateSSOAuthAttempt(ctx, CreateSSOAuthAttemptParams{
@@ -299,7 +302,7 @@ func TestSSOAuthAttempts(t *testing.T) {
 		ProviderID: provider.ID,
 		State:      pgtype.Text{String: state, Valid: true},
 		Status:     "initiated",
-		IpAddress:  pgtype.Text{String: "192.168.1.1", Valid: true},
+		IpAddress:  &ip,
 		UserAgent:  pgtype.Text{String: "Mozilla/5.0", Valid: true},
 	})
 	if err != nil {
@@ -325,9 +328,9 @@ func TestSSOAuthAttempts(t *testing.T) {
 
 	// Update the attempt to success
 	err = q.UpdateSSOAuthAttempt(ctx, UpdateSSOAuthAttemptParams{
-		Status:   "success",
-		UserID:   toPgUUID(userID),
-		ID:       attempt.ID,
+		Status: "success",
+		UserID: toPgUUID(userID),
+		ID:     attempt.ID,
 	})
 	if err != nil {
 		t.Fatalf("UpdateSSOAuthAttempt() error = %v", err)
@@ -594,7 +597,7 @@ func TestAttributeMapping(t *testing.T) {
 	// Custom attribute mapping
 	attributeMapping := map[string][]string{
 		"email":      {"emailAddress", "mail"},
-		"first_name": ["givenName"],
+		"first_name": {"givenName"},
 		"last_name":  {"sn", "surname"},
 		"phone":      {"telephoneNumber"},
 	}

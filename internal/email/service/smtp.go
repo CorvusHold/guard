@@ -6,8 +6,8 @@ import (
 	"net/smtp"
 	"strconv"
 
-	edomain "github.com/corvusHold/guard/internal/email/domain"
 	"github.com/corvusHold/guard/internal/config"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
 )
@@ -20,7 +20,9 @@ type SMTP struct {
 	settings sdomain.Service
 }
 
-func NewSMTP(settings sdomain.Service, cfg config.Config) *SMTP { return &SMTP{settings: settings, cfg: cfg} }
+func NewSMTP(settings sdomain.Service, cfg config.Config) *SMTP {
+	return &SMTP{settings: settings, cfg: cfg}
+}
 
 func (s *SMTP) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body string) error {
 	host, _ := s.settings.GetString(ctx, sdomain.KeySMTPHost, &tenantID, s.cfg.SMTPHost)
@@ -29,7 +31,9 @@ func (s *SMTP) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body s
 	password, _ := s.settings.GetString(ctx, sdomain.KeySMTPPassword, &tenantID, s.cfg.SMTPPassword)
 	portStr, _ := s.settings.GetString(ctx, sdomain.KeySMTPPort, &tenantID, fmt.Sprintf("%d", s.cfg.SMTPPort))
 	port, err := strconv.Atoi(portStr)
-	if err != nil { port = s.cfg.SMTPPort }
+	if err != nil {
+		port = s.cfg.SMTPPort
+	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
 	msg := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", from, to, subject, body))

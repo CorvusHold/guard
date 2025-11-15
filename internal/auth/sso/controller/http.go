@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	authdomain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/auth/sso/domain"
 	"github.com/corvusHold/guard/internal/auth/sso/service"
-	authdomain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/platform/ratelimit"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -120,13 +120,13 @@ func (h *SSOController) handleSSOInitiate(c echo.Context) error {
 
 	// Initiate SSO
 	resp, err := h.ssoService.InitiateSSO(c.Request().Context(), service.InitiateSSORequest{
-		TenantID:    tenantID,
+		TenantID:     tenantID,
 		ProviderSlug: slug,
-		RedirectURL: redirectURL,
-		IPAddress:   ipAddress,
-		UserAgent:   userAgent,
-		LoginHint:   loginHint,
-		ForceAuthn:  forceAuthn,
+		RedirectURL:  redirectURL,
+		IPAddress:    ipAddress,
+		UserAgent:    userAgent,
+		LoginHint:    loginHint,
+		ForceAuthn:   forceAuthn,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Str("slug", slug).Msg("failed to initiate SSO")

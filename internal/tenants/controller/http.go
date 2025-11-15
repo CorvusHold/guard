@@ -2,15 +2,15 @@ package controller
 
 import (
 	"net/http"
-	"time"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 
-	domain "github.com/corvusHold/guard/internal/tenants/domain"
 	"github.com/corvusHold/guard/internal/platform/validation"
+	domain "github.com/corvusHold/guard/internal/tenants/domain"
 )
 
 type Controller struct {
@@ -165,7 +165,7 @@ func (h *Controller) deactivateTenant(c echo.Context) error {
 
 type listQuery struct {
 	Q        string `query:"q"`
-	Active   int    `query:"active"`   // -1 any, 1 active, 0 inactive
+	Active   int    `query:"active"` // -1 any, 1 active, 0 inactive
 	Page     int    `query:"page"`
 	PageSize int    `query:"page_size"`
 }

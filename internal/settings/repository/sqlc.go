@@ -23,20 +23,24 @@ func toPgUUIDPtr(u *uuid.UUID) pgtype.UUID {
 func (r *SQLCRepository) Get(ctx context.Context, key string, tenantID *uuid.UUID) (string, bool, error) {
 	if tenantID != nil {
 		row, err := r.q.GetAppSettingByKeyTenant(ctx, db.GetAppSettingByKeyTenantParams{Key: key, TenantID: toPgUUIDPtr(tenantID)})
-		if err == nil { return row.Value, true, nil }
+		if err == nil {
+			return row.Value, true, nil
+		}
 	}
 	row, err := r.q.GetAppSettingGlobal(ctx, key)
-	if err != nil { return "", false, nil }
+	if err != nil {
+		return "", false, nil
+	}
 	return row.Value, true, nil
 }
 
 func (r *SQLCRepository) Upsert(ctx context.Context, key string, tenantID *uuid.UUID, value string, secret bool) error {
 	id := uuid.New()
 	return r.q.UpsertAppSetting(ctx, db.UpsertAppSettingParams{
-		ID:        pgtype.UUID{Bytes: id, Valid: true},
-		TenantID:  toPgUUIDPtr(tenantID),
-		Key:       key,
-		Value:     value,
-		IsSecret:  secret,
+		ID:       pgtype.UUID{Bytes: id, Valid: true},
+		TenantID: toPgUUIDPtr(tenantID),
+		Key:      key,
+		Value:    value,
+		IsSecret: secret,
 	})
 }

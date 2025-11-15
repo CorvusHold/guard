@@ -253,12 +253,12 @@ type Metadata struct {
 	ScopesSupported       []string `json:"scopes_supported,omitempty"`
 
 	// SAML metadata
-	EntityID          string    `json:"entity_id,omitempty"`
-	ACSUrl            string    `json:"acs_url,omitempty"`
-	SLOUrl            string    `json:"slo_url,omitempty"`
-	SPCertificate     string    `json:"sp_certificate,omitempty"`
+	EntityID          string     `json:"entity_id,omitempty"`
+	ACSUrl            string     `json:"acs_url,omitempty"`
+	SLOUrl            string     `json:"slo_url,omitempty"`
+	SPCertificate     string     `json:"sp_certificate,omitempty"`
 	CertificateExpiry *time.Time `json:"certificate_expiry,omitempty"`
-	MetadataXML       string    `json:"metadata_xml,omitempty"`
+	MetadataXML       string     `json:"metadata_xml,omitempty"`
 }
 
 // DefaultAttributeMapping returns the default attribute mapping for common IdP attributes.

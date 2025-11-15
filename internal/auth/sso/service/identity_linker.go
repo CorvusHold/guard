@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/corvusHold/guard/internal/auth/sso/domain"
 	authdomain "github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/corvusHold/guard/internal/auth/sso/domain"
 	db "github.com/corvusHold/guard/internal/db/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"

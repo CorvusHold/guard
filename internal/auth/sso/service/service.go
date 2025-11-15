@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	authdomain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/auth/sso/domain"
 	"github.com/corvusHold/guard/internal/auth/sso/provider"
 	"github.com/corvusHold/guard/internal/auth/sso/state"
-	authdomain "github.com/corvusHold/guard/internal/auth/domain"
 	db "github.com/corvusHold/guard/internal/db/sqlc"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	"github.com/corvusHold/guard/internal/metrics"
@@ -59,13 +59,13 @@ func (s *SSOService) SetPublisher(pub evdomain.Publisher) {
 
 // InitiateSSORequest contains the request parameters for initiating SSO.
 type InitiateSSORequest struct {
-	TenantID    uuid.UUID
+	TenantID     uuid.UUID
 	ProviderSlug string
-	RedirectURL string
-	IPAddress   string
-	UserAgent   string
-	LoginHint   string
-	ForceAuthn  bool
+	RedirectURL  string
+	IPAddress    string
+	UserAgent    string
+	LoginHint    string
+	ForceAuthn   bool
 }
 
 // InitiateSSOResponse contains the response for initiating SSO.

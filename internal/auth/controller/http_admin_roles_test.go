@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	svc "github.com/corvusHold/guard/internal/auth/service"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
@@ -27,7 +27,9 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -75,12 +77,18 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(srec.Body.Bytes())).Decode(&stoks); err != nil {
 		t.Fatalf("decode tokens: %v", err)
 	}
-	if stoks.AccessToken == "" { t.Fatalf("expected access token for admin") }
+	if stoks.AccessToken == "" {
+		t.Fatalf("expected access token for admin")
+	}
 
 	// Grant admin role to admin user via service
 	aiAdmin, err := repo.GetAuthIdentityByEmailTenant(ctx, tenantID, adminEmail)
-	if err != nil { t.Fatalf("lookup admin identity: %v", err) }
-	if err := auth.UpdateUserRoles(ctx, aiAdmin.UserID, []string{"admin"}); err != nil { t.Fatalf("grant admin role: %v", err) }
+	if err != nil {
+		t.Fatalf("lookup admin identity: %v", err)
+	}
+	if err := auth.UpdateUserRoles(ctx, aiAdmin.UserID, []string{"admin"}); err != nil {
+		t.Fatalf("grant admin role: %v", err)
+	}
 
 	// Create target user
 	tsBody := map[string]string{
@@ -97,7 +105,9 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", tsrec.Code, tsrec.Body.String())
 	}
 	aiTarget, err := repo.GetAuthIdentityByEmailTenant(ctx, tenantID, targetEmail)
-	if err != nil { t.Fatalf("lookup target identity: %v", err) }
+	if err != nil {
+		t.Fatalf("lookup target identity: %v", err)
+	}
 
 	// 401: missing token
 	b, _ := json.Marshal(map[string]any{"roles": []string{"member"}})
@@ -163,8 +173,12 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 		t.Fatalf("expected 204, got %d: %s", rec204.Code, rec204.Body.String())
 	}
 	u, err := repo.GetUserByID(ctx, aiTarget.UserID)
-	if err != nil { t.Fatalf("get user: %v", err) }
-	if len(u.Roles) != 2 { t.Fatalf("expected 2 roles, got %v", u.Roles) }
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if len(u.Roles) != 2 {
+		t.Fatalf("expected 2 roles, got %v", u.Roles)
+	}
 	if u.Roles[0] != "member" || u.Roles[1] != "editor" {
 		t.Fatalf("roles mismatch: %v", u.Roles)
 	}
@@ -177,7 +191,9 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	if meRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 from /me, got %d: %s", meRec.Code, meRec.Body.String())
 	}
-	var meResp struct{ Roles []string `json:"roles"` }
+	var meResp struct {
+		Roles []string `json:"roles"`
+	}
 	if err := json.NewDecoder(bytes.NewReader(meRec.Body.Bytes())).Decode(&meResp); err != nil {
 		t.Fatalf("decode me: %v", err)
 	}

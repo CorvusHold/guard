@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	amw "github.com/corvusHold/guard/internal/auth/middleware"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	rl "github.com/corvusHold/guard/internal/platform/ratelimit"
+	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 )
 
 // Controller exposes minimal tenant-scoped settings management endpoints.
@@ -28,7 +28,9 @@ type Controller struct {
 	roleFetcher func(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error)
 }
 
-func New(repo sdomain.Repository, service sdomain.Service) *Controller { return &Controller{repo: repo, service: service} }
+func New(repo sdomain.Repository, service sdomain.Service) *Controller {
+	return &Controller{repo: repo, service: service}
+}
 
 // Register mounts settings endpoints under /v1.
 func (h *Controller) Register(e *echo.Echo) {
@@ -75,8 +77,8 @@ func (h *Controller) Register(e *echo.Echo) {
 		return putDefaultLim
 	}
 
-	getPolicy := rl.Policy{ Name: "settings:get", Window: getDefaultWin, Limit: getDefaultLim, Key: mkKey("settings:get"), WindowFunc: getWinF, LimitFunc: getLimF }
-	putPolicy := rl.Policy{ Name: "settings:put", Window: putDefaultWin, Limit: putDefaultLim, Key: mkKey("settings:put"), WindowFunc: putWinF, LimitFunc: putLimF }
+	getPolicy := rl.Policy{Name: "settings:get", Window: getDefaultWin, Limit: getDefaultLim, Key: mkKey("settings:get"), WindowFunc: getWinF, LimitFunc: getLimF}
+	putPolicy := rl.Policy{Name: "settings:put", Window: putDefaultWin, Limit: putDefaultLim, Key: mkKey("settings:put"), WindowFunc: putWinF, LimitFunc: putLimF}
 
 	var getRL echo.MiddlewareFunc
 	var putRL echo.MiddlewareFunc
@@ -119,27 +121,27 @@ func (h *Controller) WithRoleFetcher(fn func(ctx context.Context, userID uuid.UU
 
 type settingsResponse struct {
 	// SSO
-	SSOProvider           string `json:"sso_provider"`
-	WorkOSClientID        string `json:"workos_client_id"`
-	WorkOSClientSecret    string `json:"workos_client_secret,omitempty"` // masked
-	WorkOSAPIKey          string `json:"workos_api_key,omitempty"`       // masked
-	WorkOSDefaultConnectionID  string `json:"workos_default_connection_id,omitempty"`
+	SSOProvider                 string `json:"sso_provider"`
+	WorkOSClientID              string `json:"workos_client_id"`
+	WorkOSClientSecret          string `json:"workos_client_secret,omitempty"` // masked
+	WorkOSAPIKey                string `json:"workos_api_key,omitempty"`       // masked
+	WorkOSDefaultConnectionID   string `json:"workos_default_connection_id,omitempty"`
 	WorkOSDefaultOrganizationID string `json:"workos_default_organization_id,omitempty"`
-	SSOStateTTL           string `json:"sso_state_ttl"`
-	SSORedirectAllowlist  string `json:"sso_redirect_allowlist"`
+	SSOStateTTL                 string `json:"sso_state_ttl"`
+	SSORedirectAllowlist        string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins string `json:"app_cors_allowed_origins"`
 }
 
 type putSettingsRequest struct {
-	SSOProvider           *string `json:"sso_provider"`
-	WorkOSClientID        *string `json:"workos_client_id"`
-	WorkOSClientSecret    *string `json:"workos_client_secret"`
-	WorkOSAPIKey          *string `json:"workos_api_key"`
-	WorkOSDefaultConnectionID  *string `json:"workos_default_connection_id"`
+	SSOProvider                 *string `json:"sso_provider"`
+	WorkOSClientID              *string `json:"workos_client_id"`
+	WorkOSClientSecret          *string `json:"workos_client_secret"`
+	WorkOSAPIKey                *string `json:"workos_api_key"`
+	WorkOSDefaultConnectionID   *string `json:"workos_default_connection_id"`
 	WorkOSDefaultOrganizationID *string `json:"workos_default_organization_id"`
-	SSOStateTTL           *string `json:"sso_state_ttl"`
-	SSORedirectAllowlist  *string `json:"sso_redirect_allowlist"`
+	SSOStateTTL                 *string `json:"sso_state_ttl"`
+	SSORedirectAllowlist        *string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
 }
@@ -160,7 +162,9 @@ type putSettingsRequest struct {
 func (h *Controller) getTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
-	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"}) }
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
 	// Enforce tenant match from JWT
 	if tid, ok := amw.TenantID(c); !ok {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -179,20 +183,24 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	corsAllow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyAppCORSAllowedOrigins, &id, "")
 	// Mask secrets if present
 	mask := func(s string) string {
-		if s == "" { return "" }
-		if len(s) <= 4 { return "****" }
+		if s == "" {
+			return ""
+		}
+		if len(s) <= 4 {
+			return "****"
+		}
 		return "****" + s[len(s)-4:]
 	}
 	resp := settingsResponse{
-		SSOProvider:          prov,
-		WorkOSClientID:       cid,
-		WorkOSClientSecret:   mask(csec),
-		WorkOSAPIKey:         mask(apikey),
-		WorkOSDefaultConnectionID:  defConn,
+		SSOProvider:                 prov,
+		WorkOSClientID:              cid,
+		WorkOSClientSecret:          mask(csec),
+		WorkOSAPIKey:                mask(apikey),
+		WorkOSDefaultConnectionID:   defConn,
 		WorkOSDefaultOrganizationID: defOrg,
-		SSOStateTTL:          stateTTL,
-		SSORedirectAllowlist: allow,
-		AppCORSAllowedOrigins: corsAllow,
+		SSOStateTTL:                 stateTTL,
+		SSORedirectAllowlist:        allow,
+		AppCORSAllowedOrigins:       corsAllow,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -214,7 +222,9 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 func (h *Controller) putTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
-	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"}) }
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
 	// Enforce tenant match and RBAC (admin|owner)
 	uid, okU := amw.UserID(c)
 	tid, okT := amw.TenantID(c)
@@ -226,12 +236,19 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 	}
 	if h.roleFetcher != nil {
 		roles, err := h.roleFetcher(c.Request().Context(), uid, tid)
-		if err != nil { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+		if err != nil {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+		}
 		allowed := false
 		for _, r := range roles {
-			if r == "admin" || r == "owner" { allowed = true; break }
+			if r == "admin" || r == "owner" {
+				allowed = true
+				break
+			}
 		}
-		if !allowed { return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"}) }
+		if !allowed {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+		}
 	}
 	var req putSettingsRequest
 	if err := c.Bind(&req); err != nil {
@@ -254,7 +271,9 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 		list := strings.Split(*req.SSORedirectAllowlist, ",")
 		for _, raw := range list {
 			s := strings.TrimSpace(raw)
-			if s == "" { continue }
+			if s == "" {
+				continue
+			}
 			u, err := url.Parse(s)
 			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid sso_redirect_allowlist"})
@@ -265,7 +284,9 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 		list := strings.Split(*req.AppCORSAllowedOrigins, ",")
 		for _, raw := range list {
 			s := strings.TrimSpace(raw)
-			if s == "" { continue }
+			if s == "" {
+				continue
+			}
 			u, err := url.Parse(s)
 			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid app_cors_allowed_origins"})
@@ -337,9 +358,13 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 			"changed": strings.Join(changed, ","),
 		}
 		// Provide hints without secrets
-		if req.WorkOSClientSecret != nil { meta["sso.workos.client_secret"] = "redacted" }
-		if req.WorkOSAPIKey != nil { meta["sso.workos.api_key"] = "redacted" }
-		_ = h.pub.Publish(ctx, evdomain.Event{ Type: "settings.update.success", TenantID: id, UserID: uid, Meta: meta, Time: time.Now() })
+		if req.WorkOSClientSecret != nil {
+			meta["sso.workos.client_secret"] = "redacted"
+		}
+		if req.WorkOSAPIKey != nil {
+			meta["sso.workos.api_key"] = "redacted"
+		}
+		_ = h.pub.Publish(ctx, evdomain.Event{Type: "settings.update.success", TenantID: id, UserID: uid, Meta: meta, Time: time.Now()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

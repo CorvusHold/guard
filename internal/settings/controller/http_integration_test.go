@@ -17,11 +17,11 @@ import (
 
 	amw "github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/config"
+	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
 	trepo "github.com/corvusHold/guard/internal/tenants/repository"
-	evdomain "github.com/corvusHold/guard/internal/events/domain"
 )
 
 // publisherFunc helps implement evdomain.Publisher in tests via a func.
@@ -30,93 +30,109 @@ type publisherFunc func(ctx context.Context, e evdomain.Event) error
 func (f publisherFunc) Publish(ctx context.Context, e evdomain.Event) error { return f(ctx, e) }
 
 func TestSettings_GET_MasksSecrets(t *testing.T) {
-    if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
-    ctx := context.Background()
-    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-    if err != nil { t.Fatalf("db connect: %v", err) }
-    defer pool.Close()
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
+	defer pool.Close()
 
-    tr := trepo.New(pool)
-    tenantID := uuid.New()
-    if err := tr.Create(ctx, tenantID, "settings-get-mask-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	tr := trepo.New(pool)
+	tenantID := uuid.New()
+	if err := tr.Create(ctx, tenantID, "settings-get-mask-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
-    sr := srepo.New(pool)
-    // Seed secret values; GET should mask them
-    _ = sr.Upsert(ctx, sdomain.KeyWorkOSClientSecret, &tenantID, "supersecret1234", true)
-    _ = sr.Upsert(ctx, sdomain.KeyWorkOSAPIKey, &tenantID, "apikey9876", true)
+	sr := srepo.New(pool)
+	// Seed secret values; GET should mask them
+	_ = sr.Upsert(ctx, sdomain.KeyWorkOSClientSecret, &tenantID, "supersecret1234", true)
+	_ = sr.Upsert(ctx, sdomain.KeyWorkOSAPIKey, &tenantID, "apikey9876", true)
 
-    s := ssvc.New(sr)
-    c := New(sr, s)
-    cfg, _ := config.Load()
-    c.WithJWT(amw.NewJWT(cfg))
+	s := ssvc.New(sr)
+	c := New(sr, s)
+	cfg, _ := config.Load()
+	c.WithJWT(amw.NewJWT(cfg))
 
-    e := echo.New()
-    c.Register(e)
+	e := echo.New()
+	c.Register(e)
 
-    userID := uuid.New()
-    tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
-    req := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
-    req.Header.Set("Authorization", "Bearer "+tok)
-    rec := httptest.NewRecorder()
-    e.ServeHTTP(rec, req)
-    if rec.Code != http.StatusOK {
-        t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-    }
-    var resp map[string]any
-    if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil { t.Fatalf("decode: %v", err) }
-    // Expect masked last 4 characters
-    if got := resp["workos_client_secret"]; got != "****1234" {
-        t.Fatalf("expected masked client secret ****1234, got %v", got)
-    }
-    if got := resp["workos_api_key"]; got != "****9876" {
-        t.Fatalf("expected masked api key ****9876, got %v", got)
-    }
+	userID := uuid.New()
+	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Expect masked last 4 characters
+	if got := resp["workos_client_secret"]; got != "****1234" {
+		t.Fatalf("expected masked client secret ****1234, got %v", got)
+	}
+	if got := resp["workos_api_key"]; got != "****9876" {
+		t.Fatalf("expected masked api key ****9876, got %v", got)
+	}
 }
 
 func TestSettings_GET_RateLimit_429(t *testing.T) {
-    if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
-    ctx := context.Background()
-    pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-    if err != nil { t.Fatalf("db connect: %v", err) }
-    defer pool.Close()
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
+	defer pool.Close()
 
-    tr := trepo.New(pool)
-    tenantID := uuid.New()
-    if err := tr.Create(ctx, tenantID, "settings-get-rl-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	tr := trepo.New(pool)
+	tenantID := uuid.New()
+	if err := tr.Create(ctx, tenantID, "settings-get-rl-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
-    sr := srepo.New(pool)
-    // set aggressive RL overrides for GET: limit=1 per 60s
-    _ = sr.Upsert(ctx, sdomain.KeyRLSettingsGetLimit, &tenantID, "1", false)
-    _ = sr.Upsert(ctx, sdomain.KeyRLSettingsGetWindow, &tenantID, "60s", false)
+	sr := srepo.New(pool)
+	// set aggressive RL overrides for GET: limit=1 per 60s
+	_ = sr.Upsert(ctx, sdomain.KeyRLSettingsGetLimit, &tenantID, "1", false)
+	_ = sr.Upsert(ctx, sdomain.KeyRLSettingsGetWindow, &tenantID, "60s", false)
 
-    s := ssvc.New(sr)
-    c := New(sr, s)
-    cfg, _ := config.Load()
-    c.WithJWT(amw.NewJWT(cfg))
+	s := ssvc.New(sr)
+	c := New(sr, s)
+	cfg, _ := config.Load()
+	c.WithJWT(amw.NewJWT(cfg))
 
-    e := echo.New()
-    c.Register(e)
+	e := echo.New()
+	c.Register(e)
 
-    userID := uuid.New()
-    tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
-    // first GET allowed
-    req1 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
-    req1.Header.Set("Authorization", "Bearer "+tok)
-    rec1 := httptest.NewRecorder()
-    e.ServeHTTP(rec1, req1)
-    if rec1.Code != http.StatusOK { t.Fatalf("expected 200, got %d: %s", rec1.Code, rec1.Body.String()) }
+	userID := uuid.New()
+	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	// first GET allowed
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req1.Header.Set("Authorization", "Bearer "+tok)
+	rec1 := httptest.NewRecorder()
+	e.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
 
-    // second GET within window should be rate limited
-    req2 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
-    req2.Header.Set("Authorization", "Bearer "+tok)
-    rec2 := httptest.NewRecorder()
-    e.ServeHTTP(rec2, req2)
-    if rec2.Code != http.StatusTooManyRequests {
-        t.Fatalf("expected 429, got %d: %s", rec2.Code, rec2.Body.String())
-    }
-    if h := rec2.Header().Get("Retry-After"); h == "" {
-        t.Fatalf("expected Retry-After header on 429")
-    }
+	// second GET within window should be rate limited
+	req2 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req2.Header.Set("Authorization", "Bearer "+tok)
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	if h := rec2.Header().Get("Retry-After"); h == "" {
+		t.Fatalf("expected Retry-After header on 429")
+	}
 }
 
 func makeJWT(t *testing.T, key string, sub uuid.UUID, ten uuid.UUID) string {
@@ -129,15 +145,21 @@ func makeJWT(t *testing.T, key string, sub uuid.UUID, ten uuid.UUID) string {
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	s, err := tok.SignedString([]byte(key))
-	if err != nil { t.Fatalf("sign token: %v", err) }
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
 	return s
 }
 
 func TestSettings_GET_RequiresAuth_401(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	// tenant
@@ -165,17 +187,25 @@ func TestSettings_GET_RequiresAuth_401(t *testing.T) {
 }
 
 func TestSettings_TenantMismatch_403(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	tr := trepo.New(pool)
 	tenantA := uuid.New()
-	if err := tr.Create(ctx, tenantA, "settings-tenant-a-"+tenantA.String()); err != nil { t.Fatalf("tenant a: %v", err) }
+	if err := tr.Create(ctx, tenantA, "settings-tenant-a-"+tenantA.String()); err != nil {
+		t.Fatalf("tenant a: %v", err)
+	}
 	tenantB := uuid.New()
-	if err := tr.Create(ctx, tenantB, "settings-tenant-b-"+tenantB.String()); err != nil { t.Fatalf("tenant b: %v", err) }
+	if err := tr.Create(ctx, tenantB, "settings-tenant-b-"+tenantB.String()); err != nil {
+		t.Fatalf("tenant b: %v", err)
+	}
 
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
@@ -198,15 +228,21 @@ func TestSettings_TenantMismatch_403(t *testing.T) {
 }
 
 func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-rbac-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	if err := tr.Create(ctx, tenantID, "settings-rbac-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
@@ -214,7 +250,9 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 	cfg, _ := config.Load()
 	c.WithJWT(amw.NewJWT(cfg))
 	// role fetcher returns non-admin/owner
-	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) { return []string{"member"}, nil })
+	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) {
+		return []string{"member"}, nil
+	})
 
 	e := echo.New()
 	c.Register(e)
@@ -233,15 +271,21 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 }
 
 func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-validate-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	if err := tr.Create(ctx, tenantID, "settings-validate-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
@@ -281,15 +325,21 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 }
 
 func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-audit-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	if err := tr.Create(ctx, tenantID, "settings-audit-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
@@ -330,19 +380,27 @@ func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
 			}
 		}
 	}
-	if !found { t.Fatalf("expected settings.update.success event with redacted secrets") }
+	if !found {
+		t.Fatalf("expected settings.update.success event with redacted secrets")
+	}
 }
 
 func TestSettings_PUT_RateLimit_429(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" { t.Skip("skipping integration test: DATABASE_URL not set") }
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil { t.Fatalf("db connect: %v", err) }
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
 	defer pool.Close()
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-rl-"+tenantID.String()); err != nil { t.Fatalf("create tenant: %v", err) }
+	if err := tr.Create(ctx, tenantID, "settings-rl-"+tenantID.String()); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
 
 	sr := srepo.New(pool)
 	// set aggressive RL overrides for this tenant: limit=1 per 60s
@@ -367,7 +425,9 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 	req1.Header.Set("Content-Type", "application/json")
 	rec1 := httptest.NewRecorder()
 	e.ServeHTTP(rec1, req1)
-	if rec1.Code != http.StatusNoContent { t.Fatalf("expected 204, got %d: %s", rec1.Code, rec1.Body.String()) }
+	if rec1.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec1.Code, rec1.Body.String())
+	}
 
 	// second request within window should be rate limited
 	req2 := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))

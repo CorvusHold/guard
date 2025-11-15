@@ -27,7 +27,11 @@ func (m mockSettings) GetInt(ctx context.Context, key string, tenantID *uuid.UUI
 
 var _ sdomain.Service = (*mockSettings)(nil)
 
-type captureSender struct{ called bool; lastTo, lastSub, lastBody string; lastTenant uuid.UUID }
+type captureSender struct {
+	called                    bool
+	lastTo, lastSub, lastBody string
+	lastTenant                uuid.UUID
+}
 
 func (c *captureSender) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body string) error {
 	c.called = true
