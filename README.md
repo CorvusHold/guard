@@ -351,7 +351,7 @@ This project is licensed under the FSL-1.1-ALv2 License - see the [LICENSE](LICE
 
 ## Roadmap
 
-- [ ] Additional SSO providers (Okta, Auth0, Azure AD)
+- [x] Additional SSO providers (Okta, Auth0, Azure AD)
 - [ ] WebAuthn/Passkey support
 - [ ] Advanced audit logging with filtering
 - [ ] User import/export tools
