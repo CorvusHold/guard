@@ -15,6 +15,7 @@ import MyMfaPanel from './users/MyMfaPanel'
 import MySessionsPanel from './users/MySessionsPanel'
 import UsersPanel from './users/UsersPanel'
 import TenantManagementPanel from './tenants/TenantManagementPanel'
+import SsoProvidersPanel from './sso/SsoProvidersPanel'
 
 interface SettingsForm {
   sso_provider: string
@@ -42,7 +43,7 @@ export default function AdminSettings() {
   const { user } = useAuth()
   const { tenantId, setTenantId } = useTenant()
   const [activeTab, setActiveTab] = useState<
-    'settings' | 'users' | 'account' | 'fga' | 'rbac' | 'tenants'
+    'settings' | 'users' | 'account' | 'fga' | 'rbac' | 'tenants' | 'sso'
   >('settings')
   const [fgaGroupId, setFgaGroupId] = useState('')
   const [loading, setLoading] = useState<'load' | 'save' | 'portal' | null>(
@@ -74,7 +75,7 @@ export default function AdminSettings() {
         const hash = window.location.hash || ''
         const m = hash.match(/tab=([a-z]+)/i)
         const val = (m?.[1] || '').toLowerCase()
-        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants']
+        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso']
         if (allowed.includes(val)) {
           setActiveTab(val as typeof activeTab)
         }
@@ -85,7 +86,7 @@ export default function AdminSettings() {
       if (!window.location.hash || !window.location.hash.includes('tab=')) {
         const params = new URLSearchParams(window.location.search)
         const src = (params.get('source') || '').toLowerCase()
-        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants']
+        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso']
         if (allowed.includes(src)) {
           setActiveTab(src as typeof activeTab)
         }
@@ -319,6 +320,16 @@ export default function AdminSettings() {
                 data-testid="tab-tenants"
               >
                 Tenants
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'sso' ? 'default' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('sso')}
+                data-testid="tab-sso"
+              >
+                SSO Providers
               </Button>
             )}
           </div>
@@ -638,6 +649,19 @@ export default function AdminSettings() {
         {activeTab === 'tenants' && (
           <div className="rounded-xl border p-4">
             <TenantManagementPanel />
+          </div>
+        )}
+
+        {activeTab === 'sso' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">SSO Provider Management</h2>
+            {!tenantId ? (
+              <div className="text-sm text-muted-foreground">
+                Enter a tenant ID above and click Load to manage SSO providers.
+              </div>
+            ) : (
+              <SsoProvidersPanel tenantId={tenantId} />
+            )}
           </div>
         )}
       </div>

@@ -136,6 +136,147 @@ export interface TenantSettingsPutRequest {
   sso_redirect_allowlist?: string | null; // comma-separated URLs
 }
 
+// SSO Provider Management Types
+export type SsoProviderType = 'oidc' | 'saml';
+
+export interface SsoProviderItem {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  provider_type: SsoProviderType;
+  enabled: boolean;
+  allow_signup: boolean;
+  trust_email_verified: boolean;
+  domains: string[];
+  attribute_mapping?: Record<string, any>;
+
+  // OIDC fields
+  issuer?: string;
+  authorization_endpoint?: string;
+  token_endpoint?: string;
+  userinfo_endpoint?: string;
+  jwks_uri?: string;
+  client_id?: string;
+  client_secret?: string; // masked in responses
+  scopes?: string[];
+  response_type?: string;
+  response_mode?: string;
+
+  // SAML fields
+  entity_id?: string;
+  acs_url?: string;
+  slo_url?: string;
+  idp_metadata_url?: string;
+  idp_metadata_xml?: string;
+  idp_entity_id?: string;
+  idp_sso_url?: string;
+  idp_slo_url?: string;
+  idp_certificate?: string;
+  sp_certificate?: string;
+  sp_private_key?: string; // masked in responses
+  sp_certificate_expires_at?: string;
+  want_assertions_signed?: boolean;
+  want_response_signed?: boolean;
+  sign_requests?: boolean;
+  force_authn?: boolean;
+
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface SsoProvidersListResp {
+  providers: SsoProviderItem[];
+  total: number;
+}
+
+export interface CreateSsoProviderReq {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  provider_type: SsoProviderType;
+  enabled?: boolean;
+  allow_signup?: boolean;
+  trust_email_verified?: boolean;
+  domains?: string[];
+  attribute_mapping?: Record<string, any>;
+
+  // OIDC fields
+  issuer?: string;
+  authorization_endpoint?: string;
+  token_endpoint?: string;
+  userinfo_endpoint?: string;
+  jwks_uri?: string;
+  client_id?: string;
+  client_secret?: string;
+  scopes?: string[];
+  response_type?: string;
+  response_mode?: string;
+
+  // SAML fields
+  entity_id?: string;
+  acs_url?: string;
+  slo_url?: string;
+  idp_metadata_url?: string;
+  idp_metadata_xml?: string;
+  idp_entity_id?: string;
+  idp_sso_url?: string;
+  idp_slo_url?: string;
+  idp_certificate?: string;
+  sp_certificate?: string;
+  sp_private_key?: string;
+  want_assertions_signed?: boolean;
+  want_response_signed?: boolean;
+  sign_requests?: boolean;
+  force_authn?: boolean;
+}
+
+export interface UpdateSsoProviderReq {
+  name?: string;
+  enabled?: boolean;
+  allow_signup?: boolean;
+  trust_email_verified?: boolean;
+  domains?: string[];
+  attribute_mapping?: Record<string, any>;
+
+  // OIDC fields
+  issuer?: string;
+  authorization_endpoint?: string;
+  token_endpoint?: string;
+  userinfo_endpoint?: string;
+  jwks_uri?: string;
+  client_id?: string;
+  client_secret?: string;
+  scopes?: string[];
+  response_type?: string;
+  response_mode?: string;
+
+  // SAML fields
+  entity_id?: string;
+  acs_url?: string;
+  slo_url?: string;
+  idp_metadata_url?: string;
+  idp_metadata_xml?: string;
+  idp_entity_id?: string;
+  idp_sso_url?: string;
+  idp_slo_url?: string;
+  idp_certificate?: string;
+  sp_certificate?: string;
+  sp_private_key?: string;
+  want_assertions_signed?: boolean;
+  want_response_signed?: boolean;
+  sign_requests?: boolean;
+  force_authn?: boolean;
+}
+
+export interface SsoTestProviderResp {
+  success: boolean;
+  metadata?: Record<string, any>;
+  error?: string;
+}
+
 type PasswordLoginInput = { email: string; password: string; tenant_id?: string };
 
 export class GuardClient {
@@ -158,6 +299,9 @@ export class GuardClient {
         if (token && !headers.has('authorization')) {
           headers.set('authorization', `Bearer ${token}`);
         }
+      } else if (mode === 'cookie') {
+        // Set X-Auth-Mode header to signal cookie mode to backend
+        headers.set('X-Auth-Mode', 'cookie');
       }
       return [input, { ...init, headers }];
     };
@@ -166,25 +310,11 @@ export class GuardClient {
     // Tenancy today is via body/query. Header will be added later when server adopts it.
 
     const clientHeader = `ts-sdk/${(pkg as any).version ?? '0.0.0'}`;
-    // In cookie mode, sending credentials to a different origin requires specific CORS headers.
-    // To keep local dev/tests simple, only attach credentials when the API is same-origin.
+    // In cookie mode, always include credentials (cookies) with requests.
+    // This requires the backend to have proper CORS configuration with Access-Control-Allow-Credentials: true
     let credentialsOpt: RequestCredentials | undefined = undefined;
     if (mode === 'cookie') {
-      try {
-        if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
-          const api = new URL(opts.baseUrl);
-          const appOrigin = new URL(window.location.origin);
-          if (api.origin === appOrigin.origin) {
-            credentialsOpt = 'include';
-          }
-        } else {
-          // Non-browser contexts (SSR/node) can include credentials
-          credentialsOpt = 'include';
-        }
-      } catch (_) {
-        // If URL parsing fails, default to no credentials to avoid CORS issues
-        credentialsOpt = undefined;
-      }
+      credentialsOpt = 'include';
     }
 
     this.http = new HttpClient({
@@ -502,6 +632,54 @@ export class GuardClient {
       intent: params.intent,
     });
     return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+  }
+
+  // ==============================
+  // SSO Provider Management (Admin-only endpoints)
+  // ==============================
+
+  // List SSO providers for a tenant
+  async ssoListProviders(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<SsoProvidersListResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<SsoProvidersListResp>(`/v1/sso/providers${qs}`, { method: 'GET' });
+  }
+
+  // Create a new SSO provider
+  async ssoCreateProvider(body: CreateSsoProviderReq): Promise<ResponseWrapper<SsoProviderItem>> {
+    return this.request<SsoProviderItem>('/v1/sso/providers', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Get a specific SSO provider by ID
+  async ssoGetProvider(id: string): Promise<ResponseWrapper<SsoProviderItem>> {
+    return this.request<SsoProviderItem>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+      method: 'GET',
+    });
+  }
+
+  // Update an existing SSO provider
+  async ssoUpdateProvider(id: string, body: UpdateSsoProviderReq): Promise<ResponseWrapper<SsoProviderItem>> {
+    return this.request<SsoProviderItem>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Delete an SSO provider
+  async ssoDeleteProvider(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Test SSO provider configuration
+  async ssoTestProvider(id: string): Promise<ResponseWrapper<SsoTestProviderResp>> {
+    return this.request<SsoTestProviderResp>(`/v1/sso/providers/${encodeURIComponent(id)}/test`, {
+      method: 'POST',
+    });
   }
 
   // ==============================

@@ -2,6 +2,16 @@ import { GuardClient } from '../../../sdk/ts/src/client'
 import { WebLocalStorage } from '../../../sdk/ts/src/storage/webLocalStorage'
 import { getRuntimeConfig } from './runtime'
 
+// Re-export types for use in components
+export type {
+  SsoProviderItem,
+  SsoProviderType,
+  SsoProvidersListResp,
+  CreateSsoProviderReq,
+  UpdateSsoProviderReq,
+  SsoTestProviderResp
+} from '../../../sdk/ts/src/client'
+
 let client: GuardClient | null = null
 let lastBaseUrl: string | null = null
 let lastAuthMode: 'bearer' | 'cookie' | null = null
