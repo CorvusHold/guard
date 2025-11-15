@@ -31,7 +31,7 @@ services:
     image: valkey/valkey:7.2
     container_name: guard_dev_valkey
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - guard_dev_valkey_data:/data
     healthcheck:

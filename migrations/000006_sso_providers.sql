@@ -1,6 +1,19 @@
 -- +goose Up
 -- +goose StatementBegin
 
+-- Drop old simple sso_providers table if it exists (from migration 000001)
+DROP TABLE IF EXISTS sso_identities CASCADE;
+DROP TABLE IF EXISTS sso_providers CASCADE;
+
+-- Shared trigger helper for maintaining updated_at columns
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- SSO Provider Configuration (multi-tenant, multi-provider)
 CREATE TABLE sso_providers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -175,5 +188,7 @@ ALTER TABLE auth_identities
 DROP TABLE IF EXISTS sso_sessions;
 DROP TABLE IF EXISTS sso_auth_attempts;
 DROP TABLE IF EXISTS sso_providers;
+
+DROP FUNCTION IF EXISTS update_updated_at_column();
 
 -- +goose StatementEnd

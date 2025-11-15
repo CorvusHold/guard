@@ -54,11 +54,20 @@ type RefreshInput struct {
 	IP           string
 }
 
+type SSOTokenInput struct {
+	UserID    uuid.UUID
+	TenantID  uuid.UUID
+	UserAgent string
+	IP        string
+}
+
 type Service interface {
 	Signup(ctx context.Context, in SignupInput) (AccessTokens, error)
 	Login(ctx context.Context, in LoginInput) (AccessTokens, error)
 	Refresh(ctx context.Context, in RefreshInput) (AccessTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
+	// IssueTokensForSSO issues access and refresh tokens for SSO-authenticated users
+	IssueTokensForSSO(ctx context.Context, in SSOTokenInput) (AccessTokens, error)
 	// Me returns the current user's profile within a tenant context.
 	Me(ctx context.Context, userID, tenantID uuid.UUID) (UserProfile, error)
 	// Introspect validates a JWT and returns token/user claims.

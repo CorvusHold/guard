@@ -561,6 +561,17 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	return s.repo.RevokeTokenChain(ctx, rt.ID)
 }
 
+// IssueTokensForSSO issues access and refresh tokens for SSO-authenticated users.
+// This is used after successful SSO callback to create a session for the user.
+func (s *Service) IssueTokensForSSO(ctx context.Context, in domain.SSOTokenInput) (domain.AccessTokens, error) {
+	// Update last login timestamp
+	if err := s.repo.UpdateUserLoginAt(ctx, in.UserID); err != nil {
+		return domain.AccessTokens{}, err
+	}
+	// Issue tokens
+	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil)
+}
+
 func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID) (domain.AccessTokens, error) {
     // Resolve settings with tenant override and env defaults
     accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)

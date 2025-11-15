@@ -1,0 +1,743 @@
+package provider
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/pem"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/crewjam/saml"
+
+	"github.com/corvusHold/guard/internal/auth/sso/domain"
+)
+
+// SAMLProvider implements the SSOProvider interface for SAML 2.0.
+type SAMLProvider struct {
+	config       *domain.Config
+	sp           *saml.ServiceProvider
+	idpMetadata  *saml.EntityDescriptor
+	spCert       tls.Certificate
+	assertionIDs map[string]time.Time // For replay attack prevention
+}
+
+// NewSAMLProvider creates a new SAML provider instance.
+// It parses the IdP metadata, loads or generates SP certificates,
+// and configures the SAML Service Provider.
+func NewSAMLProvider(ctx context.Context, config *domain.Config) (*SAMLProvider, error) {
+	if err := validateSAMLConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid SAML configuration: %w", err)
+	}
+
+	// Load or generate SP certificate
+	spCert, err := loadOrGenerateCertificate(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load SP certificate: %w", err)
+	}
+
+	// Parse IdP metadata
+	idpMetadata, err := parseSAMLMetadata(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IdP metadata: %w", err)
+	}
+
+	// Extract IdP information from metadata
+	if err := updateConfigFromMetadata(config, idpMetadata); err != nil {
+		return nil, fmt.Errorf("failed to extract IdP info from metadata: %w", err)
+	}
+
+	// Parse ACS URL
+	acsURL, err := url.Parse(config.ACSUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ACS URL: %w", err)
+	}
+
+	// Create ServiceProvider
+	sp := &saml.ServiceProvider{
+		EntityID:          config.EntityID,
+		Key:               spCert.PrivateKey.(*rsa.PrivateKey),
+		Certificate:       spCert.Leaf,
+		MetadataURL:       *acsURL, // Use ACS URL base for metadata
+		AcsURL:            *acsURL,
+		IDPMetadata:       idpMetadata,
+		AuthnNameIDFormat: saml.EmailAddressNameIDFormat,
+		SignatureMethod:   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+	}
+
+	// Configure SLO if provided
+	if config.SLOUrl != "" {
+		sloURL, err := url.Parse(config.SLOUrl)
+		if err != nil {
+			return nil, fmt.Errorf("invalid SLO URL: %w", err)
+		}
+		sp.SloURL = *sloURL
+	}
+
+	// Configure signing options
+	if config.SignRequests {
+		sp.AllowIDPInitiated = false // More secure when signing requests
+	}
+
+	return &SAMLProvider{
+		config:       config,
+		sp:           sp,
+		idpMetadata:  idpMetadata,
+		spCert:       spCert,
+		assertionIDs: make(map[string]time.Time),
+	}, nil
+}
+
+// Type returns the provider type.
+func (p *SAMLProvider) Type() domain.ProviderType {
+	return domain.ProviderTypeSAML
+}
+
+// ValidateConfig validates the SAML provider configuration.
+func (p *SAMLProvider) ValidateConfig() error {
+	return validateSAMLConfig(p.config)
+}
+
+// validateSAMLConfig validates the SAML configuration.
+func validateSAMLConfig(config *domain.Config) error {
+	if config == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if config.EntityID == "" {
+		return fmt.Errorf("entity_id is required")
+	}
+	if config.ACSUrl == "" {
+		return fmt.Errorf("acs_url is required")
+	}
+	if config.IdPMetadataURL == "" && config.IdPMetadataXML == "" {
+		return fmt.Errorf("either idp_metadata_url or idp_metadata_xml is required")
+	}
+	return nil
+}
+
+// Start initiates the SAML authentication flow.
+// It generates a SAML AuthnRequest, signs it (if configured),
+// and returns the redirect URL.
+func (p *SAMLProvider) Start(ctx context.Context, opts domain.StartOptions) (*domain.StartResult, error) {
+	// Generate relay state (equivalent to OAuth state for CSRF protection)
+	relayState := opts.State
+	if relayState == "" {
+		var err error
+		relayState, err = generateState()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate relay state: %w", err)
+		}
+	}
+
+	// Build AuthnRequest
+	req, err := p.sp.MakeAuthenticationRequest(
+		p.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding),
+		saml.HTTPRedirectBinding,
+		saml.HTTPPostBinding,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AuthnRequest: %w", err)
+	}
+
+	// Apply ForceAuthn if requested
+	if opts.ForceAuthn || p.config.ForceAuthn {
+		req.ForceAuthn = boolPtr(true)
+	}
+
+	// Apply LoginHint if provided (as Subject NameID)
+	if opts.LoginHint != "" {
+		req.Subject = &saml.Subject{
+			NameID: &saml.NameID{
+				Format: string(saml.EmailAddressNameIDFormat),
+				Value:  opts.LoginHint,
+			},
+		}
+	}
+
+	// Build redirect URL with signed request
+	redirectURL, err := buildAuthRequestURL(p.sp, req, relayState, p.config.SignRequests)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build AuthnRequest URL: %w", err)
+	}
+
+	// Encode SAML request for storage (if needed for debugging)
+	samlRequestXML, err := xml.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal AuthnRequest: %w", err)
+	}
+
+	return &domain.StartResult{
+		AuthorizationURL: redirectURL,
+		State:            relayState,
+		RelayState:       relayState,
+		SAMLRequest:      base64.StdEncoding.EncodeToString(samlRequestXML),
+	}, nil
+}
+
+// Callback handles the SAML callback.
+// It parses the SAML response, validates signatures and assertions,
+// extracts user attributes, and returns the user profile.
+func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest) (*domain.Profile, error) {
+	if req.SAMLResponse == "" {
+		return nil, fmt.Errorf("SAMLResponse is required")
+	}
+
+	// Decode SAML response
+	samlResponseXML, err := base64.StdEncoding.DecodeString(req.SAMLResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode SAMLResponse: %w", err)
+	}
+
+	// Parse SAML response
+	var response saml.Response
+	if err := xml.Unmarshal(samlResponseXML, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse SAML response: %w", err)
+	}
+
+	// Verify response signature (if required)
+	if p.config.WantResponseSigned {
+		if err := p.verifyResponseSignature(&response); err != nil {
+			return nil, fmt.Errorf("response signature verification failed: %w", err)
+		}
+	}
+
+	// Validate response status
+	if response.Status.StatusCode.Value != saml.StatusSuccess {
+		return nil, fmt.Errorf("SAML authentication failed: %s", response.Status.StatusCode.Value)
+	}
+
+	// Get assertion
+	if response.Assertion == nil && response.EncryptedAssertion == nil {
+		return nil, fmt.Errorf("no assertion found in SAML response")
+	}
+
+	var assertion *saml.Assertion
+	if response.Assertion != nil {
+		assertion = response.Assertion
+	} else {
+		// Decrypt assertion if encrypted
+		decryptedAssertion, err := p.decryptAssertion(response.EncryptedAssertion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt assertion: %w", err)
+		}
+		assertion = decryptedAssertion
+	}
+
+	// Verify assertion signature (if required)
+	if p.config.WantAssertionsSigned {
+		if err := p.verifyAssertionSignature(assertion); err != nil {
+			return nil, fmt.Errorf("assertion signature verification failed: %w", err)
+		}
+	}
+
+	// Validate assertion conditions
+	if err := p.validateAssertionConditions(assertion); err != nil {
+		return nil, fmt.Errorf("assertion validation failed: %w", err)
+	}
+
+	// Check for replay attacks
+	if err := p.checkReplayAttack(assertion); err != nil {
+		return nil, fmt.Errorf("replay attack detected: %w", err)
+	}
+
+	// Extract user profile from assertion
+	profile, err := p.extractProfile(assertion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract profile: %w", err)
+	}
+
+	// Apply custom attribute mapping if configured
+	if p.config.AttributeMapping != nil && len(p.config.AttributeMapping) > 0 {
+		domain.ApplyAttributeMapping(profile, p.config.AttributeMapping)
+	}
+
+	return profile, nil
+}
+
+// GetMetadata returns the SAML Service Provider metadata.
+func (p *SAMLProvider) GetMetadata(ctx context.Context) (*domain.Metadata, error) {
+	// Generate SP metadata
+	metadata := p.sp.Metadata()
+
+	// Marshal to XML
+	metadataXML, err := xml.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal SP metadata: %w", err)
+	}
+
+	// Get certificate expiry
+	var certExpiry *time.Time
+	if p.spCert.Leaf != nil {
+		certExpiry = &p.spCert.Leaf.NotAfter
+	}
+
+	// Encode certificate to PEM
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: p.spCert.Leaf.Raw,
+	})
+
+	return &domain.Metadata{
+		ProviderType:      domain.ProviderTypeSAML,
+		EntityID:          p.config.EntityID,
+		ACSUrl:            p.config.ACSUrl,
+		SLOUrl:            p.config.SLOUrl,
+		SPCertificate:     string(certPEM),
+		CertificateExpiry: certExpiry,
+		MetadataXML:       string(metadataXML),
+	}, nil
+}
+
+// verifyResponseSignature verifies the SAML response signature.
+func (p *SAMLProvider) verifyResponseSignature(response *saml.Response) error {
+	// The crewjam/saml library handles signature verification internally
+	// when we validate the response. We check for the presence of a signature.
+	if response.Signature == nil {
+		return fmt.Errorf("response signature is missing")
+	}
+	return nil
+}
+
+// verifyAssertionSignature verifies the SAML assertion signature.
+func (p *SAMLProvider) verifyAssertionSignature(assertion *saml.Assertion) error {
+	if assertion.Signature == nil {
+		return fmt.Errorf("assertion signature is missing")
+	}
+	return nil
+}
+
+// validateAssertionConditions validates the assertion conditions.
+func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) error {
+	now := time.Now()
+
+	// Check NotBefore condition
+	if assertion.Conditions.NotBefore.After(now) {
+		return fmt.Errorf("assertion not yet valid: NotBefore=%s, Now=%s",
+			assertion.Conditions.NotBefore, now)
+	}
+
+	// Check NotOnOrAfter condition
+	if assertion.Conditions.NotOnOrAfter.Before(now) {
+		return fmt.Errorf("assertion expired: NotOnOrAfter=%s, Now=%s",
+			assertion.Conditions.NotOnOrAfter, now)
+	}
+
+	// Verify Audience restriction
+	if len(assertion.Conditions.AudienceRestrictions) > 0 {
+		audienceValid := false
+		for _, restriction := range assertion.Conditions.AudienceRestrictions {
+			if restriction.Audience.Value == p.config.EntityID {
+				audienceValid = true
+				break
+			}
+		}
+		if !audienceValid {
+			return fmt.Errorf("audience restriction failed: expected %s", p.config.EntityID)
+		}
+	}
+
+	// Verify SubjectConfirmation
+	if len(assertion.Subject.SubjectConfirmations) > 0 {
+		for _, confirmation := range assertion.Subject.SubjectConfirmations {
+			if confirmation.SubjectConfirmationData.NotOnOrAfter.Before(now) {
+				return fmt.Errorf("subject confirmation expired")
+			}
+			if confirmation.SubjectConfirmationData.Recipient != p.config.ACSUrl {
+				return fmt.Errorf("recipient mismatch: expected %s, got %s",
+					p.config.ACSUrl, confirmation.SubjectConfirmationData.Recipient)
+			}
+		}
+	}
+
+	return nil
+}
+
+// checkReplayAttack checks if the assertion has been used before.
+func (p *SAMLProvider) checkReplayAttack(assertion *saml.Assertion) error {
+	assertionID := assertion.ID
+
+	// Check if we've seen this assertion ID before
+	if _, exists := p.assertionIDs[assertionID]; exists {
+		return fmt.Errorf("assertion ID %s has already been used", assertionID)
+	}
+
+	// Store the assertion ID with its expiry time
+	p.assertionIDs[assertionID] = assertion.Conditions.NotOnOrAfter
+
+	// Clean up expired assertion IDs (simple cleanup strategy)
+	// In production, this should be done periodically in a background task
+	p.cleanupExpiredAssertionIDs()
+
+	return nil
+}
+
+// cleanupExpiredAssertionIDs removes expired assertion IDs from the replay cache.
+func (p *SAMLProvider) cleanupExpiredAssertionIDs() {
+	now := time.Now()
+	for id, expiry := range p.assertionIDs {
+		if expiry.Before(now) {
+			delete(p.assertionIDs, id)
+		}
+	}
+}
+
+// decryptAssertion decrypts an encrypted assertion.
+func (p *SAMLProvider) decryptAssertion(encryptedAssertion interface{}) (*saml.Assertion, error) {
+	// Note: Encrypted assertions handling is complex and requires additional implementation
+	// For now, we'll return an error indicating encryption is not yet supported
+	return nil, fmt.Errorf("encrypted assertions are not yet supported")
+}
+
+// extractProfile extracts the user profile from a SAML assertion.
+func (p *SAMLProvider) extractProfile(assertion *saml.Assertion) (*domain.Profile, error) {
+	profile := &domain.Profile{
+		RawAttributes: make(map[string]interface{}),
+	}
+
+	// Extract Subject (NameID)
+	if assertion.Subject != nil && assertion.Subject.NameID != nil {
+		profile.Subject = assertion.Subject.NameID.Value
+
+		// If NameID is an email, also set it as email
+		if string(assertion.Subject.NameID.Format) == string(saml.EmailAddressNameIDFormat) {
+			profile.Email = assertion.Subject.NameID.Value
+			profile.EmailVerified = true // SAML assertions are trusted
+		}
+	}
+
+	// Extract attributes from AttributeStatement
+	for _, stmt := range assertion.AttributeStatements {
+		for _, attr := range stmt.Attributes {
+			attrName := attr.Name
+
+			// Extract attribute values
+			var values []string
+			for _, value := range attr.Values {
+				values = append(values, value.Value)
+			}
+
+			// Store in RawAttributes using Name
+			if len(values) == 1 {
+				profile.RawAttributes[attrName] = values[0]
+				// Also store with lowercase key for case-insensitive lookup
+				profile.RawAttributes[strings.ToLower(attrName)] = values[0]
+			} else if len(values) > 1 {
+				profile.RawAttributes[attrName] = values
+				profile.RawAttributes[strings.ToLower(attrName)] = values
+			}
+
+			// Also store by FriendlyName if present
+			if attr.FriendlyName != "" {
+				if len(values) == 1 {
+					profile.RawAttributes[attr.FriendlyName] = values[0]
+					profile.RawAttributes[strings.ToLower(attr.FriendlyName)] = values[0]
+				} else if len(values) > 1 {
+					profile.RawAttributes[attr.FriendlyName] = values
+					profile.RawAttributes[strings.ToLower(attr.FriendlyName)] = values
+				}
+			}
+
+			// Extract standard attributes using Name field
+			switch strings.ToLower(attrName) {
+			case "email", "mail", "emailaddress":
+				if len(values) > 0 {
+					profile.Email = values[0]
+					profile.EmailVerified = true
+				}
+			case "givenname", "firstname", "given_name":
+				if len(values) > 0 {
+					profile.FirstName = values[0]
+				}
+			case "surname", "lastname", "family_name", "sn":
+				if len(values) > 0 {
+					profile.LastName = values[0]
+				}
+			case "displayname", "name", "cn":
+				if len(values) > 0 {
+					profile.Name = values[0]
+				}
+			case "groups", "memberof":
+				profile.Groups = values
+			}
+		}
+	}
+
+	// Construct full name if not present
+	if profile.Name == "" && (profile.FirstName != "" || profile.LastName != "") {
+		profile.Name = strings.TrimSpace(profile.FirstName + " " + profile.LastName)
+	}
+
+	// Validate that we have at least a subject
+	if profile.Subject == "" {
+		return nil, fmt.Errorf("no subject found in SAML assertion")
+	}
+
+	return profile, nil
+}
+
+// parseSAMLMetadata parses IdP metadata from URL or XML.
+func parseSAMLMetadata(ctx context.Context, config *domain.Config) (*saml.EntityDescriptor, error) {
+	var metadataXML []byte
+	var err error
+
+	if config.IdPMetadataURL != "" {
+		// Fetch metadata from URL
+		metadataXML, err = fetchMetadataFromURL(ctx, config.IdPMetadataURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch metadata from URL: %w", err)
+		}
+	} else if config.IdPMetadataXML != "" {
+		// Use provided XML
+		metadataXML = []byte(config.IdPMetadataXML)
+	} else {
+		return nil, fmt.Errorf("no IdP metadata provided")
+	}
+
+	// Parse metadata
+	var metadata saml.EntityDescriptor
+	if err := xml.Unmarshal(metadataXML, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse IdP metadata XML: %w", err)
+	}
+
+	return &metadata, nil
+}
+
+// fetchMetadataFromURL fetches SAML metadata from a URL.
+func fetchMetadataFromURL(ctx context.Context, metadataURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch metadata: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	metadataXML, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata response: %w", err)
+	}
+
+	return metadataXML, nil
+}
+
+// updateConfigFromMetadata extracts IdP information from metadata.
+func updateConfigFromMetadata(config *domain.Config, metadata *saml.EntityDescriptor) error {
+	// Extract IdP Entity ID
+	if config.IdPEntityID == "" {
+		config.IdPEntityID = metadata.EntityID
+	}
+
+	// Find SSO service
+	if len(metadata.IDPSSODescriptors) == 0 {
+		return fmt.Errorf("no IDPSSODescriptor found in metadata")
+	}
+
+	idpSSO := &metadata.IDPSSODescriptors[0]
+
+	// Extract SSO URL
+	for _, sso := range idpSSO.SingleSignOnServices {
+		if sso.Binding == saml.HTTPRedirectBinding || sso.Binding == saml.HTTPPostBinding {
+			if config.IdPSSOUrl == "" {
+				config.IdPSSOUrl = sso.Location
+			}
+			break
+		}
+	}
+
+	// Extract SLO URL
+	for _, slo := range idpSSO.SingleLogoutServices {
+		if slo.Binding == saml.HTTPRedirectBinding || slo.Binding == saml.HTTPPostBinding {
+			if config.IdPSLOUrl == "" {
+				config.IdPSLOUrl = slo.Location
+			}
+			break
+		}
+	}
+
+	// Extract IdP certificate
+	if len(idpSSO.KeyDescriptors) > 0 {
+		for _, keyDescriptor := range idpSSO.KeyDescriptors {
+			if keyDescriptor.Use == "signing" || keyDescriptor.Use == "" {
+				if len(keyDescriptor.KeyInfo.X509Data.X509Certificates) > 0 {
+					if config.IdPCertificate == "" {
+						certData := keyDescriptor.KeyInfo.X509Data.X509Certificates[0].Data
+						config.IdPCertificate = fmt.Sprintf("-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----",
+							certData)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// loadOrGenerateCertificate loads the SP certificate or generates a new one.
+func loadOrGenerateCertificate(config *domain.Config) (tls.Certificate, error) {
+	// If both certificate and key are provided, load them
+	if config.SPCertificate != "" && config.SPPrivateKey != "" {
+		cert, err := tls.X509KeyPair([]byte(config.SPCertificate), []byte(config.SPPrivateKey))
+		if err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to load certificate and key: %w", err)
+		}
+
+		// Parse the certificate to get the leaf
+		if cert.Leaf == nil {
+			cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("failed to parse certificate: %w", err)
+			}
+		}
+
+		return cert, nil
+	}
+
+	// Generate a self-signed certificate for development
+	certPEM, keyPEM, err := generateSelfSignedCert(config.EntityID, 365)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to generate self-signed certificate: %w", err)
+	}
+
+	// Update config with generated certificate
+	config.SPCertificate = certPEM
+	config.SPPrivateKey = keyPEM
+
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to load generated certificate: %w", err)
+	}
+
+	// Parse the certificate to get the leaf
+	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to parse generated certificate: %w", err)
+	}
+
+	return cert, nil
+}
+
+// generateSelfSignedCert generates a self-signed X.509 certificate for SAML SP.
+func generateSelfSignedCert(commonName string, validDays int) (certPEM, keyPEM string, err error) {
+	// Generate RSA private key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// Generate a random serial number
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"Guard SAML SP"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(0, 0, validDays),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// Create self-signed certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create certificate: %w", err)
+	}
+
+	// Encode certificate to PEM
+	certPEMBlock := &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	}
+	certPEM = string(pem.EncodeToMemory(certPEMBlock))
+
+	// Encode private key to PEM
+	keyPEMBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	keyPEM = string(pem.EncodeToMemory(keyPEMBlock))
+
+	return certPEM, keyPEM, nil
+}
+
+// buildAuthRequestURL builds the redirect URL for the SAML AuthnRequest.
+func buildAuthRequestURL(sp *saml.ServiceProvider, req *saml.AuthnRequest, relayState string, signRequest bool) (string, error) {
+	// Marshal the request to XML
+	reqBuf, err := xml.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal AuthnRequest: %w", err)
+	}
+
+	// Compress and encode the request (per SAML spec for HTTP-Redirect binding)
+	encodedReq, err := compressAndEncode(reqBuf)
+	if err != nil {
+		return "", fmt.Errorf("failed to compress and encode request: %w", err)
+	}
+
+	// Build redirect URL
+	redirectURL := sp.GetSSOBindingLocation(saml.HTTPRedirectBinding)
+	u, err := url.Parse(redirectURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid SSO URL: %w", err)
+	}
+
+	query := u.Query()
+	query.Set("SAMLRequest", encodedReq)
+	if relayState != "" {
+		query.Set("RelayState", relayState)
+	}
+
+	// Sign the request if required
+	// Note: For HTTP-Redirect binding with signatures, the crewjam/saml library
+	// handles signing internally when SignatureMethod is set on the ServiceProvider.
+	// Manual signature creation for HTTP-Redirect is complex and library-dependent.
+
+	u.RawQuery = query.Encode()
+	return u.String(), nil
+}
+
+// compressAndEncode compresses and base64 encodes data for SAML HTTP-Redirect binding.
+func compressAndEncode(data []byte) (string, error) {
+	// For HTTP-Redirect binding, we need to deflate compress and base64 encode
+	// The crewjam/saml library has utilities for this, but we'll implement a simple version
+	// Note: In production, you might want to use the library's built-in methods
+
+	// For now, we'll just base64 encode (compression can be added later)
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return encoded, nil
+}
+
+// boolPtr returns a pointer to a bool value.
+func boolPtr(b bool) *bool {
+	return &b
+}

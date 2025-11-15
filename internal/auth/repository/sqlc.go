@@ -248,7 +248,7 @@ func (r *SQLCRepository) GetAuthIdentityByEmailTenant(ctx context.Context, tenan
 }
 
 func (r *SQLCRepository) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error {
-	return r.q.UpdateUserLoginAt(ctx, toPgUUID(userID))
+	return r.q.UpdateUserLastLogin(ctx, toPgUUID(userID))
 }
 
 func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error {

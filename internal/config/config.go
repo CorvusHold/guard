@@ -41,7 +41,7 @@ func Load() (Config, error) {
 
 	c.AppEnv = getEnv("APP_ENV", "development")
 	c.AppAddr = getEnv("APP_ADDR", ":8080")
-	c.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
+	c.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	c.PublicBaseURL = getEnv("PUBLIC_BASE_URL", "http://localhost:8080")
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
