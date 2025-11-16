@@ -2766,7 +2766,7 @@
         },
         "/v1/auth/refresh": {
             "post": {
-                "description": "Exchanges a refresh token for new access and refresh tokens",
+                "description": "Exchanges a refresh token for new access and refresh tokens. When using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token` from cookies if the body omits `refresh_token` and returns `{\"success\":true}` while setting new cookies.",
                 "consumes": [
                     "application/json"
                 ],

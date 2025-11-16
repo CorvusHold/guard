@@ -64,7 +64,13 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	// Ensure the transaction is rolled back on early returns; ignore ErrTxClosed
+	// which is expected after a successful Commit.
+	defer func() {
+		if rbErr := tx.Rollback(ctx); rbErr != nil && rbErr != pgx.ErrTxClosed {
+			l.log.Warn().Err(rbErr).Msg("failed to rollback transaction")
+		}
+	}()
 
 	queries := l.queries.WithTx(tx)
 
@@ -230,7 +236,11 @@ func (l *IdentityLinker) UnlinkIdentity(ctx context.Context, userID, providerID 
 	// Find and delete the SSO identity
 	for _, identity := range identities {
 		if identity.SsoProviderID.Valid && toUUID(identity.SsoProviderID) == providerID {
-			if err := l.queries.UnlinkSSOIdentity(ctx, identity.ID); err != nil {
+			// Include tenant_id for proper tenant isolation
+			if err := l.queries.UnlinkSSOIdentity(ctx, db.UnlinkSSOIdentityParams{
+				ID:       identity.ID,
+				TenantID: identity.TenantID,
+			}); err != nil {
 				return fmt.Errorf("failed to unlink identity: %w", err)
 			}
 			l.log.Info().
@@ -245,18 +255,13 @@ func (l *IdentityLinker) UnlinkIdentity(ctx context.Context, userID, providerID 
 }
 
 // ListIdentities returns all linked identities for a user.
-func (l *IdentityLinker) ListIdentities(ctx context.Context, userID uuid.UUID) ([]*db.AuthIdentity, error) {
+func (l *IdentityLinker) ListIdentities(ctx context.Context, userID uuid.UUID) ([]db.ListUserSSOIdentitiesRow, error) {
 	identities, err := l.queries.ListUserSSOIdentities(ctx, toPgUUID(userID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list identities: %w", err)
 	}
 
-	result := make([]*db.AuthIdentity, len(identities))
-	for i := range identities {
-		result[i] = &identities[i]
-	}
-
-	return result, nil
+	return identities, nil
 }
 
 // Helper to convert DB user to domain user

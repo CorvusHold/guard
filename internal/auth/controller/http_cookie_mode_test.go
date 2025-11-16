@@ -2,19 +2,29 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
-	"github.com/corvusHold/guard/internal/config"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+
+	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
+	"github.com/corvusHold/guard/internal/config"
+	srepo "github.com/corvusHold/guard/internal/settings/repository"
+	ssvc "github.com/corvusHold/guard/internal/settings/service"
+	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 )
 
 func TestHTTP_CookieMode_Login(t *testing.T) {
 	e := echo.New()
 
-	// Test login without X-Auth-Mode header (should return bearer tokens)
 	t.Run("login without X-Auth-Mode returns bearer tokens", func(t *testing.T) {
 		body := map[string]string{
 			"tenant_id": "test-tenant",
@@ -28,15 +38,12 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 		rec := httptest.NewRecorder()
 		ctx := e.NewContext(req, rec)
 
-		// Mock service would be needed for full test
-		// For now, just verify the detectAuthMode function works
 		mode := detectAuthMode(ctx)
 		if mode != "bearer" {
 			t.Errorf("expected bearer mode, got %s", mode)
 		}
 	})
 
-	// Test login with X-Auth-Mode: cookie header
 	t.Run("login with X-Auth-Mode: cookie", func(t *testing.T) {
 		body := map[string]string{
 			"tenant_id": "test-tenant",
@@ -57,7 +64,6 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 		}
 	})
 
-	// Test detectAuthMode with various header values
 	t.Run("detectAuthMode handles case insensitivity", func(t *testing.T) {
 		testCases := []struct {
 			header   string
@@ -101,19 +107,16 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	rec := httptest.NewRecorder()
 	ctx := e.NewContext(req, rec)
 
-	// Test setTokenCookies
 	accessToken := "test-access-token"
 	refreshToken := "test-refresh-token"
 
 	setTokenCookies(ctx, accessToken, refreshToken, cfg)
 
-	// Check response headers for Set-Cookie
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 2 {
 		t.Fatalf("expected 2 cookies, got %d", len(cookies))
 	}
 
-	// Verify access token cookie
 	var accessCookie *http.Cookie
 	var refreshCookie *http.Cookie
 	for _, cookie := range cookies {
@@ -149,4 +152,155 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	if refreshCookie.Path != "/" {
 		t.Errorf("refresh token path: expected /, got %s", refreshCookie.Path)
 	}
+}
+
+func TestHTTP_CookieMode_RefreshUsesCookieFallback(t *testing.T) {
+	fix := newCookieModeTestFixture(t)
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Mode", "cookie")
+	req.Header.Set("User-Agent", "cookie-itest")
+	req.AddCookie(&http.Cookie{Name: "guard_refresh_token", Value: fix.refreshToken})
+	rec := httptest.NewRecorder()
+	fix.e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&body); err != nil {
+		t.Fatalf("decode refresh body: %v", err)
+	}
+	if len(body) != 1 || body["success"] != true {
+		t.Fatalf("expected success response without tokens, got %+v", body)
+	}
+	accessCookie := requireCookie(t, rec.Result().Cookies(), "guard_access_token")
+	if accessCookie.Value == "" {
+		t.Fatalf("expected guard_access_token cookie to be set")
+	}
+	refreshCookie := requireCookie(t, rec.Result().Cookies(), "guard_refresh_token")
+	if refreshCookie.Value == "" {
+		t.Fatalf("expected guard_refresh_token cookie to be rotated")
+	}
+	fix.refreshToken = refreshCookie.Value
+}
+
+func TestHTTP_CookieMode_LogoutReadsCookieAndClears(t *testing.T) {
+	fix := newCookieModeTestFixture(t)
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", bytes.NewBufferString("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Mode", "cookie")
+	req.AddCookie(&http.Cookie{Name: "guard_refresh_token", Value: fix.refreshToken})
+	rec := httptest.NewRecorder()
+	fix.e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	accessCookie := requireCookie(t, rec.Result().Cookies(), "guard_access_token")
+	if accessCookie.MaxAge > 0 {
+		t.Fatalf("expected guard_access_token cookie to be cleared, got MaxAge=%d", accessCookie.MaxAge)
+	}
+	refreshCookie := requireCookie(t, rec.Result().Cookies(), "guard_refresh_token")
+	if refreshCookie.MaxAge > 0 {
+		t.Fatalf("expected guard_refresh_token cookie to be cleared, got MaxAge=%d", refreshCookie.MaxAge)
+	}
+	// Refreshing with the revoked token (still using cookie mode) should now fail.
+	again := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
+	again.Header.Set("Content-Type", "application/json")
+	again.Header.Set("X-Auth-Mode", "cookie")
+	again.AddCookie(&http.Cookie{Name: "guard_refresh_token", Value: fix.refreshToken})
+	againRec := httptest.NewRecorder()
+	fix.e.ServeHTTP(againRec, again)
+	if againRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected refresh to fail after logout, got %d: %s", againRec.Code, againRec.Body.String())
+	}
+}
+
+type cookieModeTestFixture struct {
+	e            *echo.Echo
+	refreshToken string
+}
+
+type cookieTokensResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func newCookieModeTestFixture(t *testing.T) *cookieModeTestFixture {
+	t.Helper()
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	tr := trepo.New(pool)
+	tenantID := uuid.New()
+	name := "http-cookie-mode-itest-" + tenantID.String()
+	if err := tr.Create(ctx, tenantID, name); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+	// allow tenant replication to complete
+	time.Sleep(25 * time.Millisecond)
+	repo := authrepo.New(pool)
+	sr := srepo.New(pool)
+	settings := ssvc.New(sr)
+	cfg, _ := config.Load()
+	auth := svc.New(repo, cfg, settings)
+	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
+	sso := svc.NewSSO(repo, cfg, settings)
+	e := echo.New()
+	e.Validator = noopValidator{}
+	controller := New(auth, magic, sso)
+	controller.Register(e)
+	email := "cookie-mode-user-" + tenantID.String() + "@example.com"
+	password := "Password!123"
+	sBody := map[string]string{
+		"tenant_id": tenantID.String(),
+		"email":     email,
+		"password":  password,
+	}
+	sb, _ := json.Marshal(sBody)
+	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq.Header.Set("Content-Type", "application/json")
+	srec := httptest.NewRecorder()
+	e.ServeHTTP(srec, sreq)
+	if srec.Code != http.StatusCreated {
+		t.Fatalf("signup expected 201, got %d: %s", srec.Code, srec.Body.String())
+	}
+	lBody := map[string]string{
+		"tenant_id": tenantID.String(),
+		"email":     email,
+		"password":  password,
+	}
+	lb, _ := json.Marshal(lBody)
+	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	lreq.Header.Set("Content-Type", "application/json")
+	lreq.Header.Set("User-Agent", "cookie-itest")
+	lrec := httptest.NewRecorder()
+	e.ServeHTTP(lrec, lreq)
+	if lrec.Code != http.StatusOK {
+		t.Fatalf("login expected 200, got %d: %s", lrec.Code, lrec.Body.String())
+	}
+	var tokens cookieTokensResponse
+	if err := json.NewDecoder(bytes.NewReader(lrec.Body.Bytes())).Decode(&tokens); err != nil {
+		t.Fatalf("decode login tokens: %v", err)
+	}
+	if tokens.RefreshToken == "" {
+		t.Fatalf("expected refresh token from login")
+	}
+	return &cookieModeTestFixture{e: e, refreshToken: tokens.RefreshToken}
+}
+
+func requireCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range cookies {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("cookie %s not found", name)
+	return nil
 }

@@ -260,20 +260,19 @@ func (p *OIDCProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 func (p *OIDCProvider) GetMetadata(ctx context.Context) (*domain.Metadata, error) {
 	endpoint := p.provider.Endpoint()
 
-	// Get supported scopes from discovery (if available)
+	// Get optional fields from discovery (ignore errors)
 	var claims struct {
 		ScopesSupported []string `json:"scopes_supported"`
+		JWKSUri         string   `json:"jwks_uri"`
 	}
-	if err := p.provider.Claims(&claims); err == nil {
-		// Ignore errors - scopes_supported is optional
-	}
+	_ = p.provider.Claims(&claims)
 
 	return &domain.Metadata{
 		ProviderType:          domain.ProviderTypeOIDC,
 		Issuer:                p.config.Issuer,
 		AuthorizationEndpoint: endpoint.AuthURL,
 		TokenEndpoint:         endpoint.TokenURL,
-		JWKSUri:               p.provider.Endpoint().AuthURL, // Note: This should be fetched from discovery
+		JWKSUri:               claims.JWKSUri,
 		ScopesSupported:       claims.ScopesSupported,
 	}, nil
 }

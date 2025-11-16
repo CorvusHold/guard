@@ -745,26 +745,51 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	if token == "" {
 		return domain.Introspection{Active: false}, errors.New("token required")
 	}
-	// We don't know tenant a priori; parse without checking iss/aud first to extract tenant claim.
-	// Use default signing key until tenant is known (settings lookup may rely on tenant id).
-	signingDefault := s.cfg.JWTSigningKey
+
+	// Step 1: Decode JWT without verification to extract tenant claim.
+	// We need the tenant ID to determine which signing key to use for verification.
+	tok, _ := jwt.ParseWithClaims(token, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(""), nil
+	}, jwt.WithoutClaimsValidation())
+	if tok == nil {
+		return domain.Introspection{Active: false}, errors.New("invalid token format")
+	}
+	unverifiedClaims, ok := tok.Claims.(jwt.MapClaims)
+	if !ok {
+		return domain.Introspection{Active: false}, errors.New("invalid claims")
+	}
+
+	// Step 2: Extract tenant ID from unverified claims
+	tenStr, _ := unverifiedClaims["ten"].(string)
+	tid, err := uuid.Parse(tenStr)
+	if err != nil {
+		return domain.Introspection{Active: false}, errors.New("invalid ten")
+	}
+
+	// Step 3: Load tenant-specific settings (issuer/audience/signing key may be overridden per tenant)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, s.cfg.PublicBaseURL)
+	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
+	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+
+	// Step 4: Verify signature with correct tenant-specific signing key
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		// HS256 only
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(signingDefault), nil
+		return []byte(signingKey), nil
 	})
 	if err != nil || !parsed.Valid {
 		return domain.Introspection{Active: false}, errors.New("invalid token")
 	}
+
+	// Step 5: Extract verified claims
 	claims, ok := parsed.Claims.(jwt.MapClaims)
 	if !ok {
 		return domain.Introspection{Active: false}, errors.New("invalid claims")
 	}
-	// Extract basic claims
+
 	subStr, _ := claims["sub"].(string)
-	tenStr, _ := claims["ten"].(string)
 	issStr, _ := claims["iss"].(string)
 	audStr, _ := claims["aud"].(string)
 	var expInt int64
@@ -781,42 +806,26 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	case int64:
 		iatInt = v
 	}
+
 	uid, err := uuid.Parse(subStr)
 	if err != nil {
 		return domain.Introspection{Active: false}, errors.New("invalid sub")
 	}
-	tid, err := uuid.Parse(tenStr)
-	if err != nil {
-		return domain.Introspection{Active: false}, errors.New("invalid ten")
-	}
-	// Validate against settings (issuer/audience/signing key may be overridden per tenant)
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, s.cfg.PublicBaseURL)
-	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
-	// Re-verify signature with possibly different signing key if default differed
-	if signingKey != signingDefault {
-		parsed2, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
-			}
-			return []byte(signingKey), nil
-		})
-		if err != nil || !parsed2.Valid {
-			return domain.Introspection{Active: false}, errors.New("invalid token")
-		}
-	}
-	// Check issuer/audience if present
+
+	// Step 6: Validate issuer/audience if present
 	if issStr != "" && issStr != issuer {
 		return domain.Introspection{Active: false}, errors.New("issuer mismatch")
 	}
 	if audStr != "" && audStr != audience {
 		return domain.Introspection{Active: false}, errors.New("audience mismatch")
 	}
-	// Exp validation
+
+	// Step 7: Exp validation
 	if expInt != 0 && time.Now().Unix() > expInt {
 		return domain.Introspection{Active: false}, errors.New("token expired")
 	}
-	// Load user context
+
+	// Step 8: Load user context
 	u, err := s.repo.GetUserByID(ctx, uid)
 	if err != nil {
 		return domain.Introspection{Active: false}, err
@@ -832,6 +841,7 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 			break
 		}
 	}
+
 	return domain.Introspection{
 		Active:        true,
 		UserID:        uid,

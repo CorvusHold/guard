@@ -39,7 +39,7 @@ const createSSOIdentity = `-- name: CreateSSOIdentity :one
 
 INSERT INTO auth_identities (id, user_id, tenant_id, email, sso_provider_id, sso_subject, sso_attributes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, tenant_id, email, password_hash, created_at, updated_at, sso_provider_id, sso_subject, sso_attributes
+RETURNING id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 `
 
 type CreateSSOIdentityParams struct {
@@ -52,8 +52,21 @@ type CreateSSOIdentityParams struct {
 	SsoAttributes []byte      `json:"sso_attributes"`
 }
 
+type CreateSSOIdentityRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 // SSO Identity Management
-func (q *Queries) CreateSSOIdentity(ctx context.Context, arg CreateSSOIdentityParams) (AuthIdentity, error) {
+func (q *Queries) CreateSSOIdentity(ctx context.Context, arg CreateSSOIdentityParams) (CreateSSOIdentityRow, error) {
 	row := q.db.QueryRow(ctx, createSSOIdentity,
 		arg.ID,
 		arg.UserID,
@@ -63,48 +76,61 @@ func (q *Queries) CreateSSOIdentity(ctx context.Context, arg CreateSSOIdentityPa
 		arg.SsoSubject,
 		arg.SsoAttributes,
 	)
-	var i AuthIdentity
+	var i CreateSSOIdentityRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.TenantID,
 		&i.Email,
 		&i.PasswordHash,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.SsoProviderID,
 		&i.SsoSubject,
 		&i.SsoAttributes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getAuthIdentitiesByUser = `-- name: GetAuthIdentitiesByUser :many
-SELECT id, user_id, tenant_id, email, password_hash, created_at, updated_at, sso_provider_id, sso_subject, sso_attributes
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities
 WHERE user_id = $1
 `
 
-func (q *Queries) GetAuthIdentitiesByUser(ctx context.Context, userID pgtype.UUID) ([]AuthIdentity, error) {
+type GetAuthIdentitiesByUserRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetAuthIdentitiesByUser(ctx context.Context, userID pgtype.UUID) ([]GetAuthIdentitiesByUserRow, error) {
 	rows, err := q.db.Query(ctx, getAuthIdentitiesByUser, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AuthIdentity
+	var items []GetAuthIdentitiesByUserRow
 	for rows.Next() {
-		var i AuthIdentity
+		var i GetAuthIdentitiesByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
 			&i.TenantID,
 			&i.Email,
 			&i.PasswordHash,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.SsoProviderID,
 			&i.SsoSubject,
 			&i.SsoAttributes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -117,7 +143,7 @@ func (q *Queries) GetAuthIdentitiesByUser(ctx context.Context, userID pgtype.UUI
 }
 
 const getAuthIdentityByEmailTenant = `-- name: GetAuthIdentityByEmailTenant :one
-SELECT id, user_id, tenant_id, email, password_hash, created_at, updated_at, sso_provider_id, sso_subject, sso_attributes
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities
 WHERE tenant_id = $1 AND email = $2
 `
@@ -127,26 +153,39 @@ type GetAuthIdentityByEmailTenantParams struct {
 	Email    string      `json:"email"`
 }
 
-func (q *Queries) GetAuthIdentityByEmailTenant(ctx context.Context, arg GetAuthIdentityByEmailTenantParams) (AuthIdentity, error) {
+type GetAuthIdentityByEmailTenantRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetAuthIdentityByEmailTenant(ctx context.Context, arg GetAuthIdentityByEmailTenantParams) (GetAuthIdentityByEmailTenantRow, error) {
 	row := q.db.QueryRow(ctx, getAuthIdentityByEmailTenant, arg.TenantID, arg.Email)
-	var i AuthIdentity
+	var i GetAuthIdentityByEmailTenantRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.TenantID,
 		&i.Email,
 		&i.PasswordHash,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.SsoProviderID,
 		&i.SsoSubject,
 		&i.SsoAttributes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getSSOIdentity = `-- name: GetSSOIdentity :one
-SELECT id, user_id, tenant_id, email, password_hash, created_at, updated_at, sso_provider_id, sso_subject, sso_attributes
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities
 WHERE tenant_id = $1 AND sso_provider_id = $2 AND sso_subject = $3
 `
@@ -157,50 +196,76 @@ type GetSSOIdentityParams struct {
 	SsoSubject    pgtype.Text `json:"sso_subject"`
 }
 
-func (q *Queries) GetSSOIdentity(ctx context.Context, arg GetSSOIdentityParams) (AuthIdentity, error) {
+type GetSSOIdentityRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSSOIdentity(ctx context.Context, arg GetSSOIdentityParams) (GetSSOIdentityRow, error) {
 	row := q.db.QueryRow(ctx, getSSOIdentity, arg.TenantID, arg.SsoProviderID, arg.SsoSubject)
-	var i AuthIdentity
+	var i GetSSOIdentityRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.TenantID,
 		&i.Email,
 		&i.PasswordHash,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.SsoProviderID,
 		&i.SsoSubject,
 		&i.SsoAttributes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listUserSSOIdentities = `-- name: ListUserSSOIdentities :many
-SELECT id, user_id, tenant_id, email, password_hash, created_at, updated_at, sso_provider_id, sso_subject, sso_attributes
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities
 WHERE user_id = $1 AND sso_provider_id IS NOT NULL
 `
 
-func (q *Queries) ListUserSSOIdentities(ctx context.Context, userID pgtype.UUID) ([]AuthIdentity, error) {
+type ListUserSSOIdentitiesRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListUserSSOIdentities(ctx context.Context, userID pgtype.UUID) ([]ListUserSSOIdentitiesRow, error) {
 	rows, err := q.db.Query(ctx, listUserSSOIdentities, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AuthIdentity
+	var items []ListUserSSOIdentitiesRow
 	for rows.Next() {
-		var i AuthIdentity
+		var i ListUserSSOIdentitiesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
 			&i.TenantID,
 			&i.Email,
 			&i.PasswordHash,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.SsoProviderID,
 			&i.SsoSubject,
 			&i.SsoAttributes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -214,11 +279,16 @@ func (q *Queries) ListUserSSOIdentities(ctx context.Context, userID pgtype.UUID)
 
 const unlinkSSOIdentity = `-- name: UnlinkSSOIdentity :exec
 DELETE FROM auth_identities
-WHERE id = $1
+WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) UnlinkSSOIdentity(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, unlinkSSOIdentity, id)
+type UnlinkSSOIdentityParams struct {
+	ID       pgtype.UUID `json:"id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) UnlinkSSOIdentity(ctx context.Context, arg UnlinkSSOIdentityParams) error {
+	_, err := q.db.Exec(ctx, unlinkSSOIdentity, arg.ID, arg.TenantID)
 	return err
 }
 

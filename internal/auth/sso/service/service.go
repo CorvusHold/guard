@@ -15,6 +15,7 @@ import (
 	"github.com/corvusHold/guard/internal/auth/sso/state"
 	db "github.com/corvusHold/guard/internal/db/sqlc"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
+	evsvc "github.com/corvusHold/guard/internal/events/service"
 	"github.com/corvusHold/guard/internal/metrics"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -44,6 +45,7 @@ func New(pool *pgxpool.Pool, redisClient *redis.Client, baseURL string) *SSOServ
 		providers:    make(map[uuid.UUID]domain.SSOProvider),
 		baseURL:      strings.TrimSuffix(baseURL, "/"),
 		log:          zerolog.Nop(),
+		pub:          evsvc.NewLogger(), // Initialize with no-op publisher to prevent nil panics
 	}
 }
 
@@ -550,6 +552,7 @@ func (s *SSOService) CreateProvider(ctx context.Context, req CreateProviderReque
 	}
 
 	// Convert domain config to DB params
+	// Note: Use config fields for SP certificate after initialization (which may have generated them)
 	dbProvider, err := s.queries.CreateSSOProvider(ctx, db.CreateSSOProviderParams{
 		TenantID:               toPgUUID(req.TenantID),
 		Name:                   req.Name,
@@ -574,9 +577,10 @@ func (s *SSOService) CreateProvider(ctx context.Context, req CreateProviderReque
 		IdpSsoUrl:              toPgText(req.IdPSSOUrl),
 		IdpSloUrl:              toPgText(req.IdPSLOUrl),
 		IdpCertificate:         toPgText(req.IdPCertificate),
-		SpCertificate:          toPgText(req.SPCertificate),
-		SpPrivateKey:           toPgText(req.SPPrivateKey),
-		SpCertificateExpiresAt: toPgTimestamp(req.SPCertificateExpiresAt),
+		// Use config fields for SP certificate (may have been generated during initialization)
+		SpCertificate:          toPgText(config.SPCertificate),
+		SpPrivateKey:           toPgText(config.SPPrivateKey),
+		SpCertificateExpiresAt: toPgTimestamp(config.SPCertificateExpiresAt),
 		WantAssertionsSigned:   toPgBool(req.WantAssertionsSigned),
 		WantResponseSigned:     toPgBool(req.WantResponseSigned),
 		SignRequests:           toPgBool(req.SignRequests),

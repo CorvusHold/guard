@@ -691,6 +691,14 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 	// In real implementation, we would need proper SAML IdP metadata
 	// For now, we'll create the provider and test the flow as much as possible
 
+	// Minimal IdP metadata XML for testing
+	minimalIdPMetadata := `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+
 	_, err := env.ssoService.CreateProvider(ctx, service.CreateProviderRequest{
 		TenantID:             env.tenantID,
 		Name:                 "Test SAML Provider",
@@ -702,6 +710,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 		Domains:              []string{"example.com"},
 		EntityID:             "https://guard.example.com/saml",
 		ACSUrl:               "http://localhost:8080/auth/sso/test-saml/callback",
+		IdPMetadataXML:       minimalIdPMetadata, // Required for SAML provider validation
 		IdPEntityID:          "https://idp.example.com",
 		IdPSSOUrl:            "https://idp.example.com/sso",
 		WantAssertionsSigned: false, // For testing without real signatures

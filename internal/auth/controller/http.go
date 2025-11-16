@@ -1238,7 +1238,7 @@ func (h *Controller) login(c echo.Context) error {
 
 // Refresh godoc
 // @Summary      Refresh access token
-// @Description  Exchanges a refresh token for new access and refresh tokens
+// @Description  Exchanges a refresh token for new access and refresh tokens. When using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token` from cookies if the body omits `refresh_token` and returns `{"success":true}` while setting new cookies.
 // @Tags         auth.tokens
 // @Accept       json
 // @Produce      json
@@ -1272,16 +1272,18 @@ func (h *Controller) refresh(c echo.Context) error {
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := c.Validate(&req); err != nil {
-		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-			c.Logger().Warnf("refresh: validation error=%v body=%s", err, string(raw))
-		}
-		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
-	}
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
-	// In cookie mode, try to get refresh token from cookie if not in body
 	authMode := detectAuthMode(c)
+	if authMode != "cookie" || req.RefreshToken != "" {
+		if err := c.Validate(&req); err != nil {
+			if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+				c.Logger().Warnf("refresh: validation error=%v body=%s", err, string(raw))
+			}
+			return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+		}
+	}
+	// In cookie mode, try to get refresh token from cookie if not in body
 	refreshToken := req.RefreshToken
 	if authMode == "cookie" && refreshToken == "" {
 		if cookie, err := c.Cookie("guard_refresh_token"); err == nil {

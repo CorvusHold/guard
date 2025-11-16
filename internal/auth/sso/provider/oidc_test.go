@@ -236,7 +236,10 @@ func TestOIDCProvider_Start(t *testing.T) {
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(discovery)
+			if err := json.NewEncoder(w).Encode(discovery); err != nil {
+				http.Error(w, "failed to encode discovery document", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 		http.NotFound(w, r)
@@ -536,7 +539,10 @@ func TestOIDCProvider_Callback_Errors(t *testing.T) {
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(discovery)
+			if err := json.NewEncoder(w).Encode(discovery); err != nil {
+				http.Error(w, "failed to encode discovery document", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 		http.NotFound(w, r)
@@ -663,7 +669,10 @@ func TestNewOIDCProvider_DefaultScopes(t *testing.T) {
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(discovery)
+			if err := json.NewEncoder(w).Encode(discovery); err != nil {
+				http.Error(w, "failed to encode discovery document", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 		http.NotFound(w, r)

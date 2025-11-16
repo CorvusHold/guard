@@ -62,13 +62,35 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 	if in.RedirectURL != "" {
 		allowlist, _ := s.settings.GetString(ctx, sdomain.KeySSORedirectAllowlist, &in.TenantID, "")
 		if strings.TrimSpace(allowlist) != "" {
+			// Parse the redirect URL to prevent domain-confusion attacks
+			redirURL, err := url.Parse(in.RedirectURL)
+			if err != nil || !redirURL.IsAbs() {
+				_ = s.pub.Publish(ctx, evdomain.Event{
+					Type:     "auth.sso.start.failure",
+					TenantID: in.TenantID,
+					Meta:     map[string]string{"provider": in.Provider, "reason": "redirect_disallowed", "redirect_url": in.RedirectURL},
+					Time:     time.Now(),
+				})
+				metrics.IncAuthOutcome("sso", "failure")
+				metrics.IncSSOOutcome(in.Provider, "failure")
+				return "", errors.New("redirect_url not allowed")
+			}
+
 			allowed := false
-			for _, p := range strings.Split(allowlist, ",") {
-				p = strings.TrimSpace(p)
-				if p == "" {
+			for _, raw := range strings.Split(allowlist, ",") {
+				raw = strings.TrimSpace(raw)
+				if raw == "" {
 					continue
 				}
-				if strings.HasPrefix(in.RedirectURL, p) {
+				// Parse each allowlist entry to compare origins securely
+				allowedURL, err := url.Parse(raw)
+				if err != nil || !allowedURL.IsAbs() {
+					continue // Skip invalid allowlist entries
+				}
+				// Compare scheme, host, and path prefix (not raw strings)
+				if redirURL.Scheme == allowedURL.Scheme &&
+					redirURL.Host == allowedURL.Host &&
+					strings.HasPrefix(redirURL.Path, allowedURL.Path) {
 					allowed = true
 					break
 				}
