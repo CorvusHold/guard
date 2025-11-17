@@ -25,8 +25,12 @@ func setupRedis(t *testing.T) *redis.Client {
 
 	// Clean up test data
 	t.Cleanup(func() {
-		client.FlushDB(ctx)
-		client.Close()
+		if err := client.FlushDB(ctx).Err(); err != nil {
+			t.Logf("failed to flush redis test DB: %v", err)
+		}
+		if err := client.Close(); err != nil {
+			t.Logf("failed to close redis client: %v", err)
+		}
 	})
 
 	return client

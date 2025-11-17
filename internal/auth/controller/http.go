@@ -33,6 +33,11 @@ type Controller struct {
 	pub      evdomain.Publisher
 }
 
+const (
+	guardAccessTokenCookieName  = "guard_access_token"
+	guardRefreshTokenCookieName = "guard_refresh_token"
+)
+
 // ---- Admin: RBAC v2 ----
 
 // RBAC List Permissions godoc
@@ -725,7 +730,7 @@ func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg confi
 	// Access token cookie (15 minutes default)
 	accessMaxAge := int(cfg.AccessTokenTTL.Seconds())
 	accessCookie := &http.Cookie{
-		Name:     "guard_access_token",
+		Name:     guardAccessTokenCookieName,
 		Value:    accessToken,
 		Path:     "/",
 		MaxAge:   accessMaxAge,
@@ -738,7 +743,7 @@ func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg confi
 	// Refresh token cookie (30 days default)
 	refreshMaxAge := int(cfg.RefreshTokenTTL.Seconds())
 	refreshCookie := &http.Cookie{
-		Name:     "guard_refresh_token",
+		Name:     guardRefreshTokenCookieName,
 		Value:    refreshToken,
 		Path:     "/",
 		MaxAge:   refreshMaxAge,
@@ -747,6 +752,33 @@ func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg confi
 		SameSite: sameSite,
 	}
 	c.SetCookie(refreshCookie)
+}
+
+func clearTokenCookies(c echo.Context, cfg config.Config) {
+	secure := shouldUseSecureCookie(c, cfg)
+	sameSite := cfg.CookieSameSite
+	expired := -1
+	makeClearingCookie := func(name string) *http.Cookie {
+		return &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   expired,
+			HttpOnly: true,
+			Secure:   secure,
+			SameSite: sameSite,
+		}
+	}
+	c.SetCookie(makeClearingCookie(guardAccessTokenCookieName))
+	c.SetCookie(makeClearingCookie(guardRefreshTokenCookieName))
+}
+
+func respondWithTokens(c echo.Context, cfg config.Config, accessToken, refreshToken string) error {
+	if detectAuthMode(c, cfg.DefaultAuthMode) == "cookie" {
+		setTokenCookies(c, accessToken, refreshToken, cfg)
+		return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	}
+	return c.JSON(http.StatusOK, tokensResp{AccessToken: accessToken, RefreshToken: refreshToken})
 }
 
 func shouldUseSecureCookie(c echo.Context, cfg config.Config) bool {
@@ -1226,7 +1258,7 @@ func (h *Controller) signup(c echo.Context) error {
 
 // Password Login godoc
 // @Summary      Password login
-// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.
+// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
 // @Tags         auth.password
 // @Accept       json
 // @Produce      json
@@ -1267,14 +1299,7 @@ func (h *Controller) login(c echo.Context) error {
 		}
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	// Check auth mode and set cookies if requested
-	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-	if authMode == "cookie" {
-		setTokenCookies(c, tok.AccessToken, tok.RefreshToken, h.cfg)
-		// In cookie mode, return success without tokens in body
-		return c.JSON(http.StatusOK, map[string]bool{"success": true})
-	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+	return respondWithTokens(c, h.cfg, tok.AccessToken, tok.RefreshToken)
 }
 
 // Refresh godoc
@@ -1290,21 +1315,21 @@ func (h *Controller) login(c echo.Context) error {
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/refresh [post]
 func (h *Controller) refresh(c echo.Context) error {
-	// Peek and restore body for debug logging
+	debugEnabled := os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != ""
 	var raw []byte
-	if c.Request().Body != nil {
+	if debugEnabled && c.Request().Body != nil {
 		if buf, err := io.ReadAll(c.Request().Body); err == nil {
 			raw = buf
 			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
 		}
 	}
-	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+	if debugEnabled {
 		c.Logger().Debugf("refresh: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
-		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if debugEnabled {
 			c.Logger().Warnf("refresh: bind error=%v body=%s", err, redactedBody(raw))
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -1314,7 +1339,7 @@ func (h *Controller) refresh(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	if authMode != "cookie" || req.RefreshToken != "" {
 		if err := c.Validate(&req); err != nil {
-			if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+			if debugEnabled {
 				c.Logger().Warnf("refresh: validation error=%v body=%s", err, redactedBody(raw))
 			}
 			return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
@@ -1323,7 +1348,7 @@ func (h *Controller) refresh(c echo.Context) error {
 	// In cookie mode, try to get refresh token from cookie if not in body
 	refreshToken := req.RefreshToken
 	if authMode == "cookie" && refreshToken == "" {
-		if cookie, err := c.Cookie("guard_refresh_token"); err == nil {
+		if cookie, err := c.Cookie(guardRefreshTokenCookieName); err == nil {
 			refreshToken = cookie.Value
 		}
 	}
@@ -1334,13 +1359,7 @@ func (h *Controller) refresh(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	// Check auth mode and set cookies if requested
-	if authMode == "cookie" {
-		setTokenCookies(c, tok.AccessToken, tok.RefreshToken, h.cfg)
-		// In cookie mode, return success without tokens in body
-		return c.JSON(http.StatusOK, map[string]bool{"success": true})
-	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+	return respondWithTokens(c, h.cfg, tok.AccessToken, tok.RefreshToken)
 }
 
 // Logout godoc
@@ -1354,21 +1373,21 @@ func (h *Controller) refresh(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/logout [post]
 func (h *Controller) logout(c echo.Context) error {
-	// Peek and restore body for debug logging
+	debugEnabled := os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != ""
 	var raw []byte
-	if c.Request().Body != nil {
+	if debugEnabled && c.Request().Body != nil {
 		if buf, err := io.ReadAll(c.Request().Body); err == nil {
 			raw = buf
 			c.Request().Body = io.NopCloser(bytes.NewReader(buf))
 		}
 	}
-	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+	if debugEnabled {
 		c.Logger().Debugf("logout: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("logout: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
-		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
+		if debugEnabled {
 			c.Logger().Warnf("logout: bind error=%v body=%s", err, redactedBody(raw))
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -1377,15 +1396,14 @@ func (h *Controller) logout(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	refreshToken := req.RefreshToken
 	if authMode == "cookie" && refreshToken == "" {
-		if cookie, err := c.Cookie("guard_refresh_token"); err == nil {
+		if cookie, err := c.Cookie(guardRefreshTokenCookieName); err == nil {
 			refreshToken = cookie.Value
 		}
 	}
 	if refreshToken == "" {
 		// Clear cookies if in cookie mode
 		if authMode == "cookie" {
-			c.SetCookie(&http.Cookie{Name: "guard_access_token", Path: "/", MaxAge: -1})
-			c.SetCookie(&http.Cookie{Name: "guard_refresh_token", Path: "/", MaxAge: -1})
+			clearTokenCookies(c, h.cfg)
 		}
 		return c.NoContent(http.StatusNoContent)
 	}
@@ -1394,8 +1412,7 @@ func (h *Controller) logout(c echo.Context) error {
 	}
 	// Clear cookies if in cookie mode
 	if authMode == "cookie" {
-		c.SetCookie(&http.Cookie{Name: "guard_access_token", Path: "/", MaxAge: -1})
-		c.SetCookie(&http.Cookie{Name: "guard_refresh_token", Path: "/", MaxAge: -1})
+		clearTokenCookies(c, h.cfg)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -1411,11 +1428,10 @@ func (h *Controller) logout(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/me [get]
 func (h *Controller) me(c echo.Context) error {
-	// Try bearer token first, then cookie
+	// Try bearer token first, then cookie if cookie auth is enabled/requested
 	tok := bearerToken(c)
-	if tok == "" {
-		// Try to get from cookie
-		if cookie, err := c.Cookie("guard_access_token"); err == nil {
+	if tok == "" && detectAuthMode(c, h.cfg.DefaultAuthMode) == "cookie" {
+		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil {
 			tok = cookie.Value
 		}
 	}
@@ -2428,7 +2444,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 
 // Verify MFA godoc
 // @Summary      Verify MFA challenge
-// @Description  Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.
+// @Description  Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens. When clients opt into cookie auth (`X-Auth-Mode: cookie` or default), Guard sets the session cookies and returns `{ "success": true }` instead of embedding tokens in the JSON body.
 // @Tags         auth.mfa
 // @Accept       json
 // @Produce      json
@@ -2462,12 +2478,5 @@ func (h *Controller) verifyMFA(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	// Check auth mode and set cookies if requested
-	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-	if authMode == "cookie" {
-		setTokenCookies(c, toks.AccessToken, toks.RefreshToken, h.cfg)
-		// In cookie mode, return success without tokens in body
-		return c.JSON(http.StatusOK, map[string]bool{"success": true})
-	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+	return respondWithTokens(c, h.cfg, toks.AccessToken, toks.RefreshToken)
 }

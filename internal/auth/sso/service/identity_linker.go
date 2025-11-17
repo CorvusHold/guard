@@ -130,14 +130,15 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 	var userID uuid.UUID
 	isNewUser := false
 
-	if err == nil {
+	switch err {
+	case nil:
 		// User exists with this email - link the identity
 		userID = toUUID(existingAuthIdentity.UserID)
 		l.log.Info().
 			Str("user_id", userID.String()).
 			Str("email", req.Profile.Email).
 			Msg("linking SSO identity to existing user")
-	} else if err == pgx.ErrNoRows {
+	case pgx.ErrNoRows:
 		// User doesn't exist - check if signup is allowed
 		if !req.AllowSignup {
 			return nil, fmt.Errorf("user not found and signup is not allowed")
@@ -175,7 +176,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 			Str("user_id", userID.String()).
 			Str("email", req.Profile.Email).
 			Msg("created new user from SSO")
-	} else {
+	default:
 		return nil, fmt.Errorf("failed to lookup auth identity: %w", err)
 	}
 

@@ -122,9 +122,10 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	var accessCookie *http.Cookie
 	var refreshCookie *http.Cookie
 	for _, cookie := range cookies {
-		if cookie.Name == "guard_access_token" {
+		switch cookie.Name {
+		case "guard_access_token":
 			accessCookie = cookie
-		} else if cookie.Name == "guard_refresh_token" {
+		case "guard_refresh_token":
 			refreshCookie = cookie
 		}
 	}

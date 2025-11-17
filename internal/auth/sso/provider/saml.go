@@ -18,6 +18,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -261,7 +262,7 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 	}
 
 	// Apply custom attribute mapping if configured
-	if p.config.AttributeMapping != nil && len(p.config.AttributeMapping) > 0 {
+	if len(p.config.AttributeMapping) > 0 {
 		domain.ApplyAttributeMapping(profile, p.config.AttributeMapping)
 	}
 
@@ -393,7 +394,7 @@ func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) er
 	}
 
 	// Verify Audience restriction
-	if assertion.Conditions.AudienceRestrictions != nil && len(assertion.Conditions.AudienceRestrictions) > 0 {
+	if len(assertion.Conditions.AudienceRestrictions) > 0 {
 		audienceValid := false
 		for _, restriction := range assertion.Conditions.AudienceRestrictions {
 			if restriction.Audience.Value == p.config.EntityID {
@@ -409,14 +410,15 @@ func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) er
 	// Verify SubjectConfirmation
 	if assertion.Subject != nil && assertion.Subject.SubjectConfirmations != nil && len(assertion.Subject.SubjectConfirmations) > 0 {
 		for _, confirmation := range assertion.Subject.SubjectConfirmations {
-			if confirmation.SubjectConfirmationData != nil {
-				if !confirmation.SubjectConfirmationData.NotOnOrAfter.IsZero() && confirmation.SubjectConfirmationData.NotOnOrAfter.Before(now) {
-					return fmt.Errorf("subject confirmation expired")
-				}
-				if confirmation.SubjectConfirmationData.Recipient != "" && confirmation.SubjectConfirmationData.Recipient != p.config.ACSUrl {
-					return fmt.Errorf("recipient mismatch: expected %s, got %s",
-						p.config.ACSUrl, confirmation.SubjectConfirmationData.Recipient)
-				}
+			if confirmation.SubjectConfirmationData == nil {
+				return fmt.Errorf("subject confirmation data missing")
+			}
+			if !confirmation.SubjectConfirmationData.NotOnOrAfter.IsZero() && confirmation.SubjectConfirmationData.NotOnOrAfter.Before(now) {
+				return fmt.Errorf("subject confirmation expired")
+			}
+			if confirmation.SubjectConfirmationData.Recipient != "" && confirmation.SubjectConfirmationData.Recipient != p.config.ACSUrl {
+				return fmt.Errorf("recipient mismatch: expected %s, got %s",
+					p.config.ACSUrl, confirmation.SubjectConfirmationData.Recipient)
 			}
 		}
 	}
@@ -470,17 +472,11 @@ func (p *SAMLProvider) cleanupExpiredAssertionIDs() {
 }
 
 // decryptAssertion decrypts an encrypted assertion.
-func (p *SAMLProvider) decryptAssertion(encryptedAssertion interface{}) (*saml.Assertion, error) {
+func (p *SAMLProvider) decryptAssertion(responseXML []byte) (*saml.Assertion, error) {
 	// Note: Encrypted assertions handling is complex and requires additional implementation
 	// For now, we'll delegate to the crewjam/saml ServiceProvider's ParseXMLResponse,
 	// which already supports EncryptedAssertion elements when the SP is configured
 	// with the appropriate key material.
-
-	responseXML, ok := encryptedAssertion.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("encrypted assertion payload must be raw SAML response XML")
-	}
-
 	assertion, err := p.sp.ParseXMLResponse(responseXML, nil, p.sp.AcsURL)
 	if err != nil {
 		return nil, err
@@ -541,7 +537,10 @@ func (p *SAMLProvider) extractProfile(assertion *saml.Assertion) (*domain.Profil
 			// Extract standard attributes using Name field
 			switch strings.ToLower(attrName) {
 			case "email", "mail", "emailaddress":
-				if len(values) > 0 {
+				if len(values) > 1 {
+					return nil, fmt.Errorf("email attribute contains multiple values")
+				}
+				if len(values) == 1 {
 					profile.Email = values[0]
 					profile.EmailVerified = true
 				}
@@ -618,7 +617,12 @@ func fetchMetadataFromURL(ctx context.Context, metadataURL string) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			// surface close errors via panic-free log; use default logger
+			log.Printf("fetchMetadataFromURL: failed to close response body: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)

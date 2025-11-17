@@ -2488,7 +2488,7 @@
         },
         "/v1/auth/mfa/verify": {
             "post": {
-                "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.",
+                "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens. When clients opt into cookie auth (`X-Auth-Mode: cookie` or default), Guard sets the session cookies and returns `{ \"success\": true }` instead of embedding tokens in the JSON body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2549,7 +2549,7 @@
         },
         "/v1/auth/password/login": {
             "post": {
-                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.",
+                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ \"success\": true }` instead of raw tokens in the JSON payload.",
                 "consumes": [
                     "application/json"
                 ],

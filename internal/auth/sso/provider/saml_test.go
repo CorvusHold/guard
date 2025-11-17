@@ -861,6 +861,36 @@ func TestExtractProfile(t *testing.T) {
 			},
 			expectErr: true,
 		},
+		{
+			name: "multi-valued email attribute returns error",
+			assertion: &saml.Assertion{
+				ID: "assertion-5",
+				Subject: &saml.Subject{
+					NameID: &saml.NameID{
+						Format: string(saml.EmailAddressNameIDFormat),
+						Value:  "user@example.com",
+					},
+				},
+				Conditions: &saml.Conditions{
+					NotBefore:    time.Now().Add(-5 * time.Minute),
+					NotOnOrAfter: time.Now().Add(5 * time.Minute),
+				},
+				AttributeStatements: []saml.AttributeStatement{
+					{
+						Attributes: []saml.Attribute{
+							{
+								Name: "email",
+								Values: []saml.AttributeValue{
+									{Value: "john@example.com"},
+									{Value: "doe@example.com"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -986,6 +1016,31 @@ func TestValidateAssertionConditions(t *testing.T) {
 			expectErr: true,
 			errMsg:    "recipient mismatch",
 		},
+		{
+			name: "subject confirmations missing entirely allowed",
+			assertion: &saml.Assertion{
+				Conditions: &saml.Conditions{
+					NotBefore:    now.Add(-5 * time.Minute),
+					NotOnOrAfter: now.Add(5 * time.Minute),
+				},
+				Subject: &saml.Subject{},
+			},
+			expectErr: false,
+		},
+		{
+			name: "subject confirmation missing data fails",
+			assertion: &saml.Assertion{
+				Conditions: &saml.Conditions{
+					NotBefore:    now.Add(-5 * time.Minute),
+					NotOnOrAfter: now.Add(5 * time.Minute),
+				},
+				Subject: &saml.Subject{
+					SubjectConfirmations: []saml.SubjectConfirmation{{}},
+				},
+			},
+			expectErr: true,
+			errMsg:    "subject confirmation data missing",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1054,6 +1109,8 @@ func TestCleanupExpiredAssertionIDs(t *testing.T) {
 
 	now := time.Now()
 
+	provider.assertionIDsMu.Lock()
+
 	// Add expired assertion
 	provider.assertionIDs["expired-1"] = now.Add(-10 * time.Minute)
 	provider.assertionIDs["expired-2"] = now.Add(-5 * time.Minute)
@@ -1064,6 +1121,8 @@ func TestCleanupExpiredAssertionIDs(t *testing.T) {
 
 	// Cleanup
 	provider.cleanupExpiredAssertionIDs()
+
+	provider.assertionIDsMu.Unlock()
 
 	// Verify expired ones are removed
 	assert.NotContains(t, provider.assertionIDs, "expired-1")

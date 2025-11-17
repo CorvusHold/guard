@@ -74,7 +74,11 @@ func Load() (Config, error) {
 		authMode = "bearer" // fallback to bearer if invalid value
 	}
 	c.DefaultAuthMode = authMode
-	c.CookieSameSite = getSameSite("COOKIE_SAME_SITE", http.SameSiteLaxMode)
+	sameSite := getSameSite("COOKIE_SAME_SITE", http.SameSiteLaxMode)
+	if sameSite == http.SameSiteDefaultMode {
+		sameSite = http.SameSiteLaxMode
+	}
+	c.CookieSameSite = sameSite
 
 	return c, nil
 }

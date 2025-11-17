@@ -249,7 +249,7 @@ func (p *OIDCProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 	}
 
 	// Apply custom attribute mapping if configured
-	if p.config.AttributeMapping != nil && len(p.config.AttributeMapping) > 0 {
+	if len(p.config.AttributeMapping) > 0 {
 		domain.ApplyAttributeMapping(profile, p.config.AttributeMapping)
 	}
 
