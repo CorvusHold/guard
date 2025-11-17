@@ -46,7 +46,7 @@ func Load() (Config, error) {
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
 
-	c.RedisAddr = getEnv("REDIS_ADDR", "localhost:6380")
+	c.RedisAddr = getEnv("REDIS_ADDR", "localhost:6379")
 	c.RedisDB = getInt("REDIS_DB", 0)
 
 	c.JWTSigningKey = getEnv("JWT_SIGNING_KEY", "dev-insecure-change-this")

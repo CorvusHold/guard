@@ -554,29 +554,29 @@ func (s *SSOService) CreateProvider(ctx context.Context, req CreateProviderReque
 	// Convert domain config to DB params
 	// Note: Use config fields for SP certificate after initialization (which may have generated them)
 	dbProvider, err := s.queries.CreateSSOProvider(ctx, db.CreateSSOProviderParams{
-		TenantID:               toPgUUID(req.TenantID),
-		Name:                   req.Name,
-		Slug:                   req.Slug,
-		ProviderType:           string(req.ProviderType),
-		Issuer:                 toPgText(req.Issuer),
-		AuthorizationEndpoint:  toPgText(req.AuthorizationEndpoint),
-		TokenEndpoint:          toPgText(req.TokenEndpoint),
-		UserinfoEndpoint:       toPgText(req.UserinfoEndpoint),
-		JwksUri:                toPgText(req.JWKSUri),
-		ClientID:               toPgText(req.ClientID),
-		ClientSecret:           toPgText(req.ClientSecret),
-		Scopes:                 req.Scopes,
-		ResponseType:           toPgText(req.ResponseType),
-		ResponseMode:           toPgText(req.ResponseMode),
-		EntityID:               toPgText(req.EntityID),
-		AcsUrl:                 toPgText(req.ACSUrl),
-		SloUrl:                 toPgText(req.SLOUrl),
-		IdpMetadataUrl:         toPgText(req.IdPMetadataURL),
-		IdpMetadataXml:         toPgText(req.IdPMetadataXML),
-		IdpEntityID:            toPgText(req.IdPEntityID),
-		IdpSsoUrl:              toPgText(req.IdPSSOUrl),
-		IdpSloUrl:              toPgText(req.IdPSLOUrl),
-		IdpCertificate:         toPgText(req.IdPCertificate),
+		TenantID:              toPgUUID(req.TenantID),
+		Name:                  req.Name,
+		Slug:                  req.Slug,
+		ProviderType:          string(req.ProviderType),
+		Issuer:                toPgText(req.Issuer),
+		AuthorizationEndpoint: toPgText(req.AuthorizationEndpoint),
+		TokenEndpoint:         toPgText(req.TokenEndpoint),
+		UserinfoEndpoint:      toPgText(req.UserinfoEndpoint),
+		JwksUri:               toPgText(req.JWKSUri),
+		ClientID:              toPgText(req.ClientID),
+		ClientSecret:          toPgText(req.ClientSecret),
+		Scopes:                req.Scopes,
+		ResponseType:          toPgText(req.ResponseType),
+		ResponseMode:          toPgText(req.ResponseMode),
+		EntityID:              toPgText(req.EntityID),
+		AcsUrl:                toPgText(req.ACSUrl),
+		SloUrl:                toPgText(req.SLOUrl),
+		IdpMetadataUrl:        toPgText(req.IdPMetadataURL),
+		IdpMetadataXml:        toPgText(req.IdPMetadataXML),
+		IdpEntityID:           toPgText(req.IdPEntityID),
+		IdpSsoUrl:             toPgText(req.IdPSSOUrl),
+		IdpSloUrl:             toPgText(req.IdPSLOUrl),
+		IdpCertificate:        toPgText(req.IdPCertificate),
 		// Use config fields for SP certificate (may have been generated during initialization)
 		SpCertificate:          toPgText(config.SPCertificate),
 		SpPrivateKey:           toPgText(config.SPPrivateKey),
@@ -1143,15 +1143,6 @@ func toPgTimestamp(t *time.Time) pgtype.Timestamptz {
 		return pgtype.Timestamptz{Valid: false}
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-// extractDomain extracts the domain from an email address.
-func extractDomain(email string) string {
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return ""
-	}
-	return strings.ToLower(parts[1])
 }
 
 // parseIPAddr parses an IP address string to *netip.Addr.

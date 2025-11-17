@@ -154,7 +154,7 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	}
 }
 
-func TestHTTP_CookieMode_RefreshUsesCookieFallback(t *testing.T) {
+func TestHTTP_CookieMode_RefreshViaCookieMode(t *testing.T) {
 	fix := newCookieModeTestFixture(t)
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
 	req.Header.Set("Content-Type", "application/json")
@@ -170,8 +170,14 @@ func TestHTTP_CookieMode_RefreshUsesCookieFallback(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&body); err != nil {
 		t.Fatalf("decode refresh body: %v", err)
 	}
-	if len(body) != 1 || body["success"] != true {
+	if success, ok := body["success"]; !ok || success != true {
 		t.Fatalf("expected success response without tokens, got %+v", body)
+	}
+	if _, ok := body["access_token"]; ok {
+		t.Fatalf("expected no access_token in cookie mode response, got %+v", body)
+	}
+	if _, ok := body["refresh_token"]; ok {
+		t.Fatalf("expected no refresh_token in cookie mode response, got %+v", body)
 	}
 	accessCookie := requireCookie(t, rec.Result().Cookies(), "guard_access_token")
 	if accessCookie.Value == "" {
@@ -184,7 +190,7 @@ func TestHTTP_CookieMode_RefreshUsesCookieFallback(t *testing.T) {
 	fix.refreshToken = refreshCookie.Value
 }
 
-func TestHTTP_CookieMode_LogoutReadsCookieAndClears(t *testing.T) {
+func TestHTTP_CookieMode_LogoutViaCookieMode(t *testing.T) {
 	fix := newCookieModeTestFixture(t)
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", bytes.NewBufferString("{}"))
 	req.Header.Set("Content-Type", "application/json")
@@ -194,6 +200,9 @@ func TestHTTP_CookieMode_LogoutReadsCookieAndClears(t *testing.T) {
 	fix.e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("expected empty body on logout, got %q", rec.Body.String())
 	}
 	accessCookie := requireCookie(t, rec.Result().Cookies(), "guard_access_token")
 	if accessCookie.MaxAge > 0 {

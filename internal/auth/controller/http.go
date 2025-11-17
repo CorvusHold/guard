@@ -1238,7 +1238,7 @@ func (h *Controller) login(c echo.Context) error {
 
 // Refresh godoc
 // @Summary      Refresh access token
-// @Description  Exchanges a refresh token for new access and refresh tokens. When using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token` from cookies if the body omits `refresh_token` and returns `{"success":true}` while setting new cookies.
+// @Description  Exchanges a refresh token for new access and refresh tokens. When using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token` from cookies if the body omits `refresh_token`, set rotated cookies, and return `{"success":true}` while omitting token fields from the JSON response.
 // @Tags         auth.tokens
 // @Accept       json
 // @Produce      json
@@ -1305,7 +1305,7 @@ func (h *Controller) refresh(c echo.Context) error {
 
 // Logout godoc
 // @Summary      Logout (revoke refresh token)
-// @Description  Revokes the provided refresh token if present; idempotent
+// @Description  Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads `guard_refresh_token`, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.
 // @Tags         auth.tokens
 // @Accept       json
 // @Param        body  body  refreshReq  false  "refresh_token (optional)"

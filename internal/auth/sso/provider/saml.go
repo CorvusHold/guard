@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -810,12 +811,19 @@ func buildAuthRequestURL(sp *saml.ServiceProvider, req *saml.AuthnRequest, relay
 
 // compressAndEncode compresses and base64 encodes data for SAML HTTP-Redirect binding.
 func compressAndEncode(data []byte) (string, error) {
-	// For HTTP-Redirect binding, we need to deflate compress and base64 encode
-	// The crewjam/saml library has utilities for this, but we'll implement a simple version
-	// Note: In production, you might want to use the library's built-in methods
-
-	// For now, we'll just base64 encode (compression can be added later)
-	encoded := base64.StdEncoding.EncodeToString(data)
+	var buf bytes.Buffer
+	zw, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	if err != nil {
+		return "", fmt.Errorf("failed to create deflate writer: %w", err)
+	}
+	if _, err := zw.Write(data); err != nil {
+		_ = zw.Close()
+		return "", fmt.Errorf("failed to write compressed data: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return "", fmt.Errorf("failed to flush compressed data: %w", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
 	return encoded, nil
 }
 

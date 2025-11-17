@@ -268,14 +268,13 @@ func (r *SQLCRepository) GetAuthIdentityByEmailTenant(ctx context.Context, tenan
 	if err != nil {
 		return domain.AuthIdentity{}, err
 	}
-	// Map the row type to domain
-	return domain.AuthIdentity{
-		ID:           toUUID(ai.ID),
-		UserID:       toUUID(ai.UserID),
-		TenantID:     toUUID(ai.TenantID),
+	return mapAuthIdentity(db.AuthIdentity{
+		ID:           ai.ID,
+		UserID:       ai.UserID,
+		TenantID:     ai.TenantID,
 		Email:        ai.Email,
-		PasswordHash: ai.PasswordHash.String,
-	}, nil
+		PasswordHash: ai.PasswordHash,
+	}), nil
 }
 
 func (r *SQLCRepository) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error {
@@ -356,14 +355,13 @@ func (r *SQLCRepository) GetAuthIdentitiesByUser(ctx context.Context, userID uui
 	}
 	out := make([]domain.AuthIdentity, 0, len(items))
 	for _, ai := range items {
-		// Map the row type to domain
-		out = append(out, domain.AuthIdentity{
-			ID:           toUUID(ai.ID),
-			UserID:       toUUID(ai.UserID),
-			TenantID:     toUUID(ai.TenantID),
+		out = append(out, mapAuthIdentity(db.AuthIdentity{
+			ID:           ai.ID,
+			UserID:       ai.UserID,
+			TenantID:     ai.TenantID,
 			Email:        ai.Email,
-			PasswordHash: ai.PasswordHash.String,
-		})
+			PasswordHash: ai.PasswordHash,
+		}))
 	}
 	return out, nil
 }

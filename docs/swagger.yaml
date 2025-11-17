@@ -385,6 +385,9 @@ definitions:
       app_cors_allowed_origins:
         description: App
         type: string
+      jwt_signing_key:
+        description: Auth
+        type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
@@ -573,6 +576,9 @@ definitions:
     properties:
       app_cors_allowed_origins:
         description: App
+        type: string
+      jwt_signing_key:
+        description: Auth
         type: string
       sso_provider:
         description: SSO
@@ -1931,7 +1937,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Revokes the provided refresh token if present; idempotent
+      description: Revokes the provided refresh token if present; idempotent. When
+        using cookie mode, Guard reads `guard_refresh_token`, clears both cookie tokens,
+        and still returns 204 even if the JSON body omits the token.
       parameters:
       - description: refresh_token (optional)
         in: body
@@ -2485,8 +2493,8 @@ paths:
       - application/json
       description: 'Exchanges a refresh token for new access and refresh tokens. When
         using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token`
-        from cookies if the body omits `refresh_token` and returns `{"success":true}`
-        while setting new cookies.'
+        from cookies if the body omits `refresh_token`, set rotated cookies, and return
+        `{"success":true}` while omitting token fields from the JSON response.'
       parameters:
       - description: refresh_token
         in: body

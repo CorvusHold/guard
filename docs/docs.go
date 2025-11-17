@@ -1923,7 +1923,7 @@ const docTemplate = `{
         },
         "/v1/auth/logout": {
             "post": {
-                "description": "Revokes the provided refresh token if present; idempotent",
+                "description": "Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads ` + "`" + `guard_refresh_token` + "`" + `, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2770,7 +2770,7 @@ const docTemplate = `{
         },
         "/v1/auth/refresh": {
             "post": {
-                "description": "Exchanges a refresh token for new access and refresh tokens. When using cookie mode (` + "`" + `X-Auth-Mode: cookie` + "`" + `), the server will read ` + "`" + `guard_refresh_token` + "`" + ` from cookies if the body omits ` + "`" + `refresh_token` + "`" + ` and returns ` + "`" + `{\"success\":true}` + "`" + ` while setting new cookies.",
+                "description": "Exchanges a refresh token for new access and refresh tokens. When using cookie mode (` + "`" + `X-Auth-Mode: cookie` + "`" + `), the server will read ` + "`" + `guard_refresh_token` + "`" + ` from cookies if the body omits ` + "`" + `refresh_token` + "`" + `, set rotated cookies, and return ` + "`" + `{\"success\":true}` + "`" + ` while omitting token fields from the JSON response.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3889,6 +3889,10 @@ const docTemplate = `{
                     "description": "App",
                     "type": "string"
                 },
+                "jwt_signing_key": {
+                    "description": "Auth",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "type": "string"
                 },
@@ -4174,6 +4178,10 @@ const docTemplate = `{
             "properties": {
                 "app_cors_allowed_origins": {
                     "description": "App",
+                    "type": "string"
+                },
+                "jwt_signing_key": {
+                    "description": "Auth",
                     "type": "string"
                 },
                 "sso_provider": {
