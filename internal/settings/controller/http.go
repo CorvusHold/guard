@@ -131,8 +131,6 @@ type settingsResponse struct {
 	SSORedirectAllowlist        string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins string `json:"app_cors_allowed_origins"`
-	// Auth
-	JWTSigningKey string `json:"jwt_signing_key,omitempty"`
 }
 
 type putSettingsRequest struct {
@@ -185,7 +183,6 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	stateTTL, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSOStateTTL, &id, "")
 	allow, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSORedirectAllowlist, &id, "")
 	corsAllow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyAppCORSAllowedOrigins, &id, "")
-	jwtSigningKey, _ := h.service.GetString(c.Request().Context(), sdomain.KeyJWTSigning, &id, "")
 	// Mask secrets if present
 	mask := func(s string) string {
 		if s == "" {
@@ -206,7 +203,6 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 		SSOStateTTL:                 stateTTL,
 		SSORedirectAllowlist:        allow,
 		AppCORSAllowedOrigins:       corsAllow,
-		JWTSigningKey:               mask(jwtSigningKey),
 	}
 	return c.JSON(http.StatusOK, resp)
 }

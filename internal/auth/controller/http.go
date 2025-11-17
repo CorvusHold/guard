@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -695,17 +696,32 @@ func (h *Controller) WithRateLimit(settings sdomain.Service, store ratelimit.Sto
 func (h *Controller) WithPublisher(p evdomain.Publisher) *Controller { h.pub = p; return h }
 
 // detectAuthMode checks the X-Auth-Mode header to determine if cookie mode is requested.
-// Defaults to bearer if header is not present or invalid.
-func detectAuthMode(c echo.Context) string {
+// Defaults to the provided defaultAuthMode when header is not present or invalid.
+func detectAuthMode(c echo.Context, defaultAuthMode string) string {
 	mode := strings.ToLower(strings.TrimSpace(c.Request().Header.Get("X-Auth-Mode")))
 	if mode == "cookie" {
+		return "cookie"
+	}
+	if mode == "bearer" {
+		return "bearer"
+	}
+	if defaultAuthMode == "cookie" {
 		return "cookie"
 	}
 	return "bearer"
 }
 
+func redactedBody(raw []byte) string {
+	if len(raw) == 0 {
+		return "<empty>"
+	}
+	return fmt.Sprintf("<redacted len=%d>", len(raw))
+}
+
 // setTokenCookies sets HTTP-only secure cookies for access and refresh tokens.
 func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg config.Config) {
+	secure := shouldUseSecureCookie(c, cfg)
+	sameSite := cfg.CookieSameSite
 	// Access token cookie (15 minutes default)
 	accessMaxAge := int(cfg.AccessTokenTTL.Seconds())
 	accessCookie := &http.Cookie{
@@ -714,8 +730,8 @@ func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg confi
 		Path:     "/",
 		MaxAge:   accessMaxAge,
 		HttpOnly: true,
-		Secure:   c.Request().TLS != nil, // Only set Secure flag if using HTTPS
-		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+		SameSite: sameSite,
 	}
 	c.SetCookie(accessCookie)
 
@@ -727,10 +743,35 @@ func setTokenCookies(c echo.Context, accessToken, refreshToken string, cfg confi
 		Path:     "/",
 		MaxAge:   refreshMaxAge,
 		HttpOnly: true,
-		Secure:   c.Request().TLS != nil,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+		SameSite: sameSite,
 	}
 	c.SetCookie(refreshCookie)
+}
+
+func shouldUseSecureCookie(c echo.Context, cfg config.Config) bool {
+	if cfg.ForceHTTPS {
+		return true
+	}
+	if c.Request().TLS != nil {
+		return true
+	}
+	if proto := c.Request().Header.Get("X-Forwarded-Proto"); proto != "" {
+		if idx := strings.Index(proto, ","); idx >= 0 {
+			proto = proto[:idx]
+		}
+		if strings.EqualFold(strings.TrimSpace(proto), "https") {
+			return true
+		}
+	}
+	if cfg.PublicBaseURL != "" {
+		if u, err := url.Parse(cfg.PublicBaseURL); err == nil {
+			if strings.EqualFold(u.Scheme, "https") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // OAuth2Metadata godoc
@@ -1227,7 +1268,7 @@ func (h *Controller) login(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
 	// Check auth mode and set cookies if requested
-	authMode := detectAuthMode(c)
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	if authMode == "cookie" {
 		setTokenCookies(c, tok.AccessToken, tok.RefreshToken, h.cfg)
 		// In cookie mode, return success without tokens in body
@@ -1258,27 +1299,23 @@ func (h *Controller) refresh(c echo.Context) error {
 		}
 	}
 	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-		if len(raw) > 0 {
-			c.Logger().Debugf("refresh: raw body=%s", string(raw))
-		} else {
-			c.Logger().Debug("refresh: raw body=<empty>")
-		}
+		c.Logger().Debugf("refresh: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
 		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-			c.Logger().Warnf("refresh: bind error=%v body=%s", err, string(raw))
+			c.Logger().Warnf("refresh: bind error=%v body=%s", err, redactedBody(raw))
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
-	authMode := detectAuthMode(c)
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	if authMode != "cookie" || req.RefreshToken != "" {
 		if err := c.Validate(&req); err != nil {
 			if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-				c.Logger().Warnf("refresh: validation error=%v body=%s", err, string(raw))
+				c.Logger().Warnf("refresh: validation error=%v body=%s", err, redactedBody(raw))
 			}
 			return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 		}
@@ -1289,6 +1326,9 @@ func (h *Controller) refresh(c echo.Context) error {
 		if cookie, err := c.Cookie("guard_refresh_token"); err == nil {
 			refreshToken = cookie.Value
 		}
+	}
+	if authMode == "cookie" && refreshToken == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "refresh_token required (send in body or guard_refresh_token cookie)"})
 	}
 	tok, err := h.svc.Refresh(c.Request().Context(), domain.RefreshInput{RefreshToken: refreshToken, UserAgent: ua, IP: ip})
 	if err != nil {
@@ -1323,22 +1363,18 @@ func (h *Controller) logout(c echo.Context) error {
 		}
 	}
 	if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-		if len(raw) > 0 {
-			c.Logger().Debugf("logout: raw body=%s", string(raw))
-		} else {
-			c.Logger().Debug("logout: raw body=<empty>")
-		}
+		c.Logger().Debugf("logout: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("logout: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
 	var req refreshReq
 	if err := c.Bind(&req); err != nil {
 		if os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != "" {
-			c.Logger().Warnf("logout: bind error=%v body=%s", err, string(raw))
+			c.Logger().Warnf("logout: bind error=%v body=%s", err, redactedBody(raw))
 		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	// In cookie mode, try to get refresh token from cookie if not in body
-	authMode := detectAuthMode(c)
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	refreshToken := req.RefreshToken
 	if authMode == "cookie" && refreshToken == "" {
 		if cookie, err := c.Cookie("guard_refresh_token"); err == nil {
@@ -2427,7 +2463,7 @@ func (h *Controller) verifyMFA(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
 	// Check auth mode and set cookies if requested
-	authMode := detectAuthMode(c)
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	if authMode == "cookie" {
 		setTokenCookies(c, toks.AccessToken, toks.RefreshToken, h.cfg)
 		// In cookie mode, return success without tokens in body

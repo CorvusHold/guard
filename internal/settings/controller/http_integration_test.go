@@ -80,8 +80,8 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 	if got := resp["workos_api_key"]; got != "****9876" {
 		t.Fatalf("expected masked api key ****9876, got %v", got)
 	}
-	if got := resp["jwt_signing_key"]; got != "****9999" {
-		t.Fatalf("expected masked jwt signing key ****9999, got %v", got)
+	if _, ok := resp["jwt_signing_key"]; ok {
+		t.Fatalf("expected jwt_signing_key to be omitted from GET response")
 	}
 }
 

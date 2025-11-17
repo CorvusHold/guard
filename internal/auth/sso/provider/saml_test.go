@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -61,6 +63,69 @@ func createTestSAMLConfig(t *testing.T) *domain.Config {
 		WantResponseSigned:   false,
 		SignRequests:         false,
 	}
+}
+
+func TestSAMLProvider_Start_SignedRedirect(t *testing.T) {
+	ctx := context.Background()
+	config := createTestSAMLConfig(t)
+	config.SignRequests = true
+
+	provider, err := NewSAMLProvider(ctx, config)
+	require.NoError(t, err)
+
+	result, err := provider.Start(ctx, domain.StartOptions{RedirectURL: "https://sp.example.com/callback"})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.AuthorizationURL)
+
+	u, err := url.Parse(result.AuthorizationURL)
+	require.NoError(t, err)
+	query := u.Query()
+
+	sigAlg := query.Get("SigAlg")
+	signature := query.Get("Signature")
+	require.NotEmpty(t, sigAlg)
+	require.NotEmpty(t, signature)
+	require.NotEmpty(t, query.Get("SAMLRequest"))
+
+	canonical := buildRedirectSigningInput(query.Get("SAMLRequest"), query.Get("RelayState"), sigAlg)
+	hash, digest, err := computeSignatureDigest(sigAlg, canonical)
+	require.NoError(t, err)
+	sigBytes, err := base64.StdEncoding.DecodeString(signature)
+	require.NoError(t, err)
+	privKey, ok := provider.sp.Key.(*rsa.PrivateKey)
+	require.True(t, ok)
+	assert.NoError(t, rsa.VerifyPKCS1v15(&privKey.PublicKey, hash, digest, sigBytes))
+}
+
+func TestBuildRedirectSigningInput(t *testing.T) {
+	encodedReq := "SAML+Value/="
+	relayState := "relay state!"
+	sigAlg := signatureMethodRSASHA256
+
+	got := buildRedirectSigningInput(encodedReq, relayState, sigAlg)
+	expected := "SAMLRequest=SAML%2BValue%2F%3D&RelayState=relay+state%21&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256"
+	assert.Equal(t, expected, got)
+
+	gotNoRelay := buildRedirectSigningInput(encodedReq, "", sigAlg)
+	assert.Equal(t, "SAMLRequest=SAML%2BValue%2F%3D&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256", gotNoRelay)
+}
+
+func TestSignRedirectRequest(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	signingInput := "SAMLRequest=value&SigAlg=" + signatureMethodRSASHA256
+
+	sig, err := signRedirectRequest(key, signatureMethodRSASHA256, signingInput)
+	require.NoError(t, err)
+
+	hash, digest, err := computeSignatureDigest(signatureMethodRSASHA256, signingInput)
+	require.NoError(t, err)
+	sigBytes, err := base64.StdEncoding.DecodeString(sig)
+	require.NoError(t, err)
+	assert.NoError(t, rsa.VerifyPKCS1v15(&key.PublicKey, hash, digest, sigBytes))
+
+	_, err = signRedirectRequest(key, "unsupported", signingInput)
+	assert.Error(t, err)
 }
 
 func TestValidateSAMLConfig(t *testing.T) {

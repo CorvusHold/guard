@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ type Config struct {
 	AppAddr            string
 	CORSAllowedOrigins []string
 	PublicBaseURL      string
+	ForceHTTPS         bool
 
 	DatabaseURL string
 
@@ -34,6 +36,8 @@ type Config struct {
 	BrevoSender   string
 
 	DefaultAuthMode string // bearer | cookie
+
+	CookieSameSite http.SameSite
 }
 
 func Load() (Config, error) {
@@ -43,6 +47,7 @@ func Load() (Config, error) {
 	c.AppAddr = getEnv("APP_ADDR", ":8080")
 	c.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	c.PublicBaseURL = getEnv("PUBLIC_BASE_URL", "http://localhost:8080")
+	c.ForceHTTPS = getBool("FORCE_HTTPS", false)
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
 
@@ -69,6 +74,7 @@ func Load() (Config, error) {
 		authMode = "bearer" // fallback to bearer if invalid value
 	}
 	c.DefaultAuthMode = authMode
+	c.CookieSameSite = getSameSite("COOKIE_SAME_SITE", http.SameSiteLaxMode)
 
 	return c, nil
 }
@@ -97,6 +103,38 @@ func getDuration(key string, def time.Duration) time.Duration {
 		}
 	}
 	return def
+}
+
+func getBool(key string, def bool) bool {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
+}
+
+func getSameSite(key string, def http.SameSite) http.SameSite {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "lax":
+		return http.SameSiteLaxMode
+	case "strict":
+		return http.SameSiteStrictMode
+	case "none":
+		return http.SameSiteNoneMode
+	case "default":
+		return http.SameSiteDefaultMode
+	default:
+		return def
+	}
 }
 
 func splitCSV(s string) []string {

@@ -38,7 +38,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 		rec := httptest.NewRecorder()
 		ctx := e.NewContext(req, rec)
 
-		mode := detectAuthMode(ctx)
+		mode := detectAuthMode(ctx, "bearer")
 		if mode != "bearer" {
 			t.Errorf("expected bearer mode, got %s", mode)
 		}
@@ -58,7 +58,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 		rec := httptest.NewRecorder()
 		ctx := e.NewContext(req, rec)
 
-		mode := detectAuthMode(ctx)
+		mode := detectAuthMode(ctx, "bearer")
 		if mode != "cookie" {
 			t.Errorf("expected cookie mode, got %s", mode)
 		}
@@ -86,7 +86,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 			rec := httptest.NewRecorder()
 			ctx := e.NewContext(req, rec)
 
-			mode := detectAuthMode(ctx)
+			mode := detectAuthMode(ctx, "bearer")
 			if mode != tc.expected {
 				t.Errorf("header %q: expected %s, got %s", tc.header, tc.expected, mode)
 			}
@@ -97,9 +97,11 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	cfg := config.Config{
 		JWTSigningKey:   "test-key",
-		AccessTokenTTL:  900,
-		RefreshTokenTTL: 2592000,
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
 		DefaultAuthMode: "cookie",
+		CookieSameSite:  http.SameSiteStrictMode,
+		ForceHTTPS:      true,
 	}
 
 	e := echo.New()
@@ -139,6 +141,12 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	if accessCookie.Path != "/" {
 		t.Errorf("access token path: expected /, got %s", accessCookie.Path)
 	}
+	if !accessCookie.Secure {
+		t.Error("access token cookie should be secure when ForceHTTPS is enabled")
+	}
+	if accessCookie.SameSite != http.SameSiteStrictMode {
+		t.Errorf("expected SameSite=%v, got %v", http.SameSiteStrictMode, accessCookie.SameSite)
+	}
 
 	if refreshCookie == nil {
 		t.Fatal("refresh token cookie not found")
@@ -151,6 +159,12 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	}
 	if refreshCookie.Path != "/" {
 		t.Errorf("refresh token path: expected /, got %s", refreshCookie.Path)
+	}
+	if !refreshCookie.Secure {
+		t.Error("refresh token cookie should be secure when ForceHTTPS is enabled")
+	}
+	if refreshCookie.SameSite != http.SameSiteStrictMode {
+		t.Errorf("expected SameSite=%v, got %v", http.SameSiteStrictMode, refreshCookie.SameSite)
 	}
 }
 

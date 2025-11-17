@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -35,6 +39,12 @@ type SAMLProvider struct {
 	assertionIDs   map[string]time.Time // For replay attack prevention
 	assertionIDsMu sync.RWMutex         // Protects assertionIDs map
 }
+
+const (
+	signatureMethodRSASHA1   = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+	signatureMethodRSASHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+	signatureMethodRSASHA512 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"
+)
 
 // NewSAMLProvider creates a new SAML provider instance.
 // It parses the IdP metadata, loads or generates SP certificates,
@@ -800,10 +810,23 @@ func buildAuthRequestURL(sp *saml.ServiceProvider, req *saml.AuthnRequest, relay
 		query.Set("RelayState", relayState)
 	}
 
-	// Sign the request if required
-	// Note: For HTTP-Redirect binding with signatures, the crewjam/saml library
-	// handles signing internally when SignatureMethod is set on the ServiceProvider.
-	// Manual signature creation for HTTP-Redirect is complex and library-dependent.
+	if signRequest {
+		sigAlg := sp.SignatureMethod
+		if sigAlg == "" {
+			sigAlg = signatureMethodRSASHA256
+		}
+		key, ok := sp.Key.(*rsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("service provider key must be an RSA private key for signing")
+		}
+		signingInput := buildRedirectSigningInput(encodedReq, relayState, sigAlg)
+		signature, err := signRedirectRequest(key, sigAlg, signingInput)
+		if err != nil {
+			return "", fmt.Errorf("failed to sign AuthnRequest: %w", err)
+		}
+		query.Set("SigAlg", sigAlg)
+		query.Set("Signature", signature)
+	}
 
 	u.RawQuery = query.Encode()
 	return u.String(), nil
@@ -830,4 +853,48 @@ func compressAndEncode(data []byte) (string, error) {
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// buildRedirectSigningInput constructs the canonical query string used for HTTP-Redirect signatures.
+func buildRedirectSigningInput(encodedRequest, relayState, sigAlg string) string {
+	var b strings.Builder
+	b.WriteString("SAMLRequest=")
+	b.WriteString(url.QueryEscape(encodedRequest))
+	if relayState != "" {
+		b.WriteString("&RelayState=")
+		b.WriteString(url.QueryEscape(relayState))
+	}
+	b.WriteString("&SigAlg=")
+	b.WriteString(url.QueryEscape(sigAlg))
+	return b.String()
+}
+
+// signRedirectRequest signs the canonical query string per SAML HTTP-Redirect rules.
+func signRedirectRequest(key *rsa.PrivateKey, sigAlg, signingInput string) (string, error) {
+	hashType, digest, err := computeSignatureDigest(sigAlg, signingInput)
+	if err != nil {
+		return "", err
+	}
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, hashType, digest)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign redirect request: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(sig), nil
+}
+
+// computeSignatureDigest hashes the signing input for the provided algorithm.
+func computeSignatureDigest(sigAlg, signingInput string) (crypto.Hash, []byte, error) {
+	switch sigAlg {
+	case signatureMethodRSASHA1:
+		sum := sha1.Sum([]byte(signingInput))
+		return crypto.SHA1, sum[:], nil
+	case signatureMethodRSASHA256:
+		sum := sha256.Sum256([]byte(signingInput))
+		return crypto.SHA256, sum[:], nil
+	case signatureMethodRSASHA512:
+		sum := sha512.Sum512([]byte(signingInput))
+		return crypto.SHA512, sum[:], nil
+	default:
+		return 0, nil, fmt.Errorf("unsupported signature algorithm: %s", sigAlg)
+	}
 }
