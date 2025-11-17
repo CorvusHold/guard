@@ -77,10 +77,15 @@ func NewSAMLProvider(ctx context.Context, config *domain.Config) (*SAMLProvider,
 		return nil, fmt.Errorf("invalid ACS URL: %w", err)
 	}
 
+	key, ok := spCert.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("invalid SP certificate: private key must be RSA, got %T", spCert.PrivateKey)
+	}
+
 	// Create ServiceProvider
 	sp := &saml.ServiceProvider{
 		EntityID:          config.EntityID,
-		Key:               spCert.PrivateKey.(*rsa.PrivateKey),
+		Key:               key,
 		Certificate:       spCert.Leaf,
 		MetadataURL:       *acsURL, // Use ACS URL base for metadata
 		AcsURL:            *acsURL,
@@ -422,6 +427,9 @@ func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) er
 // checkReplayAttack checks if the assertion has been used before.
 func (p *SAMLProvider) checkReplayAttack(assertion *saml.Assertion) error {
 	assertionID := assertion.ID
+	if assertionID == "" {
+		return fmt.Errorf("assertion missing ID")
+	}
 
 	// Use write lock for checking and updating
 	p.assertionIDsMu.Lock()

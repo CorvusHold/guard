@@ -1024,6 +1024,8 @@ func TestCheckReplayAttack(t *testing.T) {
 		},
 	}
 
+	assertionMissingID := &saml.Assertion{}
+
 	// First use should succeed
 	err = provider.checkReplayAttack(assertion1)
 	assert.NoError(t, err)
@@ -1036,6 +1038,11 @@ func TestCheckReplayAttack(t *testing.T) {
 	// Different assertion should succeed
 	err = provider.checkReplayAttack(assertion2)
 	assert.NoError(t, err)
+
+	// Missing assertion ID should fail immediately before locking
+	err = provider.checkReplayAttack(assertionMissingID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing ID")
 }
 
 func TestCleanupExpiredAssertionIDs(t *testing.T) {

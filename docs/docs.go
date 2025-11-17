@@ -4180,10 +4180,6 @@ const docTemplate = `{
                     "description": "App",
                     "type": "string"
                 },
-                "jwt_signing_key": {
-                    "description": "Auth",
-                    "type": "string"
-                },
                 "sso_provider": {
                     "description": "SSO",
                     "type": "string"
