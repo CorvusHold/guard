@@ -10,17 +10,37 @@ import (
 	"testing"
 	"time"
 
-	domain "github.com/corvusHold/guard/internal/auth/domain"
-	authrepo "github.com/corvusHold/guard/internal/auth/repository"
-	svc "github.com/corvusHold/guard/internal/auth/service"
-	"github.com/corvusHold/guard/internal/config"
-	srepo "github.com/corvusHold/guard/internal/settings/repository"
-	ssvc "github.com/corvusHold/guard/internal/settings/service"
-	trepo "github.com/corvusHold/guard/internal/tenants/repository"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+
+	domain "github.com/corvusHold/guard/internal/auth/domain"
+	amw "github.com/corvusHold/guard/internal/auth/middleware"
+	authrepo "github.com/corvusHold/guard/internal/auth/repository"
+	svc "github.com/corvusHold/guard/internal/auth/service"
+	"github.com/corvusHold/guard/internal/config"
+	settingsctrl "github.com/corvusHold/guard/internal/settings/controller"
+	srepo "github.com/corvusHold/guard/internal/settings/repository"
+	ssvc "github.com/corvusHold/guard/internal/settings/service"
+	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 )
+
+type staticSettingsService struct{}
+
+// staticSettingsService implements settings.Service but always returns the provided default values,
+// effectively ignoring any tenant-specific overrides.
+func (staticSettingsService) GetString(_ context.Context, _ string, _ *uuid.UUID, def string) (string, error) {
+	return def, nil
+}
+
+func (staticSettingsService) GetDuration(_ context.Context, _ string, _ *uuid.UUID, def time.Duration) (time.Duration, error) {
+	return def, nil
+}
+
+func (staticSettingsService) GetInt(_ context.Context, _ string, _ *uuid.UUID, def int) (int, error) {
+	return def, nil
+}
 
 func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
@@ -154,7 +174,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 	time.Sleep(25 * time.Millisecond)
 
-	// Services
+	// Services for issuing tokens (honor tenant-specific settings)
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
@@ -168,17 +188,46 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	// Set tenant-specific JWT signing key (different from default)
+	// Wire settings controller so we can set tenant-specific signing key via HTTP API
+	sc := settingsctrl.New(sr, settings)
+	sc.WithJWT(amw.NewJWT(cfg))
+	adminUserID := uuid.New()
+	sc.WithRoleFetcher(func(ctx context.Context, userID, tID uuid.UUID) ([]string, error) {
+		if userID == adminUserID && tID == tenantID {
+			return []string{"admin"}, nil
+		}
+		return nil, nil
+	})
+	sc.Register(e)
+
+	// Set tenant-specific JWT signing key (different from default) via settings HTTP API
 	tenantSigningKey := "tenant-specific-secret-key-for-testing-123456"
-	if err := sr.Upsert(ctx, "auth.jwt_signing_key", &tenantID, tenantSigningKey, true); err != nil {
-		t.Fatalf("set tenant signing key: %v", err)
+	claims := jwt.MapClaims{
+		"sub": adminUserID.String(),
+		"ten": tenantID.String(),
+		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(15 * time.Minute).Unix(),
 	}
-	time.Sleep(25 * time.Millisecond)
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(cfg.JWTSigningKey))
+	if err != nil {
+		t.Fatalf("sign settings jwt: %v", err)
+	}
+	setBody := map[string]string{"jwt_signing_key": tenantSigningKey}
+	setPayload, _ := json.Marshal(setBody)
+	setReq := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", bytes.NewReader(setPayload))
+	setReq.Header.Set("Authorization", "Bearer "+signed)
+	setReq.Header.Set("Content-Type", "application/json")
+	setRec := httptest.NewRecorder()
+	e.ServeHTTP(setRec, setReq)
+	if setRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from settings PUT, got %d: %s", setRec.Code, setRec.Body.String())
+	}
 
 	email := "user.tenant.key.itest@example.com"
 	password := "Password!123"
 
-	// Signup with tenant that has custom signing key
+	// Signup with tenant that has custom signing key using the first server
 	sBody := map[string]string{
 		"tenant_id": tenantID.String(),
 		"email":     email,
@@ -200,7 +249,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 		t.Fatalf("expected tokens")
 	}
 
-	// Introspect token (this should now work with tenant-specific signing key)
+	// Introspect token on the first server (should succeed with tenant-specific signing key)
 	ireq := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
 	ireq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	irec := httptest.NewRecorder()
@@ -222,7 +271,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 		t.Fatalf("tenant mismatch: expected %s, got %s", tenantID, iout.TenantID)
 	}
 
-	// Also verify /me endpoint works with tenant-specific signing key
+	// Also verify /me endpoint works with tenant-specific signing key on the first server
 	mreq := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
 	mreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	mrec := httptest.NewRecorder()
@@ -236,5 +285,36 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 	if profile.Email != email {
 		t.Fatalf("email mismatch in /me: %v", profile.Email)
+	}
+
+	// Now construct a second auth service/controller that only uses the global signing key
+	staticSettings := staticSettingsService{}
+	cfgGlobalOnly := cfg
+	cfgGlobalOnly.JWTSigningKey = "global-signing-key-only-instance"
+	auth2 := svc.New(repo, cfgGlobalOnly, staticSettings)
+	magic2 := svc.NewMagic(repo, cfgGlobalOnly, staticSettings, &fakeEmail{})
+	sso2 := svc.NewSSO(repo, cfgGlobalOnly, staticSettings)
+
+	e2 := echo.New()
+	e2.Validator = noopValidator{}
+	c2 := New(auth2, magic2, sso2)
+	c2.Register(e2)
+
+	// Against the second server, the same access token (signed with tenant-specific key) should fail introspection
+	ireq2 := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	ireq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
+	irec2 := httptest.NewRecorder()
+	e2.ServeHTTP(irec2, ireq2)
+	if irec2.Code != http.StatusUnauthorized {
+		t.Fatalf("expected introspect to fail on global-key-only instance; got %d: %s", irec2.Code, irec2.Body.String())
+	}
+
+	// /me should also fail on the second server with the mismatched signing key
+	mreq2 := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	mreq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
+	mrec2 := httptest.NewRecorder()
+	e2.ServeHTTP(mrec2, mreq2)
+	if mrec2.Code != http.StatusUnauthorized {
+		t.Fatalf("expected /me to fail on global-key-only instance; got %d: %s", mrec2.Code, mrec2.Body.String())
 	}
 }

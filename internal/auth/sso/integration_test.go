@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -145,6 +146,8 @@ type mockOIDCServer struct {
 	issuer      string
 	clientID    string
 	redirectURI string
+	mu          sync.Mutex
+	codeNonce   map[string]string
 }
 
 func newMockOIDCServer(t *testing.T) *mockOIDCServer {
@@ -161,6 +164,7 @@ func newMockOIDCServer(t *testing.T) *mockOIDCServer {
 		publicKey:   &privateKey.PublicKey,
 		clientID:    "test-client-id",
 		redirectURI: "http://localhost:8080/auth/sso/test-oidc/callback",
+		codeNonce:   make(map[string]string),
 	}
 
 	mux := http.NewServeMux()
@@ -216,9 +220,14 @@ func (m *mockOIDCServer) handleAuthorize(w http.ResponseWriter, r *http.Request)
 	query := r.URL.Query()
 	state := query.Get("state")
 	redirectURI := query.Get("redirect_uri")
+	nonce := query.Get("nonce")
 
 	// Generate mock authorization code
 	code := base64.URLEncoding.EncodeToString([]byte("mock-auth-code-" + state))
+
+	m.mu.Lock()
+	m.codeNonce[code] = nonce
+	m.mu.Unlock()
 
 	redirectURL, _ := url.Parse(redirectURI)
 	q := redirectURL.Query()
@@ -241,8 +250,13 @@ func (m *mockOIDCServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	m.mu.Lock()
+	nonce := m.codeNonce[code]
+	delete(m.codeNonce, code)
+	m.mu.Unlock()
+
 	// Create ID token
-	idToken, err := m.createIDToken("test-nonce", map[string]interface{}{
+	idToken, err := m.createIDToken(nonce, map[string]interface{}{
 		"email":          "oidc-test@example.com",
 		"email_verified": true,
 		"given_name":     "OIDC",

@@ -131,6 +131,8 @@ type settingsResponse struct {
 	SSORedirectAllowlist        string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins string `json:"app_cors_allowed_origins"`
+	// Auth
+	JWTSigningKey string `json:"jwt_signing_key,omitempty"`
 }
 
 type putSettingsRequest struct {
@@ -144,6 +146,8 @@ type putSettingsRequest struct {
 	SSORedirectAllowlist        *string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
+	// Auth
+	JWTSigningKey *string `json:"jwt_signing_key"`
 }
 
 // Get Tenant Settings godoc
@@ -181,6 +185,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	stateTTL, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSOStateTTL, &id, "")
 	allow, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSORedirectAllowlist, &id, "")
 	corsAllow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyAppCORSAllowedOrigins, &id, "")
+	jwtSigningKey, _ := h.service.GetString(c.Request().Context(), sdomain.KeyJWTSigning, &id, "")
 	// Mask secrets if present
 	mask := func(s string) string {
 		if s == "" {
@@ -201,6 +206,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 		SSOStateTTL:                 stateTTL,
 		SSORedirectAllowlist:        allow,
 		AppCORSAllowedOrigins:       corsAllow,
+		JWTSigningKey:               mask(jwtSigningKey),
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -256,6 +262,13 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	// Validate inputs
+	if req.JWTSigningKey != nil {
+		v := strings.TrimSpace(*req.JWTSigningKey)
+		// Require sufficiently long secrets when provided
+		if v != "" && len(v) < 16 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid jwt_signing_key"})
+		}
+	}
 	if req.SSOProvider != nil {
 		v := strings.ToLower(strings.TrimSpace(*req.SSOProvider))
 		if v != "" && v != "dev" && v != "workos" {
@@ -352,6 +365,13 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 		}
 		changed = append(changed, sdomain.KeyAppCORSAllowedOrigins)
 	}
+	if req.JWTSigningKey != nil {
+		v := strings.TrimSpace(*req.JWTSigningKey)
+		if err := h.repo.Upsert(ctx, sdomain.KeyJWTSigning, &id, v, true); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeyJWTSigning)
+	}
 	// Publish audit event (redact secrets)
 	if h.pub != nil && len(changed) > 0 {
 		meta := map[string]string{
@@ -363,6 +383,9 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 		}
 		if req.WorkOSAPIKey != nil {
 			meta["sso.workos.api_key"] = "redacted"
+		}
+		if req.JWTSigningKey != nil {
+			meta["auth.jwt_signing_key"] = "redacted"
 		}
 		_ = h.pub.Publish(ctx, evdomain.Event{Type: "settings.update.success", TenantID: id, UserID: uid, Meta: meta, Time: time.Now()})
 	}

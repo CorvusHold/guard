@@ -50,6 +50,7 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 	// Seed secret values; GET should mask them
 	_ = sr.Upsert(ctx, sdomain.KeyWorkOSClientSecret, &tenantID, "supersecret1234", true)
 	_ = sr.Upsert(ctx, sdomain.KeyWorkOSAPIKey, &tenantID, "apikey9876", true)
+	_ = sr.Upsert(ctx, sdomain.KeyJWTSigning, &tenantID, "jwtsecretkey9999", true)
 
 	s := ssvc.New(sr)
 	c := New(sr, s)
@@ -78,6 +79,9 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 	}
 	if got := resp["workos_api_key"]; got != "****9876" {
 		t.Fatalf("expected masked api key ****9876, got %v", got)
+	}
+	if got := resp["jwt_signing_key"]; got != "****9999" {
+		t.Fatalf("expected masked jwt signing key ****9999, got %v", got)
 	}
 }
 
@@ -304,6 +308,7 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 		{"invalid_provider", `{"sso_provider":"foo"}`, "invalid sso_provider"},
 		{"invalid_ttl", `{"sso_state_ttl":"notdur"}`, "invalid sso_state_ttl"},
 		{"invalid_allowlist", `{"sso_redirect_allowlist":"notaurl"}`, "invalid sso_redirect_allowlist"},
+		{"invalid_jwt_signing_key", `{"jwt_signing_key":"short"}`, "invalid jwt_signing_key"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

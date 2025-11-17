@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
+	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -314,6 +316,158 @@ func TestSAMLProvider_Callback_ValidationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSAMLProvider_Callback_EncryptedAssertion_Success(t *testing.T) {
+	ctx := context.Background()
+
+	// Create an in-process IdP with its own keypair and metadata.
+	certPEM, keyPEM, err := generateSelfSignedCert("idp.example.com", 365)
+	require.NoError(t, err)
+
+	idpCertBlock, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, idpCertBlock)
+	idpCert, err := x509.ParseCertificate(idpCertBlock.Bytes)
+	require.NoError(t, err)
+
+	idpKeyBlock, _ := pem.Decode([]byte(keyPEM))
+	require.NotNil(t, idpKeyBlock)
+	idpKey, err := x509.ParsePKCS1PrivateKey(idpKeyBlock.Bytes)
+	require.NoError(t, err)
+
+	metadataURL, err := url.Parse("https://idp.example.com/metadata")
+	require.NoError(t, err)
+	ssoURL, err := url.Parse("https://idp.example.com/sso")
+	require.NoError(t, err)
+
+	idp := &saml.IdentityProvider{
+		Key:         idpKey,
+		Certificate: idpCert,
+		MetadataURL: *metadataURL,
+		SSOURL:      *ssoURL,
+	}
+
+	idpMetadataXML, err := xml.Marshal(idp.Metadata())
+	require.NoError(t, err)
+
+	// Configure the Service Provider (Guard) to trust this IdP metadata.
+	config := createTestSAMLConfig(t)
+	config.IdPMetadataXML = string(idpMetadataXML)
+
+	provider, err := NewSAMLProvider(ctx, config)
+	require.NoError(t, err)
+
+	// Derive SP metadata for the IdP to target, and ensure an encryption key descriptor
+	// is present so that MakeAssertionEl produces an EncryptedAssertion.
+	spMetadata := provider.sp.Metadata()
+	require.NotNil(t, spMetadata)
+	require.NotEmpty(t, spMetadata.SPSSODescriptors)
+	spSSO := &spMetadata.SPSSODescriptors[0]
+
+	// Add an explicit encryption KeyDescriptor using the SP certificate.
+	certStr := base64.StdEncoding.EncodeToString(provider.sp.Certificate.Raw)
+	spSSO.KeyDescriptors = append(spSSO.KeyDescriptors, saml.KeyDescriptor{
+		Use: "encryption",
+		KeyInfo: saml.KeyInfo{
+			X509Data: saml.X509Data{
+				X509Certificates: []saml.X509Certificate{{Data: certStr}},
+			},
+		},
+		EncryptionMethods: []saml.EncryptionMethod{{
+			Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+		}},
+	})
+
+	// Select an HTTP-POST ACS endpoint for the IdP response.
+	var acsEndpoint *saml.IndexedEndpoint
+	for _, ep := range spSSO.AssertionConsumerServices {
+		if ep.Binding == saml.HTTPPostBinding {
+			epCopy := ep
+			acsEndpoint = &epCopy
+			break
+		}
+	}
+	require.NotNil(t, acsEndpoint, "expected at least one HTTP-POST ACS endpoint")
+
+	now := time.Now()
+	httpReq, err := http.NewRequest(http.MethodPost, provider.sp.AcsURL.String(), nil)
+	require.NoError(t, err)
+	httpReq.RemoteAddr = "127.0.0.1:12345"
+
+	authnReq := saml.IdpAuthnRequest{
+		IDP:         idp,
+		HTTPRequest: httpReq,
+		RelayState:  "relay-state-123",
+		Request: saml.AuthnRequest{
+			ID:           "authn-request-id",
+			IssueInstant: now.Add(-1 * time.Minute),
+			Version:      "2.0",
+		},
+		ServiceProviderMetadata: spMetadata,
+		SPSSODescriptor:         spSSO,
+		ACSEndpoint:             acsEndpoint,
+		Now:                     now,
+	}
+
+	session := &saml.Session{
+		ID:           "session-id",
+		CreateTime:   now.Add(-5 * time.Minute),
+		ExpireTime:   now.Add(1 * time.Hour),
+		Index:        "session-index",
+		NameID:       "user@example.com",
+		NameIDFormat: string(saml.EmailAddressNameIDFormat),
+	}
+
+	err = (saml.DefaultAssertionMaker{}).MakeAssertion(&authnReq, session)
+	require.NoError(t, err)
+	require.NotNil(t, authnReq.Assertion)
+
+	form, err := authnReq.PostBinding()
+	require.NoError(t, err)
+	require.NotEmpty(t, form.SAMLResponse)
+
+	// Sanity check that the generated response contains an EncryptedAssertion element.
+	rawResponseXML, err := base64.StdEncoding.DecodeString(form.SAMLResponse)
+	require.NoError(t, err)
+	assert.Contains(t, string(rawResponseXML), "EncryptedAssertion")
+
+	callbackReq := domain.CallbackRequest{
+		SAMLResponse: form.SAMLResponse,
+		RelayState:   form.RelayState,
+	}
+
+	profile, err := provider.Callback(ctx, callbackReq)
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	assert.Equal(t, "user@example.com", profile.Subject)
+	assert.Equal(t, "user@example.com", profile.Email)
+}
+
+func TestSAMLProvider_Callback_EncryptedAssertion_Error(t *testing.T) {
+	ctx := context.Background()
+	config := createTestSAMLConfig(t)
+
+	provider, err := NewSAMLProvider(ctx, config)
+	require.NoError(t, err)
+
+	// Craft a minimal SAML response XML that includes an EncryptedAssertion element
+	// so that the Callback code paths through decryptAssertion. The XML does not
+	// need to be a fully valid SAML response; we only assert that the encrypted
+	// assertion branch is taken and that the high-level error is preserved.
+	rawResponse := []byte(`<?xml version="1.0"?>
+		<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+		  <saml:EncryptedAssertion></saml:EncryptedAssertion>
+		</samlp:Response>`) // nolint:lll
+
+	req := domain.CallbackRequest{
+		SAMLResponse: base64.StdEncoding.EncodeToString(rawResponse),
+		RelayState:   "state123",
+	}
+
+	profile, err := provider.Callback(ctx, req)
+	require.Error(t, err)
+	assert.Nil(t, profile)
+	assert.Contains(t, err.Error(), "failed to decrypt SAML assertion")
 }
 
 func TestSAMLProvider_GetMetadata(t *testing.T) {
@@ -846,4 +1000,128 @@ func TestCleanupExpiredAssertionIDs(t *testing.T) {
 	// Verify valid ones remain
 	assert.Contains(t, provider.assertionIDs, "valid-1")
 	assert.Contains(t, provider.assertionIDs, "valid-2")
+}
+
+func TestEnforceSignaturePolicy(t *testing.T) {
+	ctx := context.Background()
+	baseConfig := createTestSAMLConfig(t)
+
+	provider, err := NewSAMLProvider(ctx, baseConfig)
+	require.NoError(t, err)
+
+	unsignedResponse := []byte(`<Response></Response>`)
+	signedResponseOnly := []byte(`<Response><Signature></Signature></Response>`)
+	unsignedResponseSignedAssertion := []byte(`<Response><Assertion><Signature></Signature></Assertion></Response>`)
+	signedResponseUnsignedAssertion := []byte(`<Response><Signature></Signature><Assertion></Assertion></Response>`)
+	signedResponseSignedAssertion := []byte(`<Response><Signature></Signature><Assertion><Signature></Signature></Assertion></Response>`)
+	unsignedResponseUnsignedAssertion := []byte(`<Response><Assertion></Assertion></Response>`)
+	encryptedOnlyResponse := []byte(`<Response><EncryptedAssertion></EncryptedAssertion></Response>`)
+
+	tests := []struct {
+		name        string
+		wantRespSig bool
+		wantAssSig  bool
+		responseXML []byte
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "no requirements allows unsigned response and assertions",
+			wantRespSig: false,
+			wantAssSig:  false,
+			responseXML: unsignedResponseUnsignedAssertion,
+			wantErr:     false,
+		},
+		{
+			name:        "require response signature - response signed",
+			wantRespSig: true,
+			wantAssSig:  false,
+			responseXML: signedResponseOnly,
+			wantErr:     false,
+		},
+		{
+			name:        "require response signature - response unsigned",
+			wantRespSig: true,
+			wantAssSig:  false,
+			responseXML: unsignedResponse,
+			wantErr:     true,
+			errContains: "requires response signature",
+		},
+		{
+			name:        "require assertion signatures - assertion signed",
+			wantRespSig: false,
+			wantAssSig:  true,
+			responseXML: unsignedResponseSignedAssertion,
+			wantErr:     false,
+		},
+		{
+			name:        "require assertion signatures - assertion unsigned",
+			wantRespSig: false,
+			wantAssSig:  true,
+			responseXML: unsignedResponseUnsignedAssertion,
+			wantErr:     true,
+			errContains: "unsigned but configuration requires signed assertions",
+		},
+		{
+			name:        "require both - response and assertion signed",
+			wantRespSig: true,
+			wantAssSig:  true,
+			responseXML: signedResponseSignedAssertion,
+			wantErr:     false,
+		},
+		{
+			name:        "require both - response signed, assertion unsigned (OR semantics)",
+			wantRespSig: true,
+			wantAssSig:  true,
+			responseXML: signedResponseUnsignedAssertion,
+			wantErr:     false,
+		},
+		{
+			name:        "require both - response unsigned, assertion signed (OR semantics)",
+			wantRespSig: true,
+			wantAssSig:  true,
+			responseXML: unsignedResponseSignedAssertion,
+			wantErr:     false,
+		},
+		{
+			name:        "require assertion signatures - encrypted-only assertions allowed",
+			wantRespSig: false,
+			wantAssSig:  true,
+			responseXML: encryptedOnlyResponse,
+			wantErr:     false,
+		},
+		{
+			name:        "require both - encrypted-only assertions allowed when response unsigned",
+			wantRespSig: true,
+			wantAssSig:  true,
+			responseXML: encryptedOnlyResponse,
+			wantErr:     false,
+		},
+		{
+			name:        "require both - response and assertions unsigned fails",
+			wantRespSig: true,
+			wantAssSig:  true,
+			responseXML: unsignedResponseUnsignedAssertion,
+			wantErr:     true,
+			errContains: "does not satisfy required response or assertion signature policy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Override config flags for this test case
+			provider.config.WantResponseSigned = tt.wantRespSig
+			provider.config.WantAssertionsSigned = tt.wantAssSig
+
+			err := provider.enforceSignaturePolicy(tt.responseXML)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

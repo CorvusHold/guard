@@ -16,6 +16,7 @@ Guard is an identity and authentication platform that provides centralized authe
 - **SSO integration** - Enterprise SSO via WorkOS (SAML, OAuth)
 - **Social providers** - Google, GitHub, and other OAuth providers
 - **Multi-factor authentication (MFA)** - TOTP with QR codes and backup codes
+- **Cookie mode sessions** – First-party session cookies with automatic token storage
 
 ### Authorization
 - **Role-Based Access Control (RBAC v2)** - Flexible role and permission system with custom roles
@@ -163,6 +164,31 @@ curl -X POST http://localhost:8080/v1/auth/password/login \
     "password": "SecurePassword123!"
   }'
 ```
+
+#### Cookie Mode Sessions
+
+Browser-based apps can ask Guard to manage access and refresh tokens as HTTP-only cookies instead of returning them in the JSON body:
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/password/login \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Mode: cookie" \
+  -d '{
+    "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "admin@my-company.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+When `X-Auth-Mode: cookie` is present, Guard will:
+
+1. Set `guard_access_token` and `guard_refresh_token` cookies (HttpOnly, SameSite=Strict, `Secure` when using HTTPS).
+2. Return `{ "success": true }` in the HTTP body instead of the raw tokens.
+3. Accept future refresh/logout calls by reading the `guard_refresh_token` cookie (omit it from the JSON body).
+
+To refresh cookies, send `POST /v1/auth/refresh` with the same header and allow the server to rotate the cookies. To terminate the session, call `POST /v1/auth/logout` with `X-Auth-Mode: cookie`; Guard clears both cookies and revokes the refresh token.
+
+Remember to enable `credentials: 'include'` (or the equivalent in your HTTP client) and configure CORS to allow credentials if you are making cross-origin requests.
 
 #### Magic Link Authentication
 

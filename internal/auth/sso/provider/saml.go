@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -197,39 +198,35 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 		return nil, fmt.Errorf("failed to decode SAMLResponse: %w", err)
 	}
 
-	// Parse the SAML response manually since we already have the raw XML
-	// The crewjam/saml library's ParseXMLResponse requires the ACS URL
-	var response saml.Response
-	if err := xml.Unmarshal(samlResponseXML, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse SAML response: %w", err)
+	// Let the crewjam/saml ServiceProvider handle XML parsing, signature
+	// verification, condition checks, and encrypted assertion handling.
+	// We still run our own additional condition checks and replay protection
+	// below.
+	var assertion *saml.Assertion
+	if bytes.Contains(samlResponseXML, []byte("EncryptedAssertion")) {
+		// Use decryptAssertion when the response contains an encrypted assertion.
+		assertion, err = p.decryptAssertion(samlResponseXML)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt SAML assertion: %w", err)
+		}
+	} else {
+		assertion, err = p.sp.ParseXMLResponse(samlResponseXML, nil, p.sp.AcsURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse SAML response: %w", err)
+		}
 	}
 
-	// Validate response status
-	if response.Status.StatusCode.Value != saml.StatusSuccess {
-		return nil, fmt.Errorf("SAML authentication failed: %s", response.Status.StatusCode.Value)
-	}
-
-	// Get assertion
-	if response.Assertion == nil && response.EncryptedAssertion == nil {
+	if assertion == nil {
 		return nil, fmt.Errorf("no assertion found in SAML response")
 	}
 
-	var assertion *saml.Assertion
-	if response.Assertion != nil {
-		assertion = response.Assertion
-	} else {
-		// Decrypt assertion if encrypted (not yet implemented)
-		return nil, fmt.Errorf("encrypted assertions are not yet supported")
+	// Enforce configured signature requirements by inspecting the verified
+	// SAML Response XML. At this point ParseXMLResponse has already validated
+	// the cryptographic signatures; this check only ensures the expected
+	// signature placement (response vs assertions) matches configuration.
+	if err := p.enforceSignaturePolicy(samlResponseXML); err != nil {
+		return nil, err
 	}
-
-	// Note: The crewjam/saml library validates signatures internally when configured
-	// We rely on the library's built-in signature validation via the IdP metadata
-
-	// The ParseXMLResponse method already validates:
-	// - Response signature (if WantResponseSigned is set on SP)
-	// - Assertion signature (if WantAssertionsSigned is set on SP)
-	// - Response status
-	// - Basic assertion conditions
 
 	// Additional validation for assertion conditions specific to our requirements
 	if err := p.validateAssertionConditions(assertion); err != nil {
@@ -287,6 +284,75 @@ func (p *SAMLProvider) GetMetadata(ctx context.Context) (*domain.Metadata, error
 		CertificateExpiry: certExpiry,
 		MetadataXML:       string(metadataXML),
 	}, nil
+}
+
+// enforceSignaturePolicy enforces configured signature requirements by
+// inspecting the SAML Response XML after it has been successfully
+// verified by the ServiceProvider.
+func (p *SAMLProvider) enforceSignaturePolicy(responseXML []byte) error {
+	if !p.config.WantResponseSigned && !p.config.WantAssertionsSigned {
+		return nil
+	}
+
+	type xmlSignature struct {
+		XMLName xml.Name `xml:"Signature"`
+	}
+
+	type xmlAssertion struct {
+		XMLName   xml.Name      `xml:"Assertion"`
+		Signature *xmlSignature `xml:"Signature"`
+	}
+
+	type xmlResponse struct {
+		XMLName    xml.Name       `xml:"Response"`
+		Signature  *xmlSignature  `xml:"Signature"`
+		Assertions []xmlAssertion `xml:"Assertion"`
+	}
+
+	var resp xmlResponse
+	if err := xml.Unmarshal(responseXML, &resp); err != nil {
+		return fmt.Errorf("failed to inspect SAML response for signature policy: %w", err)
+	}
+
+	responseSigned := resp.Signature != nil
+	hasPlainAssertions := len(resp.Assertions) > 0
+	allPlainAssertionsSigned := true
+	for _, a := range resp.Assertions {
+		if a.Signature == nil {
+			allPlainAssertionsSigned = false
+			break
+		}
+	}
+
+	// If only response signatures are required, enforce strictly.
+	if p.config.WantResponseSigned && !p.config.WantAssertionsSigned {
+		if !responseSigned {
+			return fmt.Errorf("SAML response is not signed but configuration requires response signature")
+		}
+		return nil
+	}
+
+	// If only assertion signatures are required, enforce strictly for any
+	// plaintext assertions we can see. Encrypted assertions are already
+	// validated by the ServiceProvider and are not re-checked here.
+	if !p.config.WantResponseSigned && p.config.WantAssertionsSigned {
+		if hasPlainAssertions && !allPlainAssertionsSigned {
+			return fmt.Errorf("one or more SAML assertions are unsigned but configuration requires signed assertions")
+		}
+		return nil
+	}
+
+	// When both flags are true, treat them as an OR for compatibility with
+	// real-world IdPs that may sign either the response or the assertions.
+	// Consider the assertion side satisfied if there are no plaintext
+	// assertions (e.g., only EncryptedAssertion is present) since
+	// ServiceProvider.ParseXMLResponse has already validated them.
+	assertionsSignedOK := !hasPlainAssertions || allPlainAssertionsSigned
+	if responseSigned || assertionsSignedOK {
+		return nil
+	}
+
+	return fmt.Errorf("SAML response does not satisfy required response or assertion signature policy")
 }
 
 // validateAssertionConditions validates the assertion conditions.
@@ -387,8 +453,21 @@ func (p *SAMLProvider) cleanupExpiredAssertionIDs() {
 // decryptAssertion decrypts an encrypted assertion.
 func (p *SAMLProvider) decryptAssertion(encryptedAssertion interface{}) (*saml.Assertion, error) {
 	// Note: Encrypted assertions handling is complex and requires additional implementation
-	// For now, we'll return an error indicating encryption is not yet supported
-	return nil, fmt.Errorf("encrypted assertions are not yet supported")
+	// For now, we'll delegate to the crewjam/saml ServiceProvider's ParseXMLResponse,
+	// which already supports EncryptedAssertion elements when the SP is configured
+	// with the appropriate key material.
+
+	responseXML, ok := encryptedAssertion.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("encrypted assertion payload must be raw SAML response XML")
+	}
+
+	assertion, err := p.sp.ParseXMLResponse(responseXML, nil, p.sp.AcsURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return assertion, nil
 }
 
 // extractProfile extracts the user profile from a SAML assertion.

@@ -251,6 +251,61 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
 	}
 }
 
+func TestHTTP_SSO_WorkOS_Callback_MissingState_WithSyntacticJWTCode_401(t *testing.T) {
+	if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
+		t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("db connect: %v", err)
+	}
+	defer pool.Close()
+
+	// tenant + settings
+	tr := trepo.New(pool)
+	tenantID := uuid.New()
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingstate-jwt-"+tenantID.String())
+	time.Sleep(25 * time.Millisecond)
+	sr := srepo.New(pool)
+	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
+	_ = sr.Upsert(ctx, "sso.workos.client_id", &tenantID, "client", true)
+	_ = sr.Upsert(ctx, "sso.workos.client_secret", &tenantID, "secret", true)
+
+	repo := authrepo.New(pool)
+	cfg, _ := config.Load()
+	settings := ssvc.New(sr)
+	e := echo.New()
+	e.Validator = noopValidatorWorkOS{}
+	// capture audit events
+	events := make([]evdomain.Event, 0, 1)
+	sso := svc.NewSSO(repo, cfg, settings)
+	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
+	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
+	c.Register(e)
+
+	// Syntactically valid JWT (three base64url segments) but with no state parameter.
+	// Previously, any syntactically valid JWT would have been treated as a dev code
+	// and skipped state validation; this test asserts that WorkOS flows still enforce state.
+	jwtCode := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIifQ.abc"
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/callback?code="+jwtCode, nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// assert missing_state failure audit still emitted
+	found := false
+	for _, ev := range events {
+		if ev.Type == "auth.sso.login.failure" && ev.Meta["reason"] == "missing_state" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected auth.sso.login.failure missing_state for syntactic JWT code without state")
+	}
+}
+
 func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" || os.Getenv("REDIS_ADDR") == "" {
 		t.Skip("skipping integration test: DATABASE_URL or REDIS_ADDR not set")

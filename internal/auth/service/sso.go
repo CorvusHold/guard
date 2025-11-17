@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"time"
 
+	"strings"
+
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
@@ -20,7 +22,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
-	"strings"
 )
 
 // SSO implements domain.SSOService with a dev adapter (local/testing).
@@ -151,16 +152,38 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 			metrics.IncSSOOutcome(in.Provider, "failure")
 		}
 	}()
-	// Enforce state only for non-dev flows. If the incoming 'code' is our dev JWT,
-	// skip state checks entirely. Otherwise, publish missing/invalid state for observability.
+	// Enforce state only for non-dev flows. If the incoming 'code' is a valid dev JWT
+	// for a tenant explicitly configured with the dev adapter, skip state checks entirely.
+	// Otherwise, publish missing/invalid state for observability.
 	stVals := in.Query["state"]
 	codeVals := in.Query["code"]
 	isDevCode := false
 	if len(codeVals) > 0 && codeVals[0] != "" {
+		// First, decode claims without trusting them, to locate the tenant and provider.
 		if tok, _ := jwt.ParseWithClaims(codeVals[0], jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
 			return []byte(""), nil
 		}, jwt.WithoutClaimsValidation()); tok != nil {
-			isDevCode = true
+			if mc, ok := tok.Claims.(jwt.MapClaims); ok {
+				tenStr, _ := mc["ten"].(string)
+				provClaim, _ := mc["prov"].(string)
+				if tenStr != "" && provClaim != "" && strings.EqualFold(provClaim, in.Provider) {
+					if tenID, err := uuid.Parse(tenStr); err == nil {
+						mode, _ := s.settings.GetString(ctx, sdomain.KeySSOProvider, &tenID, "")
+						if strings.EqualFold(mode, "dev") {
+							// Verify the code signature with the tenant's signing key before
+							// treating this as a trusted dev code.
+							signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenID, s.cfg.JWTSigningKey)
+							if signingKey != "" {
+								if _, err := jwt.ParseWithClaims(codeVals[0], jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+									return []byte(signingKey), nil
+								}); err == nil {
+									isDevCode = true
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 	if len(stVals) == 0 || stVals[0] == "" {
