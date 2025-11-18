@@ -1003,7 +1003,7 @@ type loginReq struct {
 }
 
 type refreshReq struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+	RefreshToken string `json:"refresh_token" validate:"omitempty"`
 }
 
 type logoutReq struct {
@@ -1339,7 +1339,7 @@ func (h *Controller) refresh(c echo.Context) error {
 		c.Logger().Debugf("refresh: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
-	var req logoutReq
+	var req refreshReq
 	if err := c.Bind(&req); err != nil {
 		if debugEnabled {
 			c.Logger().Warnf("refresh: bind error=%v body=%s", err, redactedBody(raw))
@@ -1349,13 +1349,11 @@ func (h *Controller) refresh(c echo.Context) error {
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-	if authMode != "cookie" || req.RefreshToken != "" {
-		if err := c.Validate(&req); err != nil {
-			if debugEnabled {
-				c.Logger().Warnf("refresh: validation error=%v body=%s", err, redactedBody(raw))
-			}
-			return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	if err := c.Validate(&req); err != nil {
+		if debugEnabled {
+			c.Logger().Warnf("refresh: validation error=%v body=%s", err, redactedBody(raw))
 		}
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
 	// In cookie mode, try to get refresh token from cookie if not in body
 	refreshToken := req.RefreshToken
@@ -1397,7 +1395,7 @@ func (h *Controller) logout(c echo.Context) error {
 		c.Logger().Debugf("logout: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("logout: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
-	var req refreshReq
+	var req logoutReq
 	if err := c.Bind(&req); err != nil {
 		if debugEnabled {
 			c.Logger().Warnf("logout: bind error=%v body=%s", err, redactedBody(raw))
