@@ -522,8 +522,6 @@ definitions:
     properties:
       refresh_token:
         type: string
-    required:
-    - refresh_token
     type: object
   controller.resetPasswordConfirmReq:
     properties:

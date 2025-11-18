@@ -707,7 +707,7 @@ func detectAuthMode(c echo.Context, defaultAuthMode string) string {
 	if mode == "cookie" {
 		return "cookie"
 	}
-	if mode == "bearer" {
+	if mode == "bearer" || mode == "json" {
 		return "bearer"
 	}
 	if defaultAuthMode == "cookie" {
@@ -1017,6 +1017,16 @@ type tokensResp struct {
 
 type successResp struct {
 	Success bool `json:"success" example:"true"`
+}
+
+func refreshTokenValidationError(message string) validation.ErrorBody {
+	if message == "" {
+		message = "refresh_token required"
+	}
+	return validation.ErrorBody{
+		Error:  message,
+		Fields: map[string][]string{"refresh_token": {"required"}},
+	}
 }
 
 // oauth2MetadataResp follows RFC 8414 OAuth 2.0 Authorization Server Metadata
@@ -1355,15 +1365,21 @@ func (h *Controller) refresh(c echo.Context) error {
 		}
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	// In cookie mode, try to get refresh token from cookie if not in body
 	refreshToken := req.RefreshToken
-	if authMode == "cookie" && refreshToken == "" {
+	var cookieToken string
+	if authMode == "cookie" {
 		if cookie, err := c.Cookie(guardRefreshTokenCookieName); err == nil {
-			refreshToken = cookie.Value
+			cookieToken = cookie.Value
 		}
 	}
-	if authMode == "cookie" && refreshToken == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "refresh_token required (send in body or guard_refresh_token cookie)"})
+	if refreshToken == "" && cookieToken != "" {
+		refreshToken = cookieToken
+	}
+	if refreshToken == "" {
+		if authMode == "cookie" {
+			return c.JSON(http.StatusBadRequest, refreshTokenValidationError("refresh_token required (send in body or guard_refresh_token cookie)"))
+		}
+		return c.JSON(http.StatusBadRequest, refreshTokenValidationError(""))
 	}
 	tok, err := h.svc.Refresh(c.Request().Context(), domain.RefreshInput{RefreshToken: refreshToken, UserAgent: ua, IP: ip})
 	if err != nil {

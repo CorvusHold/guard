@@ -74,6 +74,9 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 			{"COOKIE", "cookie"},
 			{"  cookie  ", "cookie"},
 			{"bearer", "bearer"},
+			{"json", "bearer"},
+			{"JSON", "bearer"},
+			{"JsOn", "bearer"},
 			{"invalid", "bearer"},
 			{"", "bearer"},
 		}
