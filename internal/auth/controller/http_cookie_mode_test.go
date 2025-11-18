@@ -259,12 +259,12 @@ func TestHTTP_CookieMode_LogoutViaCookieMode(t *testing.T) {
 		t.Fatalf("expected empty body on logout, got %q", rec.Body.String())
 	}
 	accessCookie := requireCookie(t, rec.Result().Cookies(), "guard_access_token")
-	if accessCookie.MaxAge > 0 {
-		t.Fatalf("expected guard_access_token cookie to be cleared, got MaxAge=%d", accessCookie.MaxAge)
+	if accessCookie.MaxAge != -1 {
+		t.Fatalf("expected guard_access_token cookie to be immediately deleted (MaxAge=-1), got MaxAge=%d", accessCookie.MaxAge)
 	}
 	refreshCookie := requireCookie(t, rec.Result().Cookies(), "guard_refresh_token")
-	if refreshCookie.MaxAge > 0 {
-		t.Fatalf("expected guard_refresh_token cookie to be cleared, got MaxAge=%d", refreshCookie.MaxAge)
+	if refreshCookie.MaxAge != -1 {
+		t.Fatalf("expected guard_refresh_token cookie to be immediately deleted (MaxAge=-1), got MaxAge=%d", refreshCookie.MaxAge)
 	}
 	// Refreshing with the revoked token (still using cookie mode) should now fail.
 	again := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
@@ -308,7 +308,20 @@ func newCookieModeTestFixture(t *testing.T) *cookieModeTestFixture {
 		t.Fatalf("create tenant: %v", err)
 	}
 	// allow tenant replication to complete
-	time.Sleep(25 * time.Millisecond)
+	timeout := time.After(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+pollLoop:
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("tenant replication timeout")
+		case <-ticker.C:
+			if _, err := tr.GetByID(ctx, tenantID); err == nil {
+				break pollLoop
+			}
+		}
+	}
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
