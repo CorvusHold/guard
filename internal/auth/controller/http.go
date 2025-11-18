@@ -776,9 +776,9 @@ func clearTokenCookies(c echo.Context, cfg config.Config) {
 func respondWithTokens(c echo.Context, cfg config.Config, accessToken, refreshToken string) error {
 	if detectAuthMode(c, cfg.DefaultAuthMode) == "cookie" {
 		setTokenCookies(c, accessToken, refreshToken, cfg)
-		return c.JSON(http.StatusOK, successResp{Success: true})
+		return c.JSON(http.StatusOK, authExchangeResp{Success: true})
 	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: accessToken, RefreshToken: refreshToken})
+	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: accessToken, RefreshToken: refreshToken})
 }
 
 func shouldUseSecureCookie(c echo.Context, cfg config.Config) bool {
@@ -1010,14 +1010,13 @@ type logoutReq struct {
 	RefreshToken string `json:"refresh_token" validate:"omitempty"`
 }
 
-type tokensResp struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+type authExchangeResp struct {
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	Success      bool   `json:"success,omitempty" example:"true"`
 }
 
-type successResp struct {
-	Success bool `json:"success" example:"true"`
-}
+type tokensResp = authExchangeResp
 
 func refreshTokenValidationError(message string) validation.ErrorBody {
 	if message == "" {
@@ -1245,7 +1244,7 @@ func bearerToken(c echo.Context) string {
 // @Accept       json
 // @Produce      json
 // @Param        body  body  signupReq  true  "tenant_id, email, password, optional first/last name"
-// @Success      201   {object}  tokensResp
+// @Success      201   {object}  authExchangeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/password/signup [post]
@@ -1271,7 +1270,7 @@ func (h *Controller) signup(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusCreated, tokensResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+	return c.JSON(http.StatusCreated, authExchangeResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
 }
 
 // Password Login godoc
@@ -1282,8 +1281,7 @@ func (h *Controller) signup(c echo.Context) error {
 // @Produce      json
 // @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Param        body  body    loginReq  true  "email/password"
-// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
-// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
+// @Success      200   {object}  authExchangeResp  "Access/refresh tokens (JSON mode) or success flag (cookie mode)"
 // @Success      202   {object}  mfaChallengeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
@@ -1330,8 +1328,7 @@ func (h *Controller) login(c echo.Context) error {
 // @Produce      json
 // @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Param        body  body    refreshReq  false  "refresh_token (required unless using cookie mode)"
-// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
-// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
+// @Success      200   {object}  authExchangeResp  "Access/refresh tokens (JSON mode) or success flag (cookie mode)"
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
@@ -2083,7 +2080,7 @@ func (h *Controller) sendMagic(c echo.Context) error {
 // @Produce      json
 // @Param        token  query  string        false  "Magic token (alternative to body)"
 // @Param        body   body   magicVerifyReq  false  "Magic token in JSON body"
-// @Success      200    {object}  tokensResp
+// @Success      200    {object}  authExchangeResp
 // @Failure      400    {object}  map[string]string
 // @Failure      401    {object}  map[string]string
 // @Failure      429    {object}  map[string]string
@@ -2108,7 +2105,7 @@ func (h *Controller) verifyMagic(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
 }
 
 // ---- SSO/Social (stubs) ----
@@ -2179,7 +2176,7 @@ func (h *Controller) ssoStart(c echo.Context) error {
 // @Tags         auth.sso
 // @Param        provider  path   string  true  "SSO provider (google, github, azuread)"
 // @Produce      json
-// @Success      200  {object}  tokensResp
+// @Success      200  {object}  authExchangeResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Router       /v1/auth/sso/{provider}/callback [get]
@@ -2192,7 +2189,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, tokensResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
 }
 
 // SSO Organization Portal Link Generator godoc
@@ -2476,8 +2473,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 // @Produce      json
 // @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Param        body  body    mfaVerifyReq  true  "challenge_token, method, and code"
-// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
-// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
+// @Success      200   {object}  authExchangeResp  "Access/refresh tokens (JSON mode) or success flag (cookie mode)"
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string

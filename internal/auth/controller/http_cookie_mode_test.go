@@ -96,6 +96,31 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("detectAuthMode falls back to default when header missing or invalid", func(t *testing.T) {
+		testCases := []struct {
+			name   string
+			header string
+		}{
+			{name: "missing"},
+			{name: "invalid", header: "totally-unknown"},
+		}
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodPost, "/", nil)
+				if tc.header != "" {
+					req.Header.Set("X-Auth-Mode", tc.header)
+				}
+				rec := httptest.NewRecorder()
+				ctx := e.NewContext(req, rec)
+				mode := detectAuthMode(ctx, "cookie")
+				if mode != "cookie" {
+					t.Fatalf("expected cookie fallback for %s case, got %s", tc.name, mode)
+				}
+			})
+		}
+	})
 }
 
 func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
@@ -129,6 +154,29 @@ func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
 		}
 		if email, ok := prof["email"].(string); !ok || email != fix.email {
 			t.Fatalf("expected profile email %s, got %v", fix.email, prof["email"])
+		}
+	})
+
+	t.Run("valid cookie succeeds without bearer", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req.Header.Set("X-Auth-Mode", "cookie")
+		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: fix.accessToken})
+		rec := httptest.NewRecorder()
+		fix.e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 when cookie token is valid, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("valid cookie wins when bearer is invalid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req.Header.Set("Authorization", "Bearer totally-invalid")
+		req.Header.Set("X-Auth-Mode", "cookie")
+		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: fix.accessToken})
+		rec := httptest.NewRecorder()
+		fix.e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 when cookie token is valid even if bearer header is bad, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }
@@ -187,6 +235,9 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	if accessCookie.SameSite != http.SameSiteStrictMode {
 		t.Errorf("expected SameSite=%v, got %v", http.SameSiteStrictMode, accessCookie.SameSite)
 	}
+	if accessCookie.MaxAge != int(cfg.AccessTokenTTL.Seconds()) {
+		t.Errorf("expected access cookie MaxAge=%d, got %d", int(cfg.AccessTokenTTL.Seconds()), accessCookie.MaxAge)
+	}
 
 	if refreshCookie == nil {
 		t.Fatal("refresh token cookie not found")
@@ -205,6 +256,9 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 	}
 	if refreshCookie.SameSite != http.SameSiteStrictMode {
 		t.Errorf("expected SameSite=%v, got %v", http.SameSiteStrictMode, refreshCookie.SameSite)
+	}
+	if refreshCookie.MaxAge != int(cfg.RefreshTokenTTL.Seconds()) {
+		t.Errorf("expected refresh cookie MaxAge=%d, got %d", int(cfg.RefreshTokenTTL.Seconds()), refreshCookie.MaxAge)
 	}
 }
 
@@ -326,12 +380,13 @@ pollLoop:
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
 	cfg, _ := config.Load()
+	cfg.DefaultAuthMode = "bearer"
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
 	e := echo.New()
 	e.Validator = noopValidator{}
-	controller := New(auth, magic, sso)
+	controller := NewWithConfig(auth, magic, sso, cfg)
 	controller.Register(e)
 	email := "cookie-mode-user-" + tenantID.String() + "@example.com"
 	password := "Password!123"

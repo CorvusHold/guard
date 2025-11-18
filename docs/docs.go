@@ -2045,7 +2045,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2109,7 +2109,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2526,9 +2526,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.successResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2597,9 +2597,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.successResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "202": {
@@ -2764,7 +2764,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2823,9 +2823,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.successResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -3025,7 +3025,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -3450,6 +3450,21 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/controller.adminUser"
                     }
+                }
+            }
+        },
+        "controller.authExchangeResp": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -4274,15 +4289,6 @@ const docTemplate = `{
                 }
             }
         },
-        "controller.successResp": {
-            "type": "object",
-            "properties": {
-                "success": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
         "controller.tenantResp": {
             "type": "object",
             "properties": {
@@ -4299,17 +4305,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "controller.tokensResp": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "refresh_token": {
                     "type": "string"
                 }
             }

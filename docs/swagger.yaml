@@ -70,6 +70,16 @@ definitions:
           $ref: '#/definitions/controller.adminUser'
         type: array
     type: object
+  controller.authExchangeResp:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   controller.createTenantReq:
     properties:
       name:
@@ -623,12 +633,6 @@ definitions:
     - password
     - tenant_id
     type: object
-  controller.successResp:
-    properties:
-      success:
-        example: true
-        type: boolean
-    type: object
   controller.tenantResp:
     properties:
       created_at:
@@ -640,13 +644,6 @@ definitions:
       name:
         type: string
       updated_at:
-        type: string
-    type: object
-  controller.tokensResp:
-    properties:
-      access_token:
-        type: string
-      refresh_token:
         type: string
     type: object
   domain.Introspection:
@@ -2027,7 +2024,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2070,7 +2067,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2339,9 +2336,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Cookie auth success payload when X-Auth-Mode=cookie
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.successResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2390,9 +2387,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Cookie auth success payload when X-Auth-Mode=cookie
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.successResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "202":
           description: Accepted
           schema:
@@ -2501,7 +2498,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2542,9 +2539,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Cookie auth success payload when X-Auth-Mode=cookie
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.successResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2675,7 +2672,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
