@@ -142,6 +142,57 @@ func (q *Queries) GetAuthIdentitiesByUser(ctx context.Context, userID pgtype.UUI
 	return items, nil
 }
 
+const getAuthIdentitiesByUserForUpdate = `-- name: GetAuthIdentitiesByUserForUpdate :many
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
+FROM auth_identities
+WHERE user_id = $1
+FOR UPDATE
+`
+
+type GetAuthIdentitiesByUserForUpdateRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text        `json:"sso_subject"`
+	SsoAttributes []byte             `json:"sso_attributes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetAuthIdentitiesByUserForUpdate(ctx context.Context, userID pgtype.UUID) ([]GetAuthIdentitiesByUserForUpdateRow, error) {
+	rows, err := q.db.Query(ctx, getAuthIdentitiesByUserForUpdate, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAuthIdentitiesByUserForUpdateRow
+	for rows.Next() {
+		var i GetAuthIdentitiesByUserForUpdateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TenantID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.SsoProviderID,
+			&i.SsoSubject,
+			&i.SsoAttributes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAuthIdentityByEmailTenant = `-- name: GetAuthIdentityByEmailTenant :one
 SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities

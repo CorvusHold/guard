@@ -776,7 +776,7 @@ func clearTokenCookies(c echo.Context, cfg config.Config) {
 func respondWithTokens(c echo.Context, cfg config.Config, accessToken, refreshToken string) error {
 	if detectAuthMode(c, cfg.DefaultAuthMode) == "cookie" {
 		setTokenCookies(c, accessToken, refreshToken, cfg)
-		return c.JSON(http.StatusOK, map[string]bool{"success": true})
+		return c.JSON(http.StatusOK, successResp{Success: true})
 	}
 	return c.JSON(http.StatusOK, tokensResp{AccessToken: accessToken, RefreshToken: refreshToken})
 }
@@ -1006,9 +1006,17 @@ type refreshReq struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
+type logoutReq struct {
+	RefreshToken string `json:"refresh_token" validate:"omitempty"`
+}
+
 type tokensResp struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type successResp struct {
+	Success bool `json:"success" example:"true"`
 }
 
 // oauth2MetadataResp follows RFC 8414 OAuth 2.0 Authorization Server Metadata
@@ -1262,8 +1270,10 @@ func (h *Controller) signup(c echo.Context) error {
 // @Tags         auth.password
 // @Accept       json
 // @Produce      json
-// @Param        body  body  loginReq  true  "email/password"
-// @Success      200   {object}  tokensResp
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
+// @Param        body  body    loginReq  true  "email/password"
+// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
+// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
 // @Success      202   {object}  mfaChallengeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
@@ -1308,8 +1318,10 @@ func (h *Controller) login(c echo.Context) error {
 // @Tags         auth.tokens
 // @Accept       json
 // @Produce      json
-// @Param        body  body  refreshReq  true  "refresh_token"
-// @Success      200   {object}  tokensResp
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
+// @Param        body  body    refreshReq  false  "refresh_token (required unless using cookie mode)"
+// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
+// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
@@ -1327,7 +1339,7 @@ func (h *Controller) refresh(c echo.Context) error {
 		c.Logger().Debugf("refresh: raw body=%s", redactedBody(raw))
 		c.Logger().Debugf("refresh: tenant_id=%s", c.QueryParam("tenant_id"))
 	}
-	var req refreshReq
+	var req logoutReq
 	if err := c.Bind(&req); err != nil {
 		if debugEnabled {
 			c.Logger().Warnf("refresh: bind error=%v body=%s", err, redactedBody(raw))
@@ -1367,7 +1379,7 @@ func (h *Controller) refresh(c echo.Context) error {
 // @Description  Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads `guard_refresh_token`, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.
 // @Tags         auth.tokens
 // @Accept       json
-// @Param        body  body  refreshReq  false  "refresh_token (optional)"
+// @Param        body  body  logoutReq  false  "refresh_token (optional)"
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
@@ -2448,8 +2460,10 @@ func (h *Controller) backupCount(c echo.Context) error {
 // @Tags         auth.mfa
 // @Accept       json
 // @Produce      json
-// @Param        body  body  mfaVerifyReq  true  "challenge_token, method, and code"
-// @Success      200   {object}  tokensResp
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
+// @Param        body  body    mfaVerifyReq  true  "challenge_token, method, and code"
+// @Success      200   {object}  tokensResp   "Access/refresh tokens when X-Auth-Mode=json"
+// @Success      200   {object}  successResp  "Cookie auth success payload when X-Auth-Mode=cookie"
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string

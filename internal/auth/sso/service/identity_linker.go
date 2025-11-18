@@ -224,8 +224,19 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 
 // UnlinkIdentity removes an SSO identity link from a user.
 func (l *IdentityLinker) UnlinkIdentity(ctx context.Context, userID, providerID uuid.UUID) error {
-	// Check if user has other auth methods
-	identities, err := l.queries.GetAuthIdentitiesByUser(ctx, toPgUUID(userID))
+	// Ensure the count check and delete happen atomically.
+	tx, err := l.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() {
+		if rbErr := tx.Rollback(ctx); rbErr != nil && rbErr != pgx.ErrTxClosed {
+			l.log.Warn().Err(rbErr).Msg("failed to rollback transaction")
+		}
+	}()
+
+	queries := l.queries.WithTx(tx)
+	identities, err := queries.GetAuthIdentitiesByUserForUpdate(ctx, toPgUUID(userID))
 	if err != nil {
 		return fmt.Errorf("failed to check user identities: %w", err)
 	}
@@ -234,25 +245,35 @@ func (l *IdentityLinker) UnlinkIdentity(ctx context.Context, userID, providerID 
 		return fmt.Errorf("cannot unlink last authentication method")
 	}
 
-	// Find and delete the SSO identity
-	for _, identity := range identities {
+	var target *db.GetAuthIdentitiesByUserForUpdateRow
+	for i := range identities {
+		identity := identities[i]
 		if identity.SsoProviderID.Valid && toUUID(identity.SsoProviderID) == providerID {
-			// Include tenant_id for proper tenant isolation
-			if err := l.queries.UnlinkSSOIdentity(ctx, db.UnlinkSSOIdentityParams{
-				ID:       identity.ID,
-				TenantID: identity.TenantID,
-			}); err != nil {
-				return fmt.Errorf("failed to unlink identity: %w", err)
-			}
-			l.log.Info().
-				Str("user_id", userID.String()).
-				Str("provider_id", providerID.String()).
-				Msg("SSO identity unlinked")
-			return nil
+			target = &identity
+			break
 		}
 	}
 
-	return fmt.Errorf("SSO identity not found")
+	if target == nil {
+		return fmt.Errorf("SSO identity not found")
+	}
+
+	if err := queries.UnlinkSSOIdentity(ctx, db.UnlinkSSOIdentityParams{
+		ID:       target.ID,
+		TenantID: target.TenantID,
+	}); err != nil {
+		return fmt.Errorf("failed to unlink identity: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	l.log.Info().
+		Str("user_id", userID.String()).
+		Str("provider_id", providerID.String()).
+		Msg("SSO identity unlinked")
+	return nil
 }
 
 // ListIdentities returns all linked identities for a user.

@@ -1937,7 +1937,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/controller.refreshReq"
+                            "$ref": "#/definitions/controller.logoutReq"
                         }
                     }
                 ],
@@ -2505,6 +2505,16 @@ const docTemplate = `{
                 "summary": "Verify MFA challenge",
                 "parameters": [
                     {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
                         "description": "challenge_token, method, and code",
                         "name": "body",
                         "in": "body",
@@ -2516,9 +2526,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.successResp"
                         }
                     },
                     "400": {
@@ -2566,6 +2576,16 @@ const docTemplate = `{
                 "summary": "Password login",
                 "parameters": [
                     {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
                         "description": "email/password",
                         "name": "body",
                         "in": "body",
@@ -2577,9 +2597,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.successResp"
                         }
                     },
                     "202": {
@@ -2783,10 +2803,19 @@ const docTemplate = `{
                 "summary": "Refresh access token",
                 "parameters": [
                     {
-                        "description": "refresh_token",
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
+                        "description": "refresh_token (required unless using cookie mode)",
                         "name": "body",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/controller.refreshReq"
                         }
@@ -2794,9 +2823,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Cookie auth success payload when X-Auth-Mode=cookie",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.successResp"
                         }
                     },
                     "400": {
@@ -3663,6 +3692,14 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.logoutReq": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
         "controller.magicSendReq": {
             "type": "object",
             "required": [
@@ -3891,6 +3928,10 @@ const docTemplate = `{
                 },
                 "jwt_signing_key": {
                     "description": "Auth",
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.",
                     "type": "string"
                 },
                 "sso_provider": {
@@ -4232,6 +4273,15 @@ const docTemplate = `{
                 },
                 "tenant_id": {
                     "type": "string"
+                }
+            }
+        },
+        "controller.successResp": {
+            "type": "object",
+            "properties": {
+                "success": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },

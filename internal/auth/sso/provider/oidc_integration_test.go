@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +32,15 @@ type mockOIDCServer struct {
 	issuer      string
 	clientID    string
 	redirectURI string
+	mu          sync.Mutex
+	authCodes   map[string]*authCodeEntry
+}
+
+type authCodeEntry struct {
+	nonce               string
+	codeChallenge       string
+	codeChallengeMethod string
+	redirectURI         string
 }
 
 func newMockOIDCServer(t *testing.T) *mockOIDCServer {
@@ -46,6 +57,7 @@ func newMockOIDCServer(t *testing.T) *mockOIDCServer {
 		publicKey:   &privateKey.PublicKey,
 		clientID:    "test-client-id",
 		redirectURI: "https://app.example.com/callback",
+		authCodes:   make(map[string]*authCodeEntry),
 	}
 
 	// Create the HTTP server
@@ -109,14 +121,21 @@ func (m *mockOIDCServer) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mockOIDCServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	// In a real test, we would validate the authorize request
-	// For now, just return a redirect with a code
 	query := r.URL.Query()
 	state := query.Get("state")
 	redirectURI := query.Get("redirect_uri")
+	nonce := query.Get("nonce")
+	codeChallenge := query.Get("code_challenge")
+	codeChallengeMethod := query.Get("code_challenge_method")
 
 	// Generate a mock authorization code
-	code := base64.URLEncoding.EncodeToString([]byte("mock-auth-code"))
+	code := uuid.NewString()
+	m.saveAuthCode(code, &authCodeEntry{
+		nonce:               nonce,
+		codeChallenge:       codeChallenge,
+		codeChallengeMethod: codeChallengeMethod,
+		redirectURI:         redirectURI,
+	})
 
 	redirectURL, _ := url.Parse(redirectURI)
 	q := redirectURL.Query()
@@ -138,10 +157,31 @@ func (m *mockOIDCServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing code", http.StatusBadRequest)
 		return
 	}
+	codeVerifier := r.FormValue("code_verifier")
+	if codeVerifier == "" {
+		http.Error(w, "missing code_verifier", http.StatusBadRequest)
+		return
+	}
+	entry, ok := m.consumeAuthCode(code)
+	if !ok {
+		http.Error(w, "invalid authorization code", http.StatusBadRequest)
+		return
+	}
+	if entry.redirectURI != "" {
+		if redirectURI := r.FormValue("redirect_uri"); redirectURI != "" && redirectURI != entry.redirectURI {
+			http.Error(w, "redirect_uri mismatch", http.StatusBadRequest)
+			return
+		}
+	}
+	if entry.codeChallengeMethod == "S256" {
+		expected := pkceChallengeFromVerifier(codeVerifier)
+		if expected != entry.codeChallenge {
+			http.Error(w, "invalid code_verifier", http.StatusBadRequest)
+			return
+		}
+	}
 
-	// Get nonce from the request context (in real impl, this would be stored)
-	// For testing, we'll use a fixed nonce
-	nonce := "test-nonce"
+	nonce := entry.nonce
 
 	// Create ID token
 	idToken, err := m.createIDToken(nonce, map[string]interface{}{
@@ -168,6 +208,27 @@ func (m *mockOIDCServer) handleToken(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func (m *mockOIDCServer) saveAuthCode(code string, entry *authCodeEntry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.authCodes[code] = entry
+}
+
+func (m *mockOIDCServer) consumeAuthCode(code string) (*authCodeEntry, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.authCodes[code]
+	if ok {
+		delete(m.authCodes, code)
+	}
+	return entry, ok
+}
+
+func pkceChallengeFromVerifier(verifier string) string {
+	hash := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
 func (m *mockOIDCServer) handleUserInfo(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +294,7 @@ func (m *mockOIDCServer) createIDToken(nonce string, claims map[string]interface
 	return token, nil
 }
 
-func TestOIDCProvider_FullFlow(t *testing.T) {
+func TestOIDCProvider_Callback_HappyPath(t *testing.T) {
 	// Create mock OIDC server
 	mockServer := newMockOIDCServer(t)
 	defer mockServer.Close()
@@ -284,12 +345,89 @@ func TestOIDCProvider_FullFlow(t *testing.T) {
 		t.Error("Start() returned empty PKCEVerifier")
 	}
 
-	t.Logf("Authorization URL: %s", startResult.AuthorizationURL)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get(startResult.AuthorizationURL)
+	if err != nil {
+		t.Fatalf("GET authorize error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("authorize status = %d, want 302", resp.StatusCode)
+	}
+	location := resp.Header.Get("Location")
+	if location == "" {
+		t.Fatal("authorize response missing Location header")
+	}
+	callbackURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse callback location: %v", err)
+	}
+	callbackQuery := callbackURL.Query()
+	code := callbackQuery.Get("code")
+	if code == "" {
+		t.Fatal("callback missing code")
+	}
+	stateFromCallback := callbackQuery.Get("state")
+	if stateFromCallback != startResult.State {
+		t.Fatalf("state mismatch: expected %s, got %s", startResult.State, stateFromCallback)
+	}
 
-	// Note: Testing the full callback flow with token exchange and verification
-	// would require generating valid JWT tokens signed with the mock server's key.
-	// This is complex and typically done in end-to-end tests.
-	// For now, we verify that the Start flow works correctly.
+	profile, err := provider.Callback(ctx, domain.CallbackRequest{
+		Code:         code,
+		State:        startResult.State,
+		Nonce:        startResult.Nonce,
+		PKCEVerifier: startResult.PKCEVerifier,
+		RedirectURL:  mockServer.redirectURI,
+	})
+	if err != nil {
+		t.Fatalf("Callback() error = %v", err)
+	}
+	if profile == nil {
+		t.Fatal("Callback() returned nil profile")
+	}
+	if profile.IDToken == "" {
+		t.Fatal("profile.IDToken is empty")
+	}
+	if profile.AccessToken != "mock-access-token" {
+		t.Fatalf("profile.AccessToken = %s, want mock-access-token", profile.AccessToken)
+	}
+	if profile.Subject != "test-user-123" {
+		t.Fatalf("Subject = %s, want test-user-123", profile.Subject)
+	}
+	if profile.Email != "test@example.com" {
+		t.Fatalf("Email = %s, want test@example.com", profile.Email)
+	}
+	if !profile.EmailVerified {
+		t.Fatal("EmailVerified = false, want true")
+	}
+	if profile.FirstName != "Test" || profile.LastName != "User" {
+		t.Fatalf("name claims mismatch: first=%s last=%s", profile.FirstName, profile.LastName)
+	}
+	if profile.Name != "Test User" {
+		t.Fatalf("Name = %s, want Test User", profile.Name)
+	}
+	if profile.Picture != "https://example.com/photo.jpg" {
+		t.Fatalf("Picture = %s, want https://example.com/photo.jpg", profile.Picture)
+	}
+	if profile.Locale != "en-US" {
+		t.Fatalf("Locale = %s, want en-US", profile.Locale)
+	}
+	if len(profile.Groups) != 2 || profile.Groups[0] != "users" || profile.Groups[1] != "developers" {
+		t.Fatalf("Groups = %v, want [users developers]", profile.Groups)
+	}
+	if profile.RawAttributes == nil {
+		t.Fatal("RawAttributes is nil")
+	}
+	if nonceClaim, ok := profile.RawAttributes["nonce"].(string); !ok || nonceClaim != startResult.Nonce {
+		t.Fatalf("nonce claim = %v, want %s", nonceClaim, startResult.Nonce)
+	}
+	if profile.ExpiresAt == nil {
+		t.Fatal("ExpiresAt is nil")
+	}
 }
 
 func TestOIDCProvider_Callback_InvalidCode(t *testing.T) {

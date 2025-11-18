@@ -12,6 +12,12 @@ SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subjec
 FROM auth_identities
 WHERE user_id = $1;
 
+-- name: GetAuthIdentitiesByUserForUpdate :many
+SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
+FROM auth_identities
+WHERE user_id = $1
+FOR UPDATE;
+
 -- name: UpdateAuthIdentityPassword :exec
 UPDATE auth_identities
 SET password_hash = $2, updated_at = now()

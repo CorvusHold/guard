@@ -142,6 +142,8 @@ type putSettingsRequest struct {
 	WorkOSDefaultOrganizationID *string `json:"workos_default_organization_id"`
 	SSOStateTTL                 *string `json:"sso_state_ttl"`
 	SSORedirectAllowlist        *string `json:"sso_redirect_allowlist"`
+	// Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.
+	Scope *string `json:"scope"`
 	// App
 	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
 	// Auth

@@ -236,6 +236,11 @@ definitions:
     - password
     - tenant_id
     type: object
+  controller.logoutReq:
+    properties:
+      refresh_token:
+        type: string
+    type: object
   controller.magicSendReq:
     properties:
       email:
@@ -387,6 +392,10 @@ definitions:
         type: string
       jwt_signing_key:
         description: Auth
+        type: string
+      scope:
+        description: Scope is deprecated and ignored. Kept for backward compatibility
+          with older SDKs.
         type: string
       sso_provider:
         type: string
@@ -614,6 +623,12 @@ definitions:
     - email
     - password
     - tenant_id
+    type: object
+  controller.successResp:
+    properties:
+      success:
+        example: true
+        type: boolean
     type: object
   controller.tenantResp:
     properties:
@@ -1942,7 +1957,7 @@ paths:
         in: body
         name: body
         schema:
-          $ref: '#/definitions/controller.refreshReq'
+          $ref: '#/definitions/controller.logoutReq'
       responses:
         "204":
           description: No Content
@@ -2308,6 +2323,13 @@ paths:
         or default), Guard sets the session cookies and returns `{ "success": true
         }` instead of embedding tokens in the JSON body.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: challenge_token, method, and code
         in: body
         name: body
@@ -2318,9 +2340,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Cookie auth success payload when X-Auth-Mode=cookie
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.successResp'
         "400":
           description: Bad Request
           schema:
@@ -2352,6 +2374,13 @@ paths:
         `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success":
         true }` instead of raw tokens in the JSON payload.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: email/password
         in: body
         name: body
@@ -2362,9 +2391,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Cookie auth success payload when X-Auth-Mode=cookie
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.successResp'
         "202":
           description: Accepted
           schema:
@@ -2498,19 +2527,25 @@ paths:
         from cookies if the body omits `refresh_token`, set rotated cookies, and return
         `{"success":true}` while omitting token fields from the JSON response.'
       parameters:
-      - description: refresh_token
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
+      - description: refresh_token (required unless using cookie mode)
         in: body
         name: body
-        required: true
         schema:
           $ref: '#/definitions/controller.refreshReq'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Cookie auth success payload when X-Auth-Mode=cookie
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.successResp'
         "400":
           description: Bad Request
           schema:
