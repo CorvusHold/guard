@@ -3928,7 +3928,8 @@ const docTemplate = `{
                 },
                 "jwt_signing_key": {
                     "description": "Auth",
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 16
                 },
                 "scope": {
                     "description": "Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.",
@@ -4121,9 +4122,6 @@ const docTemplate = `{
         },
         "controller.refreshReq": {
             "type": "object",
-            "required": [
-                "refresh_token"
-            ],
             "properties": {
                 "refresh_token": {
                     "type": "string"

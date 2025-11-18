@@ -3924,7 +3924,8 @@
                 },
                 "jwt_signing_key": {
                     "description": "Auth",
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 16
                 },
                 "scope": {
                     "description": "Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.",

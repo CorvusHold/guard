@@ -147,7 +147,7 @@ type putSettingsRequest struct {
 	// App
 	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
 	// Auth
-	JWTSigningKey *string `json:"jwt_signing_key"`
+	JWTSigningKey *string `json:"jwt_signing_key" validate:"omitempty,min=16"`
 }
 
 // Get Tenant Settings godoc

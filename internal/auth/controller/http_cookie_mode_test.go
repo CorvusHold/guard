@@ -31,6 +31,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 			"email":     "test@example.com",
 			"password":  "password123",
 		}
+
 		bodyBytes, _ := json.Marshal(body)
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(bodyBytes))
@@ -93,6 +94,41 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 			if mode != tc.expected {
 				t.Errorf("header %q: expected %s, got %s", tc.header, tc.expected, mode)
 			}
+		}
+	})
+}
+
+func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
+	fix := newCookieModeTestFixture(t)
+	invalidToken := "totally-wrong"
+
+	t.Run("invalid cookie without bearer fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req.Header.Set("X-Auth-Mode", "cookie")
+		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: invalidToken})
+		rec := httptest.NewRecorder()
+		fix.e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 when only invalid cookie token provided, got %d", rec.Code)
+		}
+	})
+
+	t.Run("bearer token overrides invalid cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req.Header.Set("Authorization", "Bearer "+fix.accessToken)
+		req.Header.Set("X-Auth-Mode", "cookie")
+		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: invalidToken})
+		rec := httptest.NewRecorder()
+		fix.e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 when bearer token is valid, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var prof map[string]any
+		if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&prof); err != nil {
+			t.Fatalf("decode profile: %v", err)
+		}
+		if email, ok := prof["email"].(string); !ok || email != fix.email {
+			t.Fatalf("expected profile email %s, got %v", fix.email, prof["email"])
 		}
 	})
 }
@@ -245,6 +281,8 @@ func TestHTTP_CookieMode_LogoutViaCookieMode(t *testing.T) {
 type cookieModeTestFixture struct {
 	e            *echo.Echo
 	refreshToken string
+	accessToken  string
+	email        string
 }
 
 type cookieTokensResponse struct {
@@ -318,7 +356,7 @@ func newCookieModeTestFixture(t *testing.T) *cookieModeTestFixture {
 	if tokens.RefreshToken == "" {
 		t.Fatalf("expected refresh token from login")
 	}
-	return &cookieModeTestFixture{e: e, refreshToken: tokens.RefreshToken}
+	return &cookieModeTestFixture{e: e, refreshToken: tokens.RefreshToken, accessToken: tokens.AccessToken, email: email}
 }
 
 func requireCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie {

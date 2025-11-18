@@ -392,6 +392,7 @@ definitions:
         type: string
       jwt_signing_key:
         description: Auth
+        minLength: 16
         type: string
       scope:
         description: Scope is deprecated and ignored. Kept for backward compatibility
