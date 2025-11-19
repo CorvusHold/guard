@@ -2014,7 +2014,7 @@ const docTemplate = `{
         },
         "/v1/auth/magic/verify": {
             "get": {
-                "description": "Verifies magic link token from query parameter or request body and returns tokens",
+                "description": "Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or defaults), Guard responds with cookies plus ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2026,6 +2026,16 @@ const docTemplate = `{
                 ],
                 "summary": "Verify magic link token",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "type": "string",
                         "description": "Magic token (alternative to body)",
@@ -2078,7 +2088,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Verifies magic link token from query parameter or request body and returns tokens",
+                "description": "Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or defaults), Guard responds with cookies plus ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2090,6 +2100,16 @@ const docTemplate = `{
                 ],
                 "summary": "Verify magic link token",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "type": "string",
                         "description": "Magic token (alternative to body)",
@@ -2149,7 +2169,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the authenticated user's profile derived from the access token",
+                "description": "Returns the authenticated user's profile derived from the access token. When cookie mode is requested (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard will fall back to the ` + "`" + `guard_access_token` + "`" + ` cookie if the bearer header is missing or invalid.",
                 "produces": [
                     "application/json"
                 ],
@@ -2157,6 +2177,18 @@ const docTemplate = `{
                     "auth.profile"
                 ],
                 "summary": "Get current user's profile",
+                "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2738,7 +2770,7 @@ const docTemplate = `{
         },
         "/v1/auth/password/signup": {
             "post": {
-                "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens",
+                "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2750,6 +2782,16 @@ const docTemplate = `{
                 ],
                 "summary": "Password signup",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "description": "tenant_id, email, password, optional first/last name",
                         "name": "body",
@@ -3004,7 +3046,7 @@ const docTemplate = `{
         },
         "/v1/auth/sso/{provider}/callback": {
             "get": {
-                "description": "Completes SSO flow and returns access/refresh tokens",
+                "description": "Completes SSO flow and returns access/refresh tokens. When cookie mode is requested (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard issues cookies and returns ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "produces": [
                     "application/json"
                 ],
@@ -3019,6 +3061,16 @@ const docTemplate = `{
                         "name": "provider",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
                     }
                 ],
                 "responses": {

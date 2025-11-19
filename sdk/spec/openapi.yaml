@@ -2006,9 +2006,17 @@ paths:
     get:
       consumes:
       - application/json
-      description: Verifies magic link token from query parameter or request body
-        and returns tokens
+      description: 'Verifies magic link token from query parameter or request body
+        and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: Magic token (alternative to body)
         in: query
         name: token
@@ -2049,9 +2057,17 @@ paths:
     post:
       consumes:
       - application/json
-      description: Verifies magic link token from query parameter or request body
-        and returns tokens
+      description: 'Verifies magic link token from query parameter or request body
+        and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: Magic token (alternative to body)
         in: query
         name: token
@@ -2091,8 +2107,18 @@ paths:
       - auth.magic
   /v1/auth/me:
     get:
-      description: Returns the authenticated user's profile derived from the access
-        token
+      description: 'Returns the authenticated user''s profile derived from the access
+        token. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard
+        will fall back to the `guard_access_token` cookie if the bearer header is
+        missing or invalid.'
+      parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       produces:
       - application/json
       responses:
@@ -2483,9 +2509,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new user for a tenant with email and password and returns
-        access/refresh tokens
+      description: 'Creates a new user for a tenant with email and password and returns
+        access/refresh tokens. When clients set `X-Auth-Mode: cookie` (or the deployment
+        default is cookie), Guard issues `guard_access_token` / `guard_refresh_token`
+        cookies and returns `{ "success": true }` instead of raw tokens.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: tenant_id, email, password, optional first/last name
         in: body
         name: body
@@ -2659,12 +2694,21 @@ paths:
       - auth.sessions
   /v1/auth/sso/{provider}/callback:
     get:
-      description: Completes SSO flow and returns access/refresh tokens
+      description: 'Completes SSO flow and returns access/refresh tokens. When cookie
+        mode is requested (`X-Auth-Mode: cookie` or default), Guard issues cookies
+        and returns `{ "success": true }`.'
       parameters:
       - description: SSO provider (google, github, azuread)
         in: path
         name: provider
         required: true
+        type: string
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
         type: string
       produces:
       - application/json

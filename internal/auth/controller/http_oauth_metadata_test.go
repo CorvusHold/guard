@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/corvusHold/guard/internal/config"
+	"github.com/corvusHold/guard/internal/version"
 	"github.com/labstack/echo/v4"
 )
 
@@ -115,8 +116,8 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 				t.Errorf("expected guard_auth_mode_default '%s', got '%s'", tc.expectedDefault, metadata.GuardAuthModeDefault)
 			}
 
-			if metadata.GuardVersion != "1.0.0" {
-				t.Errorf("expected guard_version '1.0.0', got '%s'", metadata.GuardVersion)
+			if metadata.GuardVersion != version.String() {
+				t.Errorf("expected guard_version '%s', got '%s'", version.String(), metadata.GuardVersion)
 			}
 
 			// Verify grant types

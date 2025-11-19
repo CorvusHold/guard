@@ -774,12 +774,15 @@ func clearTokenCookies(c echo.Context, cfg config.Config) {
 	c.SetCookie(makeClearingCookie(guardRefreshTokenCookieName))
 }
 
-func respondWithTokens(c echo.Context, cfg config.Config, authMode, accessToken, refreshToken string) error {
+func respondWithTokens(c echo.Context, cfg config.Config, authMode string, status int, accessToken, refreshToken string) error {
+	if status == 0 {
+		status = http.StatusOK
+	}
 	if authMode == "cookie" {
 		setTokenCookies(c, accessToken, refreshToken, cfg)
-		return c.JSON(http.StatusOK, authExchangeResp{Success: true})
+		return c.JSON(status, authExchangeResp{Success: true})
 	}
-	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: accessToken, RefreshToken: refreshToken})
+	return c.JSON(status, authExchangeResp{AccessToken: accessToken, RefreshToken: refreshToken})
 }
 
 func shouldUseSecureCookie(c echo.Context, cfg config.Config) bool {
@@ -1240,16 +1243,18 @@ func bearerToken(c echo.Context) string {
 
 // Signup godoc
 // @Summary      Password signup
-// @Description  Creates a new user for a tenant with email and password and returns access/refresh tokens
+// @Description  Creates a new user for a tenant with email and password and returns access/refresh tokens. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens.
 // @Tags         auth.password
 // @Accept       json
 // @Produce      json
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Param        body  body  signupReq  true  "tenant_id, email, password, optional first/last name"
 // @Success      201   {object}  authExchangeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/password/signup [post]
 func (h *Controller) signup(c echo.Context) error {
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req signupReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -1271,7 +1276,7 @@ func (h *Controller) signup(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusCreated, authExchangeResp{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken})
+	return respondWithTokens(c, h.cfg, authMode, http.StatusCreated, tok.AccessToken, tok.RefreshToken)
 }
 
 // Password Login godoc
@@ -1319,7 +1324,7 @@ func (h *Controller) login(c echo.Context) error {
 		}
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, authMode, tok.AccessToken, tok.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, http.StatusOK, tok.AccessToken, tok.RefreshToken)
 }
 
 // Refresh godoc
@@ -1384,7 +1389,7 @@ func (h *Controller) refresh(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, authMode, tok.AccessToken, tok.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, http.StatusOK, tok.AccessToken, tok.RefreshToken)
 }
 
 // Logout godoc
@@ -1444,10 +1449,11 @@ func (h *Controller) logout(c echo.Context) error {
 
 // Me godoc
 // @Summary      Get current user's profile
-// @Description  Returns the authenticated user's profile derived from the access token
+// @Description  Returns the authenticated user's profile derived from the access token. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard will fall back to the `guard_access_token` cookie if the bearer header is missing or invalid.
 // @Tags         auth.profile
 // @Security     BearerAuth
 // @Produce      json
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Success      200  {object}  domain.UserProfile
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
@@ -2101,10 +2107,11 @@ func (h *Controller) sendMagic(c echo.Context) error {
 
 // Magic Verify godoc
 // @Summary      Verify magic link token
-// @Description  Verifies magic link token from query parameter or request body and returns tokens
+// @Description  Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie` (or defaults), Guard responds with cookies plus `{ "success": true }`.
 // @Tags         auth.magic
 // @Accept       json
 // @Produce      json
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Param        token  query  string        false  "Magic token (alternative to body)"
 // @Param        body   body   magicVerifyReq  false  "Magic token in JSON body"
 // @Success      200    {object}  authExchangeResp
@@ -2114,6 +2121,7 @@ func (h *Controller) sendMagic(c echo.Context) error {
 // @Router       /v1/auth/magic/verify [get]
 // @Router       /v1/auth/magic/verify [post]
 func (h *Controller) verifyMagic(c echo.Context) error {
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	// accept ?token=... or JSON body
 	token := c.QueryParam("token")
 	if token == "" {
@@ -2132,7 +2140,7 @@ func (h *Controller) verifyMagic(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+	return respondWithTokens(c, h.cfg, authMode, http.StatusOK, toks.AccessToken, toks.RefreshToken)
 }
 
 // ---- SSO/Social (stubs) ----
@@ -2199,15 +2207,17 @@ func (h *Controller) ssoStart(c echo.Context) error {
 
 // SSO Callback godoc
 // @Summary      Handle SSO/OAuth callback
-// @Description  Completes SSO flow and returns access/refresh tokens
+// @Description  Completes SSO flow and returns access/refresh tokens. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard issues cookies and returns `{ "success": true }`.
 // @Tags         auth.sso
 // @Param        provider  path   string  true  "SSO provider (google, github, azuread)"
+// @Param        X-Auth-Mode  header  string  false  "Auth response mode override"  Enums(cookie,json)
 // @Produce      json
 // @Success      200  {object}  authExchangeResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Router       /v1/auth/sso/{provider}/callback [get]
 func (h *Controller) ssoCallback(c echo.Context) error {
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	p := c.Param("provider")
 	if _, ok := allowedProviders[p]; !ok {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
@@ -2216,7 +2226,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, authExchangeResp{AccessToken: toks.AccessToken, RefreshToken: toks.RefreshToken})
+	return respondWithTokens(c, h.cfg, authMode, http.StatusOK, toks.AccessToken, toks.RefreshToken)
 }
 
 // SSO Organization Portal Link Generator godoc
@@ -2530,5 +2540,5 @@ func (h *Controller) verifyMFA(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, authMode, toks.AccessToken, toks.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, http.StatusOK, toks.AccessToken, toks.RefreshToken)
 }
