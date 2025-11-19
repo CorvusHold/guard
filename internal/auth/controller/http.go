@@ -20,6 +20,7 @@ import (
 	"github.com/corvusHold/guard/internal/platform/ratelimit"
 	"github.com/corvusHold/guard/internal/platform/validation"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
+	"github.com/corvusHold/guard/internal/version"
 )
 
 type Controller struct {
@@ -773,8 +774,8 @@ func clearTokenCookies(c echo.Context, cfg config.Config) {
 	c.SetCookie(makeClearingCookie(guardRefreshTokenCookieName))
 }
 
-func respondWithTokens(c echo.Context, cfg config.Config, accessToken, refreshToken string) error {
-	if detectAuthMode(c, cfg.DefaultAuthMode) == "cookie" {
+func respondWithTokens(c echo.Context, cfg config.Config, authMode, accessToken, refreshToken string) error {
+	if authMode == "cookie" {
 		setTokenCookies(c, accessToken, refreshToken, cfg)
 		return c.JSON(http.StatusOK, authExchangeResp{Success: true})
 	}
@@ -857,7 +858,7 @@ func (h *Controller) OAuth2Metadata(c echo.Context) error {
 		// Guard-specific extensions
 		GuardAuthModesSupported: []string{"bearer", "cookie"},
 		GuardAuthModeDefault:    h.cfg.DefaultAuthMode,
-		GuardVersion:            "1.0.0",
+		GuardVersion:            version.String(),
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -1288,6 +1289,7 @@ func (h *Controller) signup(c echo.Context) error {
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/password/login [post]
 func (h *Controller) login(c echo.Context) error {
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req loginReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -1317,7 +1319,7 @@ func (h *Controller) login(c echo.Context) error {
 		}
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, tok.AccessToken, tok.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, tok.AccessToken, tok.RefreshToken)
 }
 
 // Refresh godoc
@@ -1382,7 +1384,7 @@ func (h *Controller) refresh(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, tok.AccessToken, tok.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, tok.AccessToken, tok.RefreshToken)
 }
 
 // Logout godoc
@@ -1451,25 +1453,50 @@ func (h *Controller) logout(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /v1/auth/me [get]
 func (h *Controller) me(c echo.Context) error {
-	// Try bearer token first, then cookie if cookie auth is enabled/requested
-	tok := bearerToken(c)
-	if tok == "" && detectAuthMode(c, h.cfg.DefaultAuthMode) == "cookie" {
-		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil {
-			tok = cookie.Value
+	ctx := c.Request().Context()
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+	respondWithProfile := func(in domain.Introspection) error {
+		prof, err := h.svc.Me(ctx, in.UserID, in.TenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusOK, prof)
+	}
+
+	if tok := bearerToken(c); tok != "" {
+		in, err := h.svc.Introspect(ctx, tok)
+		if err == nil && in.Active {
+			return respondWithProfile(in)
+		}
+		originalErr := "invalid token"
+		if err != nil && err.Error() != "" {
+			originalErr = err.Error()
+		}
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				if cin, ierr := h.svc.Introspect(ctx, cookie.Value); ierr == nil && cin.Active {
+					return respondWithProfile(cin)
+				}
+			}
+		}
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": originalErr})
+	}
+
+	if authMode == "cookie" {
+		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
+			in, ierr := h.svc.Introspect(ctx, cookie.Value)
+			if ierr == nil && in.Active {
+				return respondWithProfile(in)
+			}
+			errMsg := "invalid token"
+			if ierr != nil && ierr.Error() != "" {
+				errMsg = ierr.Error()
+			}
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": errMsg})
 		}
 	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	prof, err := h.svc.Me(c.Request().Context(), in.UserID, in.TenantID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-	}
-	return c.JSON(http.StatusOK, prof)
+
+	return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
 }
 
 // // EmailDiscovery godoc
@@ -2479,6 +2506,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 // @Failure      429   {object}  map[string]string
 // @Router       /v1/auth/mfa/verify [post]
 func (h *Controller) verifyMFA(c echo.Context) error {
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req mfaVerifyReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -2502,5 +2530,5 @@ func (h *Controller) verifyMFA(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
-	return respondWithTokens(c, h.cfg, toks.AccessToken, toks.RefreshToken)
+	return respondWithTokens(c, h.cfg, authMode, toks.AccessToken, toks.RefreshToken)
 }
