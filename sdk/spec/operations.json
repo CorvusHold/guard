@@ -1,6 +1,6 @@
 {
   "count": 57,
-  "generatedAt": "2025-11-02T16:25:39.092Z",
+  "generatedAt": "2025-11-19T05:18:47.110Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -673,7 +673,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
@@ -817,7 +817,7 @@
       "requestBody": null,
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
@@ -1708,7 +1708,7 @@
       "operationId": "post_v1_auth_logout",
       "path": "/v1/auth/logout",
       "requestBody": {
-        "$ref": "#/definitions/controller.refreshReq"
+        "$ref": "#/definitions/controller.logoutReq"
       },
       "success": {
         "status": "204"
@@ -1791,7 +1791,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
@@ -2036,7 +2036,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
@@ -2083,7 +2083,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
@@ -2191,7 +2191,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "201"
       },
@@ -2238,7 +2238,7 @@
       },
       "success": {
         "schema": {
-          "$ref": "#/definitions/controller.tokensResp"
+          "$ref": "#/definitions/controller.authExchangeResp"
         },
         "status": "200"
       },
