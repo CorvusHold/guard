@@ -3,11 +3,13 @@ module github.com/corvushold/guard/cmd/guard-cli
 go 1.21
 
 require (
+	github.com/pquerna/otp v1.5.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

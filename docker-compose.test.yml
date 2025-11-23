@@ -61,6 +61,7 @@ services:
       REDIS_DB: 0
       JWT_SIGNING_KEY: "test-secret-change-me"
       RATELIMIT_DEBUG: "1"
+      DEFAULT_AUTH_MODE: "bearer"
       # Email via MailHog for test flows
       EMAIL_PROVIDER: "smtp"
       SMTP_HOST: "mailhog_test"
@@ -93,7 +94,7 @@ services:
     container_name: guard_test_sdk_conformance
     profiles: ["conformance"]
     working_dir: /app/sdk/ts
-    command: ["/bin/sh", "-lc", "npm ci && npm run build && npm test && npm run conformance"]
+    command: ["/bin/sh", "-lc", "rm -rf node_modules && npm ci && npm run build && npm test && npm run conformance"]
     environment:
       BASE_URL: http://api_test:8080
       TENANT_ID: ""

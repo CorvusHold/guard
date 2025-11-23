@@ -17,7 +17,14 @@ export interface GuardClientOptions {
 }
 
 // OpenAPI component schema aliases
-type TokensResp = OpenAPIComponents['schemas']['controller.tokensResp'];
+// Note: The current OpenAPI typings do not expose a dedicated tokens schema,
+// so we define the minimal surface we need here and keep other DTOs sourced
+// from the generated OpenAPI types.
+type TokensResp = {
+  access_token?: string | null;
+  refresh_token?: string | null;
+  success?: boolean;
+};
 type MfaChallengeResp = OpenAPIComponents['schemas']['controller.mfaChallengeResp'];
 type OAuth2MetadataResp = OpenAPIComponents['schemas']['controller.oauth2MetadataResp'];
 // Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract

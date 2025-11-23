@@ -48,15 +48,21 @@ check_prerequisites() {
         exit 1
     fi
     
-    log_info "✓ Prerequisites check passed"
+    log_info "Prerequisites check passed"
 }
 
 test_seed_commands() {
     log_info "Testing seed commands..."
     
+    eval "$(scripts/bootstrap-token.sh --prefix "$TEST_PREFIX-docs")"
+    
     # Test 1: Create tenant only
     log_info "Testing 'tenant' seed command..."
-    TENANT_OUTPUT=$(go run ./cmd/seed tenant --name "$TEST_PREFIX-tenant-only")
+    TENANT_OUTPUT=$(
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed tenant --name "$TEST_PREFIX-tenant-only" --output env
+    )
     TENANT_ID=$(echo "$TENANT_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
     
     if [ -z "$TENANT_ID" ]; then
@@ -71,16 +77,21 @@ test_seed_commands() {
         exit 1
     fi
     
-    log_info "✓ Tenant creation test passed (ID: $TENANT_ID)"
+    log_info "Tenant creation test passed (ID: $TENANT_ID)"
     
     # Test 2: Create user in existing tenant
     log_info "Testing 'user' seed command..."
-    USER_OUTPUT=$(go run ./cmd/seed user \
-        --tenant-id "$TENANT_ID" \
-        --email "$TEST_PREFIX-user@example.com" \
-        --password "TestPassword123!" \
-        --first "Test" \
-        --last "User")
+    USER_OUTPUT=$(
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed user \
+            --tenant-id "$TENANT_ID" \
+            --email "$TEST_PREFIX-user@example.com" \
+            --password "TestPassword123!" \
+            --first-name "Test" \
+            --last-name "User" \
+            --output env
+    )
     
     USER_ID=$(echo "$USER_OUTPUT" | grep USER_ID | cut -d'=' -f2)
     if [ -z "$USER_ID" ]; then
@@ -88,15 +99,20 @@ test_seed_commands() {
         exit 1
     fi
     
-    log_info "✓ User creation test passed (ID: $USER_ID)"
+    log_info "User creation test passed (ID: $USER_ID)"
     
     # Test 3: Complete default setup
     log_info "Testing 'default' seed command..."
-    DEFAULT_OUTPUT=$(go run ./cmd/seed default \
-        --tenant-name "$TEST_PREFIX-default" \
-        --email "$TEST_PREFIX-admin@example.com" \
-        --password "AdminPassword123!" \
-        --enable-mfa)
+    DEFAULT_OUTPUT=$(
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed default \
+            --tenant-name "$TEST_PREFIX-default" \
+            --email "$TEST_PREFIX-admin@example.com" \
+            --password "AdminPassword123!" \
+            --enable-mfa \
+            --output env
+    )
     
     DEFAULT_TENANT_ID=$(echo "$DEFAULT_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
     DEFAULT_USER_ID=$(echo "$DEFAULT_OUTPUT" | grep USER_ID | cut -d'=' -f2)
@@ -107,7 +123,7 @@ test_seed_commands() {
         exit 1
     fi
     
-    log_info "✓ Default setup test passed (Tenant: $DEFAULT_TENANT_ID, User: $DEFAULT_USER_ID)"
+    log_info "Default setup test passed (Tenant: $DEFAULT_TENANT_ID, User: $DEFAULT_USER_ID)"
     
     # Export for other tests
     export TEST_TENANT_ID="$DEFAULT_TENANT_ID"
@@ -135,7 +151,7 @@ test_api_endpoints() {
     fi
     
     ACCESS_TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.access_token')
-    log_info "✓ Authentication test passed"
+    log_info "Authentication test passed"
     
     # Test tenant endpoints
     log_info "Testing tenant endpoints..."
@@ -154,7 +170,7 @@ test_api_endpoints() {
         exit 1
     fi
     
-    log_info "✓ Tenant endpoints test passed"
+    log_info "Tenant endpoints test passed"
     
     # Test settings endpoints
     log_info "Testing settings endpoints..."
@@ -183,7 +199,7 @@ test_api_endpoints() {
         exit 1
     fi
     
-    log_info "✓ Settings endpoints test passed"
+    log_info "Settings endpoints test passed"
     
     # Test user signup
     log_info "Testing user signup..."
@@ -203,20 +219,29 @@ test_api_endpoints() {
         exit 1
     fi
     
-    log_info "✓ User signup test passed"
+    log_info "User signup test passed"
 }
 
 test_workflows() {
     log_info "Testing workflow scenarios..."
     
+    if [ -z "${GUARD_API_TOKEN:-}" ]; then
+        eval "$(scripts/bootstrap-token.sh --prefix "$TEST_PREFIX-workflows")"
+    fi
+    
     # Test SaaS startup workflow (simplified)
     log_info "Testing SaaS startup workflow..."
     
     # Create dev tenant
-    DEV_OUTPUT=$(go run ./cmd/seed default \
-        --tenant-name "$TEST_PREFIX-startup-dev" \
-        --email "$TEST_PREFIX-dev@startup.com" \
-        --password "DevPassword123!")
+    DEV_OUTPUT=$(
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed default \
+            --tenant-name "$TEST_PREFIX-startup-dev" \
+            --email "$TEST_PREFIX-dev@startup.com" \
+            --password "DevPassword123!" \
+            --output env
+    )
     
     DEV_TENANT_ID=$(echo "$DEV_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
     
@@ -241,27 +266,37 @@ test_workflows() {
             "sso_provider": "dev"
         }' > /dev/null
     
-    log_info "✓ SaaS startup workflow test passed"
+    log_info "SaaS startup workflow test passed"
     
     # Test enterprise workflow (simplified)
     log_info "Testing enterprise workflow..."
     
-    ENTERPRISE_OUTPUT=$(go run ./cmd/seed default \
-        --tenant-name "$TEST_PREFIX-enterprise" \
-        --email "$TEST_PREFIX-admin@enterprise.com" \
-        --password "EnterpriseAdmin123!" \
-        --enable-mfa)
+    ENTERPRISE_OUTPUT=$(
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed default \
+            --tenant-name "$TEST_PREFIX-enterprise" \
+            --email "$TEST_PREFIX-admin@enterprise.com" \
+            --password "EnterpriseAdmin123!" \
+            --enable-mfa \
+            --output env
+    )
     
     ENTERPRISE_TENANT_ID=$(echo "$ENTERPRISE_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
     
     # Create additional users
-    go run ./cmd/seed user \
-        --tenant-id "$ENTERPRISE_TENANT_ID" \
-        --email "$TEST_PREFIX-manager@enterprise.com" \
-        --password "Manager123!" \
-        --roles "manager" > /dev/null
+    (
+        cd cmd/guard-cli && \
+        GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE_URL" \
+            seed user \
+            --tenant-id "$ENTERPRISE_TENANT_ID" \
+            --email "$TEST_PREFIX-manager@enterprise.com" \
+            --password "Manager123!" \
+            --roles "manager" \
+            --output env
+    ) > /dev/null
     
-    log_info "✓ Enterprise workflow test passed"
+    log_info "Enterprise workflow test passed"
 }
 
 cleanup() {

@@ -2196,7 +2196,7 @@ export interface paths {
         put?: never;
         /**
          * Logout (revoke refresh token)
-         * @description Revokes the provided refresh token if present; idempotent
+         * @description Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads `guard_refresh_token`, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.
          */
         post: {
             parameters: {
@@ -2208,7 +2208,7 @@ export interface paths {
             /** @description refresh_token (optional) */
             requestBody?: {
                 content: {
-                    "application/json": components["schemas"]["controller.refreshReq"];
+                    "application/json": components["schemas"]["controller.logoutReq"];
                 };
             };
             responses: {
@@ -2322,7 +2322,7 @@ export interface paths {
         };
         /**
          * Verify magic link token
-         * @description Verifies magic link token from query parameter or request body and returns tokens
+         * @description Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie` (or defaults), Guard responds with cookies plus `{ "success": true }`.
          */
         get: {
             parameters: {
@@ -2330,7 +2330,10 @@ export interface paths {
                     /** @description Magic token (alternative to body) */
                     token?: string;
                 };
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -2342,7 +2345,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -2383,7 +2386,7 @@ export interface paths {
         put?: never;
         /**
          * Verify magic link token
-         * @description Verifies magic link token from query parameter or request body and returns tokens
+         * @description Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie` (or defaults), Guard responds with cookies plus `{ "success": true }`.
          */
         post: {
             parameters: {
@@ -2391,7 +2394,10 @@ export interface paths {
                     /** @description Magic token (alternative to body) */
                     token?: string;
                 };
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -2403,7 +2409,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -2456,12 +2462,15 @@ export interface paths {
         };
         /**
          * Get current user's profile
-         * @description Returns the authenticated user's profile derived from the access token
+         * @description Returns the authenticated user's profile derived from the access token. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard will fall back to the `guard_access_token` cookie if the bearer header is missing or invalid.
          */
         get: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -2918,12 +2927,15 @@ export interface paths {
         put?: never;
         /**
          * Verify MFA challenge
-         * @description Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.
+         * @description Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens. When clients opt into cookie auth (`X-Auth-Mode: cookie` or default), Guard sets the session cookies and returns `{ "success": true }` instead of embedding tokens in the JSON body.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -2934,13 +2946,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description OK */
+                /** @description Access/refresh tokens (JSON mode) or success flag (cookie mode) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -2995,12 +3007,15 @@ export interface paths {
         put?: never;
         /**
          * Password login
-         * @description Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.
+         * @description Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -3011,13 +3026,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description OK */
+                /** @description Access/refresh tokens (JSON mode) or success flag (cookie mode) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Accepted */
@@ -3209,12 +3224,15 @@ export interface paths {
         put?: never;
         /**
          * Password signup
-         * @description Creates a new user for a tenant with email and password and returns access/refresh tokens
+         * @description Creates a new user for a tenant with email and password and returns access/refresh tokens. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -3231,7 +3249,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -3275,29 +3293,32 @@ export interface paths {
         put?: never;
         /**
          * Refresh access token
-         * @description Exchanges a refresh token for new access and refresh tokens
+         * @description Exchanges a refresh token for new access and refresh tokens. When using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token` from cookies if the body omits `refresh_token`, set rotated cookies, and return `{"success":true}` while omitting token fields from the JSON response.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path?: never;
                 cookie?: never;
             };
-            /** @description refresh_token */
-            requestBody: {
+            /** @description refresh_token (required unless using cookie mode) */
+            requestBody?: {
                 content: {
                     "application/json": components["schemas"]["controller.refreshReq"];
                 };
             };
             responses: {
-                /** @description OK */
+                /** @description Access/refresh tokens (JSON mode) or success flag (cookie mode) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -3548,12 +3569,15 @@ export interface paths {
         };
         /**
          * Handle SSO/OAuth callback
-         * @description Completes SSO flow and returns access/refresh tokens
+         * @description Completes SSO flow and returns access/refresh tokens. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard issues cookies and returns `{ "success": true }`.
          */
         get: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Auth response mode override */
+                    "X-Auth-Mode"?: "cookie" | "json";
+                };
                 path: {
                     /** @description SSO provider (google, github, azuread) */
                     provider: string;
@@ -3568,7 +3592,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tokensResp"];
+                        "application/json": components["schemas"]["controller.authExchangeResp"];
                     };
                 };
                 /** @description Bad Request */
@@ -3953,6 +3977,12 @@ export interface components {
         "controller.adminUsersResp": {
             users?: components["schemas"]["controller.adminUser"][];
         };
+        "controller.authExchangeResp": {
+            access_token?: string;
+            refresh_token?: string;
+            /** @example true */
+            success?: boolean;
+        };
         "controller.createTenantReq": {
             name: string;
         };
@@ -4021,6 +4051,9 @@ export interface components {
             password: string;
             tenant_id: string;
         };
+        "controller.logoutReq": {
+            refresh_token?: string;
+        };
         "controller.magicSendReq": {
             email: string;
             redirect_url?: string;
@@ -4086,6 +4119,10 @@ export interface components {
         "controller.putSettingsRequest": {
             /** @description App */
             app_cors_allowed_origins?: string;
+            /** @description Auth */
+            jwt_signing_key?: string;
+            /** @description Scope is deprecated and ignored. Kept for backward compatibility with older SDKs. */
+            scope?: string;
             sso_provider?: string;
             sso_redirect_allowlist?: string;
             sso_state_ttl?: string;
@@ -4143,7 +4180,7 @@ export interface components {
             role_ids?: string[];
         };
         "controller.refreshReq": {
-            refresh_token: string;
+            refresh_token?: string;
         };
         "controller.resetPasswordConfirmReq": {
             new_password: string;
@@ -4197,10 +4234,6 @@ export interface components {
             is_active?: boolean;
             name?: string;
             updated_at?: string;
-        };
-        "controller.tokensResp": {
-            access_token?: string;
-            refresh_token?: string;
         };
         "domain.Introspection": {
             active?: boolean;
