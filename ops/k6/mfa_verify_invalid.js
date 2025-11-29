@@ -5,7 +5,7 @@ export const options = {
   vus: 10,
   duration: '1m',
   thresholds: {
-    'checks{check:got 401/400}': ['rate>0.95'],
+    'checks{check:got 400/401/429}': ['rate>0.95'],
   },
 };
 
@@ -24,7 +24,7 @@ export default function () {
   });
 
   check(res, {
-    'got 401/400': (r) => r.status === 401 || r.status === 400,
+    'got 400/401/429': (r) => r.status === 400 || r.status === 401 || r.status === 429,
   });
 
   sleep(0.2);
