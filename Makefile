@@ -6,12 +6,12 @@ export RATE_LIMIT_RETRIES ?= 2
 .PHONY: compose-up compose-down compose-up-test compose-down-test dev \
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
-        swagger obsv-up obsv-down seed-test k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        swagger obsv-up obsv-down seed-test k6-setup k6-all k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         k6-portal-link-smoke k6-rate-limit-portal-link \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
-        test-rbac-admin test-fga test-integration
+        test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up -d --remove-orphans
@@ -201,6 +201,21 @@ examples-url:
 	@echo "MailHog: http://localhost:8025"
 
 # ---- k6 scenarios (via compose service 'k6') ----
+
+k6-setup: conformance-up
+	make db-purge-test
+	make migrate-up-test-dc
+	bash -lc 'scripts/seed-k6.sh'
+	make api-test-wait
+	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli FLUSHALL >/dev/null || true
+
+k6-all: k6-setup
+	make k6-smoke
+	make k6-login-stress
+	make k6-rate-limit-login
+	make k6-mfa-invalid
+	make k6-portal-link-smoke
+	make k6-rate-limit-portal-link
 
 k6-smoke:
 	bash -lc 'set -a; [ -f .env.k6 ] && source .env.k6; set +a; docker compose -f docker-compose.test.yml run --rm -e K6_BASE_URL=http://api_test:8080 k6 "k6 run /scripts/smoke.js"'
