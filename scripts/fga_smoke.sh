@@ -74,6 +74,8 @@ for i in {1..60}; do
   if (( i == 60 )); then echo "API not ready after timeout" >&2; exit 1; fi
 done
 
+eval "$(scripts/bootstrap-token.sh --prefix "fga-smoke")"
+
 parse_json_key() {
   local key="$1"; shift
   if command -v jq >/dev/null 2>&1; then
@@ -117,12 +119,20 @@ login_json() {
 }
 
 # Seed tenant and admin user
-TENANT_LINE=$(go run ./cmd/seed tenant --name "$TENANT_NAME" | grep -m1 '^TENANT_ID=')
-TENANT_ID=${TENANT_LINE#TENANT_ID=}
+TENANT_ENV=$(
+  cd cmd/guard-cli && \
+  GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE" \
+    seed tenant --name "$TENANT_NAME" --output env
+)
+TENANT_ID=$(echo "$TENANT_ENV" | grep -m1 '^TENANT_ID=' | cut -d'=' -f2)
 echo "TENANT_ID=$TENANT_ID" > .env.fga
 
-go run ./cmd/seed user --tenant-id "$TENANT_ID" \
-  --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" --roles admin >/dev/null || true
+(
+  cd cmd/guard-cli && \
+  GUARD_API_TOKEN="$GUARD_API_TOKEN" go run . --api-url "$BASE" \
+    seed user --tenant-id "$TENANT_ID" \
+    --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" --roles admin --output env
+) >/dev/null || true
 
 echo "Seeded tenant $TENANT_ID and ensured admin user $ADMIN_EMAIL"
 

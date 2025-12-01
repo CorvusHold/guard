@@ -41,19 +41,19 @@ func (r *SQLCRepository) Deactivate(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *SQLCRepository) List(ctx context.Context, query string, active int, limit, offset int32) ([]db.Tenant, int64, error) {
-    items, err := r.q.ListTenants(ctx, db.ListTenantsParams{
-        Column1: query,
-        Column2: int32(active),
-        Limit:   limit,
-        Offset:  offset,
-    })
+	items, err := r.q.ListTenants(ctx, db.ListTenantsParams{
+		Column1: query,
+		Column2: int32(active),
+		Limit:   limit,
+		Offset:  offset,
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-	    total, err := r.q.CountTenants(ctx, db.CountTenantsParams{
-        Column1: query,
-        Column2: int32(active),
-    })
+	total, err := r.q.CountTenants(ctx, db.CountTenantsParams{
+		Column1: query,
+		Column2: int32(active),
+	})
 	if err != nil {
 		return nil, 0, err
 	}

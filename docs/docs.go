@@ -1923,7 +1923,7 @@ const docTemplate = `{
         },
         "/v1/auth/logout": {
             "post": {
-                "description": "Revokes the provided refresh token if present; idempotent",
+                "description": "Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads ` + "`" + `guard_refresh_token` + "`" + `, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1937,7 +1937,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/controller.refreshReq"
+                            "$ref": "#/definitions/controller.logoutReq"
                         }
                     }
                 ],
@@ -2014,7 +2014,7 @@ const docTemplate = `{
         },
         "/v1/auth/magic/verify": {
             "get": {
-                "description": "Verifies magic link token from query parameter or request body and returns tokens",
+                "description": "Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or defaults), Guard responds with cookies plus ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2026,6 +2026,16 @@ const docTemplate = `{
                 ],
                 "summary": "Verify magic link token",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "type": "string",
                         "description": "Magic token (alternative to body)",
@@ -2045,7 +2055,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2078,7 +2088,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Verifies magic link token from query parameter or request body and returns tokens",
+                "description": "Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or defaults), Guard responds with cookies plus ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2090,6 +2100,16 @@ const docTemplate = `{
                 ],
                 "summary": "Verify magic link token",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "type": "string",
                         "description": "Magic token (alternative to body)",
@@ -2109,7 +2129,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2149,7 +2169,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the authenticated user's profile derived from the access token",
+                "description": "Returns the authenticated user's profile derived from the access token. When cookie mode is requested (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard will fall back to the ` + "`" + `guard_access_token` + "`" + ` cookie if the bearer header is missing or invalid.",
                 "produces": [
                     "application/json"
                 ],
@@ -2157,6 +2177,18 @@ const docTemplate = `{
                     "auth.profile"
                 ],
                 "summary": "Get current user's profile",
+                "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2492,7 +2524,7 @@ const docTemplate = `{
         },
         "/v1/auth/mfa/verify": {
             "post": {
-                "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens.",
+                "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens. When clients opt into cookie auth (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard sets the session cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of embedding tokens in the JSON body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2505,6 +2537,16 @@ const docTemplate = `{
                 "summary": "Verify MFA challenge",
                 "parameters": [
                     {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
                         "description": "challenge_token, method, and code",
                         "name": "body",
                         "in": "body",
@@ -2516,9 +2558,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2553,7 +2595,7 @@ const docTemplate = `{
         },
         "/v1/auth/password/login": {
             "post": {
-                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify.",
+                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens in the JSON payload.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2566,6 +2608,16 @@ const docTemplate = `{
                 "summary": "Password login",
                 "parameters": [
                     {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
                         "description": "email/password",
                         "name": "body",
                         "in": "body",
@@ -2577,9 +2629,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "202": {
@@ -2718,7 +2770,7 @@ const docTemplate = `{
         },
         "/v1/auth/password/signup": {
             "post": {
-                "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens",
+                "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2730,6 +2782,16 @@ const docTemplate = `{
                 ],
                 "summary": "Password signup",
                 "parameters": [
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
                     {
                         "description": "tenant_id, email, password, optional first/last name",
                         "name": "body",
@@ -2744,7 +2806,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2770,7 +2832,7 @@ const docTemplate = `{
         },
         "/v1/auth/refresh": {
             "post": {
-                "description": "Exchanges a refresh token for new access and refresh tokens",
+                "description": "Exchanges a refresh token for new access and refresh tokens. When using cookie mode (` + "`" + `X-Auth-Mode: cookie` + "`" + `), the server will read ` + "`" + `guard_refresh_token` + "`" + ` from cookies if the body omits ` + "`" + `refresh_token` + "`" + `, set rotated cookies, and return ` + "`" + `{\"success\":true}` + "`" + ` while omitting token fields from the JSON response.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2783,10 +2845,19 @@ const docTemplate = `{
                 "summary": "Refresh access token",
                 "parameters": [
                     {
-                        "description": "refresh_token",
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
+                    },
+                    {
+                        "description": "refresh_token (required unless using cookie mode)",
                         "name": "body",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/controller.refreshReq"
                         }
@@ -2794,9 +2865,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Access/refresh tokens (JSON mode) or success flag (cookie mode)",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -2975,7 +3046,7 @@ const docTemplate = `{
         },
         "/v1/auth/sso/{provider}/callback": {
             "get": {
-                "description": "Completes SSO flow and returns access/refresh tokens",
+                "description": "Completes SSO flow and returns access/refresh tokens. When cookie mode is requested (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard issues cookies and returns ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "produces": [
                     "application/json"
                 ],
@@ -2990,13 +3061,23 @@ const docTemplate = `{
                         "name": "provider",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "cookie",
+                            "json"
+                        ],
+                        "type": "string",
+                        "description": "Auth response mode override",
+                        "name": "X-Auth-Mode",
+                        "in": "header"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/controller.tokensResp"
+                            "$ref": "#/definitions/controller.authExchangeResp"
                         }
                     },
                     "400": {
@@ -3424,6 +3505,21 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.authExchangeResp": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "controller.createTenantReq": {
             "type": "object",
             "required": [
@@ -3663,6 +3759,14 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.logoutReq": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
         "controller.magicSendReq": {
             "type": "object",
             "required": [
@@ -3889,6 +3993,15 @@ const docTemplate = `{
                     "description": "App",
                     "type": "string"
                 },
+                "jwt_signing_key": {
+                    "description": "Auth",
+                    "type": "string",
+                    "minLength": 16
+                },
+                "scope": {
+                    "description": "Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.",
+                    "type": "string"
+                },
                 "sso_provider": {
                     "type": "string"
                 },
@@ -4076,9 +4189,6 @@ const docTemplate = `{
         },
         "controller.refreshReq": {
             "type": "object",
-            "required": [
-                "refresh_token"
-            ],
             "properties": {
                 "refresh_token": {
                     "type": "string"
@@ -4247,17 +4357,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "controller.tokensResp": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "refresh_token": {
                     "type": "string"
                 }
             }

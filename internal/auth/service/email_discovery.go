@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
 	domain "github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/google/uuid"
 )
 
 // FindTenantsByUserEmail finds all tenants where a user with the given email exists

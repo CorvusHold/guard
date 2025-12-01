@@ -17,10 +17,10 @@ type ListOptions struct {
 
 // ListResult holds items and pagination metadata
 type ListResult struct {
-	Items     []db.Tenant
-	Total     int64
-	Page      int
-	PageSize  int
+	Items      []db.Tenant
+	Total      int64
+	Page       int
+	PageSize   int
 	TotalPages int
 }
 

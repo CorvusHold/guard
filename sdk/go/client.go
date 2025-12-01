@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/cookiejar"
 	"sync"
 )
 
@@ -45,10 +46,21 @@ func (m *MemoryTokenStore) Clear(_ context.Context) error {
 	return nil
 }
 
+// AuthMode defines the authentication mode for the client.
+type AuthMode string
+
+const (
+	// AuthModeBearer uses Bearer token authentication (tokens in Authorization header)
+	AuthModeBearer AuthMode = "bearer"
+	// AuthModeCookie uses cookie-based authentication (tokens in HTTP-only cookies)
+	AuthModeCookie AuthMode = "cookie"
+)
+
 // GuardClient provides ergonomic, typed helpers over the generated client.
 type GuardClient struct {
 	baseURL  string
 	tenantID string
+	authMode AuthMode
 
 	inner      *ClientWithResponses
 	httpClient HttpRequestDoer
@@ -82,9 +94,40 @@ func WithTokenStore(ts TokenStore) GuardOption {
 	}
 }
 
+// WithAuthMode sets the authentication mode (bearer or cookie).
+func WithAuthMode(mode AuthMode) GuardOption {
+	return func(c *GuardClient) error {
+		c.authMode = mode
+		return nil
+	}
+}
+
+// WithCookieJar enables cookie storage for cookie mode authentication.
+// This creates an HTTP client with a cookie jar if one isn't already configured.
+func WithCookieJar() GuardOption {
+	return func(c *GuardClient) error {
+		jar, err := cookiejar.New(nil)
+		if err != nil {
+			return err
+		}
+
+		if c.httpClient == nil {
+			c.httpClient = &http.Client{Jar: jar}
+		} else if client, ok := c.httpClient.(*http.Client); ok {
+			client.Jar = jar
+		}
+
+		return nil
+	}
+}
+
 // NewGuardClient constructs a new ergonomic client on top of the generated client.
 func NewGuardClient(baseURL string, opts ...GuardOption) (*GuardClient, error) {
-	gc := &GuardClient{baseURL: baseURL, tokens: &MemoryTokenStore{}}
+	gc := &GuardClient{
+		baseURL:  baseURL,
+		tokens:   &MemoryTokenStore{},
+		authMode: AuthModeBearer, // default to bearer mode
+	}
 	for _, o := range opts {
 		if err := o(gc); err != nil {
 			return nil, err
@@ -104,17 +147,28 @@ func NewGuardClient(baseURL string, opts ...GuardOption) (*GuardClient, error) {
 	return gc, nil
 }
 
-// authEditor injects Authorization header when an access token is present.
+// authEditor injects Authorization header (bearer mode) or X-Auth-Mode header (cookie mode).
 func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
-	access, _ := c.tokens.Get(context.Background())
-	if access != "" {
-		req.Header.Set("Authorization", "Bearer "+access)
+	if c.authMode == AuthModeCookie {
+		// In cookie mode, set X-Auth-Mode header to signal backend
+		req.Header.Set("X-Auth-Mode", "cookie")
+	} else {
+		// In bearer mode, attach Authorization header if token present
+		access, _ := c.tokens.Get(context.Background())
+		if access != "" {
+			req.Header.Set("Authorization", "Bearer "+access)
+		}
 	}
 	return nil
 }
 
-// persistTokens saves tokens to the token store if present.
+// persistTokens saves tokens to the token store if present (bearer mode only).
+// In cookie mode, tokens are stored in HTTP-only cookies by the server.
 func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerTokensResp) error {
+	if c.authMode == AuthModeCookie {
+		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally
+		return nil
+	}
 	if t == nil {
 		return nil
 	}

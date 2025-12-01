@@ -1,12 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { getClient } from '@/lib/sdk'
+import { useAuth } from '@/lib/auth'
 import SimpleProgressiveLoginForm from './SimpleProgressiveLoginForm'
 
 export default function Login() {
   const [loading, setLoading] = useState<'sso-dev' | 'sso-workos' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [me, setMe] = useState<any | null>(null)
+  const { status, user } = useAuth()
+
+  // Redirect to admin if already authenticated
+  useEffect(() => {
+    if (status === 'authenticated' && user) {
+      window.location.href = '/admin'
+    }
+  }, [status, user])
 
   async function startSso(provider: 'dev' | 'workos') {
     setError(null)

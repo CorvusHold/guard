@@ -1,9 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"sort"
 	"strings"
+	"time"
 
+	"github.com/pquerna/otp/totp"
 	"github.com/spf13/cobra"
 )
 
@@ -65,15 +72,22 @@ var seedTenantCmd = &cobra.Command{
 		}
 
 		// Output in different formats
-		if outputFmt == "table" {
+		switch outputFmt {
+		case "table":
 			fmt.Printf("Tenant created: %s\n", name)
 			fmt.Printf("ID: %s\n", tenantID)
-		} else if outputFmt == "json" {
+		case "json":
 			return formatOutput(result)
-		} else {
-			// env format (for scripts)
-			fmt.Printf("TENANT_ID=%s\n", tenantID)
-			fmt.Printf("TENANT_NAME=%s\n", name)
+		case "env":
+			printEnvVars(map[string]string{
+				"TENANT_ID":   tenantID,
+				"TENANT_NAME": name,
+			})
+		default:
+			printEnvVars(map[string]string{
+				"TENANT_ID":   tenantID,
+				"TENANT_NAME": name,
+			})
 		}
 
 		return nil
@@ -124,9 +138,21 @@ var seedUserCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 
-		userID, ok := result["user_id"].(string)
-		if !ok {
-			return fmt.Errorf("invalid response: missing user_id")
+		accessToken, _ := result["access_token"].(string)
+		userID, _ := result["user_id"].(string)
+		if userID == "" {
+			if accessToken != "" {
+				prof, err := lookupUserProfile(accessToken)
+				if err != nil {
+					if verbose {
+						fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to resolve user profile from access token: %v\n", err)
+					}
+				} else if prof.ID != "" {
+					userID = prof.ID
+				}
+			} else if verbose {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: signup response missing user_id and access_token; continuing without user id\n")
+			}
 		}
 
 		// Apply roles if API token is provided and roles specified
@@ -148,48 +174,43 @@ var seedUserCmd = &cobra.Command{
 			}
 		}
 
-		// Enable MFA if requested (requires API token)
+		// Enable MFA if requested (requires API token) using the *user* access token
 		var totpSecret string
 		if enableMFA && apiToken != "" {
-			secret, err := enableUserMFAViaAPI(client, userID)
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to enable MFA: %v\n", err)
+			if accessToken == "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: cannot enable MFA: missing access token in signup response\n")
 			} else {
-				totpSecret = secret
-				if verbose {
-					fmt.Fprintf(cmd.ErrOrStderr(), "MFA enabled for user\n")
+				secret, err := enableUserMFAViaAPI(client, accessToken)
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to enable MFA: %v\n", err)
+				} else {
+					totpSecret = secret
+					if verbose {
+						fmt.Fprintf(cmd.ErrOrStderr(), "MFA enabled for user\n")
+					}
 				}
 			}
 		}
 
 		// Output in different formats
-		if outputFmt == "table" {
+		switch outputFmt {
+		case "table":
 			fmt.Printf("User created: %s\n", email)
 			fmt.Printf("ID: %s\n", userID)
 			fmt.Printf("Tenant: %s\n", tid)
 			if totpSecret != "" {
 				fmt.Printf("TOTP Secret: %s\n", totpSecret)
 			}
-		} else if outputFmt == "json" {
+		case "json":
 			result["tenant_id"] = tid
 			if totpSecret != "" {
 				result["totp_secret"] = totpSecret
 			}
 			return formatOutput(result)
-		} else {
-			// env format (for scripts)
-			fmt.Printf("TENANT_ID=%s\n", tid)
-			fmt.Printf("USER_ID=%s\n", userID)
-			fmt.Printf("EMAIL=%s\n", email)
-			fmt.Printf("PASSWORD=%s\n", password)
-			if totpSecret != "" {
-				fmt.Printf("TOTP_SECRET=%s\n", totpSecret)
-				fmt.Printf("K6_TOTP=%s\n", totpSecret)
-			}
-			// k6-friendly aliases
-			fmt.Printf("K6_TENANT_ID=%s\n", tid)
-			fmt.Printf("K6_EMAIL=%s\n", email)
-			fmt.Printf("K6_PASSWORD=%s\n", password)
+		case "env":
+			printEnvVars(buildUserEnv(tid, userID, email, password, totpSecret))
+		default:
+			printEnvVars(buildUserEnv(tid, userID, email, password, totpSecret))
 		}
 
 		return nil
@@ -218,24 +239,10 @@ Example:
 
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken}
 
-		// Step 1: Create tenant
-		tenantPayload := map[string]interface{}{
-			"name": tenantName,
-		}
-
-		tenantResp, err := client.makeRequest("POST", "/tenants", tenantPayload)
+		// Step 1: Find or create tenant by name (idempotent)
+		tenantID, err := findOrCreateTenantByName(client, tenantName)
 		if err != nil {
-			return fmt.Errorf("failed to create tenant: %w", err)
-		}
-
-		var tenantResult map[string]interface{}
-		if err := client.handleResponse(tenantResp, &tenantResult); err != nil {
-			return fmt.Errorf("failed to parse tenant response: %w", err)
-		}
-
-		tenantID, ok := tenantResult["id"].(string)
-		if !ok {
-			return fmt.Errorf("invalid tenant response: missing ID")
+			return err
 		}
 
 		// Step 2: Create user in that tenant
@@ -259,24 +266,41 @@ Example:
 			return fmt.Errorf("failed to parse user response: %w", err)
 		}
 
-		userID, ok := userResult["user_id"].(string)
-		if !ok {
-			return fmt.Errorf("invalid user response: missing user_id")
+		accessToken, _ := userResult["access_token"].(string)
+		userID, _ := userResult["user_id"].(string)
+		if userID == "" {
+			if accessToken != "" {
+				prof, err := lookupUserProfile(accessToken)
+				if err != nil {
+					if verbose {
+						fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to resolve user profile from access token: %v\n", err)
+					}
+				} else if prof.ID != "" {
+					userID = prof.ID
+				}
+			} else if verbose {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: signup response missing user_id and access_token; continuing without user id\n")
+			}
 		}
 
-		// Step 3: Enable MFA if requested
+		// Step 3: Enable MFA if requested using the *user* access token
 		var totpSecret string
 		if enableMFA {
-			secret, err := enableUserMFAViaAPI(client, userID)
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to enable MFA: %v\n", err)
+			if accessToken == "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: cannot enable MFA: missing access token in signup response\n")
 			} else {
-				totpSecret = secret
+				secret, err := enableUserMFAViaAPI(client, accessToken)
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to enable MFA: %v\n", err)
+				} else {
+					totpSecret = secret
+				}
 			}
 		}
 
 		// Output in different formats
-		if outputFmt == "table" {
+		switch outputFmt {
+		case "table":
 			fmt.Println("=== Test Environment Setup Complete ===")
 			fmt.Printf("Tenant: %s (ID: %s)\n", tenantName, tenantID)
 			fmt.Printf("User: %s (ID: %s)\n", email, userID)
@@ -285,7 +309,7 @@ Example:
 				fmt.Printf("MFA: Enabled\n")
 				fmt.Printf("TOTP Secret: %s\n", totpSecret)
 			}
-		} else if outputFmt == "json" {
+		case "json":
 			result := map[string]string{
 				"tenant_id":   tenantID,
 				"tenant_name": tenantName,
@@ -298,22 +322,36 @@ Example:
 				result["mfa_enabled"] = "true"
 			}
 			return formatOutput(result)
-		} else {
-			// env format (backward compatible with old seed tool)
-			fmt.Printf("TENANT_ID=%s\n", tenantID)
-			fmt.Printf("USER_ID=%s\n", userID)
-			fmt.Printf("EMAIL=%s\n", email)
-			fmt.Printf("PASSWORD=%s\n", password)
-			if totpSecret != "" {
-				fmt.Printf("TOTP_SECRET=%s\n", totpSecret)
+		case "env":
+			vars := map[string]string{
+				"TENANT_ID": tenantID,
+				"USER_ID":   userID,
+				"EMAIL":     email,
+				"PASSWORD":  password,
 			}
-			// k6-friendly aliases
-			fmt.Printf("K6_TENANT_ID=%s\n", tenantID)
-			fmt.Printf("K6_EMAIL=%s\n", email)
-			fmt.Printf("K6_PASSWORD=%s\n", password)
 			if totpSecret != "" {
-				fmt.Printf("K6_TOTP=%s\n", totpSecret)
+				vars["TOTP_SECRET"] = totpSecret
+				vars["K6_TOTP"] = totpSecret
 			}
+			vars["K6_TENANT_ID"] = tenantID
+			vars["K6_EMAIL"] = email
+			vars["K6_PASSWORD"] = password
+			printEnvVars(vars)
+		default:
+			vars := map[string]string{
+				"TENANT_ID": tenantID,
+				"USER_ID":   userID,
+				"EMAIL":     email,
+				"PASSWORD":  password,
+			}
+			if totpSecret != "" {
+				vars["TOTP_SECRET"] = totpSecret
+				vars["K6_TOTP"] = totpSecret
+			}
+			vars["K6_TENANT_ID"] = tenantID
+			vars["K6_EMAIL"] = email
+			vars["K6_PASSWORD"] = password
+			printEnvVars(vars)
 		}
 
 		return nil
@@ -368,7 +406,9 @@ var seedSSOWorkOSCmd = &cobra.Command{
 			return fmt.Errorf("failed to apply settings: %w", err)
 		}
 
-		if outputFmt == "table" {
+		// Output in different formats
+		switch outputFmt {
+		case "table":
 			fmt.Printf("WorkOS SSO configured for tenant: %s\n", tid)
 			fmt.Printf("Provider: workos\n")
 			fmt.Printf("Client ID: %s\n", clientID)
@@ -378,18 +418,25 @@ var seedSSOWorkOSCmd = &cobra.Command{
 			if apiKey != "" {
 				fmt.Println("API Key: [set]")
 			}
-		} else if outputFmt == "json" {
+		case "json":
 			return formatOutput(map[string]string{
 				"tenant_id":  tid,
 				"provider":   "workos",
 				"client_id":  clientID,
 				"configured": "true",
 			})
-		} else {
-			// env format
-			fmt.Printf("TENANT_ID=%s\n", tid)
-			fmt.Printf("SSO_PROVIDER=workos\n")
-			fmt.Printf("WORKOS_CLIENT_ID=%s\n", clientID)
+		case "env":
+			printEnvVars(map[string]string{
+				"TENANT_ID":        tid,
+				"SSO_PROVIDER":     "workos",
+				"WORKOS_CLIENT_ID": clientID,
+			})
+		default:
+			printEnvVars(map[string]string{
+				"TENANT_ID":        tid,
+				"SSO_PROVIDER":     "workos",
+				"WORKOS_CLIENT_ID": clientID,
+			})
 		}
 
 		return nil
@@ -447,27 +494,183 @@ func parseRoles(rolesCSV string) []string {
 	return roles
 }
 
-func enableUserMFAViaAPI(client *GuardClient, userID string) (string, error) {
-	// Step 1: Start TOTP enrollment
-	startResp, err := client.makeRequest("POST", "/v1/auth/mfa/totp/enroll", nil)
+func enableUserMFAViaAPI(client *GuardClient, userAccessToken string) (string, error) {
+	if strings.TrimSpace(userAccessToken) == "" {
+		return "", fmt.Errorf("user access token required to enable MFA")
+	}
+
+	// Use a copy of the client so we preserve base URL / tenant but swap auth
+	userClient := *client
+	userClient.Token = userAccessToken
+
+	// Step 1: Start TOTP enrollment as the user
+	startResp, err := userClient.makeRequest("POST", "/v1/auth/mfa/totp/start", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to start TOTP enrollment: %w", err)
 	}
 
-	var enrollResult map[string]interface{}
-	if err := client.handleResponse(startResp, &enrollResult); err != nil {
+	var startResult map[string]interface{}
+	if err := client.handleResponse(startResp, &startResult); err != nil {
 		return "", fmt.Errorf("failed to parse enrollment response: %w", err)
 	}
 
-	secret, ok := enrollResult["secret"].(string)
-	if !ok {
+	secret, ok := startResult["secret"].(string)
+	if !ok || secret == "" {
 		return "", fmt.Errorf("invalid enrollment response: missing secret")
 	}
 
 	// Step 2: Verify with a generated code (for automated setup)
-	// Note: This requires generating a valid TOTP code from the secret
-	// For now, we'll just return the secret and let the caller handle activation
-	// In a real scenario, you'd use a TOTP library to generate a code and verify it
+	// Generate a valid TOTP code from the secret
+	// and call the TOTP activation endpoint so MFA is fully enabled
+	// This mirrors the server-side integration tests for TOTP enrollment.
+	code, err := totp.GenerateCode(secret, time.Now())
+	if err != nil {
+		return "", fmt.Errorf("failed to generate TOTP code: %w", err)
+	}
+
+	activatePayload := map[string]interface{}{
+		"code": code,
+	}
+	activateResp, err := userClient.makeRequest("POST", "/v1/auth/mfa/totp/activate", activatePayload)
+	if err != nil {
+		return "", fmt.Errorf("failed to activate TOTP: %w", err)
+	}
+	if err := client.handleResponse(activateResp, nil); err != nil {
+		return "", fmt.Errorf("failed to parse TOTP activate response: %w", err)
+	}
 
 	return secret, nil
+}
+
+func buildUserEnv(tenantID, userID, email, password, totpSecret string) map[string]string {
+	vars := map[string]string{
+		"TENANT_ID":    tenantID,
+		"USER_ID":      userID,
+		"EMAIL":        email,
+		"PASSWORD":     password,
+		"K6_TENANT_ID": tenantID,
+		"K6_EMAIL":     email,
+		"K6_PASSWORD":  password,
+	}
+	if totpSecret != "" {
+		vars["TOTP_SECRET"] = totpSecret
+		vars["K6_TOTP"] = totpSecret
+	}
+	return vars
+}
+
+func printEnvVars(vars map[string]string) {
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Printf("%s=%s\n", k, vars[k])
+	}
+}
+
+// userProfile is a minimal view of /v1/auth/me used by seeding helpers to
+// recover the created user's ID when password signup returns only tokens.
+type userProfile struct {
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	Email    string `json:"email"`
+}
+
+func lookupUserProfile(accessToken string) (userProfile, error) {
+	if accessToken == "" {
+		return userProfile{}, fmt.Errorf("access token required")
+	}
+	// apiURL is populated by initConfig in main.go; fall back to default for safety.
+	base := apiURL
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	req, err := http.NewRequest("GET", strings.TrimRight(base, "/")+"/v1/auth/me", nil)
+	if err != nil {
+		return userProfile{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return userProfile{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return userProfile{}, fmt.Errorf("/v1/auth/me failed: %s: %s", resp.Status, string(b))
+	}
+	var prof userProfile
+	if err := json.NewDecoder(resp.Body).Decode(&prof); err != nil {
+		return userProfile{}, err
+	}
+	if prof.ID == "" {
+		return userProfile{}, fmt.Errorf("/v1/auth/me response missing id")
+	}
+	return prof, nil
+}
+
+// findOrCreateTenantByName provides idempotent tenant creation semantics for
+// seed helpers. It first tries GET /tenants/by-name/{name}; when the tenant
+// exists it returns its ID, otherwise it falls back to POST /tenants.
+func findOrCreateTenantByName(c *GuardClient, name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		name = "test"
+	}
+	// 1) Try lookup by name
+	lookupPath := "/tenants/by-name/" + url.PathEscape(name)
+	resp, err := c.makeRequest("GET", lookupPath, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to lookup tenant by name: %w", err)
+	}
+	if resp.StatusCode == http.StatusOK {
+		var t TenantResponse
+		if err := c.handleResponse(resp, &t); err != nil {
+			return "", fmt.Errorf("failed to parse tenant lookup response: %w", err)
+		}
+		if t.ID == "" {
+			return "", fmt.Errorf("invalid tenant lookup response: missing id")
+		}
+		return t.ID, nil
+	}
+	// For non-404 errors, surface details
+	if resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return "", fmt.Errorf("tenant lookup failed: %s: %s", resp.Status, string(body))
+	}
+	resp.Body.Close()
+
+	// 2) Create tenant when not found
+	payload := map[string]interface{}{"name": name}
+	createResp, err := c.makeRequest("POST", "/tenants", payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to create tenant: %w", err)
+	}
+	var created TenantResponse
+	if err := c.handleResponse(createResp, &created); err != nil {
+		// If the API reports "tenant name already exists" (e.g. from a race or
+		// prior run), treat this as success and resolve the existing tenant ID.
+		if strings.Contains(err.Error(), "tenant name already exists") {
+			resp2, err2 := c.makeRequest("GET", lookupPath, nil)
+			if err2 != nil {
+				return "", fmt.Errorf("tenant exists but lookup failed: %w", err2)
+			}
+			var t TenantResponse
+			if err3 := c.handleResponse(resp2, &t); err3 != nil {
+				return "", fmt.Errorf("tenant exists but lookup parse failed: %w", err3)
+			}
+			if t.ID == "" {
+				return "", fmt.Errorf("tenant exists but lookup returned empty id")
+			}
+			return t.ID, nil
+		}
+		return "", fmt.Errorf("failed to parse tenant create response: %w", err)
+	}
+	if created.ID == "" {
+		return "", fmt.Errorf("invalid tenant create response: missing id")
+	}
+	return created.ID, nil
 }

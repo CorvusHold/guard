@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	edomain "github.com/corvusHold/guard/internal/email/domain"
 	"github.com/corvusHold/guard/internal/config"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
 )
@@ -48,12 +48,16 @@ func (b *Brevo) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body 
 	}
 	buf, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.brevo.com/v3/smtp/email", bytes.NewReader(buf))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("api-key", apiKey)
 	resp, err := b.http.Do(req)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("brevo send failed: %s", resp.Status)

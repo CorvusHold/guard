@@ -70,6 +70,16 @@ definitions:
           $ref: '#/definitions/controller.adminUser'
         type: array
     type: object
+  controller.authExchangeResp:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   controller.createTenantReq:
     properties:
       name:
@@ -236,6 +246,11 @@ definitions:
     - password
     - tenant_id
     type: object
+  controller.logoutReq:
+    properties:
+      refresh_token:
+        type: string
+    type: object
   controller.magicSendReq:
     properties:
       email:
@@ -385,6 +400,14 @@ definitions:
       app_cors_allowed_origins:
         description: App
         type: string
+      jwt_signing_key:
+        description: Auth
+        minLength: 16
+        type: string
+      scope:
+        description: Scope is deprecated and ignored. Kept for backward compatibility
+          with older SDKs.
+        type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
@@ -510,8 +533,6 @@ definitions:
     properties:
       refresh_token:
         type: string
-    required:
-    - refresh_token
     type: object
   controller.resetPasswordConfirmReq:
     properties:
@@ -623,13 +644,6 @@ definitions:
       name:
         type: string
       updated_at:
-        type: string
-    type: object
-  controller.tokensResp:
-    properties:
-      access_token:
-        type: string
-      refresh_token:
         type: string
     type: object
   domain.Introspection:
@@ -1931,13 +1945,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: Revokes the provided refresh token if present; idempotent
+      description: Revokes the provided refresh token if present; idempotent. When
+        using cookie mode, Guard reads `guard_refresh_token`, clears both cookie tokens,
+        and still returns 204 even if the JSON body omits the token.
       parameters:
       - description: refresh_token (optional)
         in: body
         name: body
         schema:
-          $ref: '#/definitions/controller.refreshReq'
+          $ref: '#/definitions/controller.logoutReq'
       responses:
         "204":
           description: No Content
@@ -1990,9 +2006,17 @@ paths:
     get:
       consumes:
       - application/json
-      description: Verifies magic link token from query parameter or request body
-        and returns tokens
+      description: 'Verifies magic link token from query parameter or request body
+        and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: Magic token (alternative to body)
         in: query
         name: token
@@ -2008,7 +2032,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2033,9 +2057,17 @@ paths:
     post:
       consumes:
       - application/json
-      description: Verifies magic link token from query parameter or request body
-        and returns tokens
+      description: 'Verifies magic link token from query parameter or request body
+        and returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: Magic token (alternative to body)
         in: query
         name: token
@@ -2051,7 +2083,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2075,8 +2107,18 @@ paths:
       - auth.magic
   /v1/auth/me:
     get:
-      description: Returns the authenticated user's profile derived from the access
-        token
+      description: 'Returns the authenticated user''s profile derived from the access
+        token. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard
+        will fall back to the `guard_access_token` cookie if the bearer header is
+        missing or invalid.'
+      parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       produces:
       - application/json
       responses:
@@ -2298,9 +2340,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Verifies a TOTP or backup code against a challenge token and returns
-        access/refresh tokens.
+      description: 'Verifies a TOTP or backup code against a challenge token and returns
+        access/refresh tokens. When clients opt into cookie auth (`X-Auth-Mode: cookie`
+        or default), Guard sets the session cookies and returns `{ "success": true
+        }` instead of embedding tokens in the JSON body.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: challenge_token, method, and code
         in: body
         name: body
@@ -2311,9 +2362,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2339,9 +2390,19 @@ paths:
     post:
       consumes:
       - application/json
-      description: Logs in with email/password. If MFA is enabled for the user, responds
-        202 with a challenge to complete via /v1/auth/mfa/verify.
+      description: 'Logs in with email/password. If MFA is enabled for the user, responds
+        202 with a challenge to complete via /v1/auth/mfa/verify. When clients set
+        `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues
+        `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success":
+        true }` instead of raw tokens in the JSON payload.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: email/password
         in: body
         name: body
@@ -2352,9 +2413,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "202":
           description: Accepted
           schema:
@@ -2448,9 +2509,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new user for a tenant with email and password and returns
-        access/refresh tokens
+      description: 'Creates a new user for a tenant with email and password and returns
+        access/refresh tokens. When clients set `X-Auth-Mode: cookie` (or the deployment
+        default is cookie), Guard issues `guard_access_token` / `guard_refresh_token`
+        cookies and returns `{ "success": true }` instead of raw tokens.'
       parameters:
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
       - description: tenant_id, email, password, optional first/last name
         in: body
         name: body
@@ -2463,7 +2533,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2483,21 +2553,30 @@ paths:
     post:
       consumes:
       - application/json
-      description: Exchanges a refresh token for new access and refresh tokens
+      description: 'Exchanges a refresh token for new access and refresh tokens. When
+        using cookie mode (`X-Auth-Mode: cookie`), the server will read `guard_refresh_token`
+        from cookies if the body omits `refresh_token`, set rotated cookies, and return
+        `{"success":true}` while omitting token fields from the JSON response.'
       parameters:
-      - description: refresh_token
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
+        type: string
+      - description: refresh_token (required unless using cookie mode)
         in: body
         name: body
-        required: true
         schema:
           $ref: '#/definitions/controller.refreshReq'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:
@@ -2615,12 +2694,21 @@ paths:
       - auth.sessions
   /v1/auth/sso/{provider}/callback:
     get:
-      description: Completes SSO flow and returns access/refresh tokens
+      description: 'Completes SSO flow and returns access/refresh tokens. When cookie
+        mode is requested (`X-Auth-Mode: cookie` or default), Guard issues cookies
+        and returns `{ "success": true }`.'
       parameters:
       - description: SSO provider (google, github, azuread)
         in: path
         name: provider
         required: true
+        type: string
+      - description: Auth response mode override
+        enum:
+        - cookie
+        - json
+        in: header
+        name: X-Auth-Mode
         type: string
       produces:
       - application/json
@@ -2628,7 +2716,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/controller.tokensResp'
+            $ref: '#/definitions/controller.authExchangeResp'
         "400":
           description: Bad Request
           schema:

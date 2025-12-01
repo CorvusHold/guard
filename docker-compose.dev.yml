@@ -3,7 +3,7 @@
 # 
 # This configuration provides:
 # - PostgreSQL database on port 5433
-# - Valkey (Redis) on port 6380  
+# - Valkey (Redis) on port 6379  
 # - Guard API on port 8080 with hot reload
 # - Monitoring stack (Prometheus, Grafana, AlertManager)
 # - MailHog for email testing
@@ -31,7 +31,7 @@ services:
     image: valkey/valkey:7.2
     container_name: guard_dev_valkey
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - guard_dev_valkey_data:/data
     healthcheck:

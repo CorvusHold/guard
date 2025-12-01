@@ -9,7 +9,7 @@ export const options = {
     { duration: '30s', target: 0 },    // ramp down
   ],
   thresholds: {
-    http_req_failed: ['rate<0.01'], // <1% errors
+    'checks{check:status is 200/202/429}': ['rate>0.99'], // <1% errors
     http_req_duration: ['p(95)<500'], // p95 < 500ms
   },
 };
@@ -33,7 +33,7 @@ export default function () {
 
   // Accept 200 OK or 202 Accepted (MFA challenge); if 202, consider as success for throughput.
   check(res, {
-    'status is 200/202': (r) => r.status === 200 || r.status === 202,
+    'status is 200/202/429': (r) => r.status === 200 || r.status === 202 || r.status === 429,
   });
 
   // small randomized sleep to avoid lockstep

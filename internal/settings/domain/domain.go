@@ -24,64 +24,64 @@ type Repository interface {
 
 // Common keys
 const (
-	KeyJWTSigning      = "auth.jwt_signing_key"
-	KeyAccessTTL       = "auth.access_token_ttl"
-	KeyRefreshTTL      = "auth.refresh_token_ttl"
-	KeyJWTIssuer       = "auth.jwt_issuer"
-	KeyJWTAudience     = "auth.jwt_audience"
-	KeyMagicLinkTTL    = "auth.magic_link_ttl"
-	KeyPublicBaseURL   = "app.public_base_url"
-	KeyEmailProvider   = "email.provider"
-	KeySMTPHost        = "email.smtp.host"
-	KeySMTPPort        = "email.smtp.port"
-	KeySMTPUsername    = "email.smtp.username"
-	KeySMTPPassword    = "email.smtp.password"
-	KeySMTPFrom        = "email.smtp.from"
-	KeyBrevoAPIKey     = "email.brevo.api_key"
-	KeyBrevoSender     = "email.brevo.sender"
-	KeySSOProvider     = "sso.provider" // values: dev | workos
-	KeyWorkOSAPIKey    = "sso.workos.api_key"
-	KeyWorkOSClientID  = "sso.workos.client_id"
+	KeyJWTSigning         = "auth.jwt_signing_key"
+	KeyAccessTTL          = "auth.access_token_ttl"
+	KeyRefreshTTL         = "auth.refresh_token_ttl"
+	KeyJWTIssuer          = "auth.jwt_issuer"
+	KeyJWTAudience        = "auth.jwt_audience"
+	KeyMagicLinkTTL       = "auth.magic_link_ttl"
+	KeyPublicBaseURL      = "app.public_base_url"
+	KeyEmailProvider      = "email.provider"
+	KeySMTPHost           = "email.smtp.host"
+	KeySMTPPort           = "email.smtp.port"
+	KeySMTPUsername       = "email.smtp.username"
+	KeySMTPPassword       = "email.smtp.password"
+	KeySMTPFrom           = "email.smtp.from"
+	KeyBrevoAPIKey        = "email.brevo.api_key"
+	KeyBrevoSender        = "email.brevo.sender"
+	KeySSOProvider        = "sso.provider" // values: dev | workos
+	KeyWorkOSAPIKey       = "sso.workos.api_key"
+	KeyWorkOSClientID     = "sso.workos.client_id"
 	KeyWorkOSClientSecret = "sso.workos.client_secret"
-    // API base URL for WorkOS, default https://api.workos.com
-    KeyWorkOSAPIBaseURL = "sso.workos.api_base_url"
-    // Optional defaults to target a WorkOS SSO flow without passing query params on start
-    KeyWorkOSDefaultConnectionID  = "sso.workos.default_connection_id"
-    KeyWorkOSDefaultOrganizationID = "sso.workos.default_organization_id"
-    // SSO hardening
-    // KeySSOStateTTL controls the TTL for SSO OAuth state values stored in Redis (e.g., "10m").
-    KeySSOStateTTL     = "sso.state_ttl"
-    // KeySSORedirectAllowlist is a comma-separated list of allowed redirect URL prefixes for SSO start requests.
-    // Example: "https://app.example.com,https://staging.example.com"
-    KeySSORedirectAllowlist = "sso.redirect_allowlist"
+	// API base URL for WorkOS, default https://api.workos.com
+	KeyWorkOSAPIBaseURL = "sso.workos.api_base_url"
+	// Optional defaults to target a WorkOS SSO flow without passing query params on start
+	KeyWorkOSDefaultConnectionID   = "sso.workos.default_connection_id"
+	KeyWorkOSDefaultOrganizationID = "sso.workos.default_organization_id"
+	// SSO hardening
+	// KeySSOStateTTL controls the TTL for SSO OAuth state values stored in Redis (e.g., "10m").
+	KeySSOStateTTL = "sso.state_ttl"
+	// KeySSORedirectAllowlist is a comma-separated list of allowed redirect URL prefixes for SSO start requests.
+	// Example: "https://app.example.com,https://staging.example.com"
+	KeySSORedirectAllowlist = "sso.redirect_allowlist"
 
-    // Per-tenant CORS allowlist for browser apps calling the API.
-    // Comma-separated list of exact origins, e.g., "https://app.example.com,https://staging.example.com".
-    // This augments the global env CORS_ALLOWED_ORIGINS. Endpoints without a tenant context still rely on the global list.
-    KeyAppCORSAllowedOrigins = "app.cors_allowed_origins"
+	// Per-tenant CORS allowlist for browser apps calling the API.
+	// Comma-separated list of exact origins, e.g., "https://app.example.com,https://staging.example.com".
+	// This augments the global env CORS_ALLOWED_ORIGINS. Endpoints without a tenant context still rely on the global list.
+	KeyAppCORSAllowedOrigins = "app.cors_allowed_origins"
 
-    // Rate limiting keys (per-endpoint). All are optional and support tenant overrides.
-    // Windows use Go duration strings (e.g., "1m", "10s"). Limits are integers.
-    KeyRLSignupLimit  = "auth.ratelimit.signup.limit"
-    KeyRLSignupWindow = "auth.ratelimit.signup.window"
-    KeyRLLoginLimit  = "auth.ratelimit.login.limit"
-    KeyRLLoginWindow = "auth.ratelimit.login.window"
-    KeyRLMagicLimit  = "auth.ratelimit.magic.limit"
-    KeyRLMagicWindow = "auth.ratelimit.magic.window"
-    KeyRLSsoLimit    = "auth.ratelimit.sso.limit"
-    KeyRLSsoWindow   = "auth.ratelimit.sso.window"
-    KeyRLTokenLimit  = "auth.ratelimit.token.limit"
-    KeyRLTokenWindow = "auth.ratelimit.token.window"
-    KeyRLMFALimit    = "auth.ratelimit.mfa.limit"
-    KeyRLMFAWindow   = "auth.ratelimit.mfa.window"
+	// Rate limiting keys (per-endpoint). All are optional and support tenant overrides.
+	// Windows use Go duration strings (e.g., "1m", "10s"). Limits are integers.
+	KeyRLSignupLimit  = "auth.ratelimit.signup.limit"
+	KeyRLSignupWindow = "auth.ratelimit.signup.window"
+	KeyRLLoginLimit   = "auth.ratelimit.login.limit"
+	KeyRLLoginWindow  = "auth.ratelimit.login.window"
+	KeyRLMagicLimit   = "auth.ratelimit.magic.limit"
+	KeyRLMagicWindow  = "auth.ratelimit.magic.window"
+	KeyRLSsoLimit     = "auth.ratelimit.sso.limit"
+	KeyRLSsoWindow    = "auth.ratelimit.sso.window"
+	KeyRLTokenLimit   = "auth.ratelimit.token.limit"
+	KeyRLTokenWindow  = "auth.ratelimit.token.window"
+	KeyRLMFALimit     = "auth.ratelimit.mfa.limit"
+	KeyRLMFAWindow    = "auth.ratelimit.mfa.window"
 )
 
 // Settings API rate limiting keys (optional, support tenant overrides).
 const (
-    // GET /v1/tenants/:id/settings
-    KeyRLSettingsGetLimit  = "settings.ratelimit.get.limit"
-    KeyRLSettingsGetWindow = "settings.ratelimit.get.window"
-    // PUT /v1/tenants/:id/settings
-    KeyRLSettingsPutLimit  = "settings.ratelimit.put.limit"
-    KeyRLSettingsPutWindow = "settings.ratelimit.put.window"
+	// GET /v1/tenants/:id/settings
+	KeyRLSettingsGetLimit  = "settings.ratelimit.get.limit"
+	KeyRLSettingsGetWindow = "settings.ratelimit.get.window"
+	// PUT /v1/tenants/:id/settings
+	KeyRLSettingsPutLimit  = "settings.ratelimit.put.limit"
+	KeyRLSettingsPutWindow = "settings.ratelimit.put.window"
 )

@@ -379,6 +379,7 @@ jobs:
 
       - name: Run smoke tests
         run: |
+          make k6-setup
           make k6-smoke
 
   perf-rate-limit-login:
@@ -413,6 +414,7 @@ jobs:
         env:
           K6_ITERATIONS: '120'
         run: |
+          make k6-setup
           make k6-rate-limit-login
 
   perf-login-stress:
@@ -445,6 +447,7 @@ jobs:
 
       - name: Run login stress
         run: |
+          make k6-setup
           make k6-login-stress
 
   perf-mfa-invalid:
@@ -477,6 +480,7 @@ jobs:
 
       - name: Run MFA invalid scenario
         run: |
+          make k6-setup
           make k6-mfa-invalid
 
   perf-portal-link-smoke:
@@ -509,6 +513,7 @@ jobs:
 
       - name: Run portal link smoke
         run: |
+          make k6-setup
           make k6-portal-link-smoke
 
   perf-rate-limit-portal-link:
@@ -543,6 +548,7 @@ jobs:
         env:
           K6_ITERATIONS: '120'
         run: |
+          make k6-setup
           make k6-rate-limit-portal-link
 
   fga-smoke:

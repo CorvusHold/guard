@@ -102,7 +102,9 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 	}
 	var genResp struct{ Codes []string }
 	_ = json.NewDecoder(bytes.NewReader(recGen.Body.Bytes())).Decode(&genResp)
-	if len(genResp.Codes) != 1 { t.Fatalf("expected 1 code, got %d", len(genResp.Codes)) }
+	if len(genResp.Codes) != 1 {
+		t.Fatalf("expected 1 code, got %d", len(genResp.Codes))
+	}
 
 	// Login -> challenge
 	lb, _ := json.Marshal(map[string]string{

@@ -98,7 +98,7 @@ function App() {
                 data-testid="base-url-input"
                 type="url"
                 required
-                placeholder="http://localhost:8081"
+                placeholder="http://localhost:8080"
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 value={baseUrl}
                 onChange={(e) => handleBaseUrlChange(e.target.value)}

@@ -11,10 +11,10 @@ import (
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
-	"github.com/corvusHold/guard/internal/metrics"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
+	"github.com/corvusHold/guard/internal/metrics"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -37,7 +37,9 @@ func NewMagic(repo domain.Repository, cfg config.Config, settings sdomain.Servic
 func (m *Magic) SetPublisher(p evdomain.Publisher) { m.pub = p }
 
 func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
-	if in.Email == "" { return errors.New("email is required") }
+	if in.Email == "" {
+		return errors.New("email is required")
+	}
 	// Resolve TTL and public base URL
 	ttl, _ := m.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &in.TenantID, m.cfg.MagicLinkTTL)
 	baseURL, _ := m.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, m.cfg.PublicBaseURL)
@@ -51,16 +53,22 @@ func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 
 	// Generate token and store hashed
 	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil { return err }
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	h := sha256.Sum256([]byte(token))
 	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
 	exp := time.Now().Add(ttl)
-	if err := m.repo.CreateMagicLink(ctx, uuid.New(), userID, in.TenantID, in.Email, tokenHash, in.RedirectURL, exp); err != nil { return err }
+	if err := m.repo.CreateMagicLink(ctx, uuid.New(), userID, in.TenantID, in.Email, tokenHash, in.RedirectURL, exp); err != nil {
+		return err
+	}
 
 	// Build verification link
 	u, err := url.Parse(baseURL)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	u.Path = "/v1/auth/magic/verify"
 	q := u.Query()
 	q.Set("token", token)
@@ -76,7 +84,9 @@ func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 // CreateForTest creates and stores a magic link token (without sending email) and returns the raw token.
 // This is intended for CI/test environments to automate magic-link verification flows.
 func (m *Magic) CreateForTest(ctx context.Context, in domain.MagicSendInput) (string, error) {
-	if in.Email == "" { return "", errors.New("email is required") }
+	if in.Email == "" {
+		return "", errors.New("email is required")
+	}
 	// Resolve TTL so expiry matches production logic
 	ttl, _ := m.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &in.TenantID, m.cfg.MagicLinkTTL)
 
@@ -89,12 +99,16 @@ func (m *Magic) CreateForTest(ctx context.Context, in domain.MagicSendInput) (st
 
 	// Generate token and store hashed (same format as Send)
 	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil { return "", err }
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	h := sha256.Sum256([]byte(token))
 	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
 	exp := time.Now().Add(ttl)
-	if err := m.repo.CreateMagicLink(ctx, uuid.New(), userID, in.TenantID, in.Email, tokenHash, in.RedirectURL, exp); err != nil { return "", err }
+	if err := m.repo.CreateMagicLink(ctx, uuid.New(), userID, in.TenantID, in.Email, tokenHash, in.RedirectURL, exp); err != nil {
+		return "", err
+	}
 	return token, nil
 }
 
@@ -106,15 +120,21 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 			metrics.IncAuthOutcome("magic", "failure")
 		}
 	}()
-	if in.Token == "" { return domain.AccessTokens{}, errors.New("token required") }
+	if in.Token == "" {
+		return domain.AccessTokens{}, errors.New("token required")
+	}
 	h := sha256.Sum256([]byte(in.Token))
 	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
 	ml, err := m.repo.GetMagicLinkByHash(ctx, tokenHash)
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 	if ml.ConsumedAt != nil || time.Now().After(ml.ExpiresAt) {
 		return domain.AccessTokens{}, errors.New("token expired or already used")
 	}
-	if err := m.repo.ConsumeMagicLink(ctx, tokenHash); err != nil { return domain.AccessTokens{}, err }
+	if err := m.repo.ConsumeMagicLink(ctx, tokenHash); err != nil {
+		return domain.AccessTokens{}, err
+	}
 
 	tenantID := ml.TenantID
 	var userID uuid.UUID
@@ -124,9 +144,15 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 		userID = ai.UserID
 	} else {
 		userID = uuid.New()
-		if err := m.repo.CreateUser(ctx, userID, "", "", []string{}); err != nil { return domain.AccessTokens{}, err }
-		if err := m.repo.CreateAuthIdentity(ctx, uuid.New(), userID, tenantID, ml.Email, ""); err != nil { return domain.AccessTokens{}, err }
-		if err := m.repo.AddUserToTenant(ctx, userID, tenantID); err != nil { return domain.AccessTokens{}, err }
+		if err := m.repo.CreateUser(ctx, userID, "", "", []string{}); err != nil {
+			return domain.AccessTokens{}, err
+		}
+		if err := m.repo.CreateAuthIdentity(ctx, uuid.New(), userID, tenantID, ml.Email, ""); err != nil {
+			return domain.AccessTokens{}, err
+		}
+		if err := m.repo.AddUserToTenant(ctx, userID, tenantID); err != nil {
+			return domain.AccessTokens{}, err
+		}
 	}
 
 	// Resolve settings for token issuance
@@ -146,10 +172,14 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	access, err := t.SignedString([]byte(signingKey))
-	if err != nil { return domain.AccessTokens{}, err }
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
 
 	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil { return domain.AccessTokens{}, err }
+	if _, err := rand.Read(raw); err != nil {
+		return domain.AccessTokens{}, err
+	}
 	rt := base64.RawURLEncoding.EncodeToString(raw)
 	rh := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(rh[:])
