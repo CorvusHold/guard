@@ -199,6 +199,58 @@ describe('GuardClient', () => {
     await expect(() => client.getSsoOrganizationPortalLink('workos', { tenant_id: 't-1' } as any)).rejects.toThrow('organization_id is required');
   });
 
+  it('ssoPortalSession posts token payload and returns session data', async () => {
+    const { fetchMock, calls } = makeFetchMock([
+      mockResponse({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: { tenant_id: 't-1', provider_slug: 'oidc-main', portal_token_id: 'pt-1' },
+      }),
+    ]);
+
+    const client = new GuardClient({ baseUrl, fetchImpl: fetchMock });
+    const res = await client.ssoPortalSession('raw-token');
+    expect(res.meta.status).toBe(200);
+    expect(res.data.tenant_id).toBe('t-1');
+    expect(res.data.provider_slug).toBe('oidc-main');
+    expect(res.data.portal_token_id).toBe('pt-1');
+
+    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/session`);
+    expect(calls[0].init?.method).toBe('POST');
+    const body = JSON.parse(calls[0].init?.body as string);
+    expect(body).toEqual({ token: 'raw-token' });
+  });
+
+  it('ssoPortalProvider sends X-Portal-Token header and returns provider', async () => {
+    const { fetchMock, calls } = makeFetchMock([
+      mockResponse({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: {
+          id: 'prov-1',
+          tenant_id: 't-1',
+          name: 'OIDC Main',
+          slug: 'oidc-main',
+          provider_type: 'oidc',
+          enabled: true,
+          allow_signup: true,
+          trust_email_verified: true,
+          domains: ['example.com'],
+        },
+      }),
+    ]);
+
+    const client = new GuardClient({ baseUrl, fetchImpl: fetchMock });
+    const res = await client.ssoPortalProvider('raw-token');
+    expect(res.meta.status).toBe(200);
+    expect(res.data.id).toBe('prov-1');
+    expect(res.data.slug).toBe('oidc-main');
+
+    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/provider`);
+    const hdrs = new Headers(calls[0].init?.headers);
+    expect(hdrs.get('X-Portal-Token')).toBe('raw-token');
+  });
+
   describe('OAuth2 Discovery', () => {
     it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
       const storage = new InMemoryStorage();

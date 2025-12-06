@@ -10,8 +10,9 @@ import (
 )
 
 type fakeRepo struct {
-	capturedUserID uuid.UUID
-	capturedRoles  []string
+	capturedUserID  uuid.UUID
+	capturedRoles   []string
+	lastPortalToken domain.SSOPortalToken
 }
 
 func (f *fakeRepo) CreateUser(ctx context.Context, id uuid.UUID, firstName, lastName string, roles []string) error {
@@ -41,6 +42,19 @@ func (f *fakeRepo) GetMagicLinkByHash(ctx context.Context, tokenHash string) (do
 	return domain.MagicLink{}, nil
 }
 func (f *fakeRepo) ConsumeMagicLink(ctx context.Context, tokenHash string) error { return nil }
+func (f *fakeRepo) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (domain.SSOPortalToken, error) {
+	f.lastPortalToken = domain.SSOPortalToken{
+		TenantID:      tenantID,
+		SSOProviderID: ssoProviderID,
+		ProviderSlug:  providerSlug,
+		TokenHash:     tokenHash,
+		Intent:        intent,
+		CreatedBy:     createdBy,
+		ExpiresAt:     expiresAt,
+		MaxUses:       maxUses,
+	}
+	return f.lastPortalToken, nil
+}
 func (f *fakeRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (domain.User, error) {
 	return domain.User{ID: userID}, nil
 }

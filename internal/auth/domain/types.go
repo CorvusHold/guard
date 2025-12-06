@@ -203,6 +203,7 @@ type SSOOrganizationPortalLinkGeneratorInput struct {
 	TenantID       uuid.UUID
 	Intent         string
 	OrganizationID string
+	CreatedBy      uuid.UUID
 }
 
 // SSOService defines the contract for SSO/Social login flows.
@@ -228,6 +229,9 @@ type Repository interface {
 	CreateMagicLink(ctx context.Context, id uuid.UUID, userID *uuid.UUID, tenantID uuid.UUID, email, tokenHash, redirectURL string, expiresAt time.Time) error
 	GetMagicLinkByHash(ctx context.Context, tokenHash string) (MagicLink, error)
 	ConsumeMagicLink(ctx context.Context, tokenHash string) error
+
+	// SSO portal tokens
+	CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (SSOPortalToken, error)
 
 	// User/profile lookups
 	GetUserByID(ctx context.Context, userID uuid.UUID) (User, error)
@@ -322,6 +326,22 @@ type MagicLink struct {
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
 	ConsumedAt  *time.Time
+}
+
+type SSOPortalToken struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	SSOProviderID *uuid.UUID
+	ProviderSlug  string
+	TokenHash     string
+	Intent        string
+	CreatedBy     uuid.UUID
+	ExpiresAt     time.Time
+	RevokedAt     *time.Time
+	MaxUses       int32
+	UseCount      int32
+	LastUsedAt    *time.Time
+	CreatedAt     time.Time
 }
 
 // User reflects the users table record.

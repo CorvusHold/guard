@@ -56,6 +56,7 @@ services:
       GOTOOLCHAIN: auto
       APP_ENV: test
       APP_ADDR: ":8080"
+      PUBLIC_BASE_URL: "http://localhost:8081"
       DATABASE_URL: "postgres://guard:guard@db_test:5432/guard_test?sslmode=disable"
       REDIS_ADDR: "valkey_test:6379"
       REDIS_DB: 0

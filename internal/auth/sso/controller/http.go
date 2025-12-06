@@ -15,6 +15,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const guardAccessTokenCookieName = "guard_access_token"
+
 // SSOController handles HTTP requests for SSO endpoints.
 type SSOController struct {
 	ssoService  *service.SSOService
@@ -46,7 +48,7 @@ func (h *SSOController) WithRateLimitStore(store ratelimit.Store) *SSOController
 // Register registers SSO routes with the Echo router.
 func (h *SSOController) Register(e *echo.Echo) {
 	// Rate limiting middleware for public SSO endpoints
-	var rlInitiate, rlCallback echo.MiddlewareFunc
+	var rlInitiate, rlCallback, rlPortalSession, rlPortalProvider echo.MiddlewareFunc
 	if h.rl != nil {
 		rlInitiate = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:initiate",
@@ -57,6 +59,20 @@ func (h *SSOController) Register(e *echo.Echo) {
 
 		rlCallback = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:callback",
+			Limit:  20,
+			Window: time.Minute,
+			Key:    func(c echo.Context) string { return c.RealIP() },
+		}, h.rl)
+
+		rlPortalSession = ratelimit.MiddlewareWithStore(ratelimit.Policy{
+			Name:   "sso:portal_session",
+			Limit:  10,
+			Window: time.Minute,
+			Key:    func(c echo.Context) string { return c.RealIP() },
+		}, h.rl)
+
+		rlPortalProvider = ratelimit.MiddlewareWithStore(ratelimit.Policy{
+			Name:   "sso:portal_provider",
 			Limit:  20,
 			Window: time.Minute,
 			Key:    func(c echo.Context) string { return c.RealIP() },
@@ -88,6 +104,18 @@ func (h *SSOController) Register(e *echo.Echo) {
 	admin.PUT("/providers/:id", h.handleUpdateProvider)
 	admin.DELETE("/providers/:id", h.handleDeleteProvider)
 	admin.POST("/providers/:id/test", h.handleTestProvider)
+
+	// Portal token endpoints (no Guard auth, portal-token gated)
+	if rlPortalSession != nil {
+		e.POST("/v1/sso/portal/session", h.handlePortalSession, rlPortalSession)
+	} else {
+		e.POST("/v1/sso/portal/session", h.handlePortalSession)
+	}
+	if rlPortalProvider != nil {
+		e.GET("/v1/sso/portal/provider", h.handlePortalProvider, rlPortalProvider)
+	} else {
+		e.GET("/v1/sso/portal/provider", h.handlePortalProvider)
+	}
 }
 
 // Public SSO Endpoints
@@ -248,6 +276,67 @@ func (h *SSOController) handleSAMLMetadata(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, metadata)
+}
+
+type portalSessionRequest struct {
+	Token string `json:"token"`
+}
+
+type portalSessionResponse struct {
+	TenantID      uuid.UUID `json:"tenant_id"`
+	ProviderSlug  string    `json:"provider_slug"`
+	PortalTokenID uuid.UUID `json:"portal_token_id"`
+}
+
+// POST /v1/sso/portal/session
+func (h *SSOController) handlePortalSession(c echo.Context) error {
+	var req portalSessionRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if strings.TrimSpace(req.Token) == "" {
+		// allow ?token= as fallback
+		req.Token = c.QueryParam("token")
+	}
+	if strings.TrimSpace(req.Token) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required"})
+	}
+
+	sess, err := h.ssoService.ExchangePortalToken(c.Request().Context(), req.Token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid or expired portal token"})
+	}
+
+	return c.JSON(http.StatusOK, portalSessionResponse{
+		TenantID:      sess.TenantID,
+		ProviderSlug:  sess.ProviderSlug,
+		PortalTokenID: sess.PortalTokenID,
+	})
+}
+
+// GET /v1/sso/portal/provider
+func (h *SSOController) handlePortalProvider(c echo.Context) error {
+	token := strings.TrimSpace(c.Request().Header.Get("X-Portal-Token"))
+	if token == "" {
+		token = strings.TrimSpace(c.QueryParam("token"))
+	}
+	if token == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "portal token required"})
+	}
+
+	// Use ValidatePortalToken instead of ExchangePortalToken to avoid consuming
+	// an additional use. The token was already consumed by /session endpoint.
+	sess, err := h.ssoService.ValidatePortalToken(c.Request().Context(), token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid or expired portal token"})
+	}
+
+	config, err := h.ssoService.GetProviderBySlug(c.Request().Context(), sess.TenantID, sess.ProviderSlug)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "provider not found"})
+	}
+
+	return c.JSON(http.StatusOK, h.maskSecrets(config))
 }
 
 // Admin API Endpoints
@@ -533,6 +622,14 @@ func (h *SSOController) handleTestProvider(c echo.Context) error {
 // requireAdmin checks if the request has a valid bearer token with admin role.
 func (h *SSOController) requireAdmin(c echo.Context) (userID, tenantID uuid.UUID, isAdmin bool, err error) {
 	token := bearerToken(c)
+	if token == "" {
+		mode := strings.ToLower(strings.TrimSpace(c.Request().Header.Get("X-Auth-Mode")))
+		if mode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				token = cookie.Value
+			}
+		}
+	}
 	if token == "" {
 		err = c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 		return

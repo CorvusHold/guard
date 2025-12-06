@@ -53,6 +53,14 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 	// JWT + admin check
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -119,6 +127,14 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 func (h *Controller) fgaListGroups(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -170,6 +186,14 @@ func (h *Controller) fgaListGroups(c echo.Context) error {
 // @Router       /v1/auth/admin/fga/groups/{id} [delete]
 func (h *Controller) fgaDeleteGroup(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -238,6 +262,14 @@ type fgaModifyGroupMemberReq struct {
 func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -302,6 +334,14 @@ func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 // @Router       /v1/auth/admin/fga/groups/{id}/members [delete]
 func (h *Controller) fgaRemoveGroupMember(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -376,6 +416,14 @@ type fgaCreateACLTupleReq struct {
 // @Router       /v1/auth/admin/fga/acl/tuples [post]
 func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -458,6 +506,14 @@ type fgaDeleteACLTupleReq struct {
 // @Router       /v1/auth/admin/fga/acl/tuples [delete]
 func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -549,6 +605,14 @@ type fgaAuthorizeResp struct {
 func (h *Controller) fgaAuthorize(c echo.Context) error {
 	// JWT check (no admin required)
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}

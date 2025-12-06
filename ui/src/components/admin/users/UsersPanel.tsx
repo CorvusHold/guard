@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
+import { formatRateLimitError } from '@/lib/rateLimit'
 
 interface UsersPanelProps {
   tenantId: string
@@ -34,7 +35,7 @@ export default function UsersPanel({
 
   const canLoad = useMemo(() => !!tenantId, [tenantId])
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null)
     if (!canLoad) {
       setError('tenant_id is required')
@@ -53,16 +54,23 @@ export default function UsersPanel({
         show({ variant: 'error', title: 'Failed to load users' })
       }
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Error',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while loading users')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Error',
+          description: msg
+        })
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [canLoad, show, tenantId])
 
   useEffect(() => {
     if (tenantId) {
@@ -83,12 +91,19 @@ export default function UsersPanel({
       }
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Action failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while updating user status')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Action failed',
+          description: msg
+        })
+      }
     }
   }
 
@@ -111,12 +126,19 @@ export default function UsersPanel({
       setEditing(null)
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Update failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while updating user names')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Update failed',
+          description: msg
+        })
+      }
     }
   }
 

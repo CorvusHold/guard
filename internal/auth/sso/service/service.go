@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/netip"
@@ -74,6 +76,13 @@ type InitiateSSORequest struct {
 type InitiateSSOResponse struct {
 	AuthorizationURL string
 	State            string
+}
+
+// PortalSession represents a validated portal token context.
+type PortalSession struct {
+	TenantID      uuid.UUID
+	ProviderSlug  string
+	PortalTokenID uuid.UUID
 }
 
 // InitiateSSO initiates an SSO authentication flow.
@@ -478,6 +487,68 @@ func (s *SSOService) GetProviderMetadata(ctx context.Context, tenantID uuid.UUID
 	}
 
 	return metadata, nil
+}
+
+// ExchangePortalToken validates a raw portal token and returns portal context.
+// This method CONSUMES one use of the token (increments use_count).
+func (s *SSOService) ExchangePortalToken(ctx context.Context, rawToken string) (*PortalSession, error) {
+	rawToken = strings.TrimSpace(rawToken)
+	if rawToken == "" {
+		return nil, fmt.Errorf("portal token required")
+	}
+
+	h := sha256.Sum256([]byte(rawToken))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	row, err := s.queries.ConsumeSSOPortalTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid or expired portal token")
+	}
+	if !row.TenantID.Valid || !row.ID.Valid {
+		return nil, fmt.Errorf("invalid portal token record")
+	}
+
+	return &PortalSession{
+		TenantID:      uuid.UUID(row.TenantID.Bytes),
+		ProviderSlug:  row.ProviderSlug,
+		PortalTokenID: uuid.UUID(row.ID.Bytes),
+	}, nil
+}
+
+// ValidatePortalToken validates a raw portal token without consuming a use.
+// Use this for read-only operations after the initial session exchange.
+func (s *SSOService) ValidatePortalToken(ctx context.Context, rawToken string) (*PortalSession, error) {
+	rawToken = strings.TrimSpace(rawToken)
+	if rawToken == "" {
+		return nil, fmt.Errorf("portal token required")
+	}
+
+	h := sha256.Sum256([]byte(rawToken))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	row, err := s.queries.GetSSOPortalTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid or expired portal token")
+	}
+	if !row.TenantID.Valid || !row.ID.Valid {
+		return nil, fmt.Errorf("invalid portal token record")
+	}
+
+	// Check use_count against max_uses (same logic as ConsumeSSOPortalTokenByHash)
+	if row.MaxUses > 0 && row.UseCount >= row.MaxUses {
+		return nil, fmt.Errorf("portal token exhausted")
+	}
+
+	return &PortalSession{
+		TenantID:      uuid.UUID(row.TenantID.Bytes),
+		ProviderSlug:  row.ProviderSlug,
+		PortalTokenID: uuid.UUID(row.ID.Bytes),
+	}, nil
+}
+
+// GetProviderBySlug returns provider configuration by tenant and slug.
+func (s *SSOService) GetProviderBySlug(ctx context.Context, tenantID uuid.UUID, slug string) (*domain.Config, error) {
+	return s.getProviderBySlug(ctx, tenantID, slug)
 }
 
 // Admin methods

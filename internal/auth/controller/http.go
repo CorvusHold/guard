@@ -54,6 +54,14 @@ const (
 func (h *Controller) rbacListPermissions(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -97,6 +105,14 @@ func (h *Controller) rbacListPermissions(c echo.Context) error {
 // @Router       /v1/auth/admin/rbac/roles [get]
 func (h *Controller) rbacListRoles(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -151,6 +167,14 @@ func (h *Controller) rbacListRoles(c echo.Context) error {
 func (h *Controller) rbacCreateRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -203,6 +227,14 @@ func (h *Controller) rbacCreateRole(c echo.Context) error {
 // @Router       /v1/auth/admin/rbac/roles/{id} [patch]
 func (h *Controller) rbacUpdateRole(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -261,6 +293,14 @@ func (h *Controller) rbacUpdateRole(c echo.Context) error {
 func (h *Controller) rbacDeleteRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -313,6 +353,14 @@ func (h *Controller) rbacDeleteRole(c echo.Context) error {
 // @Router       /v1/auth/admin/rbac/users/{id}/roles [get]
 func (h *Controller) rbacListUserRoles(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -367,6 +415,14 @@ func (h *Controller) rbacListUserRoles(c echo.Context) error {
 // @Router       /v1/auth/admin/rbac/users/{id}/roles [post]
 func (h *Controller) rbacAddUserRole(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -429,6 +485,14 @@ func (h *Controller) rbacAddUserRole(c echo.Context) error {
 func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -490,6 +554,14 @@ func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -550,6 +622,14 @@ func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
 func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -609,6 +689,14 @@ func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
 // @Router       /v1/auth/admin/rbac/users/{id}/permissions/resolve [get]
 func (h *Controller) rbacResolveUserPermissions(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -1703,6 +1791,14 @@ func (h *Controller) revoke(c echo.Context) error {
 func (h *Controller) adminUpdateRoles(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -1760,6 +1856,14 @@ func (h *Controller) adminUpdateRoles(c echo.Context) error {
 // @Router       /v1/auth/admin/users [get]
 func (h *Controller) adminListUsers(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -1826,6 +1930,14 @@ func (h *Controller) adminListUsers(c echo.Context) error {
 func (h *Controller) adminUpdateNames(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -1879,6 +1991,14 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 func (h *Controller) adminBlockUser(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -1924,6 +2044,14 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 func (h *Controller) adminUnblockUser(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -1967,6 +2095,14 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 func (h *Controller) sessionsList(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -2005,6 +2141,14 @@ func (h *Controller) sessionsList(c echo.Context) error {
 // @Router       /v1/auth/sessions/{id}/revoke [post]
 func (h *Controller) sessionRevoke(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -2145,10 +2289,11 @@ func (h *Controller) verifyMagic(c echo.Context) error {
 
 // ---- SSO/Social (stubs) ----
 var allowedProviders = map[string]struct{}{
-	"google":  {},
-	"github":  {},
-	"azuread": {},
-	"workos":  {},
+	"google":          {},
+	"github":          {},
+	"azuread":         {},
+	"workos":          {},
+	"portal-e2e-oidc": {},
 }
 
 var allowedSSOOrganizationPortalIntents = map[string]struct{}{
@@ -2246,15 +2391,6 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 // @Router       /v1/auth/sso/{provider}/portal-link [get]
 func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 	p := c.Param("provider")
-	if _, ok := allowedProviders[p]; !ok {
-		c.Logger().Errorf("sso.portal_link: unsupported provider p=%s ip=%s ua=%s", p, c.RealIP(), c.Request().UserAgent())
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
-	}
-	// TEMPORARY: only workos supported
-	if p != "workos" {
-		c.Logger().Errorf("sso.portal_link: only workos supported p=%s ip=%s ua=%s", p, c.RealIP(), c.Request().UserAgent())
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only workos supported"})
-	}
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
 	// RBAC: admin only
@@ -2293,7 +2429,7 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
 	orgID := c.QueryParam("organization_id")
-	if orgID == "" {
+	if p == "workos" && orgID == "" {
 		c.Logger().Errorf("sso.portal_link: organization_id required tenant_id=%s user_id=%s ip=%s ua=%s", tenID.String(), inTok.UserID.String(), ip, ua)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id required"})
 	}
@@ -2305,7 +2441,7 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 		}
 	}
 	c.Logger().Infof("sso.portal_link: generating tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua)
-	link, err := h.sso.OrganizationPortalLinkGenerator(c.Request().Context(), domain.SSOOrganizationPortalLinkGeneratorInput{Provider: p, OrganizationID: orgID, TenantID: tenID, Intent: intentStr})
+	link, err := h.sso.OrganizationPortalLinkGenerator(c.Request().Context(), domain.SSOOrganizationPortalLinkGeneratorInput{Provider: p, TenantID: tenID, Intent: intentStr, OrganizationID: orgID, CreatedBy: inTok.UserID})
 	if err != nil {
 		c.Logger().Errorf("sso.portal_link: generation failed tenant_id=%s org_id=%s intent=%s user_id=%s ip=%s ua=%s err=%v", tenID.String(), orgID, intentStr, inTok.UserID.String(), ip, ua, err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -2327,6 +2463,14 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 // @Router       /v1/auth/mfa/totp/start [post]
 func (h *Controller) totpStart(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -2363,6 +2507,14 @@ func (h *Controller) totpActivate(c echo.Context) error {
 	}
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -2386,6 +2538,14 @@ func (h *Controller) totpActivate(c echo.Context) error {
 // @Router       /v1/auth/mfa/totp/disable [post]
 func (h *Controller) totpDisable(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -2425,6 +2585,14 @@ func (h *Controller) backupGenerate(c echo.Context) error {
 	}
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -2461,6 +2629,14 @@ func (h *Controller) backupConsume(c echo.Context) error {
 	}
 	tok := bearerToken(c)
 	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
@@ -2486,6 +2662,14 @@ func (h *Controller) backupConsume(c echo.Context) error {
 // @Router       /v1/auth/mfa/backup/count [get]
 func (h *Controller) backupCount(c echo.Context) error {
 	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}

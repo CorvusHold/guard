@@ -9,21 +9,26 @@ import TenantCreationPanel from '@/components/admin/tenants/TenantCreationPanel'
 import SSOCallback from '@/components/auth/Callback'
 import TenantCreate from '@/components/onboarding/TenantCreate'
 import Signup from '@/components/onboarding/Signup'
+import SsoSetupPortal from '@/components/auth/SsoSetupPortal'
 import { AuthProvider, RequireAuth } from '@/lib/auth'
 import { TenantProvider } from '@/lib/tenant'
 import { ToastProvider } from '@/lib/toast'
 import { ensureRuntimeConfigFromQuery } from '@/lib/runtime'
 
 // Ensure runtime config from query params is persisted BEFORE React renders
-ensureRuntimeConfigFromQuery()
+const path = window.location.pathname
+if (!path.startsWith('/portal/')) {
+  ensureRuntimeConfigFromQuery()
+}
 
 const container = document.getElementById('root') as HTMLDivElement
 const root = createRoot(container)
 
-const path = window.location.pathname
 let element: React.ReactNode = <App />
 if (path.startsWith('/auth/callback')) {
   element = <SSOCallback />
+} else if (path.startsWith('/portal/sso-setup')) {
+  element = <SsoSetupPortal />
 } else if (path.startsWith('/tenant/create')) {
   element = <TenantCreate />
 } else if (path.startsWith('/signup')) {

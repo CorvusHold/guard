@@ -32,6 +32,8 @@ interface TenantSettings {
   auth_ratelimit_signup_window?: string
   auth_ratelimit_mfa_limit?: string
   auth_ratelimit_mfa_window?: string
+  auth_ratelimit_token_limit?: string
+  auth_ratelimit_token_window?: string
   
   // SSO Settings
   sso_provider?: string
@@ -465,6 +467,31 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Token Rate Limit (admin/API)</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={settings.auth_ratelimit_token_limit || '50'}
+                    onChange={(e) => updateSetting('auth_ratelimit_token_limit', e.target.value)}
+                    placeholder="50"
+                    className="w-20"
+                  />
+                  <span className="text-sm text-muted-foreground self-center">per</span>
+                  <Select
+                    value={settings.auth_ratelimit_token_window || '1m'}
+                    onValueChange={(value) => updateSetting('auth_ratelimit_token_window', value)}
+                  >
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1m">1m</SelectItem>
+                      <SelectItem value="5m">5m</SelectItem>
+                      <SelectItem value="15m">15m</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>

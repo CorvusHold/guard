@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -65,6 +66,13 @@ type GuardClient struct {
 	inner      *ClientWithResponses
 	httpClient HttpRequestDoer
 	tokens     TokenStore
+}
+
+// SSOPortalSession represents the minimal portal session context returned by the API.
+type SSOPortalSession struct {
+	TenantID      string `json:"tenant_id"`
+	ProviderSlug  string `json:"provider_slug"`
+	PortalTokenID string `json:"portal_token_id"`
 }
 
 // GuardOption customizes GuardClient construction.
@@ -280,6 +288,70 @@ func (c *GuardClient) SSOPortalLink(ctx context.Context, provider, organizationI
 		return "", errors.New("missing link in response")
 	}
 	return *pl.Link, nil
+}
+
+// SSOPortalSession exchanges a raw portal token for a validated portal session context.
+// This endpoint does not require a Guard user token; it is gated by the portal token itself.
+func (c *GuardClient) SSOPortalSession(ctx context.Context, token string) (*SSOPortalSession, error) {
+	if token == "" {
+		return nil, errors.New("portal token required")
+	}
+	cli := c.httpClient
+	if cli == nil {
+		cli = http.DefaultClient
+	}
+	body, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/sso/portal/session", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := cli.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+	var ps SSOPortalSession
+	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
+		return nil, err
+	}
+	return &ps, nil
+}
+
+// SSOPortalProvider fetches the masked SSO provider configuration using a portal token.
+// It returns the same SSOProvider shape as the admin SSO management helpers.
+func (c *GuardClient) SSOPortalProvider(ctx context.Context, token string) (*SSOProvider, error) {
+	if token == "" {
+		return nil, errors.New("portal token required")
+	}
+	cli := c.httpClient
+	if cli == nil {
+		cli = http.DefaultClient
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/sso/portal/provider", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Portal-Token", token)
+	resp, err := cli.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+	var provider SSOProvider
+	if err := json.NewDecoder(resp.Body).Decode(&provider); err != nil {
+		return nil, err
+	}
+	return &provider, nil
 }
 
 // SSOStart initiates an SSO flow and returns the provider authorization URL to redirect the user to.

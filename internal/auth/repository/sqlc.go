@@ -239,6 +239,39 @@ func mapMagicLink(ml db.MagicLink) domain.MagicLink {
 	}
 }
 
+func mapSSOPortalToken(t db.SsoPortalToken) domain.SSOPortalToken {
+	var providerID *uuid.UUID
+	if t.SsoProviderID.Valid {
+		u := toUUID(t.SsoProviderID)
+		providerID = &u
+	}
+	var revokedAt *time.Time
+	if t.RevokedAt.Valid {
+		v := t.RevokedAt.Time
+		revokedAt = &v
+	}
+	var lastUsedAt *time.Time
+	if t.LastUsedAt.Valid {
+		v := t.LastUsedAt.Time
+		lastUsedAt = &v
+	}
+	return domain.SSOPortalToken{
+		ID:            toUUID(t.ID),
+		TenantID:      toUUID(t.TenantID),
+		SSOProviderID: providerID,
+		ProviderSlug:  t.ProviderSlug,
+		TokenHash:     t.TokenHash,
+		Intent:        t.Intent,
+		CreatedBy:     toUUID(t.CreatedBy),
+		ExpiresAt:     t.ExpiresAt.Time,
+		RevokedAt:     revokedAt,
+		MaxUses:       t.MaxUses,
+		UseCount:      t.UseCount,
+		LastUsedAt:    lastUsedAt,
+		CreatedAt:     t.CreatedAt.Time,
+	}
+}
+
 func (r *SQLCRepository) CreateUser(ctx context.Context, id uuid.UUID, firstName, lastName string, roles []string) error {
 	return r.q.CreateUser(ctx, db.CreateUserParams{
 		ID:            toPgUUID(id),
@@ -337,6 +370,23 @@ func (r *SQLCRepository) GetMagicLinkByHash(ctx context.Context, tokenHash strin
 
 func (r *SQLCRepository) ConsumeMagicLink(ctx context.Context, tokenHash string) error {
 	return r.q.ConsumeMagicLink(ctx, tokenHash)
+}
+
+func (r *SQLCRepository) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (domain.SSOPortalToken, error) {
+	row, err := r.q.CreateSSOPortalToken(ctx, db.CreateSSOPortalTokenParams{
+		TenantID:      toPgUUID(tenantID),
+		SsoProviderID: toPgUUIDNullable(ssoProviderID),
+		ProviderSlug:  providerSlug,
+		TokenHash:     tokenHash,
+		Intent:        intent,
+		CreatedBy:     toPgUUID(createdBy),
+		ExpiresAt:     toPgTime(expiresAt),
+		MaxUses:       maxUses,
+	})
+	if err != nil {
+		return domain.SSOPortalToken{}, err
+	}
+	return mapSSOPortalToken(row), nil
 }
 
 // Additional lookups for profile/introspection

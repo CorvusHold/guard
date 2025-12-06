@@ -3,10 +3,13 @@ package auth
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
 	ctrl "github.com/corvusHold/guard/internal/auth/controller"
 	repo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
+	ssoctrl "github.com/corvusHold/guard/internal/auth/sso/controller"
+	ssosvc "github.com/corvusHold/guard/internal/auth/sso/service"
 	"github.com/corvusHold/guard/internal/config"
 	emailsvc "github.com/corvusHold/guard/internal/email/service"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
@@ -30,6 +33,21 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	sso := svc.NewSSO(r, cfg, settings)
 	sso.SetLogger(logger.New(cfg.AppEnv))
 	pub := evsvc.NewLogger()
-	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rl.NewRedisStore(cfg)).WithPublisher(pub)
+	rlStore := rl.NewRedisStore(cfg)
+	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rlStore).WithPublisher(pub)
 	c.Register(e)
+
+	// SSO provider management (admin/public SSO provider APIs)
+	ssoRedis := redis.NewClient(&redis.Options{
+		Addr: cfg.RedisAddr,
+		DB:   cfg.RedisDB,
+	})
+	ssoService := ssosvc.New(pg, ssoRedis, cfg.PublicBaseURL)
+	ssoService.SetLogger(logger.New(cfg.AppEnv))
+	ssoService.SetPublisher(pub)
+	// Wire the native SSO provider service into the auth SSO service for portal link generation.
+	sso.SetSSOProviderService(ssoService)
+	ssoController := ssoctrl.New(ssoService, s).WithRateLimitStore(rlStore)
+	ssoController.SetLogger(logger.New(cfg.AppEnv))
+	ssoController.Register(e)
 }

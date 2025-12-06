@@ -30,6 +30,18 @@ type OAuth2MetadataResp = OpenAPIComponents['schemas']['controller.oauth2Metadat
 // Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract
 type PortalLink = OpenAPIComponents['schemas']['domain.PortalLink'] & { link: string };
 
+// Portal session DTOs
+export interface SsoPortalSessionResp {
+  tenant_id: string;
+  provider_slug: string;
+  portal_token_id: string;
+}
+
+export interface SsoPortalContext {
+  session: SsoPortalSessionResp;
+  provider: SsoProviderItem;
+}
+
 // Type guards to help narrow union results in consumers
 export function isTokensResp(data: unknown): data is TokensResp {
   const d = data as any;
@@ -639,6 +651,44 @@ export class GuardClient {
       intent: params.intent,
     });
     return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+  }
+
+  // SSO: Portal token session exchange (public, portal-token gated)
+  async ssoPortalSession(token: string): Promise<ResponseWrapper<SsoPortalSessionResp>> {
+    if (!token || typeof token !== 'string') {
+      throw new Error('token is required');
+    }
+    return this.request<SsoPortalSessionResp>('/v1/sso/portal/session', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  }
+
+  // SSO: Portal provider config (public, portal-token gated)
+  async ssoPortalProvider(token: string): Promise<ResponseWrapper<SsoProviderItem>> {
+    if (!token || typeof token !== 'string') {
+      throw new Error('token is required');
+    }
+    const headers: Record<string, string> = { 'X-Portal-Token': token };
+    return this.request<SsoProviderItem>('/v1/sso/portal/provider', {
+      method: 'GET',
+      headers,
+    });
+  }
+
+  // High-level helper: load portal session and provider in one call
+  async loadSsoPortalContext(token: string): Promise<SsoPortalContext> {
+    const sessionRes = await this.ssoPortalSession(token);
+    if (sessionRes.meta.status !== 200 || !sessionRes.data) {
+      throw new Error(`portal session failed with status ${sessionRes.meta.status}`);
+    }
+
+    const providerRes = await this.ssoPortalProvider(token);
+    if (providerRes.meta.status !== 200 || !providerRes.data) {
+      throw new Error(`portal provider failed with status ${providerRes.meta.status}`);
+    }
+
+    return { session: sessionRes.data, provider: providerRes.data };
   }
 
   // ==============================

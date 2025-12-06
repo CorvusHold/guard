@@ -481,6 +481,81 @@ func TestListSSOProviders(t *testing.T) {
 	}
 }
 
+// TestSSOPortalSession tests the SSOPortalSession helper
+func TestSSOPortalSession(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sso/portal/session" {
+			t.Errorf("Expected path /v1/sso/portal/session, got %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("Expected POST, got %s", r.Method)
+		}
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["token"] != "tok-1" {
+			t.Errorf("Expected token 'tok-1', got %s", body["token"])
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"tenant_id":       "tenant-1",
+			"provider_slug":   "oidc-main",
+			"portal_token_id": "pt-1",
+		})
+	}))
+	defer server.Close()
+
+	client, err := guard.NewGuardClient(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ps, err := client.SSOPortalSession(context.Background(), "tok-1")
+	if err != nil {
+		t.Fatalf("SSOPortalSession failed: %v", err)
+	}
+	if ps.TenantID != "tenant-1" || ps.ProviderSlug != "oidc-main" || ps.PortalTokenID != "pt-1" {
+		t.Fatalf("unexpected portal session: %+v", ps)
+	}
+}
+
+// TestSSOPortalProvider tests the SSOPortalProvider helper
+func TestSSOPortalProvider(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sso/portal/provider" {
+			t.Errorf("Expected path /v1/sso/portal/provider, got %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET, got %s", r.Method)
+		}
+		if r.Header.Get("X-Portal-Token") != "tok-1" {
+			t.Errorf("Expected X-Portal-Token 'tok-1', got %s", r.Header.Get("X-Portal-Token"))
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":            "provider-1",
+			"tenant_id":     "tenant-1",
+			"name":          "OIDC Main",
+			"slug":          "oidc-main",
+			"provider_type": "oidc",
+			"enabled":       true,
+		})
+	}))
+	defer server.Close()
+
+	client, err := guard.NewGuardClient(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	provider, err := client.SSOPortalProvider(context.Background(), "tok-1")
+	if err != nil {
+		t.Fatalf("SSOPortalProvider failed: %v", err)
+	}
+	if provider.ID != "provider-1" || provider.Slug != "oidc-main" {
+		t.Fatalf("unexpected provider: %+v", provider)
+	}
+}
+
 // TestCookieMode tests that cookie mode sets the correct header
 func TestCookieMode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

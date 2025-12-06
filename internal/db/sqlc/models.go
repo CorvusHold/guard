@@ -161,6 +161,22 @@ type SsoAuthAttempt struct {
 	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
 }
 
+type SsoPortalToken struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	ProviderSlug  string             `json:"provider_slug"`
+	TokenHash     string             `json:"token_hash"`
+	Intent        string             `json:"intent"`
+	CreatedBy     pgtype.UUID        `json:"created_by"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	MaxUses       int32              `json:"max_uses"`
+	UseCount      int32              `json:"use_count"`
+	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type SsoProvider struct {
 	ID                     pgtype.UUID        `json:"id"`
 	TenantID               pgtype.UUID        `json:"tenant_id"`
