@@ -152,7 +152,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 				l.log.Warn().
 					Str("email", req.Profile.Email).
 					Msg("IdP email not verified, cannot link accounts")
-				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "idp"}
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonIdP}
 			}
 
 			// Check if existing account email is verified
@@ -164,7 +164,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 				l.log.Warn().
 					Str("email", req.Profile.Email).
 					Msg("existing account email not verified, cannot link accounts")
-				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "account"}
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonAccount}
 			}
 
 			l.log.Info().
@@ -185,7 +185,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 				l.log.Warn().
 					Str("email", req.Profile.Email).
 					Msg("IdP email not verified, cannot link accounts (default policy)")
-				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "idp"}
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonIdP}
 			}
 
 			// Check if existing account email is verified (mirror VerifiedEmail behavior)
@@ -197,7 +197,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 				l.log.Warn().
 					Str("email", req.Profile.Email).
 					Msg("existing account email not verified, cannot link accounts (default policy)")
-				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "account"}
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonAccount}
 			}
 
 			l.log.Info().

@@ -192,11 +192,11 @@ func (f *fakeRepo) CreatePasswordResetToken(ctx context.Context, id uuid.UUID, u
 func (f *fakeRepo) GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
 	return domain.PasswordResetToken{}, nil
 }
-func (f *fakeRepo) ConsumePasswordResetToken(ctx context.Context, tokenHash string) error {
-	return nil
+func (f *fakeRepo) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
+	return 1, nil
 }
-func (f *fakeRepo) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) error {
-	return nil
+func (f *fakeRepo) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
+	return 1, nil
 }
 
 // --- Tenant lookup ---

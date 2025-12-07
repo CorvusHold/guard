@@ -384,6 +384,25 @@ jobs:
       - name: Seed SSO portal E2E data
         run: bash scripts/seed-sso-portal-e2e.sh
 
+      - name: Build and start UI preview server
+        working-directory: ui
+        run: |
+          pnpm build
+          pnpm preview &
+          # Wait for UI preview server to be ready
+          for i in {1..30}; do
+            if curl -sf http://localhost:4173 > /dev/null 2>&1; then
+              echo "UI preview server is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "UI preview server failed to start"
+              exit 1
+            fi
+            echo "Waiting for UI preview server... ($i/30)"
+            sleep 2
+          done
+
       - name: Run SSO Portal E2E tests
         working-directory: ui
         env:

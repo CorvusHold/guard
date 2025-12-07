@@ -116,6 +116,13 @@ function App() {
     setConfigured(false)
     setBaseUrl('')
     setUser(null)
+    // Also clear auth tokens when resetting config to prevent stale tokens
+    try {
+      localStorage.removeItem('guard_ui:guard_access_token')
+      localStorage.removeItem('guard_ui:guard_refresh_token')
+    } catch {
+      // Ignore localStorage errors
+    }
   }
 
   const handleLoginSuccess = useCallback((userData: unknown) => {

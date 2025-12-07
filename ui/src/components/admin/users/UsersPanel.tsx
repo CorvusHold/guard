@@ -125,12 +125,11 @@ export default function UsersPanel({
       await load()
       // Update viewing user from refreshed data if modal is open
       if (viewingUser?.id === u.id) {
-        // Find the updated user from the refreshed users array
-        setViewingUser((prev) => {
-          if (!prev) return null
-          // Toggle email_verified locally since load() already refreshed the users array
-          // and we need to sync viewingUser with the actual server state
-          return { ...prev, email_verified: !prev.email_verified }
+        // Sync viewingUser with refreshed server data from users array
+        setUsers((currentUsers) => {
+          const updated = currentUsers.find((usr) => usr.id === u.id)
+          if (updated) setViewingUser(updated)
+          return currentUsers
         })
       }
     } catch (e: any) {
@@ -464,8 +463,9 @@ export default function UsersPanel({
                 variant="secondary"
                 size="sm"
                 onClick={() => {
+                  const userToEdit = viewingUser
                   setViewingUser(null)
-                  openEdit(viewingUser)
+                  if (userToEdit) openEdit(userToEdit)
                 }}
               >
                 Edit Profile

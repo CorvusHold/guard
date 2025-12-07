@@ -93,10 +93,8 @@ test.describe('UniversalLogin Component', () => {
       if (await toggleButton.isVisible().catch(() => false)) {
         await toggleButton.click()
         await expect(passwordInput).toHaveAttribute('type', 'text')
-      } else {
-        // If toggle button not found, test passes (feature may not be visible)
-        expect(true).toBeTruthy()
       }
+      // If toggle button not found, test passes (feature may not be visible)
     })
 
     test('should show forgot password link', async ({ page }) => {

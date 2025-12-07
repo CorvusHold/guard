@@ -67,7 +67,7 @@ export default function SsoSetupPortal() {
           const url = new URL(window.location.href)
           url.searchParams.delete('token')
           window.history.replaceState({}, '', url.toString())
-        } catch (_) {
+        } catch {
           // ignore cleanup errors
         }
       } catch (e: unknown) {

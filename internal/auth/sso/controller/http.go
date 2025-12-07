@@ -246,10 +246,10 @@ func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 			h.log.Error().Err(err).Str("redirect_url", resp.RedirectURL).Msg("invalid redirect URL")
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect URL"})
 		}
-		q := redirectURL.Query()
-		q.Set("access_token", tokens.AccessToken)
-		q.Set("refresh_token", tokens.RefreshToken)
-		redirectURL.RawQuery = q.Encode()
+		// Use fragment to avoid token leakage in server logs/referrer headers
+		redirectURL.Fragment = fmt.Sprintf("access_token=%s&refresh_token=%s",
+			url.QueryEscape(tokens.AccessToken),
+			url.QueryEscape(tokens.RefreshToken))
 		return c.Redirect(http.StatusFound, redirectURL.String())
 	}
 
