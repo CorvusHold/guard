@@ -1,0 +1,572 @@
+import { useState, useEffect, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2 } from 'lucide-react'
+import { useToast } from '@/lib/toast'
+import { getClient } from '@/lib/sdk'
+import type { LoginOptionsResp, SsoProviderOption } from '@/lib/sdk'
+import { useTenant } from '@/lib/tenant'
+
+interface UniversalLoginProps {
+  onLoginSuccess?: (userData: unknown) => void
+  onSignupClick?: () => void
+  showSignupLink?: boolean
+  className?: string
+}
+
+type LoginStep = 'email' | 'options' | 'password' | 'mfa'
+
+// Provider logo mapping - using simple SVG icons inline
+const providerLogos: Record<string, string> = {
+  okta: '🔐',
+  azure: '☁️',
+  microsoft: '🪟',
+  google: '🔍',
+  github: '🐙',
+  onelogin: '1️⃣',
+  auth0: '🔒',
+}
+
+function getProviderIcon(name: string): string {
+  const nameLower = name.toLowerCase()
+  for (const [key, icon] of Object.entries(providerLogos)) {
+    if (nameLower.includes(key)) return icon
+  }
+  return '🔑'
+}
+
+export default function UniversalLogin({
+  onLoginSuccess,
+  onSignupClick,
+  showSignupLink = true,
+  className
+}: UniversalLoginProps) {
+  const [step, setStep] = useState<LoginStep>('email')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loginOptions, setLoginOptions] = useState<LoginOptionsResp | null>(null)
+  const [challengeToken, setChallengeToken] = useState<string | null>(null)
+  const [challengeMethods, setChallengeMethods] = useState<string[]>([])
+  const [challengeMethod, setChallengeMethod] = useState<'totp' | 'backup_code'>('totp')
+  const [challengeCode, setChallengeCode] = useState('')
+  const { show: showToast } = useToast()
+  const { tenantId, setTenantId } = useTenant()
+
+  // Hydrate tenant from URL if present
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search)
+      const tid = usp.get('tenant_id')
+      if (tid && !tenantId) setTenantId(tid)
+    } catch {
+      // ignore
+    }
+  }, [tenantId, setTenantId])
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  const fetchLoginOptions = useCallback(async (emailToCheck: string) => {
+    if (!validateEmail(emailToCheck)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const client = getClient()
+      const res = await client.getLoginOptions({
+        email: emailToCheck.trim().toLowerCase(),
+        tenant_id: tenantId || undefined
+      })
+
+      if (res.meta.status >= 200 && res.meta.status < 300 && res.data) {
+        setLoginOptions(res.data)
+        
+        // Update tenant context if discovered
+        if (res.data.tenant_id && !tenantId) {
+          setTenantId(res.data.tenant_id)
+        }
+
+        // Determine next step based on options
+        if (res.data.domain_matched_sso) {
+          // Domain matches SSO - show SSO option prominently
+          setStep('options')
+        } else if (res.data.user_exists && res.data.password_enabled) {
+          // Existing user with password - go to password
+          setStep('password')
+        } else if (res.data.sso_providers.length > 0) {
+          // SSO available - show options
+          setStep('options')
+        } else if (res.data.password_enabled) {
+          // Only password available
+          setStep('password')
+        } else {
+          setError('No login methods available for this email')
+        }
+      } else {
+        setError('Failed to check login options')
+      }
+    } catch (e: unknown) {
+      const err = e as Error
+      setError(err?.message || 'Failed to check login options')
+    } finally {
+      setLoading(false)
+    }
+  }, [tenantId, setTenantId])
+
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmedEmail = email.trim()
+    if (trimmedEmail) {
+      fetchLoginOptions(trimmedEmail)
+    }
+  }
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!password.trim()) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const client = getClient()
+      const tid = loginOptions?.tenant_id || tenantId
+
+      const res = await client.passwordLogin({
+        email: email.trim(),
+        password: password.trim(),
+        tenant_id: tid || undefined
+      })
+
+      if (res.meta.status >= 200 && res.meta.status < 300) {
+        if (res.data && (res.data as { challenge_token?: string })?.challenge_token) {
+          const data = res.data as { challenge_token: string; methods?: string[] }
+          setChallengeToken(data.challenge_token)
+          setChallengeMethods(data.methods || [])
+          if (data.methods?.includes('totp')) {
+            setChallengeMethod('totp')
+          } else if (data.methods?.includes('backup_code')) {
+            setChallengeMethod('backup_code')
+          }
+          setChallengeCode('')
+          setStep('mfa')
+          showToast({
+            title: 'Verification required',
+            description: 'Enter your authentication code to continue.',
+            variant: 'info'
+          })
+        } else {
+          const meRes = await client.me()
+          if (meRes.meta.status === 200 && onLoginSuccess) {
+            onLoginSuccess(meRes.data)
+          }
+          showToast({
+            title: 'Login successful',
+            description: 'Welcome back!',
+            variant: 'success'
+          })
+        }
+      } else {
+        setError('Invalid credentials. Please try again.')
+      }
+    } catch (e: unknown) {
+      const err = e as Error
+      setError(err?.message || 'Login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!challengeToken || !challengeCode.trim()) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const client = getClient()
+      const res = await client.mfaVerify({
+        challenge_token: challengeToken,
+        method: challengeMethod,
+        code: challengeCode.trim()
+      })
+
+      if (res.meta.status >= 200 && res.meta.status < 300) {
+        const meRes = await client.me()
+        if (meRes.meta.status === 200 && onLoginSuccess) {
+          onLoginSuccess(meRes.data)
+        }
+        showToast({
+          title: 'Verification successful',
+          description: 'You are now signed in.',
+          variant: 'success'
+        })
+      } else {
+        setError('Verification failed. Please try again.')
+      }
+    } catch (e: unknown) {
+      const err = e as Error
+      setError(err?.message || 'Verification failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSSOLogin = (provider: SsoProviderOption) => {
+    if (provider.login_url) {
+      // Add redirect URL for callback
+      const redirectUrl = `${window.location.origin}/auth/callback`
+      const url = new URL(provider.login_url)
+      url.searchParams.set('redirect_url', redirectUrl)
+      window.location.href = url.toString()
+    }
+  }
+
+  const goBackToEmail = () => {
+    setStep('email')
+    setPassword('')
+    setError(null)
+    setLoginOptions(null)
+    setChallengeToken(null)
+    setChallengeCode('')
+  }
+
+  return (
+    <Card className={`w-full max-w-md ${className || ''}`} data-testid="universal-login">
+      <CardHeader className="space-y-1 text-center">
+        <CardTitle className="text-2xl font-bold">Welcome</CardTitle>
+        <CardDescription>
+          {step === 'email' && 'Enter your email to continue'}
+          {step === 'options' && 'Choose how to sign in'}
+          {step === 'password' && 'Enter your password'}
+          {step === 'mfa' && 'Verify your identity'}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive" data-testid="login-error">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Email Step */}
+        {step === 'email' && (
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  disabled={loading}
+                  data-testid="email-input"
+                  autoComplete="email"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!email.trim() || loading}
+              data-testid="continue-button"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Checking...
+                </>
+              ) : (
+                'Continue'
+              )}
+            </Button>
+
+            {showSignupLink && (
+              <div className="text-center text-sm text-muted-foreground">
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={onSignupClick}
+                  className="text-primary hover:underline"
+                  data-testid="signup-link"
+                >
+                  Sign up
+                </button>
+              </div>
+            )}
+          </form>
+        )}
+
+        {/* Options Step - Show available login methods */}
+        {step === 'options' && loginOptions && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="truncate">{email}</span>
+              <button
+                type="button"
+                onClick={goBackToEmail}
+                className="text-primary hover:underline shrink-0"
+              >
+                Change
+              </button>
+            </div>
+
+            {loginOptions.tenant_name && (
+              <div className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>{loginOptions.tenant_name}</span>
+              </div>
+            )}
+
+            {/* Domain-matched SSO (recommended) */}
+            {loginOptions.domain_matched_sso && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-green-600">
+                  ✓ Your organization uses SSO
+                </p>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => handleSSOLogin(loginOptions.domain_matched_sso!)}
+                  data-testid="sso-recommended-button"
+                >
+                  <span className="mr-2">{getProviderIcon(loginOptions.domain_matched_sso.name)}</span>
+                  Continue with {loginOptions.domain_matched_sso.name}
+                </Button>
+              </div>
+            )}
+
+            {/* Other SSO providers */}
+            {loginOptions.sso_providers.length > 0 && !loginOptions.domain_matched_sso && (
+              <div className="space-y-2">
+                {loginOptions.sso_providers.map((provider: SsoProviderOption) => (
+                  <Button
+                    key={provider.slug}
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleSSOLogin(provider)}
+                    data-testid={`sso-button-${provider.slug}`}
+                  >
+                    <span className="mr-2">{getProviderIcon(provider.name)}</span>
+                    Continue with {provider.name}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Password option */}
+            {loginOptions.password_enabled && !loginOptions.sso_required && (
+              <>
+                {(loginOptions.sso_providers.length > 0 || loginOptions.domain_matched_sso) && (
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <Separator className="w-full" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
+                  className="w-full"
+                  onClick={() => setStep('password')}
+                  data-testid="password-option-button"
+                >
+                  <Key className="mr-2 h-4 w-4" />
+                  Password
+                </Button>
+              </>
+            )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={goBackToEmail}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+          </div>
+        )}
+
+        {/* Password Step */}
+        {step === 'password' && (
+          <form onSubmit={handlePasswordLogin} className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="truncate">{email}</span>
+              <button
+                type="button"
+                onClick={goBackToEmail}
+                className="text-primary hover:underline shrink-0"
+              >
+                Change
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  disabled={loading}
+                  data-testid="password-input"
+                  autoComplete="current-password"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <a
+                href="/forgot-password"
+                className="text-sm text-primary hover:underline"
+                data-testid="forgot-password-link"
+              >
+                Forgot password?
+              </a>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!password.trim() || loading}
+              data-testid="signin-button"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={goBackToEmail}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+          </form>
+        )}
+
+        {/* MFA Step */}
+        {step === 'mfa' && challengeToken && (
+          <form onSubmit={handleMfaSubmit} className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              Enter the verification code from your authenticator app.
+            </div>
+
+            {challengeMethods.length > 1 && (
+              <div className="flex gap-2">
+                {challengeMethods.map((method) => (
+                  <Button
+                    key={method}
+                    type="button"
+                    variant={challengeMethod === method ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setChallengeMethod(method as 'totp' | 'backup_code')}
+                    disabled={loading}
+                  >
+                    {method === 'totp' ? 'Authenticator' : 'Backup code'}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="mfa-code">
+                {challengeMethod === 'backup_code' ? 'Backup code' : 'Verification code'}
+              </Label>
+              <Input
+                id="mfa-code"
+                type="text"
+                placeholder={challengeMethod === 'backup_code' ? 'Enter backup code' : '123456'}
+                value={challengeCode}
+                onChange={(e) => setChallengeCode(e.target.value)}
+                disabled={loading}
+                data-testid="mfa-code-input"
+                autoComplete="one-time-code"
+                autoFocus
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!challengeCode.trim() || loading}
+              data-testid="mfa-verify-button"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify'
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setChallengeToken(null)
+                setChallengeCode('')
+                setStep('password')
+              }}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

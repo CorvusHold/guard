@@ -278,6 +278,29 @@ func (q *Queries) GetSSOIdentity(ctx context.Context, arg GetSSOIdentityParams) 
 	return i, err
 }
 
+const linkSSOToExistingIdentity = `-- name: LinkSSOToExistingIdentity :exec
+UPDATE auth_identities
+SET sso_provider_id = $2, sso_subject = $3, sso_attributes = $4, updated_at = now()
+WHERE id = $1
+`
+
+type LinkSSOToExistingIdentityParams struct {
+	ID            pgtype.UUID `json:"id"`
+	SsoProviderID pgtype.UUID `json:"sso_provider_id"`
+	SsoSubject    pgtype.Text `json:"sso_subject"`
+	SsoAttributes []byte      `json:"sso_attributes"`
+}
+
+func (q *Queries) LinkSSOToExistingIdentity(ctx context.Context, arg LinkSSOToExistingIdentityParams) error {
+	_, err := q.db.Exec(ctx, linkSSOToExistingIdentity,
+		arg.ID,
+		arg.SsoProviderID,
+		arg.SsoSubject,
+		arg.SsoAttributes,
+	)
+	return err
+}
+
 const listUserSSOIdentities = `-- name: ListUserSSOIdentities :many
 SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities

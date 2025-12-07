@@ -10,6 +10,26 @@ interface SessionItem {
   ip: string
   created_at: string
   expires_at: string
+  auth_method?: string
+  sso_provider_id?: string
+  sso_provider_name?: string
+  sso_provider_slug?: string
+}
+
+function formatAuthMethod(s: SessionItem): string {
+  if (s.auth_method === 'sso' && s.sso_provider_name) {
+    return `SSO (${s.sso_provider_name})`
+  }
+  switch (s.auth_method) {
+    case 'password':
+      return 'Password'
+    case 'sso':
+      return 'SSO'
+    case 'magic_link':
+      return 'Magic Link'
+    default:
+      return s.auth_method || 'Password'
+  }
 }
 
 export default function MySessionsPanel(): React.JSX.Element {
@@ -100,6 +120,7 @@ export default function MySessionsPanel(): React.JSX.Element {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b">
+                <th className="py-2 pr-3">Auth Method</th>
                 <th className="py-2 pr-3">User Agent</th>
                 <th className="py-2 pr-3">IP</th>
                 <th className="py-2 pr-3">Created</th>
@@ -111,6 +132,11 @@ export default function MySessionsPanel(): React.JSX.Element {
             <tbody>
               {sessions.map((s) => (
                 <tr key={s.id} className="border-b last:border-b-0">
+                  <td className="py-2 pr-3">
+                    <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                      {formatAuthMethod(s)}
+                    </span>
+                  </td>
                   <td className="py-2 pr-3">{s.user_agent || '-'}</td>
                   <td className="py-2 pr-3">{s.ip || '-'}</td>
                   <td className="py-2 pr-3">

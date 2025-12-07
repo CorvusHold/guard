@@ -1012,6 +1012,7 @@ func (h *Controller) Register(e *echo.Echo) {
 	g.POST("/password/login", h.login, rlLogin)
 	g.POST("/password/reset/request", h.resetPasswordRequest)
 	g.POST("/password/reset/confirm", h.resetPasswordConfirm)
+	g.POST("/password/change", h.changePassword, rlToken)
 
 	// Magic-link auth
 	g.POST("/magic/send", h.sendMagic, rlMagic)
@@ -1028,10 +1029,14 @@ func (h *Controller) Register(e *echo.Echo) {
 	// Email discovery for progressive login
 	g.POST("/email/discover", h.emailDiscovery)
 
+	// Login options discovery - returns available auth methods for a tenant/email
+	g.GET("/login-options", h.getLoginOptions)
+
 	// Token lifecycle
 	g.POST("/refresh", h.refresh, rlToken)
 	g.POST("/logout", h.logout, rlToken)
 	g.GET("/me", h.me, rlToken)
+	g.PATCH("/profile", h.updateProfile, rlToken)
 	g.POST("/introspect", h.introspect, rlToken)
 	g.POST("/revoke", h.revoke, rlToken)
 
@@ -1041,6 +1046,8 @@ func (h *Controller) Register(e *echo.Echo) {
 	g.PATCH("/admin/users/:id", h.adminUpdateNames, rlToken)
 	g.POST("/admin/users/:id/block", h.adminBlockUser, rlToken)
 	g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
+	g.POST("/admin/users/:id/verify-email", h.adminVerifyEmail, rlToken)
+	g.POST("/admin/users/:id/unverify-email", h.adminUnverifyEmail, rlToken)
 	// Admin: RBAC v2
 	g.GET("/admin/rbac/permissions", h.rbacListPermissions, rlToken)
 	g.GET("/admin/rbac/roles", h.rbacListRoles, rlToken)
@@ -1203,14 +1210,24 @@ type mfaVerifyReq struct {
 }
 
 type resetPasswordRequestReq struct {
-	TenantID string `json:"tenant_id" validate:"required,uuid4"`
+	TenantID string `json:"tenant_id" validate:"omitempty,uuid4"`
 	Email    string `json:"email" validate:"required,email"`
 }
 
 type resetPasswordConfirmReq struct {
-	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+	TenantID    string `json:"tenant_id" validate:"omitempty,uuid4"`
 	Token       string `json:"token" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
+type changePasswordReq struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
+}
+
+type updateProfileReq struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type adminUpdateRolesReq struct {
@@ -1305,12 +1322,16 @@ type rbacResolvedPermissionsResp struct {
 
 // Sessions DTOs
 type sessionItem struct {
-	ID        uuid.UUID `json:"id"`
-	Revoked   bool      `json:"revoked"`
-	UserAgent string    `json:"user_agent"`
-	IP        string    `json:"ip"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	ID              uuid.UUID `json:"id"`
+	Revoked         bool      `json:"revoked"`
+	UserAgent       string    `json:"user_agent"`
+	IP              string    `json:"ip"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	AuthMethod      string    `json:"auth_method"`
+	SSOProviderID   *string   `json:"sso_provider_id,omitempty"`
+	SSOProviderName string    `json:"sso_provider_name,omitempty"`
+	SSOProviderSlug string    `json:"sso_provider_slug,omitempty"`
 }
 
 type sessionsListResp struct {
@@ -1591,6 +1612,51 @@ func (h *Controller) me(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
+}
+
+// Update Profile godoc
+// @Summary      Update current user's profile
+// @Description  Updates the authenticated user's profile (first name, last name)
+// @Tags         auth.profile
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  updateProfileReq  true  "first_name, last_name"
+// @Success      200
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/profile [patch]
+func (h *Controller) updateProfile(c echo.Context) error {
+	ctx := c.Request().Context()
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+
+	// Get token from bearer header or cookie
+	tok := bearerToken(c)
+	if tok == "" && authMode == "cookie" {
+		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
+			tok = cookie.Value
+		}
+	}
+	if tok == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
+	}
+
+	// Introspect to get user claims
+	claims, err := h.svc.Introspect(ctx, tok)
+	if err != nil || !claims.Active {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+
+	var req updateProfileReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+
+	if err := h.svc.UpdateProfile(ctx, claims.UserID, req.FirstName, req.LastName); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
 // // EmailDiscovery godoc
@@ -2082,6 +2148,112 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Admin Verify Email godoc
+// @Summary      Manually verify user email (admin)
+// @Description  Sets email_verified=true for a user. Requires admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path  string  true  "User ID"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/verify-email [post]
+func (h *Controller) adminVerifyEmail(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+	}
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+	// RBAC: require admin role
+	isAdmin := false
+	for _, r := range in.Roles {
+		if strings.EqualFold(r, "admin") {
+			isAdmin = true
+			break
+		}
+	}
+	if !isAdmin {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	}
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+	}
+
+	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, true); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Unverify Email godoc
+// @Summary      Manually unverify user email (admin)
+// @Description  Sets email_verified=false for a user. Requires admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path  string  true  "User ID"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /v1/auth/admin/users/{id}/unverify-email [post]
+func (h *Controller) adminUnverifyEmail(c echo.Context) error {
+	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	if tok == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+	}
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+	// RBAC: require admin role
+	isAdmin := false
+	for _, r := range in.Roles {
+		if strings.EqualFold(r, "admin") {
+			isAdmin = true
+			break
+		}
+	}
+	if !isAdmin {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	}
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+	}
+
+	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, false); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 // Sessions List godoc
 // @Summary      List my active sessions
 // @Description  Lists the authenticated user's sessions (refresh tokens) for the current tenant.
@@ -2116,13 +2288,22 @@ func (h *Controller) sessionsList(c echo.Context) error {
 	}
 	out := make([]sessionItem, 0, len(sessions))
 	for _, s := range sessions {
+		var ssoProviderID *string
+		if s.SSOProviderID != nil {
+			id := s.SSOProviderID.String()
+			ssoProviderID = &id
+		}
 		out = append(out, sessionItem{
-			ID:        s.ID,
-			Revoked:   s.Revoked,
-			UserAgent: s.UserAgent,
-			IP:        s.IP,
-			CreatedAt: s.CreatedAt,
-			ExpiresAt: s.ExpiresAt,
+			ID:              s.ID,
+			Revoked:         s.Revoked,
+			UserAgent:       s.UserAgent,
+			IP:              s.IP,
+			CreatedAt:       s.CreatedAt,
+			ExpiresAt:       s.ExpiresAt,
+			AuthMethod:      s.AuthMethod,
+			SSOProviderID:   ssoProviderID,
+			SSOProviderName: s.SSOProviderName,
+			SSOProviderSlug: s.SSOProviderSlug,
 		})
 	}
 	return c.JSON(http.StatusOK, sessionsListResp{Sessions: out})
@@ -2189,7 +2370,33 @@ func (h *Controller) resetPasswordRequest(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	// Stub: endpoint contract established; implementation pending
+
+	var tenID *uuid.UUID
+	if req.TenantID != "" {
+		parsed, err := uuid.Parse(req.TenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+		}
+		tenID = &parsed
+	}
+
+	// Call the service
+	err := h.svc.RequestPasswordReset(c.Request().Context(), domain.PasswordResetRequestInput{
+		TenantID: tenID,
+		Email:    req.Email,
+	})
+
+	// Check if tenant selection is required (email exists in multiple tenants)
+	var tenantErr *domain.TenantSelectionRequiredError
+	if errors.As(err, &tenantErr) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"error":   "tenant_selection_required",
+			"message": "This email exists in multiple tenants. Please select which tenant you want to reset the password for.",
+			"tenants": tenantErr.Tenants,
+		})
+	}
+
+	// For any other error (or success), return 202 to prevent email enumeration
 	return c.NoContent(http.StatusAccepted)
 }
 
@@ -2212,7 +2419,74 @@ func (h *Controller) resetPasswordConfirm(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	// Stub: endpoint contract established; implementation pending
+
+	var tenID *uuid.UUID
+	if req.TenantID != "" {
+		parsed, err := uuid.Parse(req.TenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+		}
+		tenID = &parsed
+	}
+
+	if err := h.svc.ConfirmPasswordReset(c.Request().Context(), domain.PasswordResetConfirmInput{
+		TenantID:    tenID,
+		Token:       req.Token,
+		NewPassword: req.NewPassword,
+	}); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusOK)
+}
+
+// Change Password godoc
+// @Summary      Change password
+// @Description  Changes the password for the currently authenticated user
+// @Tags         auth.password
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body  changePasswordReq  true  "current_password, new_password"
+// @Success      200
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /v1/auth/password/change [post]
+func (h *Controller) changePassword(c echo.Context) error {
+	ctx := c.Request().Context()
+	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+
+	// Get token from bearer header or cookie
+	tok := bearerToken(c)
+	if tok == "" && authMode == "cookie" {
+		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
+			tok = cookie.Value
+		}
+	}
+	if tok == "" {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
+	}
+
+	// Introspect to get user claims
+	claims, err := h.svc.Introspect(ctx, tok)
+	if err != nil || !claims.Active {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+
+	var req changePasswordReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
+	}
+	if err := h.svc.ChangePassword(ctx, domain.PasswordChangeInput{
+		UserID:          claims.UserID,
+		TenantID:        claims.TenantID,
+		CurrentPassword: req.CurrentPassword,
+		NewPassword:     req.NewPassword,
+	}); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 	return c.NoContent(http.StatusOK)
 }
 

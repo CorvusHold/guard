@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
-import type { SsoProviderItem, SsoProviderType, CreateSsoProviderReq, UpdateSsoProviderReq } from '@/lib/sdk'
+import type { SsoProviderItem, SsoProviderType, SsoLinkingPolicy, CreateSsoProviderReq, UpdateSsoProviderReq } from '@/lib/sdk'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import SsoProviderOidcFields from './SsoProviderOidcFields'
 import SsoProviderSamlFields from './SsoProviderSamlFields'
+import SsoSetupChecklist from './SsoSetupChecklist'
 
 export interface SsoProviderFormProps {
   tenantId: string
@@ -31,6 +34,8 @@ export default function SsoProviderForm({
     enabled: true,
     allow_signup: true,
     trust_email_verified: true,
+    linking_policy: 'verified_email',
+    allow_idp_initiated: false,
     domains: [],
     scopes: ['openid', 'profile', 'email']
   })
@@ -74,7 +79,9 @@ export default function SsoProviderForm({
         want_assertions_signed: provider.want_assertions_signed,
         want_response_signed: provider.want_response_signed,
         sign_requests: provider.sign_requests,
-        force_authn: provider.force_authn
+        force_authn: provider.force_authn,
+        linking_policy: provider.linking_policy || 'verified_email',
+        allow_idp_initiated: provider.allow_idp_initiated || false
       })
     }
   }, [provider])
@@ -184,7 +191,11 @@ export default function SsoProviderForm({
           updateData.want_response_signed = form.want_response_signed
           updateData.sign_requests = form.sign_requests
           updateData.force_authn = form.force_authn
+          updateData.allow_idp_initiated = form.allow_idp_initiated
         }
+
+        // Add linking policy
+        updateData.linking_policy = form.linking_policy
 
         const res = await getClient().ssoUpdateProvider(provider.id, updateData)
 
@@ -247,7 +258,11 @@ export default function SsoProviderForm({
           createData.want_response_signed = form.want_response_signed
           createData.sign_requests = form.sign_requests
           createData.force_authn = form.force_authn
+          createData.allow_idp_initiated = form.allow_idp_initiated
         }
+
+        // Add linking policy
+        createData.linking_policy = form.linking_policy
 
         const res = await getClient().ssoCreateProvider(createData)
 
@@ -343,6 +358,44 @@ export default function SsoProviderForm({
             />
             <Label htmlFor="trust_email_verified">Trust Email Verified</Label>
           </div>
+
+          {form.provider_type === 'saml' && (
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="allow_idp_initiated"
+                checked={form.allow_idp_initiated ?? false}
+                onCheckedChange={checked => updateForm('allow_idp_initiated', checked)}
+              />
+              <Label htmlFor="allow_idp_initiated">Allow IdP-Initiated SSO</Label>
+            </div>
+          )}
+        </div>
+
+        {/* Account Linking Policy */}
+        <div className="space-y-2">
+          <Label htmlFor="linking_policy">Account Linking Policy</Label>
+          <Select
+            value={form.linking_policy || 'verified_email'}
+            onValueChange={value => updateForm('linking_policy', value as SsoLinkingPolicy)}
+          >
+            <SelectTrigger id="linking_policy">
+              <SelectValue placeholder="Select linking policy" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="never">Never - No account linking</SelectItem>
+              <SelectItem value="verified_email">Verified Email - Link if both emails verified (Recommended)</SelectItem>
+              <SelectItem value="always">Always - Always link matching emails</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Controls how SSO accounts link to existing users with matching email addresses.
+          </p>
+          {form.linking_policy === 'always' && (
+            <div className="flex items-center gap-2 p-2 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>Warning: "Always" linking is less secure. Only use with fully trusted IdPs.</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -402,6 +455,16 @@ export default function SsoProviderForm({
             </TabsList>
           </Tabs>
         </div>
+      )}
+
+      {/* SAML Setup Checklist - shown only for new SAML providers */}
+      {form.provider_type === 'saml' && !provider && form.slug && (
+        <SsoSetupChecklist
+          slug={form.slug}
+          tenantId={tenantId}
+          isSaml={true}
+          className="mb-6"
+        />
       )}
 
       {/* Provider-Specific Fields */}

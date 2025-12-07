@@ -7,6 +7,12 @@ import TenantSettingsPanel from '@/components/admin/tenants/TenantSettingsPanel'
 import TenantOnboardingWizard from '@/components/admin/tenants/TenantOnboardingWizard'
 import TenantCreationPanel from '@/components/admin/tenants/TenantCreationPanel'
 import SSOCallback from '@/components/auth/Callback'
+import ForgotPassword from '@/components/auth/ForgotPassword'
+import ResetPassword from '@/components/auth/ResetPassword'
+import MagicLinkVerify from '@/components/auth/MagicLinkVerify'
+import EmailVerify from '@/components/auth/EmailVerify'
+import ProfileSettings from '@/components/settings/ProfileSettings'
+import SecuritySettings from '@/components/settings/SecuritySettings'
 import TenantCreate from '@/components/onboarding/TenantCreate'
 import Signup from '@/components/onboarding/Signup'
 import SsoSetupPortal from '@/components/auth/SsoSetupPortal'
@@ -33,6 +39,30 @@ if (path.startsWith('/auth/callback')) {
   element = <TenantCreate />
 } else if (path.startsWith('/signup')) {
   element = <Signup />
+} else if (path.startsWith('/forgot-password')) {
+  element = <ForgotPassword />
+} else if (path.startsWith('/reset-password')) {
+  element = <ResetPassword />
+} else if (path.startsWith('/login/magic') || path.startsWith('/auth/magic/verify')) {
+  element = <MagicLinkVerify />
+} else if (path.startsWith('/verify-email') || path.startsWith('/auth/email/verify')) {
+  element = <EmailVerify />
+} else if (path.startsWith('/settings/profile')) {
+  element = (
+    <RequireAuth>
+      <div className="p-6 max-w-2xl mx-auto">
+        <ProfileSettings />
+      </div>
+    </RequireAuth>
+  )
+} else if (path.startsWith('/settings/security')) {
+  element = (
+    <RequireAuth>
+      <div className="p-6 max-w-2xl mx-auto">
+        <SecuritySettings />
+      </div>
+    </RequireAuth>
+  )
 } else if (path.startsWith('/admin')) {
   // Admin subroutes
   const mSettings = path.match(/^\/admin\/tenants\/([^/]+)\/settings$/)

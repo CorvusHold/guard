@@ -15,10 +15,14 @@ export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promis
 
 export type TenantId = string;
 
-export type SsoProvider =
-  | 'workos'
-  | 'dev'
-  // placeholders for future socials
-  | 'google'
-  | 'github'
-  | 'apple';
+/**
+ * SSO provider slug - can be any string configured in the tenant's SSO providers.
+ * Common values include 'okta', 'azure-ad', 'google-saml', 'onelogin', etc.
+ * Legacy values 'workos' and 'dev' are still supported for backward compatibility.
+ */
+export type SsoProviderSlug = string;
+
+/**
+ * @deprecated Use SsoProviderSlug instead. This type is kept for backward compatibility.
+ */
+export type SsoProvider = SsoProviderSlug;

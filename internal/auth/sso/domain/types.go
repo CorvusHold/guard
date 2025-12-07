@@ -23,6 +23,34 @@ const (
 	ProviderTypeDev ProviderType = "dev"
 )
 
+// LinkingPolicy defines how SSO accounts link to existing users.
+type LinkingPolicy string
+
+const (
+	// LinkingPolicyNever - never link to existing accounts.
+	// SSO users must be new; returns error if email already exists.
+	LinkingPolicyNever LinkingPolicy = "never"
+
+	// LinkingPolicyVerifiedEmail - link only if both emails are verified.
+	// The IdP must confirm email is verified AND the existing account email must be verified.
+	// This is the recommended default for most enterprise scenarios.
+	LinkingPolicyVerifiedEmail LinkingPolicy = "verified_email"
+
+	// LinkingPolicyAlways - always link if email matches.
+	// WARNING: This is less secure and should only be used with fully trusted IdPs.
+	LinkingPolicyAlways LinkingPolicy = "always"
+)
+
+// IsValid checks if the linking policy is a valid value.
+func (p LinkingPolicy) IsValid() bool {
+	switch p {
+	case LinkingPolicyNever, LinkingPolicyVerifiedEmail, LinkingPolicyAlways:
+		return true
+	default:
+		return false
+	}
+}
+
 // SSOProvider is the core interface all SSO providers must implement.
 // It defines the contract for initiating authentication flows and handling
 // callbacks from identity providers.
@@ -231,6 +259,10 @@ type Config struct {
 	WantResponseSigned     bool
 	SignRequests           bool
 	ForceAuthn             bool
+	AllowIdpInitiated      bool // Allow IdP-initiated SSO (less secure, but needed for Azure AD "Test" button)
+
+	// Account Linking
+	LinkingPolicy LinkingPolicy // How to handle existing accounts with matching email
 
 	// Timestamps
 	CreatedAt time.Time

@@ -1752,6 +1752,134 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/auth/admin/users/{id}/unverify-email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets email_verified=false for a user. Requires admin role.",
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Manually unverify user email (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/admin/users/{id}/verify-email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets email_verified=true for a user. Requires admin role.",
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Manually verify user email (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/authorize": {
             "post": {
                 "security": [
@@ -1911,6 +2039,61 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/login-options": {
+            "get": {
+                "description": "Returns available authentication methods based on email/tenant context.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get available login options",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User email for context-aware options",
+                        "name": "email",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant ID to scope options",
+                        "name": "tenant_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.LoginOptionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2593,6 +2776,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/auth/password/change": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the password for the currently authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.password"
+                ],
+                "summary": "Change password",
+                "parameters": [
+                    {
+                        "description": "current_password, new_password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.changePasswordReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/password/login": {
             "post": {
                 "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens in the JSON payload.",
@@ -2820,6 +3057,60 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/profile": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the authenticated user's profile (first name, last name)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.profile"
+                ],
+                "summary": "Update current user's profile",
+                "parameters": [
+                    {
+                        "description": "first_name, last_name",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.updateProfileReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3251,6 +3542,79 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/sso/sp-info": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the computed Service Provider URLs (Entity ID, ACS URL, SLO URL) needed to configure an Identity Provider",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSO"
+                ],
+                "summary": "Get SP Info for SAML configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider slug (e.g. 'okta', 'azure-ad')",
+                        "name": "slug",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.spInfoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/tenants/{id}/settings": {
             "get": {
                 "security": [
@@ -3434,6 +3798,98 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.LoginOptionsResponse": {
+            "type": "object",
+            "properties": {
+                "domain_matched_sso": {
+                    "description": "If email domain matches an SSO provider's configured domains",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/controller.SSOProviderOption"
+                        }
+                    ]
+                },
+                "magic_link_enabled": {
+                    "type": "boolean"
+                },
+                "password_enabled": {
+                    "description": "Authentication methods available",
+                    "type": "boolean"
+                },
+                "preferred_method": {
+                    "description": "Recommended/preferred login method based on context\nValues: \"sso\", \"password\", \"magic_link\", \"social\"",
+                    "type": "string"
+                },
+                "social_providers": {
+                    "description": "Social login providers (tenant-wide or global)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.SocialProviderOption"
+                    }
+                },
+                "sso_providers": {
+                    "description": "SSO providers configured for this tenant",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.SSOProviderOption"
+                    }
+                },
+                "sso_required": {
+                    "description": "If true, SSO is required for this domain/tenant (password disabled)",
+                    "type": "boolean"
+                },
+                "tenant_id": {
+                    "description": "Tenant information (if discovered)",
+                    "type": "string"
+                },
+                "tenant_name": {
+                    "type": "string"
+                },
+                "user_exists": {
+                    "description": "If true, user exists and can use password login",
+                    "type": "boolean"
+                }
+            }
+        },
+        "controller.SSOProviderOption": {
+            "type": "object",
+            "properties": {
+                "login_url": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "description": "\"oidc\", \"saml\"",
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.SocialProviderOption": {
+            "type": "object",
+            "properties": {
+                "login_url": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "\"google\", \"github\", \"microsoft\", etc.",
+                    "type": "string"
+                }
+            }
+        },
         "controller.adminUpdateNamesReq": {
             "type": "object",
             "properties": {
@@ -3517,6 +3973,22 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "controller.changePasswordReq": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "new_password"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8
                 }
             }
         },
@@ -4199,7 +4671,6 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "new_password",
-                "tenant_id",
                 "token"
             ],
             "properties": {
@@ -4218,8 +4689,7 @@ const docTemplate = `{
         "controller.resetPasswordRequestReq": {
             "type": "object",
             "required": [
-                "email",
-                "tenant_id"
+                "email"
             ],
             "properties": {
                 "email": {
@@ -4248,6 +4718,9 @@ const docTemplate = `{
         "controller.sessionItem": {
             "type": "object",
             "properties": {
+                "auth_method": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -4262,6 +4735,15 @@ const docTemplate = `{
                 },
                 "revoked": {
                     "type": "boolean"
+                },
+                "sso_provider_id": {
+                    "type": "string"
+                },
+                "sso_provider_name": {
+                    "type": "string"
+                },
+                "sso_provider_slug": {
+                    "type": "string"
                 },
                 "user_agent": {
                     "type": "string"
@@ -4341,6 +4823,32 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.spInfoResponse": {
+            "type": "object",
+            "properties": {
+                "acs_url": {
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "login_url": {
+                    "type": "string"
+                },
+                "metadata_url": {
+                    "type": "string"
+                },
+                "slo_url": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
         "controller.tenantResp": {
             "type": "object",
             "properties": {
@@ -4357,6 +4865,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.updateProfileReq": {
+            "type": "object",
+            "properties": {
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
                     "type": "string"
                 }
             }

@@ -12,7 +12,7 @@ import (
 )
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata
 FROM refresh_tokens
 WHERE token_hash = $1
 `
@@ -31,24 +31,30 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 		&i.Ip,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.AuthMethod,
+		&i.SsoProviderID,
+		&i.Metadata,
 	)
 	return i, err
 }
 
 const insertRefreshToken = `-- name: InsertRefreshToken :exec
-INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at, auth_method, sso_provider_id, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type InsertRefreshTokenParams struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	TokenHash string             `json:"token_hash"`
-	ParentID  pgtype.UUID        `json:"parent_id"`
-	UserAgent pgtype.Text        `json:"user_agent"`
-	Ip        pgtype.Text        `json:"ip"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	TokenHash     string             `json:"token_hash"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	UserAgent     pgtype.Text        `json:"user_agent"`
+	Ip            pgtype.Text        `json:"ip"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	AuthMethod    pgtype.Text        `json:"auth_method"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	Metadata      []byte             `json:"metadata"`
 }
 
 func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) error {
@@ -61,15 +67,19 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 		arg.UserAgent,
 		arg.Ip,
 		arg.ExpiresAt,
+		arg.AuthMethod,
+		arg.SsoProviderID,
+		arg.Metadata,
 	)
 	return err
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at
-FROM refresh_tokens
-WHERE user_id = $1 AND tenant_id = $2
-ORDER BY created_at DESC
+SELECT rt.id, rt.user_id, rt.tenant_id, rt.token_hash, rt.parent_id, rt.revoked, rt.user_agent, rt.ip, rt.created_at, rt.expires_at, rt.auth_method, rt.sso_provider_id, rt.metadata, sp.name as sso_provider_name, sp.slug as sso_provider_slug
+FROM refresh_tokens rt
+LEFT JOIN sso_providers sp ON rt.sso_provider_id = sp.id
+WHERE rt.user_id = $1 AND rt.tenant_id = $2
+ORDER BY rt.created_at DESC
 `
 
 type ListUserSessionsParams struct {
@@ -77,15 +87,33 @@ type ListUserSessionsParams struct {
 	TenantID pgtype.UUID `json:"tenant_id"`
 }
 
-func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsParams) ([]RefreshToken, error) {
+type ListUserSessionsRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	TokenHash       string             `json:"token_hash"`
+	ParentID        pgtype.UUID        `json:"parent_id"`
+	Revoked         bool               `json:"revoked"`
+	UserAgent       pgtype.Text        `json:"user_agent"`
+	Ip              pgtype.Text        `json:"ip"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	AuthMethod      pgtype.Text        `json:"auth_method"`
+	SsoProviderID   pgtype.UUID        `json:"sso_provider_id"`
+	Metadata        []byte             `json:"metadata"`
+	SsoProviderName pgtype.Text        `json:"sso_provider_name"`
+	SsoProviderSlug pgtype.Text        `json:"sso_provider_slug"`
+}
+
+func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsParams) ([]ListUserSessionsRow, error) {
 	rows, err := q.db.Query(ctx, listUserSessions, arg.UserID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RefreshToken
+	var items []ListUserSessionsRow
 	for rows.Next() {
-		var i RefreshToken
+		var i ListUserSessionsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -97,6 +125,11 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 			&i.Ip,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.AuthMethod,
+			&i.SsoProviderID,
+			&i.Metadata,
+			&i.SsoProviderName,
+			&i.SsoProviderSlug,
 		); err != nil {
 			return nil, err
 		}

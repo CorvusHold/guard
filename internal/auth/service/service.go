@@ -414,6 +414,11 @@ func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bo
 	return s.repo.SetUserActive(ctx, userID, active)
 }
 
+// SetUserEmailVerified sets the email_verified flag for a user.
+func (s *Service) SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return s.repo.SetUserEmailVerified(ctx, userID, verified)
+}
+
 // ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 func (s *Service) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
 	return s.repo.ListUserSessions(ctx, userID, tenantID)
@@ -698,7 +703,7 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 	h := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, "password", nil); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
@@ -981,4 +986,208 @@ func generateBackupCode(n int) (string, error) {
 	}
 	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
 	return enc.EncodeToString(b), nil
+}
+
+// --- Password Reset ---
+
+// RequestPasswordReset sends a password reset email to the user.
+// TenantID is required because identity is scoped by (tenant_id, email).
+// If TenantID is nil and email exists in multiple tenants, returns an error
+// asking the user to specify which tenant.
+func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordResetRequestInput) error {
+	email := strings.TrimSpace(strings.ToLower(in.Email))
+	if email == "" {
+		return errors.New("email is required")
+	}
+
+	var ai domain.AuthIdentity
+	var tenantID uuid.UUID
+
+	if in.TenantID != nil {
+		// Look up the user by email and specific tenant
+		found, err := s.repo.GetAuthIdentityByEmailTenant(ctx, *in.TenantID, email)
+		if err != nil {
+			// Don't reveal whether user exists - always return success
+			return nil
+		}
+		ai = found
+		tenantID = *in.TenantID
+	} else {
+		// No tenant specified - look up by email to see how many tenants have this email
+		identities, err := s.repo.FindAuthIdentitiesByEmail(ctx, email)
+		if err != nil || len(identities) == 0 {
+			// Don't reveal whether user exists - always return success
+			return nil
+		}
+		// If email exists in exactly one tenant, we can proceed
+		if len(identities) == 1 {
+			ai = identities[0]
+			tenantID = ai.TenantID
+		} else {
+			// Email exists in multiple tenants - user must specify which one
+			// Build tenant options from the identities
+			tenantOpts := make([]domain.TenantOption, 0, len(identities))
+			for _, ident := range identities {
+				// Look up tenant name
+				tenant, err := s.repo.GetTenantByID(ctx, ident.TenantID)
+				name := ""
+				if err == nil {
+					name = tenant.Name
+				}
+				tenantOpts = append(tenantOpts, domain.TenantOption{
+					TenantID:   ident.TenantID,
+					TenantName: name,
+				})
+			}
+			return &domain.TenantSelectionRequiredError{Tenants: tenantOpts}
+		}
+	}
+
+	// Resolve TTL for password reset (use magic link TTL as default)
+	ttl, _ := s.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &tenantID, s.cfg.MagicLinkTTL)
+
+	// Generate token and store hashed
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+	exp := time.Now().Add(ttl)
+
+	if err := s.repo.CreatePasswordResetToken(ctx, uuid.New(), ai.UserID, tenantID, email, tokenHash, exp); err != nil {
+		return err
+	}
+
+	// Build reset link
+	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
+	resetLink := baseURL + "/reset-password?token=" + token
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.reset.requested",
+		TenantID: tenantID,
+		UserID:   ai.UserID,
+		Meta:     map[string]string{"email": email},
+		Time:     time.Now(),
+	})
+
+	// Log the reset link (in production, this would send an email)
+	s.log.Info().Str("email", email).Str("reset_link", resetLink).Msg("password reset requested")
+
+	return nil
+}
+
+// ConfirmPasswordReset verifies the token and sets the new password.
+func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordResetConfirmInput) error {
+	if in.Token == "" {
+		return errors.New("token required")
+	}
+	if len(in.NewPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	// Hash the token and look it up
+	h := sha256.Sum256([]byte(in.Token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	prt, err := s.repo.GetPasswordResetTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+
+	// Check if token is expired or already consumed
+	if prt.ConsumedAt != nil || time.Now().After(prt.ExpiresAt) {
+		return errors.New("token expired or already used")
+	}
+
+	// Verify tenant matches if provided
+	if in.TenantID != nil && prt.TenantID != *in.TenantID {
+		return errors.New("invalid token")
+	}
+
+	// Consume the token
+	if err := s.repo.ConsumePasswordResetToken(ctx, tokenHash); err != nil {
+		return err
+	}
+
+	// Hash the new password
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update the password
+	if err := s.repo.UpdateAuthIdentityPassword(ctx, prt.TenantID, prt.Email, string(hash)); err != nil {
+		return err
+	}
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.reset.completed",
+		TenantID: prt.TenantID,
+		UserID:   prt.UserID,
+		Meta:     map[string]string{"email": prt.Email},
+		Time:     time.Now(),
+	})
+
+	return nil
+}
+
+// ChangePassword changes the password for a logged-in user.
+func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeInput) error {
+	if len(in.NewPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	// Get the user's auth identity
+	identities, err := s.repo.GetAuthIdentitiesByUser(ctx, in.UserID)
+	if err != nil {
+		return err
+	}
+
+	// Find the identity for this tenant
+	var ai *domain.AuthIdentity
+	for _, identity := range identities {
+		if identity.TenantID == in.TenantID {
+			ai = &identity
+			break
+		}
+	}
+	if ai == nil {
+		return errors.New("user not found in tenant")
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(ai.PasswordHash), []byte(in.CurrentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	// Hash the new password
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update the password
+	if err := s.repo.UpdateAuthIdentityPassword(ctx, in.TenantID, ai.Email, string(hash)); err != nil {
+		return err
+	}
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.changed",
+		TenantID: in.TenantID,
+		UserID:   in.UserID,
+		Meta:     map[string]string{"email": ai.Email},
+		Time:     time.Now(),
+	})
+
+	return nil
+}
+
+// UpdateProfile updates the user's profile (first name, last name).
+func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+	return s.repo.UpdateUserNames(ctx, userID, strings.TrimSpace(firstName), strings.TrimSpace(lastName))
 }

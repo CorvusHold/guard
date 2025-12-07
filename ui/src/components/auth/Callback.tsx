@@ -14,7 +14,6 @@ export default function SSOCallback() {
   const provider = (qp.get('provider') || '').toLowerCase()
   const code = qp.get('code') || ''
   const state = qp.get('state') || undefined
-  const email = qp.get('email') || undefined
 
   useEffect(() => {
     // Persist runtime config if guard-base-url is present
@@ -36,8 +35,7 @@ export default function SSOCallback() {
         const client = getClient()
         const res = await client.handleSsoCallback(provider as any, {
           code,
-          state,
-          email
+          state
         })
         if (res.meta.status === 200) {
           const me = await client.me()
@@ -55,7 +53,7 @@ export default function SSOCallback() {
     }
 
     void run()
-  }, [provider, code, state, email])
+  }, [provider, code, state])
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center p-6">

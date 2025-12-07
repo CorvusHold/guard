@@ -3035,6 +3035,62 @@
         }
       }
     },
+    "/v1/auth/password/change": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Changes the password for the currently authenticated user",
+        "tags": [
+          "auth.password"
+        ],
+        "summary": "Change password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.changePasswordReq"
+              }
+            }
+          },
+          "description": "current_password, new_password",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/password/login": {
       "post": {
         "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ \"success\": true }` instead of raw tokens in the JSON payload.",
@@ -3290,6 +3346,62 @@
           },
           "429": {
             "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/profile": {
+      "patch": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Updates the authenticated user's profile (first name, last name)",
+        "tags": [
+          "auth.profile"
+        ],
+        "summary": "Update current user's profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateProfileReq"
+              }
+            }
+          },
+          "description": "first_name, last_name",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -4187,6 +4299,22 @@
           }
         }
       },
+      "controller.changePasswordReq": {
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8
+          }
+        }
+      },
       "controller.createTenantReq": {
         "type": "object",
         "required": [
@@ -4866,7 +4994,6 @@
         "type": "object",
         "required": [
           "new_password",
-          "tenant_id",
           "token"
         ],
         "properties": {
@@ -4885,8 +5012,7 @@
       "controller.resetPasswordRequestReq": {
         "type": "object",
         "required": [
-          "email",
-          "tenant_id"
+          "email"
         ],
         "properties": {
           "email": {
@@ -5024,6 +5150,17 @@
             "type": "string"
           },
           "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.updateProfileReq": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
             "type": "string"
           }
         }

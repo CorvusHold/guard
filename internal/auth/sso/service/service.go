@@ -209,6 +209,7 @@ type CallbackResponse struct {
 	IsNewUser    bool
 	IdentityID   uuid.UUID
 	SessionToken string // Optional: generated session token
+	RedirectURL  string // The redirect URL from the initiate request (for app callback)
 }
 
 // HandleCallback handles the SSO callback from the identity provider.
@@ -216,6 +217,8 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 	start := time.Now()
 	var config *domain.Config
 	var callbackErr error
+	var stateData *state.State
+	isIdpInitiated := false
 
 	// Defer metrics and audit event publishing
 	defer func() {
@@ -236,48 +239,91 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 		stateToken = req.RelayState
 	}
 
-	stateData, err := s.stateManager.GetAndDelete(ctx, stateToken)
-	if err != nil {
-		s.log.Warn().Err(err).Str("state", stateToken).Msg("invalid or expired state")
-		callbackErr = domain.ErrInvalidState{}
-		return nil, callbackErr
-	}
+	if stateToken != "" {
+		// SP-initiated flow: validate state token
+		var err error
+		stateData, err = s.stateManager.GetAndDelete(ctx, stateToken)
+		if err != nil {
+			s.log.Warn().Err(err).Str("state", stateToken).Msg("invalid or expired state")
+			callbackErr = domain.ErrInvalidState{}
+			return nil, callbackErr
+		}
 
-	// Verify tenant ID matches
-	if stateData.TenantID != req.TenantID {
-		s.log.Warn().
-			Str("state_tenant_id", stateData.TenantID.String()).
-			Str("request_tenant_id", req.TenantID.String()).
-			Msg("tenant ID mismatch in SSO callback")
-		callbackErr = fmt.Errorf("tenant ID mismatch")
-		return nil, callbackErr
-	}
+		// Verify tenant ID matches
+		if stateData.TenantID != req.TenantID {
+			s.log.Warn().
+				Str("state_tenant_id", stateData.TenantID.String()).
+				Str("request_tenant_id", req.TenantID.String()).
+				Msg("tenant ID mismatch in SSO callback")
+			callbackErr = fmt.Errorf("tenant ID mismatch")
+			return nil, callbackErr
+		}
 
-	// Load provider configuration
-	config, err = s.getProviderByID(ctx, req.TenantID, stateData.ProviderID)
-	if err != nil {
-		s.log.Error().Err(err).
-			Str("provider_id", stateData.ProviderID.String()).
-			Msg("failed to load provider")
-		callbackErr = domain.ErrProviderNotFound{ProviderSlug: stateData.ProviderID.String()}
-		return nil, callbackErr
-	}
+		// Load provider configuration by ID from state
+		config, err = s.getProviderByID(ctx, req.TenantID, stateData.ProviderID)
+		if err != nil {
+			s.log.Error().Err(err).
+				Str("provider_id", stateData.ProviderID.String()).
+				Msg("failed to load provider")
+			callbackErr = domain.ErrProviderNotFound{ProviderSlug: stateData.ProviderID.String()}
+			return nil, callbackErr
+		}
 
-	// IP/UserAgent validation - log warnings if mismatch (non-blocking)
-	if stateData.IPAddress != "" && stateData.IPAddress != req.IPAddress {
-		s.log.Warn().
-			Str("stored_ip", stateData.IPAddress).
-			Str("request_ip", req.IPAddress).
-			Str("provider_slug", config.Slug).
-			Msg("IP address mismatch in SSO callback")
-	}
+		// IP/UserAgent validation - log warnings if mismatch (non-blocking)
+		if stateData.IPAddress != "" && stateData.IPAddress != req.IPAddress {
+			s.log.Warn().
+				Str("stored_ip", stateData.IPAddress).
+				Str("request_ip", req.IPAddress).
+				Str("provider_slug", config.Slug).
+				Msg("IP address mismatch in SSO callback")
+		}
 
-	if stateData.UserAgent != "" && stateData.UserAgent != req.UserAgent {
-		s.log.Warn().
-			Str("stored_user_agent", stateData.UserAgent).
-			Str("request_user_agent", req.UserAgent).
-			Str("provider_slug", config.Slug).
-			Msg("User agent mismatch in SSO callback")
+		if stateData.UserAgent != "" && stateData.UserAgent != req.UserAgent {
+			s.log.Warn().
+				Str("stored_user_agent", stateData.UserAgent).
+				Str("request_user_agent", req.UserAgent).
+				Str("provider_slug", config.Slug).
+				Msg("User agent mismatch in SSO callback")
+		}
+	} else {
+		// IdP-initiated flow: no state token provided
+		// This happens when user clicks "Test" in Azure AD or similar IdP portals
+		isIdpInitiated = true
+
+		s.log.Info().
+			Str("provider_slug", req.ProviderSlug).
+			Str("tenant_id", req.TenantID.String()).
+			Msg("IdP-initiated SSO callback detected (no state token)")
+
+		// Load provider by slug from request
+		var err error
+		config, err = s.getProviderBySlug(ctx, req.TenantID, req.ProviderSlug)
+		if err != nil {
+			s.log.Error().Err(err).
+				Str("provider_slug", req.ProviderSlug).
+				Msg("failed to load provider for IdP-initiated SSO")
+			callbackErr = domain.ErrProviderNotFound{ProviderSlug: req.ProviderSlug}
+			return nil, callbackErr
+		}
+
+		// Check if IdP-initiated SSO is allowed for this provider
+		if !config.AllowIdpInitiated {
+			s.log.Warn().
+				Str("provider_slug", config.Slug).
+				Str("tenant_id", req.TenantID.String()).
+				Msg("IdP-initiated SSO not allowed for this provider")
+			callbackErr = domain.ErrIdpInitiatedNotAllowed{ProviderSlug: config.Slug}
+			return nil, callbackErr
+		}
+
+		// Check if provider is enabled
+		if !config.Enabled {
+			s.log.Warn().
+				Str("provider_slug", config.Slug).
+				Msg("provider is disabled")
+			callbackErr = domain.ErrProviderDisabled{ProviderSlug: config.Slug}
+			return nil, callbackErr
+		}
 	}
 
 	// Get or initialize provider
@@ -315,19 +361,25 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 	callbackReq := domain.CallbackRequest{
 		Code:         req.Code,
 		State:        req.State,
-		Nonce:        stateData.Nonce,
-		PKCEVerifier: stateData.PKCEVerifier,
 		SAMLResponse: req.SAMLResponse,
 		RelayState:   req.RelayState,
 		RedirectURL:  callbackURL,
+	}
+	// Add state data fields if available (SP-initiated flow)
+	if stateData != nil {
+		callbackReq.Nonce = stateData.Nonce
+		callbackReq.PKCEVerifier = stateData.PKCEVerifier
 	}
 
 	profile, err := provider.Callback(ctx, callbackReq)
 	if err != nil {
 		s.log.Error().Err(err).
 			Str("provider_id", config.ID.String()).
+			Bool("idp_initiated", isIdpInitiated).
 			Msg("provider callback failed")
-		s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "callback_error", err.Error(), nil)
+		if stateData != nil {
+			s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "callback_error", err.Error(), nil)
+		}
 		callbackErr = fmt.Errorf("provider callback failed: %w", err)
 
 		// Publish failure audit event
@@ -359,7 +411,9 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 			Strs("allowed_domains", config.Domains).
 			Str("provider_slug", config.Slug).
 			Msg("email domain not allowed")
-		s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "domain_not_allowed", "email domain not allowed", nil)
+		if stateData != nil {
+			s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "domain_not_allowed", "email domain not allowed", nil)
+		}
 		callbackErr = domain.ErrDomainNotAllowed{
 			Email:          profile.Email,
 			Domain:         emailDomain,
@@ -396,13 +450,16 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 		Profile:            profile,
 		AllowSignup:        config.AllowSignup,
 		TrustEmailVerified: config.TrustEmailVerified,
+		LinkingPolicy:      config.LinkingPolicy,
 	})
 	if err != nil {
 		s.log.Error().Err(err).
 			Str("provider_id", config.ID.String()).
 			Str("email", profile.Email).
 			Msg("failed to link user")
-		s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "user_link_error", err.Error(), nil)
+		if stateData != nil {
+			s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "failed", "user_link_error", err.Error(), nil)
+		}
 		callbackErr = fmt.Errorf("failed to link user: %w", err)
 
 		// Publish failure audit event
@@ -426,8 +483,10 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 		return nil, callbackErr
 	}
 
-	// Update auth attempt with success
-	s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "success", "", "", &linkResult.User.ID)
+	// Update auth attempt with success (only if we have state data from SP-initiated flow)
+	if stateData != nil {
+		s.updateAuthAttempt(ctx, stateData.ProviderID, stateToken, "success", "", "", &linkResult.User.ID)
+	}
 
 	// Create SSO session
 	if err := s.createSSOSession(ctx, req.TenantID, config.ID, linkResult.User.ID, profile); err != nil {
@@ -458,11 +517,18 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 		Time: time.Now(),
 	})
 
+	// Get redirect URL from state (if available from SP-initiated flow)
+	var redirectURL string
+	if stateData != nil {
+		redirectURL = stateData.RedirectURL
+	}
+
 	return &CallbackResponse{
-		User:       linkResult.User,
-		Profile:    profile,
-		IsNewUser:  linkResult.IsNewUser,
-		IdentityID: linkResult.IdentityID,
+		User:        linkResult.User,
+		Profile:     profile,
+		IsNewUser:   linkResult.IsNewUser,
+		IdentityID:  linkResult.IdentityID,
+		RedirectURL: redirectURL,
 	}, nil
 }
 
@@ -551,6 +617,62 @@ func (s *SSOService) GetProviderBySlug(ctx context.Context, tenantID uuid.UUID, 
 	return s.getProviderBySlug(ctx, tenantID, slug)
 }
 
+// SPInfo contains the computed Service Provider URLs for SAML configuration.
+type SPInfo struct {
+	// EntityID is the SP Entity ID / Issuer URL (also called "Identifier" in some IdPs)
+	EntityID string `json:"entity_id"`
+	// ACSURL is the Assertion Consumer Service URL where the IdP sends SAML responses
+	ACSURL string `json:"acs_url"`
+	// SLOURL is the Single Logout URL (optional, may be empty if SLO is not configured)
+	SLOURL string `json:"slo_url,omitempty"`
+	// MetadataURL is the URL where SP metadata XML can be downloaded
+	MetadataURL string `json:"metadata_url"`
+	// LoginURL is the URL to initiate SSO login
+	LoginURL string `json:"login_url"`
+	// BaseURL is the public base URL of the Guard service
+	BaseURL string `json:"base_url"`
+	// TenantID is the tenant UUID used in the URL
+	TenantID string `json:"tenant_id"`
+}
+
+// GetSPInfo computes the Service Provider URLs for a given tenant and provider slug.
+// These URLs are needed by admins to configure their Identity Provider (IdP).
+// The URLs use the V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+// This ensures globally unique URLs even when multiple tenants use the same provider slug.
+func (s *SSOService) GetSPInfo(tenantID uuid.UUID, slug string) (*SPInfo, error) {
+	if s.baseURL == "" {
+		return nil, fmt.Errorf("base URL is not configured")
+	}
+
+	// Validate tenant ID
+	if tenantID == uuid.Nil {
+		return nil, fmt.Errorf("tenant_id is required")
+	}
+
+	// Validate slug format
+	if err := domain.ValidateProviderSlug(slug); err != nil {
+		return nil, fmt.Errorf("invalid provider slug: %w", err)
+	}
+
+	tenantIDStr := tenantID.String()
+
+	// V2 tenant-scoped URL format: /auth/sso/t/{tenant_id}/{slug}/*
+	return &SPInfo{
+		EntityID:    fmt.Sprintf("%s/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
+		ACSURL:      fmt.Sprintf("%s/auth/sso/t/%s/%s/callback", s.baseURL, tenantIDStr, slug),
+		SLOURL:      fmt.Sprintf("%s/auth/sso/t/%s/%s/logout", s.baseURL, tenantIDStr, slug),
+		MetadataURL: fmt.Sprintf("%s/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
+		LoginURL:    fmt.Sprintf("%s/auth/sso/t/%s/%s/login", s.baseURL, tenantIDStr, slug),
+		BaseURL:     s.baseURL,
+		TenantID:    tenantIDStr,
+	}, nil
+}
+
+// GetBaseURL returns the configured public base URL.
+func (s *SSOService) GetBaseURL() string {
+	return s.baseURL
+}
+
 // Admin methods
 
 // CreateProviderRequest contains the request parameters for creating a provider.
@@ -623,44 +745,44 @@ func (s *SSOService) CreateProvider(ctx context.Context, req CreateProviderReque
 	}
 
 	// Convert domain config to DB params
-	// Note: Use config fields for SP certificate after initialization (which may have generated them)
+	// Note: Use config fields after initialization - SAML providers have IdP info extracted from metadata
+	// and SP certificates may have been generated during initialization
 	dbProvider, err := s.queries.CreateSSOProvider(ctx, db.CreateSSOProviderParams{
-		TenantID:              toPgUUID(req.TenantID),
-		Name:                  req.Name,
-		Slug:                  req.Slug,
-		ProviderType:          string(req.ProviderType),
-		Issuer:                toPgText(req.Issuer),
-		AuthorizationEndpoint: toPgText(req.AuthorizationEndpoint),
-		TokenEndpoint:         toPgText(req.TokenEndpoint),
-		UserinfoEndpoint:      toPgText(req.UserinfoEndpoint),
-		JwksUri:               toPgText(req.JWKSUri),
-		ClientID:              toPgText(req.ClientID),
-		ClientSecret:          toPgText(req.ClientSecret),
-		Scopes:                req.Scopes,
-		ResponseType:          toPgText(req.ResponseType),
-		ResponseMode:          toPgText(req.ResponseMode),
-		EntityID:              toPgText(req.EntityID),
-		AcsUrl:                toPgText(req.ACSUrl),
-		SloUrl:                toPgText(req.SLOUrl),
-		IdpMetadataUrl:        toPgText(req.IdPMetadataURL),
-		IdpMetadataXml:        toPgText(req.IdPMetadataXML),
-		IdpEntityID:           toPgText(req.IdPEntityID),
-		IdpSsoUrl:             toPgText(req.IdPSSOUrl),
-		IdpSloUrl:             toPgText(req.IdPSLOUrl),
-		IdpCertificate:        toPgText(req.IdPCertificate),
-		// Use config fields for SP certificate (may have been generated during initialization)
+		TenantID:               toPgUUID(config.TenantID),
+		Name:                   config.Name,
+		Slug:                   config.Slug,
+		ProviderType:           string(config.ProviderType),
+		Issuer:                 toPgText(config.Issuer),
+		AuthorizationEndpoint:  toPgText(config.AuthorizationEndpoint),
+		TokenEndpoint:          toPgText(config.TokenEndpoint),
+		UserinfoEndpoint:       toPgText(config.UserinfoEndpoint),
+		JwksUri:                toPgText(config.JWKSUri),
+		ClientID:               toPgText(config.ClientID),
+		ClientSecret:           toPgText(config.ClientSecret),
+		Scopes:                 config.Scopes,
+		ResponseType:           toPgText(config.ResponseType),
+		ResponseMode:           toPgText(config.ResponseMode),
+		EntityID:               toPgText(config.EntityID),
+		AcsUrl:                 toPgText(config.ACSUrl),
+		SloUrl:                 toPgText(config.SLOUrl),
+		IdpMetadataUrl:         toPgText(config.IdPMetadataURL),
+		IdpMetadataXml:         toPgText(config.IdPMetadataXML),
+		IdpEntityID:            toPgText(config.IdPEntityID),
+		IdpSsoUrl:              toPgText(config.IdPSSOUrl),
+		IdpSloUrl:              toPgText(config.IdPSLOUrl),
+		IdpCertificate:         toPgText(config.IdPCertificate),
 		SpCertificate:          toPgText(config.SPCertificate),
 		SpPrivateKey:           toPgText(config.SPPrivateKey),
 		SpCertificateExpiresAt: toPgTimestamp(config.SPCertificateExpiresAt),
-		WantAssertionsSigned:   toPgBool(req.WantAssertionsSigned),
-		WantResponseSigned:     toPgBool(req.WantResponseSigned),
-		SignRequests:           toPgBool(req.SignRequests),
-		ForceAuthn:             toPgBool(req.ForceAuthn),
+		WantAssertionsSigned:   toPgBool(config.WantAssertionsSigned),
+		WantResponseSigned:     toPgBool(config.WantResponseSigned),
+		SignRequests:           toPgBool(config.SignRequests),
+		ForceAuthn:             toPgBool(config.ForceAuthn),
 		AttributeMapping:       attributeMappingJSON,
-		Enabled:                toPgBool(req.Enabled),
-		AllowSignup:            toPgBool(req.AllowSignup),
-		TrustEmailVerified:     toPgBool(req.TrustEmailVerified),
-		Domains:                req.Domains,
+		Enabled:                toPgBool(config.Enabled),
+		AllowSignup:            toPgBool(config.AllowSignup),
+		TrustEmailVerified:     toPgBool(config.TrustEmailVerified),
+		Domains:                config.Domains,
 		CreatedBy:              toPgUUID(req.CreatedBy),
 		UpdatedBy:              toPgUUID(req.CreatedBy),
 	})
@@ -1017,12 +1139,16 @@ func (s *SSOService) initializeProvider(ctx context.Context, config *domain.Conf
 	case domain.ProviderTypeOIDC:
 		return provider.NewOIDCProvider(ctx, config)
 	case domain.ProviderTypeSAML:
-		// For SAML, we need to build the callback URLs
+		// For SAML, we need to build the callback URLs using V2 tenant-scoped format
+		tenantIDStr := config.TenantID.String()
 		if config.ACSUrl == "" {
-			config.ACSUrl = fmt.Sprintf("%s/auth/sso/%s/callback", s.baseURL, config.Slug)
+			config.ACSUrl = fmt.Sprintf("%s/auth/sso/t/%s/%s/callback", s.baseURL, tenantIDStr, config.Slug)
 		}
 		if config.EntityID == "" {
-			config.EntityID = fmt.Sprintf("%s/auth/sso/%s/metadata", s.baseURL, config.Slug)
+			config.EntityID = fmt.Sprintf("%s/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, config.Slug)
+		}
+		if config.SLOUrl == "" {
+			config.SLOUrl = fmt.Sprintf("%s/auth/sso/t/%s/%s/logout", s.baseURL, tenantIDStr, config.Slug)
 		}
 		return provider.NewSAMLProvider(ctx, config)
 	default:
@@ -1178,6 +1304,8 @@ func (s *SSOService) dbProviderToConfig(p db.SsoProvider) *domain.Config {
 		WantResponseSigned:     fromPgBool(p.WantResponseSigned),
 		SignRequests:           fromPgBool(p.SignRequests),
 		ForceAuthn:             fromPgBool(p.ForceAuthn),
+		AllowIdpInitiated:      fromPgBool(p.AllowIdpInitiated),
+		LinkingPolicy:          domain.LinkingPolicy(p.LinkingPolicy.String),
 		CreatedAt:              p.CreatedAt.Time,
 		UpdatedAt:              p.UpdatedAt.Time,
 		CreatedBy:              toUUID(p.CreatedBy),

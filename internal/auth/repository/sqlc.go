@@ -116,6 +116,11 @@ func (r *SQLCRepository) SetUserActive(ctx context.Context, userID uuid.UUID, ac
 	return r.q.SetUserActive(ctx, db.SetUserActiveParams{ID: toPgUUID(userID), IsActive: active})
 }
 
+// SetUserEmailVerified sets the email_verified flag for a user.
+func (r *SQLCRepository) SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return r.q.SetUserEmailVerified(ctx, db.SetUserEmailVerifiedParams{ID: toPgUUID(userID), EmailVerified: verified})
+}
+
 // UpdateUserNames updates only first and last name for a user, preserving roles.
 func (r *SQLCRepository) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
 	// Load current roles to preserve
@@ -139,7 +144,7 @@ func (r *SQLCRepository) ListUserSessions(ctx context.Context, userID uuid.UUID,
 	}
 	out := make([]domain.RefreshToken, 0, len(items))
 	for _, rt := range items {
-		out = append(out, mapRefreshToken(rt))
+		out = append(out, mapListUserSessionsRow(rt))
 	}
 	return out, nil
 }
@@ -212,6 +217,28 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		CreatedAt: rt.CreatedAt.Time,
 		UserAgent: rt.UserAgent.String,
 		IP:        rt.Ip.String,
+	}
+}
+
+func mapListUserSessionsRow(rt db.ListUserSessionsRow) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
+	return domain.RefreshToken{
+		ID:              toUUID(rt.ID),
+		UserID:          toUUID(rt.UserID),
+		TenantID:        toUUID(rt.TenantID),
+		Revoked:         rt.Revoked,
+		ExpiresAt:       rt.ExpiresAt.Time,
+		CreatedAt:       rt.CreatedAt.Time,
+		UserAgent:       rt.UserAgent.String,
+		IP:              rt.Ip.String,
+		AuthMethod:      rt.AuthMethod.String,
+		SSOProviderID:   ssoProviderID,
+		SSOProviderName: rt.SsoProviderName.String,
+		SSOProviderSlug: rt.SsoProviderSlug.String,
 	}
 }
 
@@ -318,20 +345,27 @@ func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, 
 	return r.q.AddUserToTenant(ctx, db.AddUserToTenantParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
 }
 
-func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error {
+func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID) error {
 	pid := pgtype.UUID{}
 	if parentID != nil {
 		pid = toPgUUID(*parentID)
 	}
+	spid := pgtype.UUID{}
+	if ssoProviderID != nil {
+		spid = toPgUUID(*ssoProviderID)
+	}
 	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
-		ID:        toPgUUID(id),
-		UserID:    toPgUUID(userID),
-		TenantID:  toPgUUID(tenantID),
-		TokenHash: tokenHash,
-		ParentID:  pid,
-		UserAgent: toPgText(userAgent),
-		Ip:        toPgText(ip),
-		ExpiresAt: toPgTime(expiresAt),
+		ID:            toPgUUID(id),
+		UserID:        toPgUUID(userID),
+		TenantID:      toPgUUID(tenantID),
+		TokenHash:     tokenHash,
+		ParentID:      pid,
+		UserAgent:     toPgText(userAgent),
+		Ip:            toPgText(ip),
+		ExpiresAt:     toPgTime(expiresAt),
+		AuthMethod:    toPgText(authMethod),
+		SsoProviderID: spid,
+		Metadata:      []byte("{}"),
 	})
 }
 
@@ -414,6 +448,38 @@ func (r *SQLCRepository) GetAuthIdentitiesByUser(ctx context.Context, userID uui
 		}))
 	}
 	return out, nil
+}
+
+func (r *SQLCRepository) GetTenantByID(ctx context.Context, tenantID uuid.UUID) (domain.Tenant, error) {
+	t, err := r.q.GetTenantByID(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	return domain.Tenant{
+		ID:        toUUID(t.ID),
+		Name:      t.Name,
+		IsActive:  t.IsActive,
+		CreatedAt: t.CreatedAt.Time,
+		UpdatedAt: t.UpdatedAt.Time,
+	}, nil
+}
+
+// ListEnabledSSOProviders returns public info about enabled SSO providers for a tenant.
+func (r *SQLCRepository) ListEnabledSSOProviders(ctx context.Context, tenantID uuid.UUID) ([]domain.PublicSSOProvider, error) {
+	providers, err := r.q.ListEnabledSSOProviders(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.PublicSSOProvider, 0, len(providers))
+	for _, p := range providers {
+		result = append(result, domain.PublicSSOProvider{
+			Slug:         p.Slug,
+			Name:         p.Name,
+			ProviderType: p.ProviderType,
+			Domains:      p.Domains,
+		})
+	}
+	return result, nil
 }
 
 // UpdateUserRoles updates only the roles column while preserving other profile fields.
@@ -771,4 +837,51 @@ func (r *SQLCRepository) FindAuthIdentitiesByEmail(ctx context.Context, email st
 	}
 
 	return identities, rows.Err()
+}
+
+// --- Password reset tokens ---
+
+func (r *SQLCRepository) CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	return r.q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		ID:        toPgUUID(id),
+		UserID:    toPgUUID(userID),
+		TenantID:  toPgUUID(tenantID),
+		Email:     email,
+		TokenHash: tokenHash,
+		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+	})
+}
+
+func (r *SQLCRepository) GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
+	row, err := r.q.GetPasswordResetTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return domain.PasswordResetToken{}, err
+	}
+	var consumedAt *time.Time
+	if row.ConsumedAt.Valid {
+		t := row.ConsumedAt.Time
+		consumedAt = &t
+	}
+	return domain.PasswordResetToken{
+		ID:         toUUID(row.ID),
+		UserID:     toUUID(row.UserID),
+		TenantID:   toUUID(row.TenantID),
+		Email:      row.Email,
+		TokenHash:  row.TokenHash,
+		CreatedAt:  row.CreatedAt.Time,
+		ExpiresAt:  row.ExpiresAt.Time,
+		ConsumedAt: consumedAt,
+	}, nil
+}
+
+func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHash string) error {
+	return r.q.ConsumePasswordResetToken(ctx, tokenHash)
+}
+
+func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) error {
+	return r.q.UpdateAuthIdentityPasswordByTenantEmail(ctx, db.UpdateAuthIdentityPasswordByTenantEmailParams{
+		TenantID:     toPgUUID(tenantID),
+		Email:        email,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	})
 }

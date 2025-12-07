@@ -93,8 +93,8 @@ func NewSAMLProvider(ctx context.Context, config *domain.Config) (*SAMLProvider,
 		IDPMetadata:       idpMetadata,
 		AuthnNameIDFormat: saml.EmailAddressNameIDFormat,
 		SignatureMethod:   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
-		// Configure signature validation based on config
-		AllowIDPInitiated: !config.SignRequests, // More secure when false
+		// Allow IdP-initiated SSO based on explicit config (needed for Azure AD "Test" button)
+		AllowIDPInitiated: config.AllowIdpInitiated,
 	}
 
 	// Configure SLO if provided

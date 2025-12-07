@@ -2996,6 +2996,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change password
+         * @description Changes the password for the currently authenticated user
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description current_password, new_password */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.changePasswordReq"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/password/login": {
         parameters: {
             query?: never;
@@ -3280,6 +3344,70 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update current user's profile
+         * @description Updates the authenticated user's profile (first name, last name)
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description first_name, last_name */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.updateProfileReq"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/v1/auth/refresh": {
@@ -3983,6 +4111,10 @@ export interface components {
             /** @example true */
             success?: boolean;
         };
+        "controller.changePasswordReq": {
+            current_password: string;
+            new_password: string;
+        };
         "controller.createTenantReq": {
             name: string;
         };
@@ -4184,12 +4316,12 @@ export interface components {
         };
         "controller.resetPasswordConfirmReq": {
             new_password: string;
-            tenant_id: string;
+            tenant_id?: string;
             token: string;
         };
         "controller.resetPasswordRequestReq": {
             email: string;
-            tenant_id: string;
+            tenant_id?: string;
         };
         "controller.revokeReq": {
             token: string;
@@ -4234,6 +4366,10 @@ export interface components {
             is_active?: boolean;
             name?: string;
             updated_at?: string;
+        };
+        "controller.updateProfileReq": {
+            first_name?: string;
+            last_name?: string;
         };
         "domain.Introspection": {
             active?: boolean;
