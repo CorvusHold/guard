@@ -318,9 +318,10 @@ type Repository interface {
 	// Password reset tokens
 	CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error
 	GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (PasswordResetToken, error)
-	ConsumePasswordResetToken(ctx context.Context, tokenHash string) error
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error)
 	// UpdateAuthIdentityPassword updates the password hash for an auth identity.
-	UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) error
+	// Returns the number of rows affected.
+	UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error)
 
 	// --- FGA repository methods (groups, memberships, ACL tuples) ---
 	// Groups

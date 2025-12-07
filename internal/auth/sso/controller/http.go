@@ -494,6 +494,7 @@ type portalSessionResponse struct {
 	TenantID      uuid.UUID `json:"tenant_id"`
 	ProviderSlug  string    `json:"provider_slug"`
 	PortalTokenID uuid.UUID `json:"portal_token_id"`
+	Intent        string    `json:"intent"`
 }
 
 // POST /v1/sso/portal/session
@@ -519,6 +520,7 @@ func (h *SSOController) handlePortalSession(c echo.Context) error {
 		TenantID:      sess.TenantID,
 		ProviderSlug:  sess.ProviderSlug,
 		PortalTokenID: sess.PortalTokenID,
+		Intent:        sess.Intent,
 	})
 }
 

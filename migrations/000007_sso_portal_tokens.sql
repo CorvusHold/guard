@@ -26,8 +26,8 @@ CREATE TABLE sso_portal_tokens (
 CREATE INDEX idx_sso_portal_tokens_lookup
   ON sso_portal_tokens (tenant_id, provider_slug, expires_at);
 
-CREATE INDEX idx_sso_portal_tokens_token_hash
-  ON sso_portal_tokens (token_hash);
+-- Note: token_hash UNIQUE constraint already creates a btree index,
+-- so no separate idx_sso_portal_tokens_token_hash index is needed.
 
 CREATE INDEX idx_sso_portal_tokens_not_expired
   ON sso_portal_tokens (expires_at)
@@ -39,7 +39,6 @@ CREATE INDEX idx_sso_portal_tokens_not_expired
 -- +goose StatementBegin
 
 DROP INDEX IF EXISTS idx_sso_portal_tokens_not_expired;
-DROP INDEX IF EXISTS idx_sso_portal_tokens_token_hash;
 DROP INDEX IF EXISTS idx_sso_portal_tokens_lookup;
 DROP TABLE IF EXISTS sso_portal_tokens;
 

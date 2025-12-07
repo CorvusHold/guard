@@ -22,10 +22,7 @@ function logMissingEnv() {
 
 test.describe('SSO Setup Portal (fully wired)', () => {
   test('loads portal context end-to-end using real backend', async ({ page, request }) => {
-    if (missingEnv) {
-      logMissingEnv()
-      test.skip()
-    }
+    test.skip(missingEnv, 'Missing required env vars: SSO_PORTAL_E2E_TENANT_ID, SSO_PORTAL_E2E_ADMIN_TOKEN, or SSO_PORTAL_E2E_PROVIDER_SLUG')
 
     const slug = PROVIDER_SLUG!
 

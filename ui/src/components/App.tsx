@@ -128,6 +128,14 @@ function App() {
       await client.logout()
     } catch {
       // Ignore logout errors
+    } finally {
+      // Always clear tokens regardless of API success/failure
+      try {
+        localStorage.removeItem('guard_ui:guard_access_token')
+        localStorage.removeItem('guard_ui:guard_refresh_token')
+      } catch {
+        // Ignore localStorage errors
+      }
     }
     setUser(null)
   }, [])

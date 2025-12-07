@@ -31,8 +31,10 @@ test.describe('UniversalLogin Component', () => {
       await page.getByTestId('continue-button').click()
       
       // Should show error or stay on email step (not proceed to password)
-      // Wait a moment for any async operations
-      await page.waitForTimeout(1000)
+      // Wait for either error to appear or confirm we're still on email step
+      await expect(
+        page.getByTestId('login-error').or(page.getByTestId('email-input'))
+      ).toBeVisible({ timeout: 3000 })
       
       // Either shows error or stays on email step
       const hasError = await page.getByTestId('login-error').isVisible().catch(() => false)
@@ -123,7 +125,11 @@ test.describe('UniversalLogin Component', () => {
       await page.getByTestId('signin-button').click()
       
       // Wait for response - either MFA, success, or error
-      await page.waitForTimeout(3000)
+      await expect(
+        page.getByTestId('mfa-code-input')
+          .or(page.getByTestId('login-error'))
+          .or(page.getByTestId('user-email'))
+      ).toBeVisible({ timeout: 5000 })
       
       // Check what happened
       const hasMfa = await page.getByTestId('mfa-code-input').isVisible().catch(() => false)

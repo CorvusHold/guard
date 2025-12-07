@@ -52,15 +52,7 @@ const (
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/rbac/permissions [get]
 func (h *Controller) rbacListPermissions(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
+	tok := h.resolveAccessToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -104,15 +96,7 @@ func (h *Controller) rbacListPermissions(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/rbac/roles [get]
 func (h *Controller) rbacListRoles(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
+	tok := h.resolveAccessToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -165,15 +149,7 @@ func (h *Controller) rbacListRoles(c echo.Context) error {
 // @Failure      403   {object}  map[string]string
 // @Router       /v1/auth/admin/rbac/roles [post]
 func (h *Controller) rbacCreateRole(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
+	tok := h.resolveAccessToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -1346,6 +1322,19 @@ func bearerToken(c echo.Context) string {
 	parts := strings.SplitN(h, " ", 2)
 	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 		return parts[1]
+	}
+	return ""
+}
+
+// resolveAccessToken returns the access token from bearer header or cookie fallback.
+func (h *Controller) resolveAccessToken(c echo.Context) string {
+	if tok := bearerToken(c); tok != "" {
+		return tok
+	}
+	if detectAuthMode(c, h.cfg.DefaultAuthMode) == "cookie" {
+		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
+			return cookie.Value
+		}
 	}
 	return ""
 }

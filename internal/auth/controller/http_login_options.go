@@ -121,6 +121,9 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 	// If we have a tenant, get SSO providers
 	if tenantID != uuid.Nil {
 		providers, listErr := h.svc.ListSSOProvidersPublic(c.Request().Context(), tenantID)
+		if listErr != nil {
+			c.Logger().Warnf("failed to list SSO providers for tenant %s: %v", tenantID, listErr)
+		}
 		if listErr == nil {
 			// Extract domain from email for SSO matching
 			emailDomain := ""
@@ -180,33 +183,35 @@ func buildSSOLoginURL(baseURL, tenantID, slug string) string {
 	return baseURL + "/auth/sso/t/" + tenantID + "/" + slug + "/login"
 }
 
-// getSSOProviderLogo returns a logo URL based on provider name
+// getSSOProviderLogo returns a local asset path based on provider name.
+// Uses curated local/static assets to avoid leaking client metadata and external dependencies.
 func getSSOProviderLogo(name, providerType string) string {
 	nameLower := strings.ToLower(name)
 
-	// Common identity providers
+	// Map provider keys to local asset paths (served from our domain)
 	logoMap := map[string]string{
-		"okta":      "https://www.okta.com/sites/default/files/Okta_Logo_BrightBlue_Medium.png",
-		"azure":     "https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg",
-		"microsoft": "https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg",
-		"google":    "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
-		"onelogin":  "https://www.onelogin.com/assets/img/press/presskit/downloads/onelogin-mark.png",
-		"ping":      "https://www.pingidentity.com/content/dam/ping-6-2-assets/logos/ping-logo.svg",
-		"auth0":     "https://cdn.auth0.com/styleguide/latest/lib/logos/img/logo-blue.svg",
-		"jumpcloud": "https://jumpcloud.com/wp-content/uploads/2022/03/JumpCloud-Logo-Stacked.svg",
-		"duo":       "https://duo.com/assets/img/duo-logo.svg",
+		"okta":      "/assets/sso/okta.svg",
+		"azure":     "/assets/sso/azure.svg",
+		"microsoft": "/assets/sso/microsoft.svg",
+		"google":    "/assets/sso/google.svg",
+		"onelogin":  "/assets/sso/onelogin.svg",
+		"ping":      "/assets/sso/ping.svg",
+		"auth0":     "/assets/sso/auth0.svg",
+		"jumpcloud": "/assets/sso/jumpcloud.svg",
+		"duo":       "/assets/sso/duo.svg",
 	}
 
-	for key, url := range logoMap {
+	for key, path := range logoMap {
 		if strings.Contains(nameLower, key) {
-			return url
+			return path
 		}
 	}
 
-	// Default based on type
+	// Generic fallback icon for unknown providers (SAML, OIDC, or other)
 	if providerType == "saml" {
-		return "" // Could return a generic SAML icon
+		return "/assets/sso/saml-generic.svg"
 	}
 
-	return ""
+	// Default SSO/OIDC fallback
+	return "/assets/sso/sso-generic.svg"
 }

@@ -5,11 +5,11 @@ export function formatRateLimitError(
   context?: string
 ): string | null {
   if (!isRateLimitError(err)) return null
-  const e = err as RateLimitError
+  const e = err
 
   const baseParts: string[] = ['Rate limit exceeded']
   if (context) {
-    baseParts.push(context.trim().endsWith('.') ? context.trim() : `${context.trim()}.`)
+    baseParts.push(`${context.trim()}.`)
   }
   let suffix = ' Please wait and try again.'
 

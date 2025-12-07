@@ -278,10 +278,10 @@ func (q *Queries) GetSSOIdentity(ctx context.Context, arg GetSSOIdentityParams) 
 	return i, err
 }
 
-const linkSSOToExistingIdentity = `-- name: LinkSSOToExistingIdentity :exec
+const linkSSOToExistingIdentity = `-- name: LinkSSOToExistingIdentity :execrows
 UPDATE auth_identities
 SET sso_provider_id = $2, sso_subject = $3, sso_attributes = $4, updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND sso_provider_id IS NULL
 `
 
 type LinkSSOToExistingIdentityParams struct {
@@ -291,14 +291,17 @@ type LinkSSOToExistingIdentityParams struct {
 	SsoAttributes []byte      `json:"sso_attributes"`
 }
 
-func (q *Queries) LinkSSOToExistingIdentity(ctx context.Context, arg LinkSSOToExistingIdentityParams) error {
-	_, err := q.db.Exec(ctx, linkSSOToExistingIdentity,
+func (q *Queries) LinkSSOToExistingIdentity(ctx context.Context, arg LinkSSOToExistingIdentityParams) (int64, error) {
+	result, err := q.db.Exec(ctx, linkSSOToExistingIdentity,
 		arg.ID,
 		arg.SsoProviderID,
 		arg.SsoSubject,
 		arg.SsoAttributes,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listUserSSOIdentities = `-- name: ListUserSSOIdentities :many

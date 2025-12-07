@@ -56,6 +56,7 @@ function CopyButton({ value }: { value: string }) {
       size="sm"
       className="shrink-0"
       onClick={handleCopy}
+      aria-label="Copy to clipboard"
     >
       {copied ? 'Copied!' : 'Copy'}
     </Button>
@@ -135,8 +136,7 @@ export default function GuardIntegrationForm({
     try {
       await onSave(config)
     } catch (e: unknown) {
-      const err = e as Error
-      setError(err?.message || 'Failed to save configuration')
+      setError(e instanceof Error ? e.message : 'Failed to save configuration')
     } finally {
       setSaving(false)
     }

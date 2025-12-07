@@ -44,6 +44,7 @@ func (f *fakeRepo) GetMagicLinkByHash(ctx context.Context, tokenHash string) (do
 func (f *fakeRepo) ConsumeMagicLink(ctx context.Context, tokenHash string) error { return nil }
 func (f *fakeRepo) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (domain.SSOPortalToken, error) {
 	f.lastPortalToken = domain.SSOPortalToken{
+		ID:            uuid.New(),
 		TenantID:      tenantID,
 		SSOProviderID: ssoProviderID,
 		ProviderSlug:  providerSlug,

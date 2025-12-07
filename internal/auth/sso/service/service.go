@@ -83,6 +83,7 @@ type PortalSession struct {
 	TenantID      uuid.UUID
 	ProviderSlug  string
 	PortalTokenID uuid.UUID
+	Intent        string
 }
 
 // InitiateSSO initiates an SSO authentication flow.
@@ -578,6 +579,7 @@ func (s *SSOService) ExchangePortalToken(ctx context.Context, rawToken string) (
 		TenantID:      uuid.UUID(row.TenantID.Bytes),
 		ProviderSlug:  row.ProviderSlug,
 		PortalTokenID: uuid.UUID(row.ID.Bytes),
+		Intent:        row.Intent,
 	}, nil
 }
 
@@ -609,6 +611,7 @@ func (s *SSOService) ValidatePortalToken(ctx context.Context, rawToken string) (
 		TenantID:      uuid.UUID(row.TenantID.Bytes),
 		ProviderSlug:  row.ProviderSlug,
 		PortalTokenID: uuid.UUID(row.ID.Bytes),
+		Intent:        row.Intent,
 	}, nil
 }
 

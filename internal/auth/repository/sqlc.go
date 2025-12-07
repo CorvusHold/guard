@@ -874,11 +874,11 @@ func (r *SQLCRepository) GetPasswordResetTokenByHash(ctx context.Context, tokenH
 	}, nil
 }
 
-func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHash string) error {
+func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
 	return r.q.ConsumePasswordResetToken(ctx, tokenHash)
 }
 
-func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) error {
+func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
 	return r.q.UpdateAuthIdentityPasswordByTenantEmail(ctx, db.UpdateAuthIdentityPasswordByTenantEmailParams{
 		TenantID:     toPgUUID(tenantID),
 		Email:        email,

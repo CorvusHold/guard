@@ -187,6 +187,19 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 					Msg("IdP email not verified, cannot link accounts (default policy)")
 				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "idp"}
 			}
+
+			// Check if existing account email is verified (mirror VerifiedEmail behavior)
+			existingUser, err := queries.GetUserByID(ctx, existingAuthIdentity.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load existing user: %w", err)
+			}
+			if !existingUser.EmailVerified {
+				l.log.Warn().
+					Str("email", req.Profile.Email).
+					Msg("existing account email not verified, cannot link accounts (default policy)")
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: "account"}
+			}
+
 			l.log.Info().
 				Str("user_id", userID.String()).
 				Str("email", req.Profile.Email).
@@ -259,7 +272,7 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 	} else {
 		// Existing user - update their existing auth_identity with SSO info
 		identityID = toUUID(existingAuthIdentity.ID)
-		err = queries.LinkSSOToExistingIdentity(ctx, db.LinkSSOToExistingIdentityParams{
+		rowsAffected, err := queries.LinkSSOToExistingIdentity(ctx, db.LinkSSOToExistingIdentityParams{
 			ID:            existingAuthIdentity.ID,
 			SsoProviderID: toPgUUID(req.ProviderID),
 			SsoSubject:    toPgText(req.Profile.Subject),
@@ -267,6 +280,10 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to link SSO to existing identity: %w", err)
+		}
+		if rowsAffected == 0 {
+			// Identity already has SSO linked (protected by WHERE sso_provider_id IS NULL)
+			return nil, fmt.Errorf("identity already linked to an SSO provider")
 		}
 	}
 

@@ -75,17 +75,27 @@ func (e ErrAccountExists) Error() string {
 	return fmt.Sprintf("an account with email '%s' already exists. Please sign in with your password or contact support to link your accounts.", e.Email)
 }
 
+// EmailNotVerifiedReason describes why email verification failed.
+type EmailNotVerifiedReason string
+
+const (
+	// EmailNotVerifiedReasonIdP indicates the IdP has not verified the user's email.
+	EmailNotVerifiedReasonIdP EmailNotVerifiedReason = "idp"
+	// EmailNotVerifiedReasonAccount indicates the existing account's email is not verified.
+	EmailNotVerifiedReasonAccount EmailNotVerifiedReason = "account"
+)
+
 // ErrEmailNotVerified is returned when account linking requires verified email but it's not.
 type ErrEmailNotVerified struct {
 	Email  string
-	Reason string // "idp" for IdP email not verified, "account" for existing account email not verified
+	Reason EmailNotVerifiedReason
 }
 
 func (e ErrEmailNotVerified) Error() string {
 	switch e.Reason {
-	case "idp":
+	case EmailNotVerifiedReasonIdP:
 		return "your identity provider has not verified your email address. Please verify your email with your IdP and try again."
-	case "account":
+	case EmailNotVerifiedReasonAccount:
 		return fmt.Sprintf("please verify your existing account's email address (%s) before linking with SSO.", e.Email)
 	default:
 		return "email verification required for account linking"

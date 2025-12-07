@@ -15,6 +15,8 @@ INSERT INTO sso_portal_tokens (
 ) RETURNING *;
 
 -- name: ConsumeSSOPortalTokenByHash :one
+-- Consumes a portal token by incrementing use_count.
+-- max_uses = 0 means unlimited uses.
 UPDATE sso_portal_tokens
 SET use_count = use_count + 1,
     last_used_at = NOW()

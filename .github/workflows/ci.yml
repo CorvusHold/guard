@@ -392,7 +392,11 @@ jobs:
         run: |
           # Source the env file created by seed script
           set -a
-          [ -f ../.env.sso-portal-e2e ] && source ../.env.sso-portal-e2e
+          if [ ! -f ../.env.sso-portal-e2e ]; then
+            echo "Error: .env.sso-portal-e2e not found"
+            exit 1
+          fi
+          source ../.env.sso-portal-e2e
           set +a
           pnpm exec playwright test e2e/sso-portal.spec.ts e2e/sso-portal-integration.spec.ts --reporter=line --trace=retain-on-failure
 
@@ -424,7 +428,7 @@ jobs:
             make_target: k6-smoke
           - scenario: login-rate-limit
             make_target: k6-rate-limit-login
-            env_vars: K6_ITERATIONS=120
+            k6_iterations: '120'
           - scenario: login-stress
             make_target: k6-login-stress
           - scenario: mfa-invalid
@@ -433,7 +437,7 @@ jobs:
             make_target: k6-portal-link-smoke
           - scenario: portal-link-rate-limit
             make_target: k6-rate-limit-portal-link
-            env_vars: K6_ITERATIONS=120
+            k6_iterations: '120'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -445,8 +449,9 @@ jobs:
           cache: true
 
       - name: Run k6 scenario
+        env:
+          K6_ITERATIONS: ${{ matrix.k6_iterations || '' }}
         run: |
-          ${{ matrix.env_vars || ':' }}
           make k6-setup
           make ${{ matrix.make_target }}
 

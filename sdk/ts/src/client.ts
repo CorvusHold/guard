@@ -35,6 +35,7 @@ export interface SsoPortalSessionResp {
   tenant_id: string;
   provider_slug: string;
   portal_token_id: string;
+  intent: string;
 }
 
 // Password reset tenant selection response (when email exists in multiple tenants)
@@ -762,7 +763,7 @@ export class GuardClient {
       try {
         const body = await res.json();
         if (body?.error) errorMsg = body.error;
-      } catch (_) { /* ignore parse errors */ }
+      } catch { /* ignore parse errors */ }
       throw new Error(errorMsg);
     }
     
@@ -873,15 +874,33 @@ export class GuardClient {
   async loadSsoPortalContext(token: string): Promise<SsoPortalContext> {
     const sessionRes = await this.ssoPortalSession(token);
     if (sessionRes.meta.status !== 200 || !sessionRes.data) {
-      throw new Error(`portal session failed with status ${sessionRes.meta.status}`);
+      const serverError = this.extractErrorDetails(sessionRes.data);
+      throw new Error(
+        `portal session failed with status ${sessionRes.meta.status}${serverError ? `: ${serverError}` : ''}`
+      );
     }
 
     const providerRes = await this.ssoPortalProvider(token);
     if (providerRes.meta.status !== 200 || !providerRes.data) {
-      throw new Error(`portal provider failed with status ${providerRes.meta.status}`);
+      const serverError = this.extractErrorDetails(providerRes.data);
+      throw new Error(
+        `portal provider failed with status ${providerRes.meta.status}${serverError ? `: ${serverError}` : ''}`
+      );
     }
 
     return { session: sessionRes.data, provider: providerRes.data };
+  }
+
+  // Helper to extract error details from server response
+  private extractErrorDetails(data: unknown): string | null {
+    if (!data || typeof data !== 'object') return null;
+    const obj = data as Record<string, unknown>;
+    // Try common error field names
+    if (typeof obj.error === 'string') return obj.error;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.description === 'string') return obj.description;
+    if (typeof obj.detail === 'string') return obj.detail;
+    return null;
   }
 
   // ==============================

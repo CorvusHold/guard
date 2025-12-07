@@ -123,9 +123,15 @@ export default function UsersPanel({
         show({ variant: 'success', title: 'Email marked as verified' })
       }
       await load()
-      // Update viewing user if modal is open
+      // Update viewing user from refreshed data if modal is open
       if (viewingUser?.id === u.id) {
-        setViewingUser({ ...u, email_verified: !u.email_verified })
+        // Find the updated user from the refreshed users array
+        setViewingUser((prev) => {
+          if (!prev) return null
+          // Toggle email_verified locally since load() already refreshed the users array
+          // and we need to sync viewingUser with the actual server state
+          return { ...prev, email_verified: !prev.email_verified }
+        })
       }
     } catch (e: any) {
       const rlMsg = formatRateLimitError(e, 'while updating email verification')

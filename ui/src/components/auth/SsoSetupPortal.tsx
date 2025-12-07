@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ensureRuntimeConfigFromQuery } from '@/lib/runtime'
+import { ensureRuntimeConfigFromQuery, getRuntimeConfig } from '@/lib/runtime'
 import { getClient } from '@/lib/sdk'
+import type { SsoPortalSessionResp, SsoProviderItem } from '../../../../sdk/ts/src/client'
 
 export default function SsoSetupPortal() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState<string>('')
-  const [session, setSession] = useState<any | null>(null)
-  const [provider, setProvider] = useState<any | null>(null)
+  const [session, setSession] = useState<SsoPortalSessionResp | null>(null)
+  const [provider, setProvider] = useState<SsoProviderItem | null>(null)
 
   // Capture token on first render, before any URL cleanup
   const tokenRef = useRef<string | null>(null)
@@ -39,6 +40,14 @@ export default function SsoSetupPortal() {
         return
       }
 
+      // Verify runtime config is present before calling getClient()
+      const runtimeConfig = getRuntimeConfig()
+      if (!runtimeConfig) {
+        setStatus('error')
+        setMessage('Runtime config missing from portal query (guard-base-url required)')
+        return
+      }
+
       setStatus('loading')
       try {
         const client = getClient()
@@ -61,9 +70,10 @@ export default function SsoSetupPortal() {
         } catch (_) {
           // ignore cleanup errors
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setStatus('error')
-        setMessage('Portal session failed')
+        const errMsg = e instanceof Error ? e.message : 'Unknown error'
+        setMessage(`Portal session failed: ${errMsg}`)
       }
     }
 

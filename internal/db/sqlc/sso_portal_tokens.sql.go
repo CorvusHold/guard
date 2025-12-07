@@ -22,6 +22,8 @@ WHERE token_hash = $1
 RETURNING id, tenant_id, sso_provider_id, provider_slug, token_hash, intent, created_by, expires_at, revoked_at, max_uses, use_count, last_used_at, created_at
 `
 
+// Consumes a portal token by incrementing use_count.
+// max_uses = 0 means unlimited uses.
 func (q *Queries) ConsumeSSOPortalTokenByHash(ctx context.Context, tokenHash string) (SsoPortalToken, error) {
 	row := q.db.QueryRow(ctx, consumeSSOPortalTokenByHash, tokenHash)
 	var i SsoPortalToken

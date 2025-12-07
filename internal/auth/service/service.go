@@ -1060,9 +1060,9 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 		return err
 	}
 
-	// Build reset link
+	// Build reset link (in production, this would be sent via email)
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
-	resetLink := baseURL + "/reset-password?token=" + token
+	_ = baseURL + "/reset-password?token=" + token // resetLink would be sent via email service
 
 	// Publish audit event
 	_ = s.pub.Publish(ctx, evdomain.Event{
@@ -1073,8 +1073,11 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 		Time:     time.Now(),
 	})
 
-	// Log the reset link (in production, this would send an email)
-	s.log.Info().Str("email", email).Str("reset_link", resetLink).Msg("password reset requested")
+	// Log the request (in production, this would send an email with resetLink)
+	s.log.Info().
+		Str("email", email).
+		Str("tenant_id", tenantID.String()).
+		Msg("password reset requested")
 
 	return nil
 }
@@ -1107,20 +1110,31 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 		return errors.New("invalid token")
 	}
 
-	// Consume the token
-	if err := s.repo.ConsumePasswordResetToken(ctx, tokenHash); err != nil {
-		return err
-	}
-
 	// Hash the new password
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
-	// Update the password
-	if err := s.repo.UpdateAuthIdentityPassword(ctx, prt.TenantID, prt.Email, string(hash)); err != nil {
+	// Update the password first (before consuming token for atomicity)
+	// If password update fails, user can retry with the same token
+	rowsAffected, err := s.repo.UpdateAuthIdentityPassword(ctx, prt.TenantID, prt.Email, string(hash))
+	if err != nil {
 		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	// Consume the token only after password update succeeds
+	rowsConsumed, err := s.repo.ConsumePasswordResetToken(ctx, tokenHash)
+	if err != nil {
+		return err
+	}
+	if rowsConsumed == 0 {
+		// Token was already consumed or expired between check and now (race condition)
+		// Password was already updated, so this is acceptable
+		s.log.Warn().Str("email", prt.Email).Msg("password reset token already consumed during update")
 	}
 
 	// Publish audit event
@@ -1171,8 +1185,12 @@ func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeIn
 	}
 
 	// Update the password
-	if err := s.repo.UpdateAuthIdentityPassword(ctx, in.TenantID, ai.Email, string(hash)); err != nil {
+	rowsAffected, err := s.repo.UpdateAuthIdentityPassword(ctx, in.TenantID, ai.Email, string(hash))
+	if err != nil {
 		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("user not found")
 	}
 
 	// Publish audit event

@@ -470,9 +470,11 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Token Rate Limit (admin/API)</Label>
+                <Label htmlFor="token-rate-limit">Token Rate Limit (admin/API)</Label>
                 <div className="flex space-x-2">
                   <Input
+                    id="token-rate-limit"
+                    data-testid="token-rate-limit"
                     value={settings.auth_ratelimit_token_limit || '50'}
                     onChange={(e) => updateSetting('auth_ratelimit_token_limit', e.target.value)}
                     placeholder="50"

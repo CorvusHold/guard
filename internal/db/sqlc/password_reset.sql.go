@@ -11,15 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const consumePasswordResetToken = `-- name: ConsumePasswordResetToken :exec
+const consumePasswordResetToken = `-- name: ConsumePasswordResetToken :execrows
 UPDATE password_reset_tokens
 SET consumed_at = now()
 WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
 `
 
-func (q *Queries) ConsumePasswordResetToken(ctx context.Context, tokenHash string) error {
-	_, err := q.db.Exec(ctx, consumePasswordResetToken, tokenHash)
-	return err
+func (q *Queries) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
+	result, err := q.db.Exec(ctx, consumePasswordResetToken, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createPasswordResetToken = `-- name: CreatePasswordResetToken :exec
@@ -70,7 +73,7 @@ func (q *Queries) GetPasswordResetTokenByHash(ctx context.Context, tokenHash str
 	return i, err
 }
 
-const updateAuthIdentityPasswordByTenantEmail = `-- name: UpdateAuthIdentityPasswordByTenantEmail :exec
+const updateAuthIdentityPasswordByTenantEmail = `-- name: UpdateAuthIdentityPasswordByTenantEmail :execrows
 UPDATE auth_identities
 SET password_hash = $3, updated_at = now()
 WHERE tenant_id = $1 AND email = $2
@@ -82,7 +85,10 @@ type UpdateAuthIdentityPasswordByTenantEmailParams struct {
 	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
-func (q *Queries) UpdateAuthIdentityPasswordByTenantEmail(ctx context.Context, arg UpdateAuthIdentityPasswordByTenantEmailParams) error {
-	_, err := q.db.Exec(ctx, updateAuthIdentityPasswordByTenantEmail, arg.TenantID, arg.Email, arg.PasswordHash)
-	return err
+func (q *Queries) UpdateAuthIdentityPasswordByTenantEmail(ctx context.Context, arg UpdateAuthIdentityPasswordByTenantEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAuthIdentityPasswordByTenantEmail, arg.TenantID, arg.Email, arg.PasswordHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

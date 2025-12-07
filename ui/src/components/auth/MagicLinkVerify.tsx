@@ -14,6 +14,7 @@ export default function MagicLinkVerify() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
+    let redirectTimeout: ReturnType<typeof setTimeout> | null = null
 
     if (!token) {
       setState('error')
@@ -30,7 +31,7 @@ export default function MagicLinkVerify() {
           setState('success')
           show({ variant: 'success', title: 'Signed in successfully' })
           // Redirect to admin after a short delay
-          setTimeout(() => {
+          redirectTimeout = setTimeout(() => {
             window.location.href = '/admin'
           }, 1500)
         } else {
@@ -48,6 +49,10 @@ export default function MagicLinkVerify() {
     }
 
     verify()
+
+    return () => {
+      if (redirectTimeout) clearTimeout(redirectTimeout)
+    }
   }, [show])
 
   return (

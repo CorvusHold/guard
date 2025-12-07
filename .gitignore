@@ -34,3 +34,6 @@ playwright-report
 .last-run.json
 TODO.md
 guard-cli
+
+# E2E test env files (generated during test setup)
+.env.sso-portal-e2e
