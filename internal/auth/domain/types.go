@@ -419,8 +419,11 @@ type PasswordResetRequestInput struct {
 	Email    string
 }
 
-// TenantSelectionRequiredError is returned when an email exists in multiple tenants
-// and the user must select which tenant they want to reset the password for.
+// TenantSelectionRequiredError is returned when an email exists in multiple tenants.
+// For password reset flows, this triggers sending separate reset emails to each tenant
+// rather than exposing tenant options in the API response.
+// Deprecated: This type is retained for backwards compatibility but the service now
+// handles multi-tenant emails by sending per-tenant reset emails internally.
 type TenantSelectionRequiredError struct {
 	Tenants []TenantOption
 }

@@ -215,6 +215,16 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		id := toUUID(rt.SsoProviderID)
 		ssoProviderID = &id
 	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			// Non-fatal: log and continue with nil metadata
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
+	}
 	return domain.RefreshToken{
 		ID:            toUUID(rt.ID),
 		UserID:        toUUID(rt.UserID),
@@ -226,6 +236,7 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		IP:            rt.Ip.String,
 		AuthMethod:    rt.AuthMethod.String,
 		SSOProviderID: ssoProviderID,
+		Metadata:      metadata,
 	}
 }
 
@@ -234,6 +245,16 @@ func mapListUserSessionsRow(rt db.ListUserSessionsRow) domain.RefreshToken {
 	if rt.SsoProviderID.Valid {
 		id := toUUID(rt.SsoProviderID)
 		ssoProviderID = &id
+	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			// Non-fatal: log and continue with nil metadata
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
 	}
 	return domain.RefreshToken{
 		ID:              toUUID(rt.ID),
@@ -248,6 +269,7 @@ func mapListUserSessionsRow(rt db.ListUserSessionsRow) domain.RefreshToken {
 		SSOProviderID:   ssoProviderID,
 		SSOProviderName: rt.SsoProviderName.String,
 		SSOProviderSlug: rt.SsoProviderSlug.String,
+		Metadata:        metadata,
 	}
 }
 

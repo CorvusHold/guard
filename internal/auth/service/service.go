@@ -1171,6 +1171,22 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 		s.log.Warn().Str("email", prt.Email).Msg("password reset token already consumed during update")
 	}
 
+	// Revoke all existing sessions for this user+tenant to invalidate pre-existing refresh tokens
+	revokedCount, revokeErr := s.repo.RevokeUserSessions(ctx, prt.UserID, prt.TenantID)
+	if revokeErr != nil {
+		// Log warning but don't fail the reset - password was already changed successfully
+		s.log.Warn().Err(revokeErr).
+			Str("user_id", prt.UserID.String()).
+			Str("tenant_id", prt.TenantID.String()).
+			Msg("failed to revoke sessions after password reset")
+	} else if revokedCount > 0 {
+		s.log.Info().
+			Int64("revoked_count", revokedCount).
+			Str("user_id", prt.UserID.String()).
+			Str("tenant_id", prt.TenantID.String()).
+			Msg("revoked sessions after password reset")
+	}
+
 	// Publish audit event
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.password.reset.completed",
@@ -1225,6 +1241,23 @@ func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeIn
 	}
 	if rowsAffected == 0 {
 		return errors.New("user not found")
+	}
+
+	// Revoke all existing sessions for this user+tenant to invalidate other sessions
+	// This ensures that changing the password immediately invalidates old sessions
+	revokedCount, revokeErr := s.repo.RevokeUserSessions(ctx, in.UserID, in.TenantID)
+	if revokeErr != nil {
+		// Log warning but don't fail the password change - password was already updated successfully
+		s.log.Warn().Err(revokeErr).
+			Str("user_id", in.UserID.String()).
+			Str("tenant_id", in.TenantID.String()).
+			Msg("failed to revoke sessions after password change")
+	} else if revokedCount > 0 {
+		s.log.Info().
+			Int64("revoked_count", revokedCount).
+			Str("user_id", in.UserID.String()).
+			Str("tenant_id", in.TenantID.String()).
+			Msg("revoked sessions after password change")
 	}
 
 	// Publish audit event
