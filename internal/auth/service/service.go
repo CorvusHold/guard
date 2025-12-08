@@ -1068,8 +1068,9 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 				Str("email", email).
 				Int("tenant_count", len(tenantOpts)).
 				Msg("password reset requested for email in multiple tenants - tenant selection email would be sent")
-			// Always return success to avoid leaking tenant membership
-			return nil
+			// Return explicit error until tenant-selection email flow is implemented.
+			// Do not include tenant details in the error to avoid leaking cross-tenant membership.
+			return errors.New("email service integration required for multi-tenant password reset")
 		}
 	}
 
