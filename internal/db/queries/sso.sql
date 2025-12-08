@@ -120,9 +120,9 @@ WHERE id = $1 AND tenant_id = $2;
 
 -- name: FindSSOProviderByDomain :one
 SELECT * FROM sso_providers
-WHERE tenant_id = $1
+WHERE tenant_id = sqlc.arg('tenant_id')
   AND enabled = TRUE
-  AND $2 = ANY(domains)
+  AND sqlc.arg('domain')::text = ANY(domains)
 ORDER BY created_at DESC
 LIMIT 1;
 

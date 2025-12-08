@@ -328,18 +328,18 @@ const findSSOProviderByDomain = `-- name: FindSSOProviderByDomain :one
 SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy FROM sso_providers
 WHERE tenant_id = $1
   AND enabled = TRUE
-  AND $2 = ANY(domains)
+  AND $2::text = ANY(domains)
 ORDER BY created_at DESC
 LIMIT 1
 `
 
 type FindSSOProviderByDomainParams struct {
 	TenantID pgtype.UUID `json:"tenant_id"`
-	Domains  []string    `json:"domains"`
+	Domain   string      `json:"domain"`
 }
 
 func (q *Queries) FindSSOProviderByDomain(ctx context.Context, arg FindSSOProviderByDomainParams) (SsoProvider, error) {
-	row := q.db.QueryRow(ctx, findSSOProviderByDomain, arg.TenantID, arg.Domains)
+	row := q.db.QueryRow(ctx, findSSOProviderByDomain, arg.TenantID, arg.Domain)
 	var i SsoProvider
 	err := row.Scan(
 		&i.ID,

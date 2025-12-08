@@ -3,14 +3,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import SsoProvidersPanel from './SsoProvidersPanel'
 import type { SsoProviderItem } from '@/lib/sdk'
 
-// Mock the SDK
+// Create stable mock functions
+const mockSsoListProviders = vi.fn()
+const mockSsoCreateProvider = vi.fn()
+const mockSsoUpdateProvider = vi.fn()
+const mockSsoDeleteProvider = vi.fn()
+const mockSsoTestProvider = vi.fn()
+
+// Mock the SDK with stable references
 vi.mock('@/lib/sdk', () => ({
   getClient: vi.fn(() => ({
-    ssoListProviders: vi.fn(),
-    ssoCreateProvider: vi.fn(),
-    ssoUpdateProvider: vi.fn(),
-    ssoDeleteProvider: vi.fn(),
-    ssoTestProvider: vi.fn()
+    ssoListProviders: mockSsoListProviders,
+    ssoCreateProvider: mockSsoCreateProvider,
+    ssoUpdateProvider: mockSsoUpdateProvider,
+    ssoDeleteProvider: mockSsoDeleteProvider,
+    ssoTestProvider: mockSsoTestProvider
   }))
 }))
 
@@ -63,15 +70,13 @@ describe('SsoProvidersPanel', () => {
   })
 
   it('renders the panel with providers', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: mockProviders,
         total: 2
       },
       meta: { status: 200 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -86,12 +91,10 @@ describe('SsoProvidersPanel', () => {
   })
 
   it('shows error when loading fails', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
-      data: { error: 'Failed to load' } as any,
+    mockSsoListProviders.mockResolvedValue({
+      data: { error: 'Failed to load' },
       meta: { status: 500 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -102,15 +105,13 @@ describe('SsoProvidersPanel', () => {
   })
 
   it('shows empty state when no providers exist', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: [],
         total: 0
       },
       meta: { status: 200 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -120,15 +121,13 @@ describe('SsoProvidersPanel', () => {
   })
 
   it('can open create form', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: [],
         total: 0
       },
       meta: { status: 200 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -144,17 +143,13 @@ describe('SsoProvidersPanel', () => {
   })
 
   it('can refresh providers list', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    const mockListProviders = vi.mocked(mockClient.ssoListProviders)
-
-    mockListProviders.mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: mockProviders,
         total: 2
       },
       meta: { status: 200 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -167,25 +162,23 @@ describe('SsoProvidersPanel', () => {
 
     // Should call the API again
     await waitFor(() => {
-      expect(mockListProviders).toHaveBeenCalledTimes(2)
+      expect(mockSsoListProviders).toHaveBeenCalledTimes(2)
     })
   })
 
   it('handles delete provider', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: mockProviders,
         total: 2
       },
       meta: { status: 200 }
-    } as any)
+    })
 
-    vi.mocked(mockClient.ssoDeleteProvider).mockResolvedValue({
+    mockSsoDeleteProvider.mockResolvedValue({
       data: {},
       meta: { status: 204 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -212,28 +205,26 @@ describe('SsoProvidersPanel', () => {
 
     // Should call delete API
     await waitFor(() => {
-      expect(mockClient.ssoDeleteProvider).toHaveBeenCalledWith('1')
+      expect(mockSsoDeleteProvider).toHaveBeenCalledWith('1')
     })
   })
 
   it('handles test provider', async () => {
-    const { getClient } = await import('@/lib/sdk')
-    const mockClient = getClient()
-    vi.mocked(mockClient.ssoListProviders).mockResolvedValue({
+    mockSsoListProviders.mockResolvedValue({
       data: {
         providers: mockProviders,
         total: 2
       },
       meta: { status: 200 }
-    } as any)
+    })
 
-    vi.mocked(mockClient.ssoTestProvider).mockResolvedValue({
+    mockSsoTestProvider.mockResolvedValue({
       data: {
         success: true,
         metadata: {}
       },
       meta: { status: 200 }
-    } as any)
+    })
 
     render(<SsoProvidersPanel tenantId="tenant-1" />)
 
@@ -247,7 +238,7 @@ describe('SsoProvidersPanel', () => {
 
     // Should call test API
     await waitFor(() => {
-      expect(mockClient.ssoTestProvider).toHaveBeenCalledWith('1')
+      expect(mockSsoTestProvider).toHaveBeenCalledWith('1')
     })
   })
 })
