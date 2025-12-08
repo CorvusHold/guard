@@ -12,7 +12,8 @@ export RATE_LIMIT_RETRIES ?= 2
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
         test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check \
-        portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down
+        portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down \
+        release-check docker-build docker-build-local
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up -d --remove-orphans
@@ -286,3 +287,32 @@ portal-e2e-suite: portal-e2e-suite-no-down
 
 portal-e2e-down:
 	docker compose -f docker-compose.test.yml down -v
+
+# ---- Release helpers ----
+
+# Verify release readiness (run before tagging)
+release-check:
+	@echo "==> Running release preflight checks..."
+	@echo "Checking Go build..."
+	go build ./...
+	@echo "Running tests..."
+	go test ./...
+	@echo "Running vet..."
+	go vet ./...
+	@echo "Checking UI build..."
+	cd ui && pnpm install --frozen-lockfile && pnpm build
+	@echo "Checking SDK TS build..."
+	cd sdk/ts && npm ci && npm run build && npm test
+	@echo ""
+	@echo "==> All preflight checks passed!"
+	@echo "To release, create and push a tag:"
+	@echo "  git tag v1.0.0"
+	@echo "  git push origin v1.0.0"
+
+# Build Docker image locally
+docker-build:
+	docker build -t guard:local --build-arg VERSION=local .
+
+# Build Docker image for local architecture only (faster)
+docker-build-local:
+	docker build -t guard:local --build-arg VERSION=local --platform linux/amd64 .

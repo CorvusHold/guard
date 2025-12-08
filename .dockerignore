@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Development
+.air.toml
+.env*
+docker-compose*.yml
+
+# Test artifacts
+coverage.out
+*.test
+test-results/
+playwright-report/
+
+# UI (built separately)
+ui/
+examples/
+
+# SDK (published separately)
+sdk/
+
+# Ops (monitoring configs)
+ops/
+
+# Build artifacts
+dist/
