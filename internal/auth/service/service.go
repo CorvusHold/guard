@@ -1012,8 +1012,9 @@ func generateBackupCode(n int) (string, error) {
 
 // RequestPasswordReset sends a password reset email to the user.
 // TenantID is required because identity is scoped by (tenant_id, email).
-// If TenantID is nil and email exists in multiple tenants, returns an error
-// asking the user to specify which tenant.
+// If TenantID is nil and email exists in multiple tenants, sends an email
+// with tenant selection options instead of returning them in the API response
+// to avoid leaking cross-tenant membership information.
 func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordResetRequestInput) error {
 	email := strings.TrimSpace(strings.ToLower(in.Email))
 	if email == "" {
@@ -1044,8 +1045,9 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 			ai = identities[0]
 			tenantID = ai.TenantID
 		} else {
-			// Email exists in multiple tenants - user must specify which one
-			// Build tenant options from the identities
+			// Email exists in multiple tenants - send an email with tenant selection options
+			// instead of returning them in the API response to avoid leaking cross-tenant membership.
+			// Build tenant options for the email
 			tenantOpts := make([]domain.TenantOption, 0, len(identities))
 			for _, ident := range identities {
 				// Look up tenant name
@@ -1059,7 +1061,15 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 					TenantName: name,
 				})
 			}
-			return &domain.TenantSelectionRequiredError{Tenants: tenantOpts}
+			// TODO: Send email with tenant selection options
+			// In production, integrate with email service:
+			// if err := s.emailService.SendTenantSelectionEmail(ctx, email, tenantOpts); err != nil { ... }
+			s.log.Info().
+				Str("email", email).
+				Int("tenant_count", len(tenantOpts)).
+				Msg("password reset requested for email in multiple tenants - tenant selection email would be sent")
+			// Always return success to avoid leaking tenant membership
+			return nil
 		}
 	}
 

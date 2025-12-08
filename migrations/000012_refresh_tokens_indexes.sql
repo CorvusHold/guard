@@ -1,4 +1,5 @@
 -- +goose Up
+-- +goose NO TRANSACTION
 -- Composite indexes for refresh_tokens query optimization
 
 -- Index for RevokeRefreshTokensByUserAndTenant and ListUserSessions queries

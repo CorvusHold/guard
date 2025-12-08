@@ -52,7 +52,10 @@ export interface TenantSelectionRequiredResp {
 
 export function isTenantSelectionRequired(data: unknown): data is TenantSelectionRequiredResp {
   const d = data as any;
-  return !!d && d.error === 'tenant_selection_required' && Array.isArray(d.tenants);
+  return !!d
+    && d.error === 'tenant_selection_required'
+    && typeof d.message === 'string'
+    && Array.isArray(d.tenants);
 }
 
 export interface SsoPortalContext {
@@ -138,6 +141,9 @@ export interface AdminUsersResp {
   users: AdminUser[];
 }
 
+/** Auth method used to create a session */
+export type AuthMethod = 'password' | 'sso' | 'magic_link';
+
 export interface SessionItem {
   id: string;
   revoked: boolean;
@@ -145,7 +151,7 @@ export interface SessionItem {
   ip: string;
   created_at: string; // RFC3339
   expires_at: string; // RFC3339
-  auth_method: string; // "password", "sso", "magic_link"
+  auth_method: AuthMethod;
   sso_provider_id?: string;
   sso_provider_name?: string;
   sso_provider_slug?: string;
@@ -240,7 +246,7 @@ export interface SsoProvidersListResp {
 export interface SsoProviderOption {
   slug: string;
   name: string;
-  provider_type: string;
+  provider_type: SsoProviderType;
   logo_url?: string;
   login_url: string;
 }
@@ -767,7 +773,11 @@ export class GuardClient {
       throw new Error(`${errorMsg}${requestId ? ` (request: ${requestId})` : ''}`);
     }
     
-    if (!loc) throw new Error('missing redirect location from SSO start');
+    if (!loc) {
+      throw new Error(
+        `missing redirect location from SSO start${requestId ? ` (request: ${requestId})` : ''}`
+      );
+    }
     return {
       data: { redirect_url: loc },
       meta: { status: res.status, requestId, headers: toHeadersMap(res.headers) },
@@ -803,6 +813,9 @@ export class GuardClient {
    * Parse SSO callback tokens from URL query parameters or fragment.
    * Use this when Guard redirects to your app's callback URL with tokens.
    * 
+   * **Note:** This method has a side effect: when tokens are successfully parsed,
+   * they are automatically persisted to the configured TokenStorage.
+   * 
    * @param url - The full callback URL or just the query/fragment string (e.g., window.location.search or window.location.hash)
    * @returns Tokens if access_token is present in URL, null otherwise
    * 
@@ -810,6 +823,7 @@ export class GuardClient {
    * - access_token is required for a successful return
    * - refresh_token is optional (some flows don't provide it)
    * - When refresh_token is missing, token refresh via `refresh()` will not be available
+   * - Tokens are persisted to storage on successful parse (side effect)
    */
   parseSsoCallbackTokens(url: string): TokensResp | null {
     try {
@@ -892,16 +906,22 @@ export class GuardClient {
     const sessionRes = await this.ssoPortalSession(token);
     if (sessionRes.meta.status !== 200 || !sessionRes.data) {
       const serverError = this.extractErrorDetails(sessionRes.data);
+      const requestId = sessionRes.meta.requestId;
       throw new Error(
-        `portal session failed with status ${sessionRes.meta.status}${serverError ? `: ${serverError}` : ''}`
+        `portal session failed with status ${sessionRes.meta.status}` +
+        (serverError ? `: ${serverError}` : '') +
+        (requestId ? ` (request: ${requestId})` : '')
       );
     }
 
     const providerRes = await this.ssoPortalProvider(token);
     if (providerRes.meta.status !== 200 || !providerRes.data) {
       const serverError = this.extractErrorDetails(providerRes.data);
+      const requestId = providerRes.meta.requestId;
       throw new Error(
-        `portal provider failed with status ${providerRes.meta.status}${serverError ? `: ${serverError}` : ''}`
+        `portal provider failed with status ${providerRes.meta.status}` +
+        (serverError ? `: ${serverError}` : '') +
+        (requestId ? ` (request: ${requestId})` : '')
       );
     }
 

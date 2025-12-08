@@ -209,15 +209,22 @@ func mapAuthIdentity(ai db.AuthIdentity) domain.AuthIdentity {
 }
 
 func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
 	return domain.RefreshToken{
-		ID:        toUUID(rt.ID),
-		UserID:    toUUID(rt.UserID),
-		TenantID:  toUUID(rt.TenantID),
-		Revoked:   rt.Revoked,
-		ExpiresAt: rt.ExpiresAt.Time,
-		CreatedAt: rt.CreatedAt.Time,
-		UserAgent: rt.UserAgent.String,
-		IP:        rt.Ip.String,
+		ID:            toUUID(rt.ID),
+		UserID:        toUUID(rt.UserID),
+		TenantID:      toUUID(rt.TenantID),
+		Revoked:       rt.Revoked,
+		ExpiresAt:     rt.ExpiresAt.Time,
+		CreatedAt:     rt.CreatedAt.Time,
+		UserAgent:     rt.UserAgent.String,
+		IP:            rt.Ip.String,
+		AuthMethod:    rt.AuthMethod.String,
+		SSOProviderID: ssoProviderID,
 	}
 }
 
