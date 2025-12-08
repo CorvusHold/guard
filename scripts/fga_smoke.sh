@@ -34,7 +34,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 BASE="http://localhost:8081"
-TENANT_NAME=${TENANT_NAME:-test}
+# Use a unique tenant name to avoid conflicts with existing tenants
+TENANT_NAME=${TENANT_NAME:-"fga-smoke-$(date +%s)-$$"}
 ADMIN_EMAIL=${EMAIL:-admin@example.com}
 ADMIN_PASSWORD=${PASSWORD:-Password123!}
 

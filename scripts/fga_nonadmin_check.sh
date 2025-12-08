@@ -64,7 +64,8 @@ eval "$(scripts/bootstrap-token.sh --prefix "fga-nonadmin")"
 
 # Always create fresh tenant and admin for isolated test
 echo "Creating fresh tenant and admin for test..."
-TENANT_NAME=${TENANT_NAME:-test}
+# Use a unique tenant name to avoid conflicts with existing tenants
+TENANT_NAME=${TENANT_NAME:-"fga-nonadmin-$(date +%s)-$$"}
 ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-Password123!}
 

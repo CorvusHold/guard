@@ -24,6 +24,70 @@ definitions:
       user_exists:
         type: boolean
     type: object
+  controller.LoginOptionsResponse:
+    properties:
+      domain_matched_sso:
+        allOf:
+        - $ref: '#/definitions/controller.SSOProviderOption'
+        description: If email domain matches an SSO provider's configured domains
+      magic_link_enabled:
+        type: boolean
+      password_enabled:
+        description: Authentication methods available
+        type: boolean
+      preferred_method:
+        description: |-
+          Recommended/preferred login method based on context
+          Values: "sso", "password", "magic_link", "social"
+        type: string
+      social_providers:
+        description: Social login providers (tenant-wide or global)
+        items:
+          $ref: '#/definitions/controller.SocialProviderOption'
+        type: array
+      sso_providers:
+        description: SSO providers configured for this tenant
+        items:
+          $ref: '#/definitions/controller.SSOProviderOption'
+        type: array
+      sso_required:
+        description: If true, SSO is required for this domain/tenant (password disabled)
+        type: boolean
+      tenant_id:
+        description: Tenant information (if discovered)
+        type: string
+      tenant_name:
+        type: string
+      user_exists:
+        description: If true, user exists and can use password login
+        type: boolean
+    type: object
+  controller.SSOProviderOption:
+    properties:
+      login_url:
+        type: string
+      logo_url:
+        type: string
+      name:
+        type: string
+      provider_type:
+        description: '"oidc", "saml"'
+        type: string
+      slug:
+        type: string
+    type: object
+  controller.SocialProviderOption:
+    properties:
+      login_url:
+        type: string
+      logo_url:
+        type: string
+      name:
+        type: string
+      provider:
+        description: '"google", "github", "microsoft", etc.'
+        type: string
+    type: object
   controller.adminUpdateNamesReq:
     properties:
       first_name:
@@ -79,6 +143,17 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  controller.changePasswordReq:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+    required:
+    - current_password
+    - new_password
     type: object
   controller.createTenantReq:
     properties:
@@ -545,7 +620,6 @@ definitions:
         type: string
     required:
     - new_password
-    - tenant_id
     - token
     type: object
   controller.resetPasswordRequestReq:
@@ -556,7 +630,6 @@ definitions:
         type: string
     required:
     - email
-    - tenant_id
     type: object
   controller.revokeReq:
     properties:
@@ -570,6 +643,8 @@ definitions:
     type: object
   controller.sessionItem:
     properties:
+      auth_method:
+        type: string
       created_at:
         type: string
       expires_at:
@@ -580,6 +655,12 @@ definitions:
         type: string
       revoked:
         type: boolean
+      sso_provider_id:
+        type: string
+      sso_provider_name:
+        type: string
+      sso_provider_slug:
+        type: string
       user_agent:
         type: string
     type: object
@@ -633,6 +714,23 @@ definitions:
     - password
     - tenant_id
     type: object
+  controller.spInfoResponse:
+    properties:
+      acs_url:
+        type: string
+      base_url:
+        type: string
+      entity_id:
+        type: string
+      login_url:
+        type: string
+      metadata_url:
+        type: string
+      slo_url:
+        type: string
+      tenant_id:
+        type: string
+    type: object
   controller.tenantResp:
     properties:
       created_at:
@@ -644,6 +742,13 @@ definitions:
       name:
         type: string
       updated_at:
+        type: string
+    type: object
+  controller.updateProfileReq:
+    properties:
+      first_name:
+        type: string
+      last_name:
         type: string
     type: object
   domain.Introspection:
@@ -1829,6 +1934,88 @@ paths:
       summary: Unblock a user (admin-only)
       tags:
       - auth.admin
+  /v1/auth/admin/users/{id}/unverify-email:
+    post:
+      description: Sets email_verified=false for a user. Requires admin role.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Manually unverify user email (admin)
+      tags:
+      - auth.admin
+  /v1/auth/admin/users/{id}/verify-email:
+    post:
+      description: Sets email_verified=true for a user. Requires admin role.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Manually verify user email (admin)
+      tags:
+      - auth.admin
   /v1/auth/authorize:
     post:
       consumes:
@@ -1941,6 +2128,43 @@ paths:
       summary: Introspect access token
       tags:
       - auth.introspect
+  /v1/auth/login-options:
+    get:
+      consumes:
+      - application/json
+      description: Returns available authentication methods based on email/tenant
+        context.
+      parameters:
+      - description: User email for context-aware options
+        in: query
+        name: email
+        type: string
+      - description: Tenant ID to scope options
+        in: query
+        name: tenant_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.LoginOptionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get available login options
+      tags:
+      - auth
   /v1/auth/logout:
     post:
       consumes:
@@ -2386,6 +2610,40 @@ paths:
       summary: Verify MFA challenge
       tags:
       - auth.mfa
+  /v1/auth/password/change:
+    post:
+      consumes:
+      - application/json
+      description: Changes the password for the currently authenticated user
+      parameters:
+      - description: current_password, new_password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.changePasswordReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - auth.password
   /v1/auth/password/login:
     post:
       consumes:
@@ -2549,6 +2807,40 @@ paths:
       summary: Password signup
       tags:
       - auth.password
+  /v1/auth/profile:
+    patch:
+      consumes:
+      - application/json
+      description: Updates the authenticated user's profile (first name, last name)
+      parameters:
+      - description: first_name, last_name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateProfileReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update current user's profile
+      tags:
+      - auth.profile
   /v1/auth/refresh:
     post:
       consumes:
@@ -2834,6 +3126,54 @@ paths:
       summary: Start SSO/OAuth flow
       tags:
       - auth.sso
+  /v1/sso/sp-info:
+    get:
+      consumes:
+      - application/json
+      description: Returns the computed Service Provider URLs (Entity ID, ACS URL,
+        SLO URL) needed to configure an Identity Provider
+      parameters:
+      - description: Provider slug (e.g. 'okta', 'azure-ad')
+        in: query
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.spInfoResponse'
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SP Info for SAML configuration
+      tags:
+      - SSO
   /v1/tenants/{id}/settings:
     get:
       description: Returns tenant-scoped settings required for SSO setup (WorkOS)

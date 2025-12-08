@@ -81,6 +81,7 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 		"X-Guard-Client",
 		"X-Tenant-ID",
 		"X-Auth-Mode",
+		"X-Portal-Token",
 	}, ", ")
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {

@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog"
 )
+
+const guardAccessTokenCookieName = "guard_access_token"
 
 // SSOController handles HTTP requests for SSO endpoints.
 type SSOController struct {
@@ -46,7 +50,7 @@ func (h *SSOController) WithRateLimitStore(store ratelimit.Store) *SSOController
 // Register registers SSO routes with the Echo router.
 func (h *SSOController) Register(e *echo.Echo) {
 	// Rate limiting middleware for public SSO endpoints
-	var rlInitiate, rlCallback echo.MiddlewareFunc
+	var rlInitiate, rlCallback, rlPortalSession, rlPortalProvider echo.MiddlewareFunc
 	if h.rl != nil {
 		rlInitiate = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:initiate",
@@ -61,24 +65,48 @@ func (h *SSOController) Register(e *echo.Echo) {
 			Window: time.Minute,
 			Key:    func(c echo.Context) string { return c.RealIP() },
 		}, h.rl)
+
+		rlPortalSession = ratelimit.MiddlewareWithStore(ratelimit.Policy{
+			Name:   "sso:portal_session",
+			Limit:  10,
+			Window: time.Minute,
+			Key:    func(c echo.Context) string { return c.RealIP() },
+		}, h.rl)
+
+		rlPortalProvider = ratelimit.MiddlewareWithStore(ratelimit.Policy{
+			Name:   "sso:portal_provider",
+			Limit:  20,
+			Window: time.Minute,
+			Key:    func(c echo.Context) string { return c.RealIP() },
+		}, h.rl)
 	}
 
 	// Public SSO endpoints (no authentication required)
+	// New tenant-scoped URLs: /auth/sso/t/:tenant_id/:slug/*
 	if rlInitiate != nil {
-		e.GET("/auth/sso/:slug/login", h.handleSSOInitiate, rlInitiate)
+		e.GET("/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2, rlInitiate)
+		e.GET("/auth/sso/:slug/login", h.handleSSOInitiateLegacy, rlInitiate) // Legacy redirect
 	} else {
-		e.GET("/auth/sso/:slug/login", h.handleSSOInitiate)
+		e.GET("/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2)
+		e.GET("/auth/sso/:slug/login", h.handleSSOInitiateLegacy)
 	}
 
 	if rlCallback != nil {
-		e.GET("/auth/sso/:slug/callback", h.handleSSOCallback, rlCallback)
-		e.POST("/auth/sso/:slug/callback", h.handleSSOCallback, rlCallback) // SAML POST binding
+		e.GET("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback)
+		e.POST("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback) // SAML POST binding
+		e.GET("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)           // Legacy redirect
+		e.POST("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)
 	} else {
-		e.GET("/auth/sso/:slug/callback", h.handleSSOCallback)
-		e.POST("/auth/sso/:slug/callback", h.handleSSOCallback)
+		e.GET("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
+		e.POST("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
+		e.GET("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
+		e.POST("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
 	}
 
-	e.GET("/auth/sso/:slug/metadata", h.handleSAMLMetadata)
+	e.GET("/auth/sso/t/:tenant_id/:slug/metadata", h.handleSAMLMetadataV2)
+	e.GET("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout)
+	e.POST("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout) // SAML SLO POST binding
+	e.GET("/auth/sso/:slug/metadata", h.handleSAMLMetadataLegacy)    // Legacy redirect
 
 	// Admin API endpoints (authentication required)
 	admin := e.Group("/v1/sso")
@@ -88,21 +116,39 @@ func (h *SSOController) Register(e *echo.Echo) {
 	admin.PUT("/providers/:id", h.handleUpdateProvider)
 	admin.DELETE("/providers/:id", h.handleDeleteProvider)
 	admin.POST("/providers/:id/test", h.handleTestProvider)
+	admin.GET("/sp-info", h.handleGetSPInfo)
+
+	// Portal token endpoints (no Guard auth, portal-token gated)
+	if rlPortalSession != nil {
+		e.POST("/v1/sso/portal/session", h.handlePortalSession, rlPortalSession)
+	} else {
+		e.POST("/v1/sso/portal/session", h.handlePortalSession)
+	}
+	if rlPortalProvider != nil {
+		e.GET("/v1/sso/portal/provider", h.handlePortalProvider, rlPortalProvider)
+	} else {
+		e.GET("/v1/sso/portal/provider", h.handlePortalProvider)
+	}
 }
 
-// Public SSO Endpoints
+// ============================================================================
+// V2 Tenant-Scoped SSO Endpoints
+// URL format: /auth/sso/t/:tenant_id/:slug/*
+// These endpoints use tenant_id in the URL path instead of query params,
+// making them compatible with SAML POST binding and more reliable.
+// ============================================================================
 
-// handleSSOInitiate initiates an SSO login flow.
-// GET /auth/sso/:slug/login?tenant_id=xxx&redirect_url=xxx
-func (h *SSOController) handleSSOInitiate(c echo.Context) error {
+// handleSSOInitiateV2 initiates an SSO login flow using tenant-scoped URLs.
+// GET /auth/sso/t/:tenant_id/:slug/login?redirect_url=xxx
+func (h *SSOController) handleSSOInitiateV2(c echo.Context) error {
+	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
-	}
 
-	tenantIDStr := c.QueryParam("tenant_id")
 	if tenantIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id is required"})
+	}
+	if slug == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr)
@@ -114,11 +160,9 @@ func (h *SSOController) handleSSOInitiate(c echo.Context) error {
 	loginHint := c.QueryParam("login_hint")
 	forceAuthn := c.QueryParam("force_authn") == "true"
 
-	// Get client IP and user agent
 	ipAddress := c.RealIP()
 	userAgent := c.Request().UserAgent()
 
-	// Initiate SSO
 	resp, err := h.ssoService.InitiateSSO(c.Request().Context(), service.InitiateSSORequest{
 		TenantID:     tenantID,
 		ProviderSlug: slug,
@@ -129,105 +173,98 @@ func (h *SSOController) handleSSOInitiate(c echo.Context) error {
 		ForceAuthn:   forceAuthn,
 	})
 	if err != nil {
-		h.log.Error().Err(err).Str("slug", slug).Msg("failed to initiate SSO")
+		h.log.Error().Err(err).Str("slug", slug).Str("tenant_id", tenantIDStr).Msg("failed to initiate SSO")
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	// Redirect to authorization URL
 	return c.Redirect(http.StatusFound, resp.AuthorizationURL)
 }
 
-// handleSSOCallback handles the SSO callback from the identity provider.
-// GET/POST /auth/sso/:slug/callback
-func (h *SSOController) handleSSOCallback(c echo.Context) error {
-	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
-	}
+// ============================================================================
+// Shared Callback Processing
+// ============================================================================
 
-	tenantIDStr := c.QueryParam("tenant_id")
-	if tenantIDStr == "" {
-		// Try to get from form for SAML POST binding
-		tenantIDStr = c.FormValue("tenant_id")
-	}
-	if tenantIDStr == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id is required"})
-	}
+// callbackRequest contains the parsed parameters for SSO callback processing.
+type callbackRequest struct {
+	TenantID     uuid.UUID
+	Slug         string
+	Code         string // OIDC authorization code
+	State        string // OIDC state parameter
+	SAMLResponse string // SAML response (POST binding)
+	RelayState   string // SAML relay state
+	IPAddress    string
+	UserAgent    string
+}
 
-	tenantID, err := uuid.Parse(tenantIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
-	}
+// callbackResult contains the result of SSO callback processing.
+type callbackResult struct {
+	Tokens      *authdomain.AccessTokens
+	RedirectURL string
+	UserID      uuid.UUID
+	Email       string
+	IsNewUser   bool
+	Error       error
+}
 
-	// Extract callback parameters
-	code := c.QueryParam("code")
-	state := c.QueryParam("state")
-	samlResponse := c.FormValue("SAMLResponse")
-	relayState := c.FormValue("RelayState")
-
-	// Get client IP and user agent
-	ipAddress := c.RealIP()
-	userAgent := c.Request().UserAgent()
-
-	// Handle callback
-	resp, err := h.ssoService.HandleCallback(c.Request().Context(), service.CallbackRequest{
-		TenantID:     tenantID,
-		ProviderSlug: slug,
-		Code:         code,
-		State:        state,
-		SAMLResponse: samlResponse,
-		RelayState:   relayState,
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
+// processCallback handles the common SSO callback logic:
+// 1. Calls the SSO service to validate the callback and get user info
+// 2. Issues access and refresh tokens for the authenticated user
+// 3. Returns a structured result with tokens or error
+func (h *SSOController) processCallback(ctx context.Context, req callbackRequest) callbackResult {
+	resp, err := h.ssoService.HandleCallback(ctx, service.CallbackRequest{
+		TenantID:     req.TenantID,
+		ProviderSlug: req.Slug,
+		Code:         req.Code,
+		State:        req.State,
+		SAMLResponse: req.SAMLResponse,
+		RelayState:   req.RelayState,
+		IPAddress:    req.IPAddress,
+		UserAgent:    req.UserAgent,
 	})
 	if err != nil {
-		h.log.Error().Err(err).Str("slug", slug).Msg("SSO callback failed")
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		h.log.Error().Err(err).Str("slug", req.Slug).Str("tenant_id", req.TenantID.String()).Msg("SSO callback failed")
+		return callbackResult{Error: err}
 	}
 
-	// Issue access and refresh tokens for the SSO user
-	// We use IssueTokensForSSO which is a new method we'll add to the auth service
-	tokens, err := h.authService.IssueTokensForSSO(c.Request().Context(), authdomain.SSOTokenInput{
-		UserID:    resp.User.ID,
-		TenantID:  tenantID,
-		UserAgent: userAgent,
-		IP:        ipAddress,
+	tokens, err := h.authService.IssueTokensForSSO(ctx, authdomain.SSOTokenInput{
+		UserID:        resp.User.ID,
+		TenantID:      req.TenantID,
+		SSOProviderID: &resp.SSOProviderID,
+		UserAgent:     req.UserAgent,
+		IP:            req.IPAddress,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to issue tokens for SSO user")
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		return callbackResult{Error: fmt.Errorf("failed to create session: %w", err)}
 	}
 
 	h.log.Info().
 		Str("user_id", resp.User.ID.String()).
 		Str("email", resp.Profile.Email).
 		Bool("is_new_user", resp.IsNewUser).
+		Str("redirect_url", resp.RedirectURL).
 		Msg("SSO login successful")
 
-	// Store OIDC refresh token if provided (for token refresh)
-	if resp.Profile.RefreshToken != "" {
-		h.log.Debug().Msg("storing OIDC refresh token for future use")
-		// TODO: Store this in the database for later use
+	return callbackResult{
+		Tokens:      &tokens,
+		RedirectURL: resp.RedirectURL,
+		UserID:      resp.User.ID,
+		Email:       resp.Profile.Email,
+		IsNewUser:   resp.IsNewUser,
 	}
-
-	// Return response in the same format as other auth endpoints
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"access_token":  tokens.AccessToken,
-		"refresh_token": tokens.RefreshToken,
-	})
 }
 
-// handleSAMLMetadata returns SAML SP metadata.
-// GET /auth/sso/:slug/metadata
-func (h *SSOController) handleSAMLMetadata(c echo.Context) error {
+// handleSSOCallbackV2 handles the SSO callback using tenant-scoped URLs.
+// GET/POST /auth/sso/t/:tenant_id/:slug/callback
+func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
+	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
-	if slug == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
-	}
 
-	tenantIDStr := c.QueryParam("tenant_id")
 	if tenantIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id is required"})
+	}
+	if slug == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr)
@@ -235,19 +272,357 @@ func (h *SSOController) handleSAMLMetadata(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
 	}
 
-	// Get provider metadata
+	// Use shared callback processing
+	result := h.processCallback(c.Request().Context(), callbackRequest{
+		TenantID:     tenantID,
+		Slug:         slug,
+		Code:         c.QueryParam("code"),
+		State:        c.QueryParam("state"),
+		SAMLResponse: c.FormValue("SAMLResponse"),
+		RelayState:   c.FormValue("RelayState"),
+		IPAddress:    c.RealIP(),
+		UserAgent:    c.Request().UserAgent(),
+	})
+
+	if result.Error != nil {
+		// Check if it's a session creation error (internal) vs callback validation error (bad request)
+		if strings.Contains(result.Error.Error(), "failed to create session") {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		}
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": result.Error.Error()})
+	}
+
+	// If a redirect URL was provided during initiation, redirect with tokens in fragment
+	if result.RedirectURL != "" {
+		redirectURL, err := url.Parse(result.RedirectURL)
+		if err != nil {
+			h.log.Error().Err(err).Str("redirect_url", result.RedirectURL).Msg("invalid redirect URL")
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect URL"})
+		}
+		// Use fragment to avoid token leakage in server logs/referrer headers
+		redirectURL.Fragment = fmt.Sprintf("access_token=%s&refresh_token=%s",
+			url.QueryEscape(result.Tokens.AccessToken),
+			url.QueryEscape(result.Tokens.RefreshToken))
+		return c.Redirect(http.StatusFound, redirectURL.String())
+	}
+
+	// Fallback to JSON response if no redirect URL
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"access_token":  result.Tokens.AccessToken,
+		"refresh_token": result.Tokens.RefreshToken,
+	})
+}
+
+// handleSAMLMetadataV2 returns SAML SP metadata using tenant-scoped URLs.
+// GET /auth/sso/t/:tenant_id/:slug/metadata
+func (h *SSOController) handleSAMLMetadataV2(c echo.Context) error {
+	tenantIDStr := c.Param("tenant_id")
+	slug := c.Param("slug")
+
+	if tenantIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id is required"})
+	}
+	if slug == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
+	}
+
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+
 	metadata, err := h.ssoService.GetProviderMetadata(c.Request().Context(), tenantID, slug)
 	if err != nil {
-		h.log.Error().Err(err).Str("slug", slug).Msg("failed to get provider metadata")
+		h.log.Error().Err(err).Str("slug", slug).Str("tenant_id", tenantIDStr).Msg("failed to get provider metadata")
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	// Return XML for SAML, JSON for OIDC
 	if metadata.MetadataXML != "" {
 		return c.XMLBlob(http.StatusOK, []byte(metadata.MetadataXML))
 	}
 
 	return c.JSON(http.StatusOK, metadata)
+}
+
+// handleSSOLogout handles SSO logout (Single Logout).
+// GET/POST /auth/sso/t/:tenant_id/:slug/logout
+func (h *SSOController) handleSSOLogout(c echo.Context) error {
+	tenantIDStr := c.Param("tenant_id")
+	slug := c.Param("slug")
+
+	if tenantIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id is required"})
+	}
+	if slug == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "provider slug is required"})
+	}
+
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+
+	// Get SAML logout request/response if present
+	samlRequest := c.FormValue("SAMLRequest")
+	samlResponse := c.FormValue("SAMLResponse")
+	relayState := c.FormValue("RelayState")
+
+	// Try to extract user context from bearer token or cookie for session revocation
+	var userID uuid.UUID
+	var hasUserContext bool
+	token := bearerToken(c)
+	if token == "" {
+		// Try cookie mode
+		if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+			token = cookie.Value
+		}
+	}
+	if token != "" {
+		if introspection, introErr := h.authService.Introspect(c.Request().Context(), token); introErr == nil && introspection.Active {
+			userID = introspection.UserID
+			hasUserContext = true
+		}
+	}
+
+	// Revoke user sessions before acknowledging logout (Phase 1: Local Session Revocation)
+	if hasUserContext {
+		count, revokeErr := h.authService.RevokeUserSessions(c.Request().Context(), userID, tenantID)
+		if revokeErr != nil {
+			h.log.Error().Err(revokeErr).
+				Str("user_id", userID.String()).
+				Str("tenant_id", tenantIDStr).
+				Msg("failed to revoke sessions during SSO logout")
+			// Continue with logout flow even if revocation fails
+		} else {
+			h.log.Info().
+				Str("user_id", userID.String()).
+				Str("tenant_id", tenantIDStr).
+				Int64("sessions_revoked", count).
+				Msg("revoked user sessions during SSO logout")
+		}
+	}
+
+	// If this is an IdP-initiated logout (SAMLRequest present)
+	if samlRequest != "" {
+		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("processing IdP-initiated logout")
+		// TODO: Implement IdP-initiated SLO (Phase 2)
+		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
+	}
+
+	// If this is a logout response from IdP
+	if samlResponse != "" {
+		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("processing logout response")
+		_ = relayState // Will be used to redirect user
+		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
+	}
+
+	// SP-initiated logout
+	h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("initiating SP logout")
+
+	// Get the provider to check if SLO is configured
+	config, err := h.ssoService.GetProviderBySlug(c.Request().Context(), tenantID, slug)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "provider not found"})
+	}
+
+	// If IdP has SLO URL configured, redirect there
+	if config.IdPSLOUrl != "" {
+		// TODO: Generate proper SAML LogoutRequest (Phase 2)
+		return c.Redirect(http.StatusFound, config.IdPSLOUrl)
+	}
+
+	// No SLO configured, just acknowledge logout
+	return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+// ============================================================================
+// Legacy Redirect Handlers (Backward Compatibility)
+// These redirect old URLs to the new tenant-scoped format
+// ============================================================================
+
+// handleSSOInitiateLegacy redirects legacy SSO initiate to V2 format.
+// GET /auth/sso/:slug/login?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/login
+func (h *SSOController) handleSSOInitiateLegacy(c echo.Context) error {
+	slug := c.Param("slug")
+	tenantIDStr := c.QueryParam("tenant_id")
+
+	if tenantIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":   "tenant_id is required",
+			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/login",
+		})
+	}
+
+	// Validate tenant_id format
+	if _, err := uuid.Parse(tenantIDStr); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+
+	h.log.Warn().
+		Str("slug", slug).
+		Str("tenant_id", tenantIDStr).
+		Msg("legacy SSO URL used, redirecting to V2 format")
+
+	// Build new URL with all query params except tenant_id
+	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/login", tenantIDStr, slug)
+	query := c.QueryParams()
+	query.Del("tenant_id")
+	if len(query) > 0 {
+		newURL += "?" + query.Encode()
+	}
+
+	return c.Redirect(http.StatusPermanentRedirect, newURL)
+}
+
+// handleSSOCallbackLegacy redirects legacy SSO callback to V2 format.
+// GET/POST /auth/sso/:slug/callback?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/callback
+func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
+	slug := c.Param("slug")
+	tenantIDStr := c.QueryParam("tenant_id")
+	if tenantIDStr == "" {
+		tenantIDStr = c.FormValue("tenant_id")
+	}
+
+	if tenantIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":   "tenant_id is required",
+			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/callback",
+		})
+	}
+
+	if _, err := uuid.Parse(tenantIDStr); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+
+	h.log.Warn().
+		Str("slug", slug).
+		Str("tenant_id", tenantIDStr).
+		Msg("legacy SSO callback URL used, redirecting to V2 format")
+
+	// For POST requests (SAML), we can't redirect, so handle directly using shared callback processing
+	if c.Request().Method == http.MethodPost {
+		tenantID, _ := uuid.Parse(tenantIDStr)
+
+		result := h.processCallback(c.Request().Context(), callbackRequest{
+			TenantID:     tenantID,
+			Slug:         slug,
+			SAMLResponse: c.FormValue("SAMLResponse"),
+			RelayState:   c.FormValue("RelayState"),
+			IPAddress:    c.RealIP(),
+			UserAgent:    c.Request().UserAgent(),
+		})
+
+		if result.Error != nil {
+			if strings.Contains(result.Error.Error(), "failed to create session") {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+			}
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": result.Error.Error()})
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"access_token":  result.Tokens.AccessToken,
+			"refresh_token": result.Tokens.RefreshToken,
+		})
+	}
+
+	// For GET requests, redirect
+	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/callback", tenantIDStr, slug)
+	query := c.QueryParams()
+	query.Del("tenant_id")
+	if len(query) > 0 {
+		newURL += "?" + query.Encode()
+	}
+
+	return c.Redirect(http.StatusPermanentRedirect, newURL)
+}
+
+// handleSAMLMetadataLegacy redirects legacy metadata URL to V2 format.
+// GET /auth/sso/:slug/metadata?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/metadata
+func (h *SSOController) handleSAMLMetadataLegacy(c echo.Context) error {
+	slug := c.Param("slug")
+	tenantIDStr := c.QueryParam("tenant_id")
+
+	if tenantIDStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":   "tenant_id is required",
+			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/metadata",
+		})
+	}
+
+	if _, err := uuid.Parse(tenantIDStr); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+
+	h.log.Warn().
+		Str("slug", slug).
+		Str("tenant_id", tenantIDStr).
+		Msg("legacy SAML metadata URL used, redirecting to V2 format")
+
+	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/metadata", tenantIDStr, slug)
+	return c.Redirect(http.StatusPermanentRedirect, newURL)
+}
+
+type portalSessionRequest struct {
+	Token string `json:"token"`
+}
+
+type portalSessionResponse struct {
+	TenantID      uuid.UUID `json:"tenant_id"`
+	ProviderSlug  string    `json:"provider_slug"`
+	PortalTokenID uuid.UUID `json:"portal_token_id"`
+	Intent        string    `json:"intent"`
+}
+
+// POST /v1/sso/portal/session
+func (h *SSOController) handlePortalSession(c echo.Context) error {
+	var req portalSessionRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if strings.TrimSpace(req.Token) == "" {
+		// allow ?token= as fallback
+		req.Token = c.QueryParam("token")
+	}
+	if strings.TrimSpace(req.Token) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required"})
+	}
+
+	sess, err := h.ssoService.ExchangePortalToken(c.Request().Context(), req.Token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid or expired portal token"})
+	}
+
+	return c.JSON(http.StatusOK, portalSessionResponse{
+		TenantID:      sess.TenantID,
+		ProviderSlug:  sess.ProviderSlug,
+		PortalTokenID: sess.PortalTokenID,
+		Intent:        sess.Intent,
+	})
+}
+
+// GET /v1/sso/portal/provider
+func (h *SSOController) handlePortalProvider(c echo.Context) error {
+	token := strings.TrimSpace(c.Request().Header.Get("X-Portal-Token"))
+	if token == "" {
+		token = strings.TrimSpace(c.QueryParam("token"))
+	}
+	if token == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "portal token required"})
+	}
+
+	// Use ValidatePortalToken instead of ExchangePortalToken to avoid consuming
+	// an additional use. The token was already consumed by /session endpoint.
+	sess, err := h.ssoService.ValidatePortalToken(c.Request().Context(), token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid or expired portal token"})
+	}
+
+	config, err := h.ssoService.GetProviderBySlug(c.Request().Context(), sess.TenantID, sess.ProviderSlug)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "provider not found"})
+	}
+
+	return c.JSON(http.StatusOK, h.maskSecrets(config))
 }
 
 // Admin API Endpoints
@@ -528,11 +903,85 @@ func (h *SSOController) handleTestProvider(c echo.Context) error {
 	})
 }
 
+// spInfoResponse is the response DTO for GET /v1/sso/sp-info.
+type spInfoResponse struct {
+	EntityID    string `json:"entity_id"`
+	ACSURL      string `json:"acs_url"`
+	SLOURL      string `json:"slo_url,omitempty"`
+	MetadataURL string `json:"metadata_url"`
+	LoginURL    string `json:"login_url"`
+	BaseURL     string `json:"base_url"`
+	TenantID    string `json:"tenant_id"`
+}
+
+// handleGetSPInfo returns computed Service Provider URLs for SAML configuration.
+// GET /v1/sso/sp-info?slug=xxx
+// @Summary Get SP Info for SAML configuration
+// @Description Returns the computed Service Provider URLs (Entity ID, ACS URL, SLO URL) needed to configure an Identity Provider
+// @Tags SSO
+// @Accept json
+// @Produce json
+// @Param slug query string true "Provider slug (e.g. 'okta', 'azure-ad')"
+// @Success 200 {object} spInfoResponse
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Security BearerAuth
+// @Router /v1/sso/sp-info [get]
+func (h *SSOController) handleGetSPInfo(c echo.Context) error {
+	// Check authentication (admin required)
+	_, tenantID, _, err := h.requireAdmin(c)
+	if err != nil {
+		return err
+	}
+
+	slug := c.QueryParam("slug")
+	if slug == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slug query parameter is required"})
+	}
+
+	// Allow tenant_id override for super-admin use cases
+	tenantIDStr := c.QueryParam("tenant_id")
+	if tenantIDStr != "" {
+		parsedTenantID, parseErr := uuid.Parse(tenantIDStr)
+		if parseErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+		}
+		tenantID = parsedTenantID
+	}
+
+	// Get SP info from service using V2 tenant-scoped URLs
+	spInfo, err := h.ssoService.GetSPInfo(tenantID, slug)
+	if err != nil {
+		h.log.Error().Err(err).Str("slug", slug).Str("tenant_id", tenantID.String()).Msg("failed to compute SP info")
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, spInfoResponse{
+		EntityID:    spInfo.EntityID,
+		ACSURL:      spInfo.ACSURL,
+		SLOURL:      spInfo.SLOURL,
+		MetadataURL: spInfo.MetadataURL,
+		LoginURL:    spInfo.LoginURL,
+		BaseURL:     spInfo.BaseURL,
+		TenantID:    spInfo.TenantID,
+	})
+}
+
 // Helper methods
 
 // requireAdmin checks if the request has a valid bearer token with admin role.
 func (h *SSOController) requireAdmin(c echo.Context) (userID, tenantID uuid.UUID, isAdmin bool, err error) {
 	token := bearerToken(c)
+	if token == "" {
+		mode := strings.ToLower(strings.TrimSpace(c.Request().Header.Get("X-Auth-Mode")))
+		if mode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				token = cookie.Value
+			}
+		}
+	}
 	if token == "" {
 		err = c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 		return

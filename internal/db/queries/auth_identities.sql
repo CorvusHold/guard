@@ -40,6 +40,11 @@ UPDATE auth_identities
 SET sso_attributes = $2, updated_at = now()
 WHERE id = $1;
 
+-- name: LinkSSOToExistingIdentity :execrows
+UPDATE auth_identities
+SET sso_provider_id = $2, sso_subject = $3, sso_attributes = $4, updated_at = now()
+WHERE id = $1 AND sso_provider_id IS NULL;
+
 -- name: ListUserSSOIdentities :many
 SELECT id, user_id, tenant_id, email, password_hash, sso_provider_id, sso_subject, sso_attributes, created_at, updated_at
 FROM auth_identities

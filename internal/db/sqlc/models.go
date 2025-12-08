@@ -107,6 +107,17 @@ type MfaSecret struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type PasswordResetToken struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	Email      string             `json:"email"`
+	TokenHash  string             `json:"token_hash"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
+}
+
 type Permission struct {
 	ID          pgtype.UUID        `json:"id"`
 	Key         string             `json:"key"`
@@ -116,16 +127,19 @@ type Permission struct {
 }
 
 type RefreshToken struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	TokenHash string             `json:"token_hash"`
-	ParentID  pgtype.UUID        `json:"parent_id"`
-	Revoked   bool               `json:"revoked"`
-	UserAgent pgtype.Text        `json:"user_agent"`
-	Ip        pgtype.Text        `json:"ip"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	TokenHash     string             `json:"token_hash"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	Revoked       bool               `json:"revoked"`
+	UserAgent     pgtype.Text        `json:"user_agent"`
+	Ip            pgtype.Text        `json:"ip"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	AuthMethod    pgtype.Text        `json:"auth_method"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	Metadata      []byte             `json:"metadata"`
 }
 
 type Role struct {
@@ -159,6 +173,22 @@ type SsoAuthAttempt struct {
 	UserAgent    pgtype.Text        `json:"user_agent"`
 	InitiatedAt  pgtype.Timestamptz `json:"initiated_at"`
 	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+}
+
+type SsoPortalToken struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	ProviderSlug  string             `json:"provider_slug"`
+	TokenHash     string             `json:"token_hash"`
+	Intent        string             `json:"intent"`
+	CreatedBy     pgtype.UUID        `json:"created_by"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	MaxUses       int32              `json:"max_uses"`
+	UseCount      int32              `json:"use_count"`
+	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type SsoProvider struct {
@@ -202,6 +232,9 @@ type SsoProvider struct {
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 	CreatedBy              pgtype.UUID        `json:"created_by"`
 	UpdatedBy              pgtype.UUID        `json:"updated_by"`
+	AllowIdpInitiated      pgtype.Bool        `json:"allow_idp_initiated"`
+	// Account linking policy: never (no linking), verified_email (link if both emails verified), always (always link - less secure)
+	LinkingPolicy pgtype.Text `json:"linking_policy"`
 }
 
 type SsoSession struct {

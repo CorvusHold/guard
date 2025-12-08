@@ -11,7 +11,8 @@ export RATE_LIMIT_RETRIES ?= 2
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
-        test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check
+        test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check \
+        portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down
 
 compose-up:
 	docker compose -f docker-compose.dev.yml up -d --remove-orphans
@@ -260,6 +261,28 @@ seed-test:
 	eval "$(scripts/bootstrap-token.sh --prefix k6)"; \
 	( cd cmd/guard-cli && GUARD_API_TOKEN="$$GUARD_API_TOKEN" go run . seed default \
 		--tenant-name "$$TENANT_NAME" --email "$$EMAIL" --password "$$PASSWORD" \
-		$$ENABLE_MFA_FLAG \
-		--output env ) | tee .env.k6 >/dev/null; \
-	echo "Wrote k6 env to .env.k6"'
+			$$ENABLE_MFA_FLAG \
+			--output env ) | tee .env.k6 >/dev/null; \
+		echo "Wrote k6 env to .env.k6"'
+
+# ---- SSO Setup Portal fully wired E2E (Playwright) ----
+
+portal-e2e-setup: conformance-up
+	make db-purge-test
+	make migrate-up-test-dc
+	bash -lc 'scripts/seed-sso-portal-e2e.sh'
+	make api-test-wait
+	docker compose -f docker-compose.test.yml exec -T valkey_test valkey-cli FLUSHALL >/dev/null || true
+
+portal-e2e: portal-e2e-setup
+	bash -lc 'set -a; [ -f .env.sso-portal-e2e ] && source .env.sso-portal-e2e; set +a; cd ui && pnpm run test:e2e -- e2e/sso-portal-integration.spec.ts'
+	make portal-e2e-down
+
+portal-e2e-suite-no-down: portal-e2e-setup
+	bash -lc 'set -a; [ -f .env.sso-portal-e2e ] && source .env.sso-portal-e2e; set +a; cd ui && pnpm run test:e2e -- e2e/sso-portal.spec.ts e2e/sso-portal-integration.spec.ts'
+
+portal-e2e-suite: portal-e2e-suite-no-down
+	make portal-e2e-down
+
+portal-e2e-down:
+	docker compose -f docker-compose.test.yml down -v

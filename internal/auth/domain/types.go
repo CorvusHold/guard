@@ -11,6 +11,14 @@ type PortalLink struct {
 	Link string `json:"link"`
 }
 
+// PublicSSOProvider contains public info about an SSO provider for login options
+type PublicSSOProvider struct {
+	Slug         string
+	Name         string
+	ProviderType string
+	Domains      []string
+}
+
 // AccessTokens represents the issued tokens payload.
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -56,10 +64,11 @@ type RefreshInput struct {
 }
 
 type SSOTokenInput struct {
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	UserAgent string
-	IP        string
+	UserID        uuid.UUID
+	TenantID      uuid.UUID
+	SSOProviderID *uuid.UUID // Optional: SSO provider ID for session tracking
+	UserAgent     string
+	IP            string
 }
 
 type Service interface {
@@ -86,10 +95,15 @@ type Service interface {
 	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
 	// SetUserActive toggles the active state of a user.
 	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// SetUserEmailVerified sets the email_verified flag for a user.
+	SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error
 	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
 	// RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
 	RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error
+	// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+	// Returns the number of tokens revoked.
+	RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error)
 
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
@@ -134,6 +148,19 @@ type Service interface {
 	// Email discovery methods
 	FindTenantsByUserEmail(ctx context.Context, email string) ([]TenantInfo, error)
 	GetUserByEmail(ctx context.Context, email, tenantID string) (*User, error)
+
+	// SSO provider discovery for login options
+	ListSSOProvidersPublic(ctx context.Context, tenantID uuid.UUID) ([]PublicSSOProvider, error)
+
+	// Password reset
+	// RequestPasswordReset sends a password reset email to the user.
+	RequestPasswordReset(ctx context.Context, in PasswordResetRequestInput) error
+	// ConfirmPasswordReset verifies the token and sets the new password.
+	ConfirmPasswordReset(ctx context.Context, in PasswordResetConfirmInput) error
+	// ChangePassword changes the password for a logged-in user.
+	ChangePassword(ctx context.Context, in PasswordChangeInput) error
+	// UpdateProfile updates the user's profile (first name, last name).
+	UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
 
 	// --- FGA ---
 	// Group management
@@ -203,6 +230,7 @@ type SSOOrganizationPortalLinkGeneratorInput struct {
 	TenantID       uuid.UUID
 	Intent         string
 	OrganizationID string
+	CreatedBy      uuid.UUID
 }
 
 // SSOService defines the contract for SSO/Social login flows.
@@ -220,7 +248,7 @@ type Repository interface {
 	UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error
 	AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error
 
-	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error
+	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *RefreshTokenMetadata) error
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	RevokeTokenChain(ctx context.Context, id uuid.UUID) error
 
@@ -228,6 +256,9 @@ type Repository interface {
 	CreateMagicLink(ctx context.Context, id uuid.UUID, userID *uuid.UUID, tenantID uuid.UUID, email, tokenHash, redirectURL string, expiresAt time.Time) error
 	GetMagicLinkByHash(ctx context.Context, tokenHash string) (MagicLink, error)
 	ConsumeMagicLink(ctx context.Context, tokenHash string) error
+
+	// SSO portal tokens
+	CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (SSOPortalToken, error)
 
 	// User/profile lookups
 	GetUserByID(ctx context.Context, userID uuid.UUID) (User, error)
@@ -249,10 +280,18 @@ type Repository interface {
 	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]User, error)
 	// SetUserActive toggles the active state of a user.
 	SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error
+	// SetUserEmailVerified sets the email_verified flag for a user.
+	SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error
 	// UpdateUserNames updates only first and last name for a user, preserving roles.
 	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
 	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
+	// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+	// Returns the number of tokens revoked.
+	RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error)
+	// RevokeRefreshTokenByHash revokes a specific refresh token by its hash.
+	// Returns the number of tokens revoked (0 or 1).
+	RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error)
 
 	// --- RBAC v2 ---
 	// Permissions
@@ -280,6 +319,20 @@ type Repository interface {
 	// Email discovery methods
 	FindAuthIdentitiesByEmail(ctx context.Context, email string) ([]AuthIdentity, error)
 
+	// Tenant lookups
+	GetTenantByID(ctx context.Context, tenantID uuid.UUID) (Tenant, error)
+
+	// SSO provider lookups for login options
+	ListEnabledSSOProviders(ctx context.Context, tenantID uuid.UUID) ([]PublicSSOProvider, error)
+
+	// Password reset tokens
+	CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error
+	GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (PasswordResetToken, error)
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error)
+	// UpdateAuthIdentityPassword updates the password hash for an auth identity.
+	// Returns the number of rows affected.
+	UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error)
+
 	// --- FGA repository methods (groups, memberships, ACL tuples) ---
 	// Groups
 	CreateGroup(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, description string) (Group, error)
@@ -301,15 +354,39 @@ type AuthIdentity struct {
 	PasswordHash string
 }
 
-type RefreshToken struct {
+type Tenant struct {
 	ID        uuid.UUID
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	Revoked   bool
-	ExpiresAt time.Time
+	Name      string
+	IsActive  bool
 	CreatedAt time.Time
-	UserAgent string
-	IP        string
+	UpdatedAt time.Time
+}
+
+// RefreshTokenMetadata contains additional context about how a refresh token was created.
+// This metadata is stored as JSON in the database and can be used for debugging,
+// auditing, and analytics purposes.
+type RefreshTokenMetadata struct {
+	AuthMethod    string `json:"auth_method,omitempty"`    // "password", "sso", "magic_link"
+	SSOProvider   string `json:"sso_provider,omitempty"`   // Provider slug when auth_method is "sso"
+	MFAVerified   bool   `json:"mfa_verified,omitempty"`   // Whether MFA was verified during authentication
+	CreatedVia    string `json:"created_via,omitempty"`    // "login", "refresh", "sso_callback"
+	ClientVersion string `json:"client_version,omitempty"` // SDK/client version from X-Guard-Client header
+}
+
+type RefreshToken struct {
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	TenantID        uuid.UUID
+	Revoked         bool
+	ExpiresAt       time.Time
+	CreatedAt       time.Time
+	UserAgent       string
+	IP              string
+	AuthMethod      string     // "password", "sso", "magic_link"
+	SSOProviderID   *uuid.UUID // Set when auth_method is "sso"
+	SSOProviderName string     // Provider name (from join)
+	SSOProviderSlug string     // Provider slug (from join)
+	Metadata        *RefreshTokenMetadata
 }
 
 type MagicLink struct {
@@ -322,6 +399,74 @@ type MagicLink struct {
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
 	ConsumedAt  *time.Time
+}
+
+// PasswordResetToken represents a password reset token record.
+type PasswordResetToken struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TenantID   uuid.UUID
+	Email      string
+	TokenHash  string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+}
+
+// PasswordResetRequestInput is the input for requesting a password reset.
+type PasswordResetRequestInput struct {
+	TenantID *uuid.UUID // Optional - if nil, will look up by email across all tenants
+	Email    string
+}
+
+// TenantSelectionRequiredError is returned when an email exists in multiple tenants.
+// For password reset flows, this triggers sending separate reset emails to each tenant
+// rather than exposing tenant options in the API response.
+// Deprecated: This type is retained for backwards compatibility but the service now
+// handles multi-tenant emails by sending per-tenant reset emails internally.
+type TenantSelectionRequiredError struct {
+	Tenants []TenantOption
+}
+
+func (e *TenantSelectionRequiredError) Error() string {
+	return "tenant_selection_required"
+}
+
+// TenantOption represents a tenant the user can select from.
+type TenantOption struct {
+	TenantID   uuid.UUID `json:"tenant_id"`
+	TenantName string    `json:"tenant_name"`
+}
+
+// PasswordResetConfirmInput is the input for confirming a password reset.
+type PasswordResetConfirmInput struct {
+	TenantID    *uuid.UUID // Optional - tenant is derived from token
+	Token       string
+	NewPassword string
+}
+
+// PasswordChangeInput is the input for changing password while logged in.
+type PasswordChangeInput struct {
+	UserID          uuid.UUID
+	TenantID        uuid.UUID
+	CurrentPassword string
+	NewPassword     string
+}
+
+type SSOPortalToken struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	SSOProviderID *uuid.UUID
+	ProviderSlug  string
+	TokenHash     string
+	Intent        string
+	CreatedBy     uuid.UUID
+	ExpiresAt     time.Time
+	RevokedAt     *time.Time
+	MaxUses       int32
+	UseCount      int32
+	LastUsedAt    *time.Time
+	CreatedAt     time.Time
 }
 
 // User reflects the users table record.

@@ -234,7 +234,7 @@ func TestFindSSOProviderByDomain(t *testing.T) {
 	// Find by domain
 	provider, err := q.FindSSOProviderByDomain(ctx, FindSSOProviderByDomainParams{
 		TenantID: toPgUUID(tenantID),
-		Domains:  []string{"acme.com"},
+		Domain:   "acme.com",
 	})
 	if err != nil {
 		t.Fatalf("FindSSOProviderByDomain() error = %v", err)
@@ -247,7 +247,7 @@ func TestFindSSOProviderByDomain(t *testing.T) {
 	// Test with second domain
 	provider2, err := q.FindSSOProviderByDomain(ctx, FindSSOProviderByDomainParams{
 		TenantID: toPgUUID(tenantID),
-		Domains:  []string{"acme.io"},
+		Domain:   "acme.io",
 	})
 	if err != nil {
 		t.Fatalf("FindSSOProviderByDomain() error = %v", err)

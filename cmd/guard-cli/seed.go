@@ -162,7 +162,7 @@ var seedUserCmd = &cobra.Command{
 				rolePayload := map[string]interface{}{
 					"roles": roles,
 				}
-				roleResp, err := client.makeRequest("PUT", "/v1/admin/users/"+userID+"/roles", rolePayload)
+				roleResp, err := client.makeRequest("POST", "/v1/auth/admin/users/"+userID+"/roles", rolePayload)
 				if err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to assign roles: %v\n", err)
 				} else {

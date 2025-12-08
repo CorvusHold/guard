@@ -17,10 +17,10 @@ concurrency:
 
 
 jobs:
-  unit:
-    name: Unit Tests
+  go-checks:
+    name: Go Checks (vet, unit tests)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,48 +29,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Go mod download
-        run: go mod download
-
-      - name: Run unit tests
-        run: go test ./...
-
-  go-vet:
-    name: Go Vet (static analysis)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Run go vet
         run: go vet ./...
+
+      - name: Run unit tests
+        run: go test ./...
 
   changes:
     name: Detect Changes
@@ -80,6 +45,9 @@ jobs:
       fga: ${{ steps.filter.outputs.fga }}
       ui: ${{ steps.filter.outputs.ui }}
       sdk: ${{ steps.filter.outputs.sdk_ts }}
+      sso_portal: ${{ steps.filter.outputs.sso_portal }}
+      go_backend: ${{ steps.filter.outputs.go_backend }}
+      perf: ${{ steps.filter.outputs.perf }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -118,6 +86,29 @@ jobs:
             sdk_ts:
               - 'sdk/ts/**'
               - '.github/workflows/ci.yml'
+            go_backend:
+              - 'internal/**'
+              - 'cmd/**'
+              - 'migrations/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            perf:
+              - 'ops/k6/**'
+              - 'internal/**'
+              - 'cmd/**'
+              - '.github/workflows/ci.yml'
+            sso_portal:
+              - 'internal/auth/sso/**'
+              - 'internal/auth/service/sso*.go'
+              - 'internal/db/queries/sso_portal_tokens.sql'
+              - 'migrations/*sso*.sql'
+              - 'ui/src/components/auth/SsoSetupPortal.tsx'
+              - 'ui/e2e/sso-portal*.spec.ts'
+              - 'sdk/ts/src/client.ts'
+              - 'scripts/seed-sso-portal-e2e.sh'
+              - '.github/workflows/ci.yml'
 
   rbac-admin:
     name: RBAC Admin Tests
@@ -133,16 +124,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Run RBAC admin tests
         env:
@@ -164,16 +146,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Run FGA tests
         env:
@@ -226,6 +199,8 @@ jobs:
 
   e2e:
     name: E2E / Integration
+    needs: changes
+    if: needs.changes.outputs.go_backend == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -236,16 +211,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Install tools (goose, gotestsum)
         run: |
@@ -331,7 +297,7 @@ jobs:
         working-directory: ui
         run: pnpm install
 
-      - name: Install   Playwright browsers
+      - name: Install Playwright browsers
         working-directory: ui
         run: pnpm exec playwright install --with-deps
 
@@ -349,10 +315,12 @@ jobs:
             ui/test-results
             ui/playwright-report
 
-  perf-smoke:
-    name: Performance - Smoke (k6)
+  sso-portal-e2e:
+    name: SSO Portal E2E (Playwright)
+    needs: [changes, ui-verify]
+    if: needs.changes.outputs.sso_portal == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,66 +329,134 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
+          cache: true
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          version: 10
+          run_install: false
 
-      - name: Install curl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-
-      - name: Run smoke tests
-        run: |
-          make k6-setup
-          make k6-smoke
-
-  perf-rate-limit-login:
-    name: Performance - Login Rate Limit (k6)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          go-version: '1.24.x'
+          node-version: '22.12.x'
+          cache: 'pnpm'
+          cache-dependency-path: 'ui/pnpm-lock.yaml'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      - name: Install UI dependencies
+        working-directory: ui
+        run: pnpm install
 
-      - name: Install curl
+      - name: Install Playwright browsers
+        working-directory: ui
+        run: pnpm exec playwright install --with-deps
+
+      - name: Start test infrastructure
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
+          docker compose -f docker-compose.test.yml up -d db_test valkey_test mailhog_test
+          # Wait for DB to be healthy
+          for i in {1..30}; do
+            if docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard > /dev/null 2>&1; then
+              echo "DB is ready"
+              break
+            fi
+            echo "Waiting for DB... ($i/30)"
+            sleep 2
+          done
 
-      - name: Run login rate limit (short)
+      - name: Run database migrations
+        run: make migrate-up-test-dc
+
+      - name: Start API server
+        run: |
+          docker compose -f docker-compose.test.yml up -d api_test
+          # Wait for API to be healthy
+          for i in {1..30}; do
+            if curl -sf http://localhost:8081/readyz > /dev/null 2>&1; then
+              echo "API is ready"
+              break
+            fi
+            echo "Waiting for API... ($i/30)"
+            sleep 2
+          done
+
+      - name: Seed SSO portal E2E data
+        run: bash scripts/seed-sso-portal-e2e.sh
+
+      - name: Build and start UI preview server
+        working-directory: ui
+        run: |
+          pnpm build
+          pnpm preview &
+          # Wait for UI preview server to be ready
+          for i in {1..30}; do
+            if curl -sf http://localhost:4173 > /dev/null 2>&1; then
+              echo "UI preview server is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "UI preview server failed to start"
+              exit 1
+            fi
+            echo "Waiting for UI preview server... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run SSO Portal E2E tests
+        working-directory: ui
         env:
-          K6_ITERATIONS: '120'
+          SSO_PORTAL_E2E_API_URL: http://localhost:8081
+          SSO_PORTAL_E2E_UI_URL: http://localhost:4173
         run: |
-          make k6-setup
-          make k6-rate-limit-login
+          # Source the env file created by seed script
+          set -a
+          if [ ! -f ../.env.sso-portal-e2e ]; then
+            echo "Error: .env.sso-portal-e2e not found"
+            exit 1
+          fi
+          source ../.env.sso-portal-e2e
+          set +a
+          pnpm exec playwright test e2e/sso-portal.spec.ts e2e/sso-portal-integration.spec.ts --reporter=line --trace=retain-on-failure
 
-  perf-login-stress:
-    name: Performance - Login Stress (k6)
+      - name: Upload test results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sso-portal-e2e-test-results
+          if-no-files-found: ignore
+          path: |
+            ui/test-results
+            ui/playwright-report
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  perf-k6:
+    name: Performance - ${{ matrix.scenario }} (k6)
+    needs: changes
+    if: needs.changes.outputs.perf == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: smoke
+            make_target: k6-smoke
+          - scenario: login-rate-limit
+            make_target: k6-rate-limit-login
+            k6_iterations: '120'
+          - scenario: login-stress
+            make_target: k6-login-stress
+          - scenario: mfa-invalid
+            make_target: k6-mfa-invalid
+          - scenario: portal-link-smoke
+            make_target: k6-portal-link-smoke
+          - scenario: portal-link-rate-limit
+            make_target: k6-rate-limit-portal-link
+            k6_iterations: '120'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -429,130 +465,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
+          cache: true
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install curl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-
-      - name: Run login stress
-        run: |
-          make k6-setup
-          make k6-login-stress
-
-  perf-mfa-invalid:
-    name: Performance - MFA Invalid (k6)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install curl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-
-      - name: Run MFA invalid scenario
-        run: |
-          make k6-setup
-          make k6-mfa-invalid
-
-  perf-portal-link-smoke:
-    name: Performance - Portal Link Smoke (k6)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install curl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-
-      - name: Run portal link smoke
-        run: |
-          make k6-setup
-          make k6-portal-link-smoke
-
-  perf-rate-limit-portal-link:
-    name: Performance - Portal Link Rate Limit (k6)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install curl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-
-      - name: Run portal link rate limit
+      - name: Run k6 scenario
         env:
-          K6_ITERATIONS: '120'
+          K6_ITERATIONS: ${{ matrix.k6_iterations || '' }}
         run: |
           make k6-setup
-          make k6-rate-limit-portal-link
+          make ${{ matrix.make_target }}
 
   fga-smoke:
     name: FGA Smoke
+    needs: changes
+    if: needs.changes.outputs.fga == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -563,24 +488,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Install curl and jq
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
+      - name: Run FGA smoke tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl jq
-
-      - name: Start data services (db, valkey)
-        run: make test-fga-smoke
-
-      - name: Run non-admin helper check (deny → allow)
-        run: make test-fga-nonadmin-check
+          make test-fga-smoke
+          make test-fga-nonadmin-check

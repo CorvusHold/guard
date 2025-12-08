@@ -34,6 +34,8 @@ INSERT INTO sso_providers (
     want_response_signed,
     sign_requests,
     force_authn,
+    allow_idp_initiated,
+    linking_policy,
     -- Common fields
     attribute_mapping,
     enabled,
@@ -45,7 +47,7 @@ INSERT INTO sso_providers (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-    $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
+    $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
 ) RETURNING *;
 
 -- name: GetSSOProvider :one
@@ -61,6 +63,12 @@ SELECT * FROM sso_providers
 WHERE tenant_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: ListEnabledSSOProviders :many
+SELECT id, tenant_id, name, slug, provider_type, domains, enabled
+FROM sso_providers
+WHERE tenant_id = $1 AND enabled = TRUE
+ORDER BY name ASC;
 
 -- name: UpdateSSOProvider :exec
 UPDATE sso_providers
@@ -95,6 +103,8 @@ SET
     want_response_signed = COALESCE(sqlc.narg('want_response_signed'), want_response_signed),
     sign_requests = COALESCE(sqlc.narg('sign_requests'), sign_requests),
     force_authn = COALESCE(sqlc.narg('force_authn'), force_authn),
+    allow_idp_initiated = COALESCE(sqlc.narg('allow_idp_initiated'), allow_idp_initiated),
+    linking_policy = COALESCE(sqlc.narg('linking_policy'), linking_policy),
     -- Common fields
     attribute_mapping = COALESCE(sqlc.narg('attribute_mapping'), attribute_mapping),
     allow_signup = COALESCE(sqlc.narg('allow_signup'), allow_signup),
@@ -110,9 +120,9 @@ WHERE id = $1 AND tenant_id = $2;
 
 -- name: FindSSOProviderByDomain :one
 SELECT * FROM sso_providers
-WHERE tenant_id = $1
+WHERE tenant_id = sqlc.arg('tenant_id')
   AND enabled = TRUE
-  AND $2 = ANY(domains)
+  AND sqlc.arg('domain')::text = ANY(domains)
 ORDER BY created_at DESC
 LIMIT 1;
 

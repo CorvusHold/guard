@@ -38,6 +38,7 @@ type LinkOrCreateUserRequest struct {
 	Profile            *domain.Profile
 	AllowSignup        bool
 	TrustEmailVerified bool
+	LinkingPolicy      domain.LinkingPolicy
 }
 
 // LinkOrCreateUserResult contains the result of linking or creating a user.
@@ -132,12 +133,78 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 
 	switch err {
 	case nil:
-		// User exists with this email - link the identity
+		// User exists with this email - apply linking policy
 		userID = toUUID(existingAuthIdentity.UserID)
-		l.log.Info().
-			Str("user_id", userID.String()).
-			Str("email", req.Profile.Email).
-			Msg("linking SSO identity to existing user")
+
+		// Apply linking policy
+		switch req.LinkingPolicy {
+		case domain.LinkingPolicyNever:
+			// Never link - return error
+			l.log.Warn().
+				Str("email", req.Profile.Email).
+				Str("policy", string(req.LinkingPolicy)).
+				Msg("account linking blocked by policy")
+			return nil, domain.ErrAccountExists{Email: req.Profile.Email}
+
+		case domain.LinkingPolicyVerifiedEmail:
+			// Link only if both emails are verified
+			if !req.Profile.EmailVerified {
+				l.log.Warn().
+					Str("email", req.Profile.Email).
+					Msg("IdP email not verified, cannot link accounts")
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonIdP}
+			}
+
+			// Check if existing account email is verified
+			existingUser, err := queries.GetUserByID(ctx, existingAuthIdentity.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load existing user: %w", err)
+			}
+			if !existingUser.EmailVerified {
+				l.log.Warn().
+					Str("email", req.Profile.Email).
+					Msg("existing account email not verified, cannot link accounts")
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonAccount}
+			}
+
+			l.log.Info().
+				Str("user_id", userID.String()).
+				Str("email", req.Profile.Email).
+				Msg("linking SSO identity to existing user (verified_email policy)")
+
+		case domain.LinkingPolicyAlways:
+			// Always link - proceed
+			l.log.Info().
+				Str("user_id", userID.String()).
+				Str("email", req.Profile.Email).
+				Msg("linking SSO identity to existing user (always policy)")
+
+		default:
+			// Default to verified_email behavior for safety
+			if !req.Profile.EmailVerified {
+				l.log.Warn().
+					Str("email", req.Profile.Email).
+					Msg("IdP email not verified, cannot link accounts (default policy)")
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonIdP}
+			}
+
+			// Check if existing account email is verified (mirror VerifiedEmail behavior)
+			existingUser, err := queries.GetUserByID(ctx, existingAuthIdentity.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load existing user: %w", err)
+			}
+			if !existingUser.EmailVerified {
+				l.log.Warn().
+					Str("email", req.Profile.Email).
+					Msg("existing account email not verified, cannot link accounts (default policy)")
+				return nil, domain.ErrEmailNotVerified{Email: req.Profile.Email, Reason: domain.EmailNotVerifiedReasonAccount}
+			}
+
+			l.log.Info().
+				Str("user_id", userID.String()).
+				Str("email", req.Profile.Email).
+				Msg("linking SSO identity to existing user (default policy)")
+		}
 	case pgx.ErrNoRows:
 		// User doesn't exist - check if signup is allowed
 		if !req.AllowSignup {
@@ -180,24 +247,44 @@ func (l *IdentityLinker) LinkOrCreateUser(ctx context.Context, req LinkOrCreateU
 		return nil, fmt.Errorf("failed to lookup auth identity: %w", err)
 	}
 
-	// 3. Create SSO identity record
-	identityID := uuid.New()
+	// 3. Create or link SSO identity record
 	ssoAttributes, err := json.Marshal(req.Profile.RawAttributes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal SSO attributes: %w", err)
 	}
 
-	_, err = queries.CreateSSOIdentity(ctx, db.CreateSSOIdentityParams{
-		ID:            toPgUUID(identityID),
-		UserID:        toPgUUID(userID),
-		TenantID:      toPgUUID(req.TenantID),
-		Email:         req.Profile.Email,
-		SsoProviderID: toPgUUID(req.ProviderID),
-		SsoSubject:    toPgText(req.Profile.Subject),
-		SsoAttributes: ssoAttributes,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SSO identity: %w", err)
+	var identityID uuid.UUID
+	if isNewUser {
+		// New user - create a new auth_identity record with SSO info
+		identityID = uuid.New()
+		_, err = queries.CreateSSOIdentity(ctx, db.CreateSSOIdentityParams{
+			ID:            toPgUUID(identityID),
+			UserID:        toPgUUID(userID),
+			TenantID:      toPgUUID(req.TenantID),
+			Email:         req.Profile.Email,
+			SsoProviderID: toPgUUID(req.ProviderID),
+			SsoSubject:    toPgText(req.Profile.Subject),
+			SsoAttributes: ssoAttributes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SSO identity: %w", err)
+		}
+	} else {
+		// Existing user - update their existing auth_identity with SSO info
+		identityID = toUUID(existingAuthIdentity.ID)
+		rowsAffected, err := queries.LinkSSOToExistingIdentity(ctx, db.LinkSSOToExistingIdentityParams{
+			ID:            existingAuthIdentity.ID,
+			SsoProviderID: toPgUUID(req.ProviderID),
+			SsoSubject:    toPgText(req.Profile.Subject),
+			SsoAttributes: ssoAttributes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to link SSO to existing identity: %w", err)
+		}
+		if rowsAffected == 0 {
+			// Identity already has SSO linked (protected by WHERE sso_provider_id IS NULL)
+			return nil, fmt.Errorf("identity already linked to an SSO provider")
+		}
 	}
 
 	// 4. Load user to return

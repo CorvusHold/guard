@@ -10,8 +10,9 @@ import (
 )
 
 type fakeRepo struct {
-	capturedUserID uuid.UUID
-	capturedRoles  []string
+	capturedUserID  uuid.UUID
+	capturedRoles   []string
+	lastPortalToken domain.SSOPortalToken
 }
 
 func (f *fakeRepo) CreateUser(ctx context.Context, id uuid.UUID, firstName, lastName string, roles []string) error {
@@ -27,7 +28,7 @@ func (f *fakeRepo) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) erro
 func (f *fakeRepo) AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error {
 	return nil
 }
-func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error {
+func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
 	return nil
 }
 func (f *fakeRepo) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
@@ -41,6 +42,20 @@ func (f *fakeRepo) GetMagicLinkByHash(ctx context.Context, tokenHash string) (do
 	return domain.MagicLink{}, nil
 }
 func (f *fakeRepo) ConsumeMagicLink(ctx context.Context, tokenHash string) error { return nil }
+func (f *fakeRepo) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (domain.SSOPortalToken, error) {
+	f.lastPortalToken = domain.SSOPortalToken{
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		SSOProviderID: ssoProviderID,
+		ProviderSlug:  providerSlug,
+		TokenHash:     tokenHash,
+		Intent:        intent,
+		CreatedBy:     createdBy,
+		ExpiresAt:     expiresAt,
+		MaxUses:       maxUses,
+	}
+	return f.lastPortalToken, nil
+}
 func (f *fakeRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (domain.User, error) {
 	return domain.User{ID: userID}, nil
 }
@@ -78,11 +93,20 @@ func (f *fakeRepo) ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]d
 func (f *fakeRepo) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
 	return nil
 }
+func (f *fakeRepo) SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return nil
+}
 func (f *fakeRepo) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
 	return nil
 }
 func (f *fakeRepo) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
 	return nil, nil
+}
+func (f *fakeRepo) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (f *fakeRepo) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
+	return 0, nil
 }
 
 // --- RBAC v2 stubs to satisfy domain.Repository ---
@@ -165,6 +189,30 @@ func (f *fakeRepo) CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uu
 }
 func (f *fakeRepo) DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error {
 	return nil
+}
+
+// --- Password reset token methods ---
+func (f *fakeRepo) CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	return nil
+}
+func (f *fakeRepo) GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
+	return domain.PasswordResetToken{}, nil
+}
+func (f *fakeRepo) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
+	return 1, nil
+}
+func (f *fakeRepo) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
+	return 1, nil
+}
+
+// --- Tenant lookup ---
+func (f *fakeRepo) GetTenantByID(ctx context.Context, tenantID uuid.UUID) (domain.Tenant, error) {
+	return domain.Tenant{ID: tenantID, Name: "Test Tenant"}, nil
+}
+
+// --- SSO provider lookup ---
+func (f *fakeRepo) ListEnabledSSOProviders(ctx context.Context, tenantID uuid.UUID) ([]domain.PublicSSOProvider, error) {
+	return []domain.PublicSSOProvider{}, nil
 }
 
 func TestService_UpdateUserRoles_NormalizesAndDedupes(t *testing.T) {

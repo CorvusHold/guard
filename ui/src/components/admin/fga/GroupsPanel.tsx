@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
+import { formatRateLimitError } from '@/lib/rateLimit'
 
 interface GroupsPanelProps {
   tenantId: string
@@ -33,7 +34,7 @@ export default function GroupsPanel({
 
   const canLoad = useMemo(() => !!tenantId, [tenantId])
 
-  async function load() {
+  const load = useCallback(async () => {
     setMessage(null)
     setError(null)
     if (!canLoad) {
@@ -53,16 +54,23 @@ export default function GroupsPanel({
         show({ variant: 'error', title: 'Failed to load groups' })
       }
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Error',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while loading groups')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Error',
+          description: msg
+        })
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [canLoad, show, tenantId])
 
   useEffect(() => {
     if (tenantId) {
@@ -90,12 +98,19 @@ export default function GroupsPanel({
       show({ variant: 'success', title: 'Group created' })
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Create failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while creating a group')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Create failed',
+          description: msg
+        })
+      }
     }
   }
 
@@ -110,12 +125,19 @@ export default function GroupsPanel({
       show({ variant: 'success', title: 'Group deleted' })
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Delete failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while deleting a group')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Delete failed',
+          description: msg
+        })
+      }
     }
   }
 

@@ -57,3 +57,9 @@ func (s *Service) GetUserByEmail(ctx context.Context, email, tenantID string) (*
 
 	return &user, nil
 }
+
+// ListSSOProvidersPublic returns public info about enabled SSO providers for a tenant.
+// This is used for login options discovery - only returns non-sensitive info.
+func (s *Service) ListSSOProvidersPublic(ctx context.Context, tenantID uuid.UUID) ([]domain.PublicSSOProvider, error) {
+	return s.repo.ListEnabledSSOProviders(ctx, tenantID)
+}

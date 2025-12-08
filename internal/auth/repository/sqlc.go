@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 type SQLCRepository struct {
@@ -116,6 +118,11 @@ func (r *SQLCRepository) SetUserActive(ctx context.Context, userID uuid.UUID, ac
 	return r.q.SetUserActive(ctx, db.SetUserActiveParams{ID: toPgUUID(userID), IsActive: active})
 }
 
+// SetUserEmailVerified sets the email_verified flag for a user.
+func (r *SQLCRepository) SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return r.q.SetUserEmailVerified(ctx, db.SetUserEmailVerifiedParams{ID: toPgUUID(userID), EmailVerified: verified})
+}
+
 // UpdateUserNames updates only first and last name for a user, preserving roles.
 func (r *SQLCRepository) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
 	// Load current roles to preserve
@@ -139,7 +146,7 @@ func (r *SQLCRepository) ListUserSessions(ctx context.Context, userID uuid.UUID,
 	}
 	out := make([]domain.RefreshToken, 0, len(items))
 	for _, rt := range items {
-		out = append(out, mapRefreshToken(rt))
+		out = append(out, mapListUserSessionsRow(rt))
 	}
 	return out, nil
 }
@@ -203,15 +210,66 @@ func mapAuthIdentity(ai db.AuthIdentity) domain.AuthIdentity {
 }
 
 func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			// Non-fatal: log and continue with nil metadata
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
+	}
 	return domain.RefreshToken{
-		ID:        toUUID(rt.ID),
-		UserID:    toUUID(rt.UserID),
-		TenantID:  toUUID(rt.TenantID),
-		Revoked:   rt.Revoked,
-		ExpiresAt: rt.ExpiresAt.Time,
-		CreatedAt: rt.CreatedAt.Time,
-		UserAgent: rt.UserAgent.String,
-		IP:        rt.Ip.String,
+		ID:            toUUID(rt.ID),
+		UserID:        toUUID(rt.UserID),
+		TenantID:      toUUID(rt.TenantID),
+		Revoked:       rt.Revoked,
+		ExpiresAt:     rt.ExpiresAt.Time,
+		CreatedAt:     rt.CreatedAt.Time,
+		UserAgent:     rt.UserAgent.String,
+		IP:            rt.Ip.String,
+		AuthMethod:    rt.AuthMethod.String,
+		SSOProviderID: ssoProviderID,
+		Metadata:      metadata,
+	}
+}
+
+func mapListUserSessionsRow(rt db.ListUserSessionsRow) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			// Non-fatal: log and continue with nil metadata
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
+	}
+	return domain.RefreshToken{
+		ID:              toUUID(rt.ID),
+		UserID:          toUUID(rt.UserID),
+		TenantID:        toUUID(rt.TenantID),
+		Revoked:         rt.Revoked,
+		ExpiresAt:       rt.ExpiresAt.Time,
+		CreatedAt:       rt.CreatedAt.Time,
+		UserAgent:       rt.UserAgent.String,
+		IP:              rt.Ip.String,
+		AuthMethod:      rt.AuthMethod.String,
+		SSOProviderID:   ssoProviderID,
+		SSOProviderName: rt.SsoProviderName.String,
+		SSOProviderSlug: rt.SsoProviderSlug.String,
+		Metadata:        metadata,
 	}
 }
 
@@ -236,6 +294,39 @@ func mapMagicLink(ml db.MagicLink) domain.MagicLink {
 		CreatedAt:   ml.CreatedAt.Time,
 		ExpiresAt:   ml.ExpiresAt.Time,
 		ConsumedAt:  consumed,
+	}
+}
+
+func mapSSOPortalToken(t db.SsoPortalToken) domain.SSOPortalToken {
+	var providerID *uuid.UUID
+	if t.SsoProviderID.Valid {
+		u := toUUID(t.SsoProviderID)
+		providerID = &u
+	}
+	var revokedAt *time.Time
+	if t.RevokedAt.Valid {
+		v := t.RevokedAt.Time
+		revokedAt = &v
+	}
+	var lastUsedAt *time.Time
+	if t.LastUsedAt.Valid {
+		v := t.LastUsedAt.Time
+		lastUsedAt = &v
+	}
+	return domain.SSOPortalToken{
+		ID:            toUUID(t.ID),
+		TenantID:      toUUID(t.TenantID),
+		SSOProviderID: providerID,
+		ProviderSlug:  t.ProviderSlug,
+		TokenHash:     t.TokenHash,
+		Intent:        t.Intent,
+		CreatedBy:     toUUID(t.CreatedBy),
+		ExpiresAt:     t.ExpiresAt.Time,
+		RevokedAt:     revokedAt,
+		MaxUses:       t.MaxUses,
+		UseCount:      t.UseCount,
+		LastUsedAt:    lastUsedAt,
+		CreatedAt:     t.CreatedAt.Time,
 	}
 }
 
@@ -285,20 +376,35 @@ func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, 
 	return r.q.AddUserToTenant(ctx, db.AddUserToTenantParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
 }
 
-func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time) error {
+func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
 	pid := pgtype.UUID{}
 	if parentID != nil {
 		pid = toPgUUID(*parentID)
 	}
+	spid := pgtype.UUID{}
+	if ssoProviderID != nil {
+		spid = toPgUUID(*ssoProviderID)
+	}
+	metadataJSON := []byte("{}")
+	if metadata != nil {
+		if b, err := json.Marshal(metadata); err == nil {
+			metadataJSON = b
+		} else {
+			log.Ctx(ctx).Warn().Err(err).Str("user_id", userID.String()).Msg("failed to marshal refresh token metadata, using empty JSON")
+		}
+	}
 	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
-		ID:        toPgUUID(id),
-		UserID:    toPgUUID(userID),
-		TenantID:  toPgUUID(tenantID),
-		TokenHash: tokenHash,
-		ParentID:  pid,
-		UserAgent: toPgText(userAgent),
-		Ip:        toPgText(ip),
-		ExpiresAt: toPgTime(expiresAt),
+		ID:            toPgUUID(id),
+		UserID:        toPgUUID(userID),
+		TenantID:      toPgUUID(tenantID),
+		TokenHash:     tokenHash,
+		ParentID:      pid,
+		UserAgent:     toPgText(userAgent),
+		Ip:            toPgText(ip),
+		ExpiresAt:     toPgTime(expiresAt),
+		AuthMethod:    toPgText(authMethod),
+		SsoProviderID: spid,
+		Metadata:      metadataJSON,
 	})
 }
 
@@ -339,6 +445,23 @@ func (r *SQLCRepository) ConsumeMagicLink(ctx context.Context, tokenHash string)
 	return r.q.ConsumeMagicLink(ctx, tokenHash)
 }
 
+func (r *SQLCRepository) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID, ssoProviderID *uuid.UUID, providerSlug, tokenHash, intent string, createdBy uuid.UUID, expiresAt time.Time, maxUses int32) (domain.SSOPortalToken, error) {
+	row, err := r.q.CreateSSOPortalToken(ctx, db.CreateSSOPortalTokenParams{
+		TenantID:      toPgUUID(tenantID),
+		SsoProviderID: toPgUUIDNullable(ssoProviderID),
+		ProviderSlug:  providerSlug,
+		TokenHash:     tokenHash,
+		Intent:        intent,
+		CreatedBy:     toPgUUID(createdBy),
+		ExpiresAt:     toPgTime(expiresAt),
+		MaxUses:       maxUses,
+	})
+	if err != nil {
+		return domain.SSOPortalToken{}, err
+	}
+	return mapSSOPortalToken(row), nil
+}
+
 // Additional lookups for profile/introspection
 func (r *SQLCRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (domain.User, error) {
 	u, err := r.q.GetUserByID(ctx, toPgUUID(userID))
@@ -364,6 +487,38 @@ func (r *SQLCRepository) GetAuthIdentitiesByUser(ctx context.Context, userID uui
 		}))
 	}
 	return out, nil
+}
+
+func (r *SQLCRepository) GetTenantByID(ctx context.Context, tenantID uuid.UUID) (domain.Tenant, error) {
+	t, err := r.q.GetTenantByID(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	return domain.Tenant{
+		ID:        toUUID(t.ID),
+		Name:      t.Name,
+		IsActive:  t.IsActive,
+		CreatedAt: t.CreatedAt.Time,
+		UpdatedAt: t.UpdatedAt.Time,
+	}, nil
+}
+
+// ListEnabledSSOProviders returns public info about enabled SSO providers for a tenant.
+func (r *SQLCRepository) ListEnabledSSOProviders(ctx context.Context, tenantID uuid.UUID) ([]domain.PublicSSOProvider, error) {
+	providers, err := r.q.ListEnabledSSOProviders(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.PublicSSOProvider, 0, len(providers))
+	for _, p := range providers {
+		result = append(result, domain.PublicSSOProvider{
+			Slug:         p.Slug,
+			Name:         p.Name,
+			ProviderType: p.ProviderType,
+			Domains:      p.Domains,
+		})
+	}
+	return result, nil
 }
 
 // UpdateUserRoles updates only the roles column while preserving other profile fields.
@@ -721,4 +876,66 @@ func (r *SQLCRepository) FindAuthIdentitiesByEmail(ctx context.Context, email st
 	}
 
 	return identities, rows.Err()
+}
+
+// --- Password reset tokens ---
+
+func (r *SQLCRepository) CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	return r.q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		ID:        toPgUUID(id),
+		UserID:    toPgUUID(userID),
+		TenantID:  toPgUUID(tenantID),
+		Email:     email,
+		TokenHash: tokenHash,
+		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+	})
+}
+
+func (r *SQLCRepository) GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
+	row, err := r.q.GetPasswordResetTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return domain.PasswordResetToken{}, err
+	}
+	var consumedAt *time.Time
+	if row.ConsumedAt.Valid {
+		t := row.ConsumedAt.Time
+		consumedAt = &t
+	}
+	return domain.PasswordResetToken{
+		ID:         toUUID(row.ID),
+		UserID:     toUUID(row.UserID),
+		TenantID:   toUUID(row.TenantID),
+		Email:      row.Email,
+		TokenHash:  row.TokenHash,
+		CreatedAt:  row.CreatedAt.Time,
+		ExpiresAt:  row.ExpiresAt.Time,
+		ConsumedAt: consumedAt,
+	}, nil
+}
+
+func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
+	return r.q.ConsumePasswordResetToken(ctx, tokenHash)
+}
+
+func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
+	return r.q.UpdateAuthIdentityPasswordByTenantEmail(ctx, db.UpdateAuthIdentityPasswordByTenantEmailParams{
+		TenantID:     toPgUUID(tenantID),
+		Email:        email,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	})
+}
+
+// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+// Returns the number of tokens revoked.
+func (r *SQLCRepository) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return r.q.RevokeRefreshTokensByUserAndTenant(ctx, db.RevokeRefreshTokensByUserAndTenantParams{
+		UserID:   toPgUUID(userID),
+		TenantID: toPgUUID(tenantID),
+	})
+}
+
+// RevokeRefreshTokenByHash revokes a specific refresh token by its hash.
+// Returns the number of tokens revoked (0 or 1).
+func (r *SQLCRepository) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
+	return r.q.RevokeRefreshTokenByHash(ctx, tokenHash)
 }

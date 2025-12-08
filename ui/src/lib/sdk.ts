@@ -6,10 +6,14 @@ import { getRuntimeConfig } from './runtime'
 export type {
   SsoProviderItem,
   SsoProviderType,
+  SsoLinkingPolicy,
   SsoProvidersListResp,
   CreateSsoProviderReq,
   UpdateSsoProviderReq,
-  SsoTestProviderResp
+  SsoTestProviderResp,
+  SsoSPInfoResp,
+  SsoProviderOption,
+  LoginOptionsResp
 } from '../../../sdk/ts/src/client'
 
 let client: GuardClient | null = null

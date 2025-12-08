@@ -374,6 +374,13 @@ export default function SimpleProgressiveLoginForm({
                   {loginError}
                 </div>
               )}
+              <a
+                href="/forgot-password"
+                data-testid="forgot-password-link"
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Forgot password?
+              </a>
             </div>
             
             <div className="flex gap-2">

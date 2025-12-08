@@ -107,6 +107,8 @@ INSERT INTO sso_providers (
     want_response_signed,
     sign_requests,
     force_authn,
+    allow_idp_initiated,
+    linking_policy,
     -- Common fields
     attribute_mapping,
     enabled,
@@ -118,8 +120,8 @@ INSERT INTO sso_providers (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-    $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
-) RETURNING id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by
+    $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
+) RETURNING id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy
 `
 
 type CreateSSOProviderParams struct {
@@ -153,6 +155,8 @@ type CreateSSOProviderParams struct {
 	WantResponseSigned     pgtype.Bool        `json:"want_response_signed"`
 	SignRequests           pgtype.Bool        `json:"sign_requests"`
 	ForceAuthn             pgtype.Bool        `json:"force_authn"`
+	AllowIdpInitiated      pgtype.Bool        `json:"allow_idp_initiated"`
+	LinkingPolicy          pgtype.Text        `json:"linking_policy"`
 	AttributeMapping       []byte             `json:"attribute_mapping"`
 	Enabled                pgtype.Bool        `json:"enabled"`
 	AllowSignup            pgtype.Bool        `json:"allow_signup"`
@@ -195,6 +199,8 @@ func (q *Queries) CreateSSOProvider(ctx context.Context, arg CreateSSOProviderPa
 		arg.WantResponseSigned,
 		arg.SignRequests,
 		arg.ForceAuthn,
+		arg.AllowIdpInitiated,
+		arg.LinkingPolicy,
 		arg.AttributeMapping,
 		arg.Enabled,
 		arg.AllowSignup,
@@ -245,6 +251,8 @@ func (q *Queries) CreateSSOProvider(ctx context.Context, arg CreateSSOProviderPa
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.UpdatedBy,
+		&i.AllowIdpInitiated,
+		&i.LinkingPolicy,
 	)
 	return i, err
 }
@@ -317,21 +325,21 @@ func (q *Queries) DeleteSSOProvider(ctx context.Context, arg DeleteSSOProviderPa
 }
 
 const findSSOProviderByDomain = `-- name: FindSSOProviderByDomain :one
-SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by FROM sso_providers
+SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy FROM sso_providers
 WHERE tenant_id = $1
   AND enabled = TRUE
-  AND $2 = ANY(domains)
+  AND $2::text = ANY(domains)
 ORDER BY created_at DESC
 LIMIT 1
 `
 
 type FindSSOProviderByDomainParams struct {
 	TenantID pgtype.UUID `json:"tenant_id"`
-	Domains  []string    `json:"domains"`
+	Domain   string      `json:"domain"`
 }
 
 func (q *Queries) FindSSOProviderByDomain(ctx context.Context, arg FindSSOProviderByDomainParams) (SsoProvider, error) {
-	row := q.db.QueryRow(ctx, findSSOProviderByDomain, arg.TenantID, arg.Domains)
+	row := q.db.QueryRow(ctx, findSSOProviderByDomain, arg.TenantID, arg.Domain)
 	var i SsoProvider
 	err := row.Scan(
 		&i.ID,
@@ -374,6 +382,8 @@ func (q *Queries) FindSSOProviderByDomain(ctx context.Context, arg FindSSOProvid
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.UpdatedBy,
+		&i.AllowIdpInitiated,
+		&i.LinkingPolicy,
 	)
 	return i, err
 }
@@ -445,7 +455,7 @@ func (q *Queries) GetSSOAuthAttemptByState(ctx context.Context, state pgtype.Tex
 }
 
 const getSSOProvider = `-- name: GetSSOProvider :one
-SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by FROM sso_providers
+SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy FROM sso_providers
 WHERE id = $1 AND tenant_id = $2
 `
 
@@ -498,12 +508,14 @@ func (q *Queries) GetSSOProvider(ctx context.Context, arg GetSSOProviderParams) 
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.UpdatedBy,
+		&i.AllowIdpInitiated,
+		&i.LinkingPolicy,
 	)
 	return i, err
 }
 
 const getSSOProviderBySlug = `-- name: GetSSOProviderBySlug :one
-SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by FROM sso_providers
+SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy FROM sso_providers
 WHERE tenant_id = $1 AND slug = $2
 `
 
@@ -556,6 +568,8 @@ func (q *Queries) GetSSOProviderBySlug(ctx context.Context, arg GetSSOProviderBy
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.UpdatedBy,
+		&i.AllowIdpInitiated,
+		&i.LinkingPolicy,
 	)
 	return i, err
 }
@@ -589,6 +603,51 @@ func (q *Queries) GetSSOSessionByIndex(ctx context.Context, arg GetSSOSessionByI
 		&i.TerminatedAt,
 	)
 	return i, err
+}
+
+const listEnabledSSOProviders = `-- name: ListEnabledSSOProviders :many
+SELECT id, tenant_id, name, slug, provider_type, domains, enabled
+FROM sso_providers
+WHERE tenant_id = $1 AND enabled = TRUE
+ORDER BY name ASC
+`
+
+type ListEnabledSSOProvidersRow struct {
+	ID           pgtype.UUID `json:"id"`
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	Name         string      `json:"name"`
+	Slug         string      `json:"slug"`
+	ProviderType string      `json:"provider_type"`
+	Domains      []string    `json:"domains"`
+	Enabled      pgtype.Bool `json:"enabled"`
+}
+
+func (q *Queries) ListEnabledSSOProviders(ctx context.Context, tenantID pgtype.UUID) ([]ListEnabledSSOProvidersRow, error) {
+	rows, err := q.db.Query(ctx, listEnabledSSOProviders, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnabledSSOProvidersRow
+	for rows.Next() {
+		var i ListEnabledSSOProvidersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Name,
+			&i.Slug,
+			&i.ProviderType,
+			&i.Domains,
+			&i.Enabled,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSSOAuthAttemptsByProvider = `-- name: ListSSOAuthAttemptsByProvider :many
@@ -684,7 +743,7 @@ func (q *Queries) ListSSOAuthAttemptsByTenant(ctx context.Context, arg ListSSOAu
 }
 
 const listSSOProviders = `-- name: ListSSOProviders :many
-SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by FROM sso_providers
+SELECT id, tenant_id, name, slug, provider_type, issuer, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, client_id, client_secret, scopes, response_type, response_mode, entity_id, acs_url, slo_url, idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificate, sp_certificate, sp_private_key, sp_certificate_expires_at, want_assertions_signed, want_response_signed, sign_requests, force_authn, attribute_mapping, enabled, allow_signup, trust_email_verified, domains, created_at, updated_at, created_by, updated_by, allow_idp_initiated, linking_policy FROM sso_providers
 WHERE tenant_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -746,6 +805,8 @@ func (q *Queries) ListSSOProviders(ctx context.Context, arg ListSSOProvidersPara
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.UpdatedBy,
+			&i.AllowIdpInitiated,
+			&i.LinkingPolicy,
 		); err != nil {
 			return nil, err
 		}
@@ -843,14 +904,16 @@ SET
     want_response_signed = COALESCE($26, want_response_signed),
     sign_requests = COALESCE($27, sign_requests),
     force_authn = COALESCE($28, force_authn),
+    allow_idp_initiated = COALESCE($29, allow_idp_initiated),
+    linking_policy = COALESCE($30, linking_policy),
     -- Common fields
-    attribute_mapping = COALESCE($29, attribute_mapping),
-    allow_signup = COALESCE($30, allow_signup),
-    trust_email_verified = COALESCE($31, trust_email_verified),
-    domains = COALESCE($32, domains),
-    updated_by = $33,
+    attribute_mapping = COALESCE($31, attribute_mapping),
+    allow_signup = COALESCE($32, allow_signup),
+    trust_email_verified = COALESCE($33, trust_email_verified),
+    domains = COALESCE($34, domains),
+    updated_by = $35,
     updated_at = NOW()
-WHERE id = $34 AND tenant_id = $35
+WHERE id = $36 AND tenant_id = $37
 `
 
 type UpdateSSOProviderParams struct {
@@ -882,6 +945,8 @@ type UpdateSSOProviderParams struct {
 	WantResponseSigned     pgtype.Bool        `json:"want_response_signed"`
 	SignRequests           pgtype.Bool        `json:"sign_requests"`
 	ForceAuthn             pgtype.Bool        `json:"force_authn"`
+	AllowIdpInitiated      pgtype.Bool        `json:"allow_idp_initiated"`
+	LinkingPolicy          pgtype.Text        `json:"linking_policy"`
 	AttributeMapping       []byte             `json:"attribute_mapping"`
 	AllowSignup            pgtype.Bool        `json:"allow_signup"`
 	TrustEmailVerified     pgtype.Bool        `json:"trust_email_verified"`
@@ -921,6 +986,8 @@ func (q *Queries) UpdateSSOProvider(ctx context.Context, arg UpdateSSOProviderPa
 		arg.WantResponseSigned,
 		arg.SignRequests,
 		arg.ForceAuthn,
+		arg.AllowIdpInitiated,
+		arg.LinkingPolicy,
 		arg.AttributeMapping,
 		arg.AllowSignup,
 		arg.TrustEmailVerified,

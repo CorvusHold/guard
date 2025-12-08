@@ -414,6 +414,11 @@ func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bo
 	return s.repo.SetUserActive(ctx, userID, active)
 }
 
+// SetUserEmailVerified sets the email_verified flag for a user.
+func (s *Service) SetUserEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return s.repo.SetUserEmailVerified(ctx, userID, verified)
+}
+
 // ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 func (s *Service) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
 	return s.repo.ListUserSessions(ctx, userID, tenantID)
@@ -437,6 +442,12 @@ func (s *Service) RevokeSession(ctx context.Context, userID uuid.UUID, tenantID 
 		return errors.New("session not found")
 	}
 	return s.repo.RevokeTokenChain(ctx, sessionID)
+}
+
+// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+// Returns the number of tokens revoked.
+func (s *Service) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return s.repo.RevokeUserSessions(ctx, userID, tenantID)
 }
 
 // VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
@@ -507,7 +518,7 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 		return domain.AccessTokens{}, errors.New("unsupported method")
 	}
 	// Issue tokens and publish login success audit event
-	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil)
+	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil, "password", nil)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -554,7 +565,7 @@ func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.Acc
 	if err := s.repo.AddUserToTenant(ctx, userID, in.TenantID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil)
+	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil, "password", nil)
 }
 
 func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.AccessTokens, error) {
@@ -595,7 +606,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	if err := s.repo.UpdateUserLoginAt(ctx, ai.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil)
+	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil, "password", nil)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -628,7 +639,12 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if err := s.repo.RevokeTokenChain(ctx, rt.ID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID)
+	// Preserve the original auth method from the refresh token for the new token
+	originalAuthMethod := "password"
+	if rt.AuthMethod != "" {
+		originalAuthMethod = rt.AuthMethod
+	}
+	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod, rt.SSOProviderID)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -663,11 +679,11 @@ func (s *Service) IssueTokensForSSO(ctx context.Context, in domain.SSOTokenInput
 	if err := s.repo.UpdateUserLoginAt(ctx, in.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	// Issue tokens
-	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil)
+	// Issue tokens for SSO-authenticated users with provider ID for session tracking
+	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil, "sso", in.SSOProviderID)
 }
 
-func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID) (domain.AccessTokens, error) {
+func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string, ssoProviderID *uuid.UUID) (domain.AccessTokens, error) {
 	// Resolve settings with tenant override and env defaults
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
@@ -698,7 +714,16 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 	h := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt); err != nil {
+	// Build metadata for the refresh token
+	createdVia := "login"
+	if parent != nil {
+		createdVia = "refresh"
+	}
+	metadata := &domain.RefreshTokenMetadata{
+		AuthMethod: authMethod,
+		CreatedVia: createdVia,
+	}
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
@@ -981,4 +1006,274 @@ func generateBackupCode(n int) (string, error) {
 	}
 	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
 	return enc.EncodeToString(b), nil
+}
+
+// --- Password Reset ---
+
+// RequestPasswordReset sends a password reset email to the user.
+// TenantID is required because identity is scoped by (tenant_id, email).
+// If TenantID is nil and email exists in multiple tenants, sends an email
+// with tenant selection options instead of returning them in the API response
+// to avoid leaking cross-tenant membership information.
+func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordResetRequestInput) error {
+	email := strings.TrimSpace(strings.ToLower(in.Email))
+	if email == "" {
+		return errors.New("email is required")
+	}
+
+	var ai domain.AuthIdentity
+	var tenantID uuid.UUID
+
+	if in.TenantID != nil {
+		// Look up the user by email and specific tenant
+		found, err := s.repo.GetAuthIdentityByEmailTenant(ctx, *in.TenantID, email)
+		if err != nil {
+			// Don't reveal whether user exists - always return success
+			return nil
+		}
+		ai = found
+		tenantID = *in.TenantID
+	} else {
+		// No tenant specified - look up by email to see how many tenants have this email
+		identities, err := s.repo.FindAuthIdentitiesByEmail(ctx, email)
+		if err != nil || len(identities) == 0 {
+			// Don't reveal whether user exists - always return success
+			return nil
+		}
+		// If email exists in exactly one tenant, we can proceed
+		if len(identities) == 1 {
+			ai = identities[0]
+			tenantID = ai.TenantID
+		} else {
+			// Email exists in multiple tenants - send an email with tenant selection options
+			// instead of returning them in the API response to avoid leaking cross-tenant membership.
+			// Build tenant options for the email
+			tenantOpts := make([]domain.TenantOption, 0, len(identities))
+			for _, ident := range identities {
+				// Look up tenant name
+				tenant, err := s.repo.GetTenantByID(ctx, ident.TenantID)
+				name := ""
+				if err == nil {
+					name = tenant.Name
+				}
+				tenantOpts = append(tenantOpts, domain.TenantOption{
+					TenantID:   ident.TenantID,
+					TenantName: name,
+				})
+			}
+			// TODO: Send email with tenant selection options
+			// In production, integrate with email service:
+			// if err := s.emailService.SendTenantSelectionEmail(ctx, email, tenantOpts); err != nil { ... }
+			s.log.Info().
+				Str("email", email).
+				Int("tenant_count", len(tenantOpts)).
+				Msg("password reset requested for email in multiple tenants - tenant selection email would be sent")
+			// Return explicit error until tenant-selection email flow is implemented.
+			// Do not include tenant details in the error to avoid leaking cross-tenant membership.
+			return errors.New("email service integration required for multi-tenant password reset")
+		}
+	}
+
+	// Resolve TTL for password reset (use magic link TTL as default)
+	ttl, _ := s.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &tenantID, s.cfg.MagicLinkTTL)
+
+	// Generate token and store hashed
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+	exp := time.Now().Add(ttl)
+
+	if err := s.repo.CreatePasswordResetToken(ctx, uuid.New(), ai.UserID, tenantID, email, tokenHash, exp); err != nil {
+		return err
+	}
+
+	// TODO: Send reset link via email service
+	// Build reset link for email delivery
+	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
+	resetLink := baseURL + "/reset-password?token=" + token
+	// In production, integrate with email service:
+	// if err := s.emailService.SendPasswordResetEmail(ctx, email, resetLink); err != nil { ... }
+	_ = resetLink // Suppress unused variable until email service integration
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.reset.requested",
+		TenantID: tenantID,
+		UserID:   ai.UserID,
+		Meta:     map[string]string{"email": email},
+		Time:     time.Now(),
+	})
+
+	// Log the request (in production, this would send an email with resetLink)
+	s.log.Info().
+		Str("email", email).
+		Str("tenant_id", tenantID.String()).
+		Msg("password reset requested")
+
+	return nil
+}
+
+// ConfirmPasswordReset verifies the token and sets the new password.
+func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordResetConfirmInput) error {
+	if in.Token == "" {
+		return errors.New("token required")
+	}
+	if len(in.NewPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	// Hash the token and look it up
+	h := sha256.Sum256([]byte(in.Token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	prt, err := s.repo.GetPasswordResetTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+
+	// Check if token is expired or already consumed
+	if prt.ConsumedAt != nil || time.Now().After(prt.ExpiresAt) {
+		return errors.New("token expired or already used")
+	}
+
+	// Verify tenant matches if provided
+	if in.TenantID != nil && prt.TenantID != *in.TenantID {
+		return errors.New("invalid token")
+	}
+
+	// Hash the new password
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update the password first (before consuming token for atomicity)
+	// If password update fails, user can retry with the same token
+	rowsAffected, err := s.repo.UpdateAuthIdentityPassword(ctx, prt.TenantID, prt.Email, string(hash))
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	// Consume the token only after password update succeeds
+	rowsConsumed, err := s.repo.ConsumePasswordResetToken(ctx, tokenHash)
+	if err != nil {
+		return err
+	}
+	if rowsConsumed == 0 {
+		// Token was already consumed or expired between check and now (race condition)
+		// Password was already updated, so this is acceptable
+		s.log.Warn().Str("email", prt.Email).Msg("password reset token already consumed during update")
+	}
+
+	// Revoke all existing sessions for this user+tenant to invalidate pre-existing refresh tokens
+	revokedCount, revokeErr := s.repo.RevokeUserSessions(ctx, prt.UserID, prt.TenantID)
+	if revokeErr != nil {
+		// Log warning but don't fail the reset - password was already changed successfully
+		s.log.Warn().Err(revokeErr).
+			Str("user_id", prt.UserID.String()).
+			Str("tenant_id", prt.TenantID.String()).
+			Msg("failed to revoke sessions after password reset")
+	} else if revokedCount > 0 {
+		s.log.Info().
+			Int64("revoked_count", revokedCount).
+			Str("user_id", prt.UserID.String()).
+			Str("tenant_id", prt.TenantID.String()).
+			Msg("revoked sessions after password reset")
+	}
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.reset.completed",
+		TenantID: prt.TenantID,
+		UserID:   prt.UserID,
+		Meta:     map[string]string{"email": prt.Email},
+		Time:     time.Now(),
+	})
+
+	return nil
+}
+
+// ChangePassword changes the password for a logged-in user.
+func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeInput) error {
+	if len(in.NewPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	// Get the user's auth identity
+	identities, err := s.repo.GetAuthIdentitiesByUser(ctx, in.UserID)
+	if err != nil {
+		return err
+	}
+
+	// Find the identity for this tenant
+	var ai *domain.AuthIdentity
+	for _, identity := range identities {
+		if identity.TenantID == in.TenantID {
+			ai = &identity
+			break
+		}
+	}
+	if ai == nil {
+		return errors.New("user not found in tenant")
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(ai.PasswordHash), []byte(in.CurrentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	// Hash the new password
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update the password
+	rowsAffected, err := s.repo.UpdateAuthIdentityPassword(ctx, in.TenantID, ai.Email, string(hash))
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	// Revoke all existing sessions for this user+tenant to invalidate other sessions
+	// This ensures that changing the password immediately invalidates old sessions
+	revokedCount, revokeErr := s.repo.RevokeUserSessions(ctx, in.UserID, in.TenantID)
+	if revokeErr != nil {
+		// Log warning but don't fail the password change - password was already updated successfully
+		s.log.Warn().Err(revokeErr).
+			Str("user_id", in.UserID.String()).
+			Str("tenant_id", in.TenantID.String()).
+			Msg("failed to revoke sessions after password change")
+	} else if revokedCount > 0 {
+		s.log.Info().
+			Int64("revoked_count", revokedCount).
+			Str("user_id", in.UserID.String()).
+			Str("tenant_id", in.TenantID.String()).
+			Msg("revoked sessions after password change")
+	}
+
+	// Publish audit event
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.password.changed",
+		TenantID: in.TenantID,
+		UserID:   in.UserID,
+		Meta:     map[string]string{"email": ai.Email},
+		Time:     time.Now(),
+	})
+
+	return nil
+}
+
+// UpdateProfile updates the user's profile (first name, last name).
+func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
+	return s.repo.UpdateUserNames(ctx, userID, strings.TrimSpace(firstName), strings.TrimSpace(lastName))
 }

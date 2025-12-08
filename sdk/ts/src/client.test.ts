@@ -199,6 +199,144 @@ describe('GuardClient', () => {
     await expect(() => client.getSsoOrganizationPortalLink('workos', { tenant_id: 't-1' } as any)).rejects.toThrow('organization_id is required');
   });
 
+  it('ssoPortalSession posts token payload and returns session data', async () => {
+    const { fetchMock, calls } = makeFetchMock([
+      mockResponse({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: { tenant_id: 't-1', provider_slug: 'oidc-main', portal_token_id: 'pt-1' },
+      }),
+    ]);
+
+    const client = new GuardClient({ baseUrl, fetchImpl: fetchMock });
+    const res = await client.ssoPortalSession('raw-token');
+    expect(res.meta.status).toBe(200);
+    expect(res.data.tenant_id).toBe('t-1');
+    expect(res.data.provider_slug).toBe('oidc-main');
+    expect(res.data.portal_token_id).toBe('pt-1');
+
+    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/session`);
+    expect(calls[0].init?.method).toBe('POST');
+    const body = JSON.parse(calls[0].init?.body as string);
+    expect(body).toEqual({ token: 'raw-token' });
+  });
+
+  it('ssoPortalProvider sends X-Portal-Token header and returns provider', async () => {
+    const { fetchMock, calls } = makeFetchMock([
+      mockResponse({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: {
+          id: 'prov-1',
+          tenant_id: 't-1',
+          name: 'OIDC Main',
+          slug: 'oidc-main',
+          provider_type: 'oidc',
+          enabled: true,
+          allow_signup: true,
+          trust_email_verified: true,
+          domains: ['example.com'],
+        },
+      }),
+    ]);
+
+    const client = new GuardClient({ baseUrl, fetchImpl: fetchMock });
+    const res = await client.ssoPortalProvider('raw-token');
+    expect(res.meta.status).toBe(200);
+    expect(res.data.id).toBe('prov-1');
+    expect(res.data.slug).toBe('oidc-main');
+
+    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/provider`);
+    const hdrs = new Headers(calls[0].init?.headers);
+    expect(hdrs.get('X-Portal-Token')).toBe('raw-token');
+  });
+
+  describe('parseSsoCallbackTokens', () => {
+    it('parses both tokens from query string', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?access_token=acc-1&refresh_token=ref-1');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-1');
+      expect(tokens?.refresh_token).toBe('ref-1');
+      expect(storage.getAccessToken()).toBe('acc-1');
+      expect(storage.getRefreshToken()).toBe('ref-1');
+    });
+
+    it('parses both tokens from fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('#access_token=acc-2&refresh_token=ref-2');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-2');
+      expect(tokens?.refresh_token).toBe('ref-2');
+      expect(storage.getAccessToken()).toBe('acc-2');
+      expect(storage.getRefreshToken()).toBe('ref-2');
+    });
+
+    it('parses both tokens from full URL with fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('https://app.example.com/callback#access_token=acc-3&refresh_token=ref-3');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-3');
+      expect(tokens?.refresh_token).toBe('ref-3');
+    });
+
+    it('parses access token only (refresh token optional)', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?access_token=acc-only');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-only');
+      expect(tokens?.refresh_token).toBeUndefined();
+      expect(storage.getAccessToken()).toBe('acc-only');
+      // Refresh token should be null (not set)
+      expect(storage.getRefreshToken()).toBeNull();
+    });
+
+    it('parses access token only from fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('#access_token=acc-frag-only');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-frag-only');
+      expect(tokens?.refresh_token).toBeUndefined();
+    });
+
+    it('returns null when access token is missing', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?refresh_token=ref-only');
+      expect(tokens).toBeNull();
+      expect(storage.getAccessToken()).toBeNull();
+    });
+
+    it('returns null when no tokens present', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?foo=bar');
+      expect(tokens).toBeNull();
+    });
+
+    it('returns null for empty string', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('');
+      expect(tokens).toBeNull();
+    });
+
+    it('prefers fragment over query params in full URL', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      // URL has both query and fragment - fragment should win
+      const tokens = client.parseSsoCallbackTokens('https://app.example.com/callback?access_token=query-acc#access_token=frag-acc&refresh_token=frag-ref');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('frag-acc');
+      expect(tokens?.refresh_token).toBe('frag-ref');
+    });
+  });
+
   describe('OAuth2 Discovery', () => {
     it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
       const storage = new InMemoryStorage();

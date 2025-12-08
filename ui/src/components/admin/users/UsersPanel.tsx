@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
+import { formatRateLimitError } from '@/lib/rateLimit'
+import { Mail, Shield, User, Calendar, Clock } from 'lucide-react'
 
 interface UsersPanelProps {
   tenantId: string
@@ -29,12 +33,13 @@ export default function UsersPanel({
   const [users, setUsers] = useState<AdminUserItem[]>([])
   const { show } = useToast()
   const [editing, setEditing] = useState<AdminUserItem | null>(null)
+  const [viewingUser, setViewingUser] = useState<AdminUserItem | null>(null)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
 
   const canLoad = useMemo(() => !!tenantId, [tenantId])
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null)
     if (!canLoad) {
       setError('tenant_id is required')
@@ -53,16 +58,23 @@ export default function UsersPanel({
         show({ variant: 'error', title: 'Failed to load users' })
       }
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Error',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while loading users')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Error',
+          description: msg
+        })
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [canLoad, show, tenantId])
 
   useEffect(() => {
     if (tenantId) {
@@ -83,12 +95,57 @@ export default function UsersPanel({
       }
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Action failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while updating user status')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Action failed',
+          description: msg
+        })
+      }
+    }
+  }
+
+  async function onToggleEmailVerified(u: AdminUserItem) {
+    setError(null)
+    try {
+      const c = getClient()
+      if (u.email_verified) {
+        await c.unverifyUserEmail(u.id)
+        show({ variant: 'success', title: 'Email marked as unverified' })
+      } else {
+        await c.verifyUserEmail(u.id)
+        show({ variant: 'success', title: 'Email marked as verified' })
+      }
+      await load()
+      // Update viewing user from refreshed data if modal is open
+      if (viewingUser?.id === u.id) {
+        // Sync viewingUser with refreshed server data from users array
+        setUsers((currentUsers) => {
+          const updated = currentUsers.find((usr) => usr.id === u.id)
+          if (updated) setViewingUser(updated)
+          return currentUsers
+        })
+      }
+    } catch (e: any) {
+      const rlMsg = formatRateLimitError(e, 'while updating email verification')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Action failed',
+          description: msg
+        })
+      }
     }
   }
 
@@ -111,12 +168,19 @@ export default function UsersPanel({
       setEditing(null)
       await load()
     } catch (e: any) {
-      setError(e?.message || String(e))
-      show({
-        variant: 'error',
-        title: 'Update failed',
-        description: e?.message || String(e)
-      })
+      const rlMsg = formatRateLimitError(e, 'while updating user names')
+      if (rlMsg) {
+        setError(rlMsg)
+        show({ variant: 'error', title: 'Too Many Requests', description: rlMsg })
+      } else {
+        const msg = e?.message || String(e)
+        setError(msg)
+        show({
+          variant: 'error',
+          title: 'Update failed',
+          description: msg
+        })
+      }
     }
   }
 
@@ -211,7 +275,18 @@ export default function UsersPanel({
                     <div className="text-xs text-muted-foreground">{u.id}</div>
                   </td>
                   <td className="py-2 pr-3">
-                    {u.email_verified ? 'yes' : 'no'}
+                    <button
+                      onClick={() => onToggleEmailVerified(u)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${
+                        u.email_verified
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                      }`}
+                      title={u.email_verified ? 'Click to unverify' : 'Click to verify'}
+                    >
+                      <Mail className="h-3 w-3" />
+                      {u.email_verified ? 'verified' : 'unverified'}
+                    </button>
                   </td>
                   <td className="py-2 pr-3">
                     <span
@@ -230,6 +305,14 @@ export default function UsersPanel({
                   </td>
                   <td className="py-2 pr-3">
                     <div className="flex gap-2">
+                      <Button
+                        data-testid={`users-view-${u.id}`}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewingUser(u)}
+                      >
+                        View
+                      </Button>
                       <Button
                         data-testid={`users-edit-${u.id}`}
                         variant="secondary"
@@ -290,6 +373,113 @@ export default function UsersPanel({
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* User Details Modal */}
+      <Modal
+        open={!!viewingUser}
+        title="User Details"
+        onClose={() => setViewingUser(null)}
+      >
+        {viewingUser && (
+          <div className="space-y-4">
+            {/* User Info Header */}
+            <div className="flex items-center gap-3 pb-3 border-b">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">
+                  {viewingUser.first_name} {viewingUser.last_name}
+                </h3>
+                <p className="text-xs text-muted-foreground font-mono">{viewingUser.id}</p>
+              </div>
+            </div>
+
+            {/* Status Toggles */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="email-verified">Email Verified</Label>
+                </div>
+                <Switch
+                  id="email-verified"
+                  checked={viewingUser.email_verified}
+                  onCheckedChange={() => onToggleEmailVerified(viewingUser)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="user-active">Account Active</Label>
+                </div>
+                <Switch
+                  id="user-active"
+                  checked={viewingUser.is_active}
+                  onCheckedChange={() => onToggleActive(viewingUser)}
+                />
+              </div>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 gap-3 text-sm pt-2">
+              <div>
+                <p className="text-muted-foreground text-xs">Roles</p>
+                <p className="font-medium">
+                  {viewingUser.roles?.length ? viewingUser.roles.join(', ') : 'None'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Status</p>
+                <p className={`font-medium ${viewingUser.is_active ? 'text-green-600' : 'text-red-600'}`}>
+                  {viewingUser.is_active ? 'Active' : 'Blocked'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Created
+                </p>
+                <p className="font-medium">
+                  {new Date(viewingUser.created_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Last Login
+                </p>
+                <p className="font-medium">
+                  {viewingUser.last_login_at
+                    ? new Date(viewingUser.last_login_at).toLocaleString()
+                    : 'Never'}
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-3 border-t">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const userToEdit = viewingUser
+                  setViewingUser(null)
+                  if (userToEdit) openEdit(userToEdit)
+                }}
+              >
+                Edit Profile
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingUser(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

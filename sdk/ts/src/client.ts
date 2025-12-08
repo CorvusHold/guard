@@ -30,6 +30,39 @@ type OAuth2MetadataResp = OpenAPIComponents['schemas']['controller.oauth2Metadat
 // Portal link DTO: base on OpenAPI, but enforce `link` is present at type-level for stricter SDK contract
 type PortalLink = OpenAPIComponents['schemas']['domain.PortalLink'] & { link: string };
 
+// Portal session DTOs
+export interface SsoPortalSessionResp {
+  tenant_id: string;
+  provider_slug: string;
+  portal_token_id: string;
+  intent: string;
+}
+
+// Password reset tenant selection response (when email exists in multiple tenants)
+export interface TenantOption {
+  tenant_id: string;
+  tenant_name: string;
+}
+
+export interface TenantSelectionRequiredResp {
+  error: 'tenant_selection_required';
+  message: string;
+  tenants: TenantOption[];
+}
+
+export function isTenantSelectionRequired(data: unknown): data is TenantSelectionRequiredResp {
+  const d = data as any;
+  return !!d
+    && d.error === 'tenant_selection_required'
+    && typeof d.message === 'string'
+    && Array.isArray(d.tenants);
+}
+
+export interface SsoPortalContext {
+  session: SsoPortalSessionResp;
+  provider: SsoProviderItem;
+}
+
 // Type guards to help narrow union results in consumers
 export function isTokensResp(data: unknown): data is TokensResp {
   const d = data as any;
@@ -108,6 +141,9 @@ export interface AdminUsersResp {
   users: AdminUser[];
 }
 
+/** Auth method used to create a session */
+export type AuthMethod = 'password' | 'sso' | 'magic_link';
+
 export interface SessionItem {
   id: string;
   revoked: boolean;
@@ -115,6 +151,10 @@ export interface SessionItem {
   ip: string;
   created_at: string; // RFC3339
   expires_at: string; // RFC3339
+  auth_method: AuthMethod;
+  sso_provider_id?: string;
+  sso_provider_name?: string;
+  sso_provider_slug?: string;
 }
 
 export interface SessionsListResp {
@@ -145,6 +185,7 @@ export interface TenantSettingsPutRequest {
 
 // SSO Provider Management Types
 export type SsoProviderType = 'oidc' | 'saml';
+export type SsoLinkingPolicy = 'never' | 'verified_email' | 'always';
 
 export interface SsoProviderItem {
   id: string;
@@ -187,6 +228,8 @@ export interface SsoProviderItem {
   want_response_signed?: boolean;
   sign_requests?: boolean;
   force_authn?: boolean;
+  allow_idp_initiated?: boolean;
+  linking_policy?: SsoLinkingPolicy;
 
   created_at: string;
   updated_at: string;
@@ -197,6 +240,27 @@ export interface SsoProviderItem {
 export interface SsoProvidersListResp {
   providers: SsoProviderItem[];
   total: number;
+}
+
+// Login options response - available auth methods for a tenant/email
+export interface SsoProviderOption {
+  slug: string;
+  name: string;
+  provider_type: SsoProviderType;
+  logo_url?: string;
+  login_url: string;
+}
+
+export interface LoginOptionsResp {
+  password_enabled: boolean;
+  magic_link_enabled: boolean;
+  sso_providers: SsoProviderOption[];
+  preferred_method: AuthMethod;
+  sso_required: boolean;
+  user_exists: boolean;
+  tenant_id?: string;
+  tenant_name?: string;
+  domain_matched_sso?: SsoProviderOption;
 }
 
 export interface CreateSsoProviderReq {
@@ -238,6 +302,8 @@ export interface CreateSsoProviderReq {
   want_response_signed?: boolean;
   sign_requests?: boolean;
   force_authn?: boolean;
+  allow_idp_initiated?: boolean;
+  linking_policy?: SsoLinkingPolicy;
 }
 
 export interface UpdateSsoProviderReq {
@@ -276,12 +342,33 @@ export interface UpdateSsoProviderReq {
   want_response_signed?: boolean;
   sign_requests?: boolean;
   force_authn?: boolean;
+  allow_idp_initiated?: boolean;
+  linking_policy?: SsoLinkingPolicy;
 }
 
 export interface SsoTestProviderResp {
   success: boolean;
   metadata?: Record<string, any>;
   error?: string;
+}
+
+// SP Info response - computed Service Provider URLs for SAML configuration
+// URLs use V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+export interface SsoSPInfoResp {
+  /** SP Entity ID / Issuer URL (also called "Identifier" in some IdPs) */
+  entity_id: string;
+  /** Assertion Consumer Service URL where the IdP sends SAML responses */
+  acs_url: string;
+  /** Single Logout URL (optional) */
+  slo_url?: string;
+  /** URL where SP metadata XML can be downloaded */
+  metadata_url: string;
+  /** URL to initiate SSO login */
+  login_url: string;
+  /** Public base URL of the Guard service */
+  base_url: string;
+  /** Tenant ID used in the URL paths */
+  tenant_id: string;
 }
 
 type PasswordLoginInput = { email: string; password: string; tenant_id?: string };
@@ -447,6 +534,13 @@ export class GuardClient {
     });
   }
 
+  // Auth: Get login options - returns available auth methods for a tenant/email
+  async getLoginOptions(params?: { email?: string; tenant_id?: string }): Promise<ResponseWrapper<LoginOptionsResp>> {
+    const tid = params?.tenant_id ?? this.tenantId;
+    const qs = this.buildQuery({ email: params?.email, tenant_id: tid });
+    return this.request<LoginOptionsResp>(`/v1/auth/login-options${qs}`, { method: 'GET' });
+  }
+
   // --- MFA self-service ---
   async mfaStartTotp(): Promise<ResponseWrapper<{ secret: string; otpauth_url: string }>> {
     return this.request<{ secret: string; otpauth_url: string }>('/v1/auth/mfa/totp/start', { method: 'POST' });
@@ -523,6 +617,38 @@ export class GuardClient {
     return res;
   }
 
+  // Auth: Request password reset -> 202 (always, to prevent email enumeration)
+  async passwordResetRequest(body: { tenant_id?: string; email: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/password/reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
+    });
+  }
+
+  // Auth: Confirm password reset -> 200 on success
+  async passwordResetConfirm(body: { tenant_id?: string; token: string; new_password: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/password/reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
+    });
+  }
+
+  // Auth: Change password (requires auth) -> 200 on success
+  async changePassword(body: { current_password: string; new_password: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/password/change', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Auth: Update profile (first/last name) -> 200 on success
+  async updateProfile(body: { first_name?: string; last_name?: string }): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>('/v1/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
   // Admin: List users (requires admin role). tenant_id from client or param.
   async listUsers(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<AdminUsersResp>> {
     const tenant = params.tenant_id ?? this.tenantId;
@@ -549,6 +675,16 @@ export class GuardClient {
   // Admin: Unblock user
   async unblockUser(id: string): Promise<ResponseWrapper<unknown>> {
     return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/unblock`, { method: 'POST' });
+  }
+
+  // Admin: Verify user email (set email_verified=true)
+  async verifyUserEmail(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/verify-email`, { method: 'POST' });
+  }
+
+  // Admin: Unverify user email (set email_verified=false)
+  async unverifyUserEmail(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/unverify-email`, { method: 'POST' });
   }
 
   // Sessions: List sessions. When includeAll=false, filter to active (non-revoked, not expired) client-side to match example app UX.
@@ -590,38 +726,141 @@ export class GuardClient {
     });
   }
 
-  // SSO: Start flow -> returns redirect URL (Location header) without following redirects
-  async startSso(provider: SsoProvider, params: {
+  /**
+   * Start SSO flow with a provider slug.
+   * Uses V2 tenant-scoped URLs: /auth/sso/t/{tenant_id}/{slug}/login
+   * 
+   * @param providerSlug - The provider slug (e.g., 'okta', 'azure-ad', 'google-saml')
+   * @param params - Optional parameters for the SSO flow
+   * @returns The redirect URL to send the user to for authentication
+   * 
+   * @example
+   * ```ts
+   * const result = await client.startSso('okta', { redirect_url: 'https://myapp.com/callback' });
+   * window.location.href = result.data.redirect_url;
+   * ```
+   */
+  async startSso(providerSlug: SsoProvider, params: {
     tenant_id?: string;
     redirect_url?: string;
-    state?: string;
-    connection_id?: string;
-    organization_id?: string;
+    login_hint?: string;
+    force_authn?: boolean;
   } = {}): Promise<ResponseWrapper<{ redirect_url: string }>> {
     const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required for SSO; set via params or client constructor');
+    
     const qs = this.buildQuery({
-      tenant_id: tenant,
       redirect_url: params.redirect_url,
-      state: params.state,
-      connection_id: params.connection_id,
-      organization_id: params.organization_id,
+      login_hint: params.login_hint,
+      force_authn: params.force_authn,
     });
-    const res = await this.http.requestRaw(`/v1/auth/sso/${provider}/start${qs}`, { method: 'GET', redirect: 'manual' });
+    
+    // Use V2 tenant-scoped URL format
+    const res = await this.http.requestRaw(
+      `/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/login${qs}`,
+      { method: 'GET', redirect: 'manual' }
+    );
     const loc = res.headers.get('location');
     const requestId = res.headers.get('x-request-id') || undefined;
-    if (!loc) throw new Error('missing redirect location from SSO start');
+    
+    // Check for error response (non-redirect)
+    if (res.status >= 400) {
+      let errorMsg = `SSO start failed with status ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error) errorMsg += `: ${body.error}`;
+      } catch { /* ignore parse errors */ }
+      throw new Error(`${errorMsg}${requestId ? ` (request: ${requestId})` : ''}`);
+    }
+    
+    if (!loc) {
+      throw new Error(
+        `missing redirect location from SSO start${requestId ? ` (request: ${requestId})` : ''}`
+      );
+    }
     return {
       data: { redirect_url: loc },
       meta: { status: res.status, requestId, headers: toHeadersMap(res.headers) },
     };
   }
 
-  // SSO: Handle callback -> persists tokens on success
-  async handleSsoCallback(provider: SsoProvider, params: { code: string; state?: string; email?: string } = { code: '' }): Promise<ResponseWrapper<TokensResp>> {
-    const qs = this.buildQuery({ code: params.code, state: params.state, email: params.email });
-    const res = await this.request<TokensResp>(`/v1/auth/sso/${provider}/callback${qs}`, { method: 'GET' });
+  /**
+   * Handle SSO callback and exchange code for tokens.
+   * Uses V2 tenant-scoped URLs: /auth/sso/t/{tenant_id}/{slug}/callback
+   * 
+   * @param providerSlug - The provider slug used in startSso
+   * @param params - Callback parameters (code, state from IdP redirect)
+   * @returns Access and refresh tokens
+   */
+  async handleSsoCallback(providerSlug: SsoProvider, params: {
+    tenant_id?: string;
+    code: string;
+    state?: string;
+  }): Promise<ResponseWrapper<TokensResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    if (!tenant) throw new Error('tenant_id is required for SSO callback');
+    
+    const qs = this.buildQuery({ code: params.code, state: params.state });
+    const res = await this.request<TokensResp>(
+      `/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/callback${qs}`,
+      { method: 'GET' }
+    );
     if (res.meta.status === 200) this.persistTokensFrom(res.data);
     return res;
+  }
+
+  /**
+   * Parse SSO callback tokens from URL query parameters or fragment.
+   * Use this when Guard redirects to your app's callback URL with tokens.
+   * 
+   * **Note:** This method has a side effect: when tokens are successfully parsed,
+   * they are automatically persisted to the configured TokenStorage.
+   * 
+   * @param url - The full callback URL or just the query/fragment string (e.g., window.location.search or window.location.hash)
+   * @returns Tokens if access_token is present in URL, null otherwise
+   * 
+   * @remarks
+   * - access_token is required for a successful return
+   * - refresh_token is optional (some flows don't provide it)
+   * - When refresh_token is missing, token refresh via `refresh()` will not be available
+   * - Tokens are persisted to storage on successful parse (side effect)
+   */
+  parseSsoCallbackTokens(url: string): TokensResp | null {
+    try {
+      // Handle both full URL and just query/fragment string
+      let searchParams: URLSearchParams;
+      if (url.startsWith('#')) {
+        // Fragment-based tokens (e.g., from SSO redirect)
+        searchParams = new URLSearchParams(url.substring(1));
+      } else if (url.startsWith('?') || url.startsWith('/') || url.startsWith('http')) {
+        // For query-only or path-only strings, prepend a dummy base URL for parsing
+        const needsBase = url.startsWith('?') || url.startsWith('/');
+        const parsed = new URL(needsBase ? `http://x${url}` : url);
+        // Try fragment first (preferred for security), then query params
+        searchParams = parsed.hash
+          ? new URLSearchParams(parsed.hash.substring(1))
+          : parsed.searchParams;
+      } else {
+        searchParams = new URLSearchParams(url);
+      }
+      
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      
+      // Access token is required; refresh token is optional
+      if (!accessToken) {
+        return null;
+      }
+      
+      const tokens: TokensResp = {
+        access_token: accessToken,
+        refresh_token: refreshToken ?? undefined,
+      };
+      this.persistTokensFrom(tokens);
+      return tokens;
+    } catch {
+      return null;
+    }
   }
 
   // SSO: WorkOS Organization Portal link (admin-only on server)
@@ -639,6 +878,68 @@ export class GuardClient {
       intent: params.intent,
     });
     return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+  }
+
+  // SSO: Portal token session exchange (public, portal-token gated)
+  async ssoPortalSession(token: string): Promise<ResponseWrapper<SsoPortalSessionResp>> {
+    if (!token || typeof token !== 'string') {
+      throw new Error('token is required');
+    }
+    return this.request<SsoPortalSessionResp>('/v1/sso/portal/session', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  }
+
+  // SSO: Portal provider config (public, portal-token gated)
+  async ssoPortalProvider(token: string): Promise<ResponseWrapper<SsoProviderItem>> {
+    if (!token || typeof token !== 'string') {
+      throw new Error('token is required');
+    }
+    const headers: Record<string, string> = { 'X-Portal-Token': token };
+    return this.request<SsoProviderItem>('/v1/sso/portal/provider', {
+      method: 'GET',
+      headers,
+    });
+  }
+
+  // High-level helper: load portal session and provider in one call
+  async loadSsoPortalContext(token: string): Promise<SsoPortalContext> {
+    const sessionRes = await this.ssoPortalSession(token);
+    if (sessionRes.meta.status !== 200 || !sessionRes.data) {
+      const serverError = this.extractErrorDetails(sessionRes.data);
+      const requestId = sessionRes.meta.requestId;
+      throw new Error(
+        `portal session failed with status ${sessionRes.meta.status}` +
+        (serverError ? `: ${serverError}` : '') +
+        (requestId ? ` (request: ${requestId})` : '')
+      );
+    }
+
+    const providerRes = await this.ssoPortalProvider(token);
+    if (providerRes.meta.status !== 200 || !providerRes.data) {
+      const serverError = this.extractErrorDetails(providerRes.data);
+      const requestId = providerRes.meta.requestId;
+      throw new Error(
+        `portal provider failed with status ${providerRes.meta.status}` +
+        (serverError ? `: ${serverError}` : '') +
+        (requestId ? ` (request: ${requestId})` : '')
+      );
+    }
+
+    return { session: sessionRes.data, provider: providerRes.data };
+  }
+
+  // Helper to extract error details from server response
+  private extractErrorDetails(data: unknown): string | null {
+    if (!data || typeof data !== 'object') return null;
+    const obj = data as Record<string, unknown>;
+    // Try common error field names
+    if (typeof obj.error === 'string') return obj.error;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.description === 'string') return obj.description;
+    if (typeof obj.detail === 'string') return obj.detail;
+    return null;
   }
 
   // ==============================
@@ -687,6 +988,32 @@ export class GuardClient {
     return this.request<SsoTestProviderResp>(`/v1/sso/providers/${encodeURIComponent(id)}/test`, {
       method: 'POST',
     });
+  }
+
+  /**
+   * Get computed Service Provider (SP) URLs for SAML configuration.
+   * These URLs are needed by admins to configure their Identity Provider (IdP).
+   * URLs use V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+   * 
+   * @param slug - The provider slug (e.g. 'okta', 'azure-ad')
+   * @param tenantId - Optional tenant ID (uses client's default if not provided)
+   * @returns SP info including Entity ID, ACS URL, SLO URL, Metadata URL, Login URL, and Tenant ID
+   * 
+   * @example
+   * ```ts
+   * const spInfo = await client.ssoGetSPInfo('okta');
+   * console.log(spInfo.data.entity_id);  // https://api.example.com/auth/sso/t/{tenant_id}/okta/metadata
+   * console.log(spInfo.data.acs_url);    // https://api.example.com/auth/sso/t/{tenant_id}/okta/callback
+   * console.log(spInfo.data.tenant_id);  // The tenant UUID used in the URLs
+   * ```
+   */
+  async ssoGetSPInfo(slug: string, tenantId?: string): Promise<ResponseWrapper<SsoSPInfoResp>> {
+    if (!slug) throw new Error('slug is required');
+    const tenant = tenantId ?? this.tenantId;
+    const params: Record<string, string> = { slug };
+    if (tenant) params.tenant_id = tenant;
+    const qs = this.buildQuery(params);
+    return this.request<SsoSPInfoResp>(`/v1/sso/sp-info${qs}`, { method: 'GET' });
   }
 
   // ==============================

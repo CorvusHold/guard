@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	ssodomain "github.com/corvusHold/guard/internal/auth/sso/domain"
+	ssosvc "github.com/corvusHold/guard/internal/auth/sso/service"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
@@ -32,11 +34,12 @@ type SSO struct {
 	redis    *redis.Client
 	pub      evdomain.Publisher
 	log      zerolog.Logger
+	ssoSvc   *ssosvc.SSOService
 }
 
 func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service) *SSO {
 	rc := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, DB: cfg.RedisDB})
-	return &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop()}
+	return &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop(), ssoSvc: nil}
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
@@ -44,6 +47,9 @@ func (s *SSO) SetPublisher(p evdomain.Publisher) { s.pub = p }
 
 // SetLogger allows injection of a structured logger for SSO flows.
 func (s *SSO) SetLogger(l zerolog.Logger) { s.log = l }
+
+// SetSSOProviderService allows injection of the native SSO provider service used for portal flows.
+func (s *SSO) SetSSOProviderService(svc *ssosvc.SSOService) { s.ssoSvc = svc }
 
 // Start builds a local callback URL with a signed one-time code.
 func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error) {
@@ -357,7 +363,12 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 	rh := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(rh[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt); err != nil {
+	metadata := &domain.RefreshTokenMetadata{
+		AuthMethod:  "sso",
+		SSOProvider: in.Provider,
+		CreatedVia:  "sso_callback",
+	}
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt, "sso", nil, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	// Publish audit event
@@ -381,9 +392,63 @@ func (s *SSO) OrganizationPortalLinkGenerator(ctx context.Context, in domain.SSO
 			metrics.IncSSOOutcome(in.Provider, "failure")
 		}
 	}()
-	if in.Provider != "workos" {
-		return domain.PortalLink{}, errors.New("unsupported provider")
+	mode, _ := s.settings.GetString(ctx, sdomain.KeySSOProvider, &in.TenantID, "")
+	if strings.EqualFold(in.Provider, "workos") || strings.EqualFold(mode, "workos") {
+		plink, err = s.OrganizationPortalLinkGeneratorWorkOS(ctx, in)
+		return plink, err
 	}
-	plink, err = s.OrganizationPortalLinkGeneratorWorkOS(ctx, in)
-	return plink, err
+
+	// Resolve native provider by slug using the SSO provider service.
+	providerSlug := strings.TrimSpace(in.Provider)
+	if providerSlug == "" {
+		return domain.PortalLink{}, errors.New("provider slug required")
+	}
+	if s.ssoSvc == nil {
+		return domain.PortalLink{}, errors.New("sso service not initialized")
+	}
+	config, errCfg := s.ssoSvc.GetProviderBySlug(ctx, in.TenantID, providerSlug)
+	if errCfg != nil {
+		return domain.PortalLink{}, errCfg
+	}
+	if !config.Enabled {
+		return domain.PortalLink{}, ssodomain.ErrProviderDisabled{ProviderSlug: providerSlug}
+	}
+	if config.ProviderType == ssodomain.ProviderTypeWorkOS {
+		// If the resolved provider is WorkOS, delegate to the WorkOS generator.
+		plink, err = s.OrganizationPortalLinkGeneratorWorkOS(ctx, in)
+		return plink, err
+	}
+
+	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
+	u, parseErr := url.Parse(baseURL)
+	if parseErr != nil {
+		return domain.PortalLink{}, parseErr
+	}
+
+	raw := make([]byte, 32)
+	if _, genErr := rand.Read(raw); genErr != nil {
+		return domain.PortalLink{}, genErr
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	intent := strings.TrimSpace(in.Intent)
+	if intent == "" {
+		intent = "sso"
+	}
+	if _, errIntent := s.repo.CreateSSOPortalToken(ctx, in.TenantID, &config.ID, config.Slug, tokenHash, intent, in.CreatedBy, expiresAt, 10); errIntent != nil {
+		return domain.PortalLink{}, errIntent
+	}
+
+	u.Path = "/portal/sso-setup"
+	q := u.Query()
+	q.Set("token", token)
+	q.Set("guard-base-url", baseURL)
+	q.Set("provider", config.Slug)
+	q.Set("intent", intent)
+	u.RawQuery = q.Encode()
+
+	return domain.PortalLink{Link: u.String()}, nil
 }

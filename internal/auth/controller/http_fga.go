@@ -15,6 +15,21 @@ import (
 
 // ---- Admin: FGA (scaffold) ----
 
+// getToken returns the access token from the Authorization header (bearer token)
+// or, if empty and auth mode is "cookie", from the guard access token cookie.
+func (h *Controller) getToken(c echo.Context) string {
+	tok := bearerToken(c)
+	if tok == "" {
+		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
+		if authMode == "cookie" {
+			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+				tok = cookie.Value
+			}
+		}
+	}
+	return tok
+}
+
 // fgaCreateGroupReq represents the request to create a group.
 type fgaCreateGroupReq struct {
 	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
@@ -51,7 +66,7 @@ type fgaListGroupsResp struct {
 // @Router       /v1/auth/admin/fga/groups [post]
 func (h *Controller) fgaCreateGroup(c echo.Context) error {
 	// JWT + admin check
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -117,7 +132,7 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/fga/groups [get]
 func (h *Controller) fgaListGroups(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -169,7 +184,7 @@ func (h *Controller) fgaListGroups(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/fga/groups/{id} [delete]
 func (h *Controller) fgaDeleteGroup(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -236,7 +251,7 @@ type fgaModifyGroupMemberReq struct {
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/fga/groups/{id}/members [post]
 func (h *Controller) fgaAddGroupMember(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -301,7 +316,7 @@ func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /v1/auth/admin/fga/groups/{id}/members [delete]
 func (h *Controller) fgaRemoveGroupMember(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -375,7 +390,7 @@ type fgaCreateACLTupleReq struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /v1/auth/admin/fga/acl/tuples [post]
 func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -457,7 +472,7 @@ type fgaDeleteACLTupleReq struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /v1/auth/admin/fga/acl/tuples [delete]
 func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}
@@ -548,7 +563,7 @@ type fgaAuthorizeResp struct {
 // @Router       /v1/auth/authorize [post]
 func (h *Controller) fgaAuthorize(c echo.Context) error {
 	// JWT check (no admin required)
-	tok := bearerToken(c)
+	tok := h.getToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}

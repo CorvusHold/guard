@@ -47,6 +47,15 @@ func (e ErrInvalidState) Error() string {
 	return "invalid or expired SSO state token"
 }
 
+// ErrIdpInitiatedNotAllowed is returned when IdP-initiated SSO is attempted but not allowed.
+type ErrIdpInitiatedNotAllowed struct {
+	ProviderSlug string
+}
+
+func (e ErrIdpInitiatedNotAllowed) Error() string {
+	return fmt.Sprintf("IdP-initiated SSO is not allowed for provider '%s'. Please initiate login from the application.", e.ProviderSlug)
+}
+
 // ErrConfigValidation is returned when provider configuration is invalid.
 type ErrConfigValidation struct {
 	Field   string
@@ -55,4 +64,40 @@ type ErrConfigValidation struct {
 
 func (e ErrConfigValidation) Error() string {
 	return fmt.Sprintf("configuration validation failed for '%s': %s", e.Field, e.Message)
+}
+
+// ErrAccountExists is returned when SSO login matches an existing account but linking is disabled.
+type ErrAccountExists struct {
+	Email string
+}
+
+func (e ErrAccountExists) Error() string {
+	return fmt.Sprintf("an account with email '%s' already exists. Please sign in with your password or contact support to link your accounts.", e.Email)
+}
+
+// EmailNotVerifiedReason describes why email verification failed.
+type EmailNotVerifiedReason string
+
+const (
+	// EmailNotVerifiedReasonIdP indicates the IdP has not verified the user's email.
+	EmailNotVerifiedReasonIdP EmailNotVerifiedReason = "idp"
+	// EmailNotVerifiedReasonAccount indicates the existing account's email is not verified.
+	EmailNotVerifiedReasonAccount EmailNotVerifiedReason = "account"
+)
+
+// ErrEmailNotVerified is returned when account linking requires verified email but it's not.
+type ErrEmailNotVerified struct {
+	Email  string
+	Reason EmailNotVerifiedReason
+}
+
+func (e ErrEmailNotVerified) Error() string {
+	switch e.Reason {
+	case EmailNotVerifiedReasonIdP:
+		return "your identity provider has not verified your email address. Please verify your email with your IdP and try again."
+	case EmailNotVerifiedReasonAccount:
+		return fmt.Sprintf("please verify your existing account's email address (%s) before linking with SSO.", e.Email)
+	default:
+		return "email verification required for account linking"
+	}
 }
