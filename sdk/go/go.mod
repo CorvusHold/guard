@@ -1,4 +1,4 @@
-module github.com/corvusHold/guard/sdk/go
+module github.com/CorvusHold/guard/sdk/go
 
 go 1.22.5
 
