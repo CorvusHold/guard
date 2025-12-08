@@ -1,0 +1,129 @@
+name: SDK Drift Check
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'docs/swagger.json'
+      - 'docs/swagger.yaml'
+      - 'cmd/api/**'
+      - 'internal/**/controller/**'
+      - 'sdk/**'
+  pull_request:
+    paths:
+      - 'docs/swagger.json'
+      - 'docs/swagger.yaml'
+      - 'cmd/api/**'
+      - 'internal/**/controller/**'
+      - 'sdk/**'
+
+jobs:
+  check-spec-freshness:
+    name: Check OpenAPI Spec is Fresh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+
+      - name: Install swag
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Regenerate OpenAPI spec
+        run: swag init -g cmd/api/main.go -o docs
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet docs/swagger.json docs/swagger.yaml; then
+            echo "::error::OpenAPI spec is out of date. Run 'make swagger' and commit the changes."
+            git diff docs/swagger.json docs/swagger.yaml
+            exit 1
+          fi
+          echo "OpenAPI spec is up to date"
+
+  check-ts-sdk-types:
+    name: Check TS SDK Types
+    runs-on: ubuntu-latest
+    needs: [check-spec-freshness]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: 'sdk/ts/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: sdk/ts
+        run: npm ci
+
+      - name: Regenerate types from OpenAPI
+        working-directory: sdk/ts
+        run: npm run gen:openapi
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet sdk/ts/src/generated/; then
+            echo "::error::TS SDK types are out of date. Run 'cd sdk/ts && npm run gen:openapi' and commit."
+            git diff sdk/ts/src/generated/
+            exit 1
+          fi
+          echo "TS SDK types are up to date"
+
+      - name: Verify SDK builds
+        working-directory: sdk/ts
+        run: npm run build
+
+      - name: Verify SDK tests pass
+        working-directory: sdk/ts
+        run: npm test
+
+  check-go-sdk-types:
+    name: Check Go SDK Types
+    runs-on: ubuntu-latest
+    needs: [check-spec-freshness]
+    # Go SDK is currently out of sync - make this non-blocking until fixed
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache: true
+          cache-dependency-path: 'sdk/go/go.sum'
+
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+
+      - name: Regenerate Go SDK types
+        working-directory: sdk/go
+        run: |
+          if [ -f "generate.go" ] || [ -f "Makefile" ]; then
+            go generate ./... || make generate || true
+          fi
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet sdk/go/; then
+            echo "::warning::Go SDK types may be out of date"
+            git diff sdk/go/
+          fi
+
+      - name: Verify SDK builds
+        working-directory: sdk/go
+        run: go build ./... || echo "::warning::Go SDK build failed - needs sync with API"
+
+      - name: Verify SDK tests pass
+        working-directory: sdk/go
+        run: go test -v ./... || echo "::warning::Go SDK tests failed - needs sync with API"

@@ -1,32 +1,49 @@
 openapi: 3.0.0
 info:
-  contact: {}
   description: Central Authentication Service for multi-tenant identity management.
   title: Guard CAS API
+  contact: {}
   version: "1.0"
 paths:
+  /.well-known/oauth-authorization-server:
+    get:
+      description: RFC 8414 compliant discovery endpoint that returns server metadata
+        including supported authentication modes
+      tags:
+        - auth
+      summary: OAuth 2.0 Authorization Server Metadata
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.oauth2MetadataResp"
   /tenants:
     get:
       description: Lists tenants with optional filters and pagination
+      tags:
+        - tenants
+      summary: List tenants
       parameters:
         - description: Search query
-          in: query
           name: q
+          in: query
           schema:
             type: string
         - description: -1 any, 1 active, 0 inactive
-          in: query
           name: active
+          in: query
           schema:
             type: integer
         - description: Page number
-          in: query
           name: page
+          in: query
           schema:
             type: integer
         - description: Page size
-          in: query
           name: page_size
+          in: query
           schema:
             type: integer
       responses:
@@ -41,14 +58,14 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: List tenants
-      tags:
-        - tenants
     post:
       description: Creates a new tenant
+      tags:
+        - tenants
+      summary: Create tenant
       requestBody:
         content:
           application/json:
@@ -68,79 +85,19 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Create tenant
-      tags:
-        - tenants
-  "/tenants/{id}":
-    get:
-      description: Fetch a tenant by UUID
-      parameters:
-        - description: Tenant ID (UUID)
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/controller.tenantResp"
-        "400":
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "404":
-          description: Not Found
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      summary: Get tenant by ID
-      tags:
-        - tenants
-  "/tenants/{id}/deactivate":
-    patch:
-      description: Deactivates a tenant by ID
-      parameters:
-        - description: Tenant ID (UUID)
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      summary: Deactivate tenant
-      tags:
-        - tenants
   "/tenants/by-name/{name}":
     get:
       description: Fetch a tenant by unique name
+      tags:
+        - tenants
+      summary: Get tenant by name
       parameters:
         - description: Tenant name
-          in: path
           name: name
+          in: path
           required: true
           schema:
             type: string
@@ -156,30 +113,66 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "404":
           description: Not Found
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Get tenant by name
+  "/tenants/{id}":
+    get:
+      description: Fetch a tenant by UUID
       tags:
         - tenants
-  /v1/auth/admin/fga/acl/tuples:
-    delete:
-      description: Deletes a direct permission grant (tuple).
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/controller.fgaDeleteACLTupleReq"
-        description: tuple selector
-        required: true
+      summary: Get tenant by ID
+      parameters:
+        - description: Tenant ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.tenantResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  "/tenants/{id}/deactivate":
+    patch:
+      description: Deactivates a tenant by ID
+      tags:
+        - tenants
+      summary: Deactivate tenant
+      parameters:
+        - description: Tenant ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         "204":
           description: No Content
@@ -188,32 +181,17 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-        "401":
-          description: Unauthorized
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "403":
-          description: Forbidden
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
+  /v1/auth/admin/fga/acl/tuples:
+    post:
       security:
         - BearerAuth: []
-      summary: Delete ACL tuple (admin-only)
+      description: Creates a direct permission grant (tuple).
       tags:
         - auth.admin
-    post:
-      description: Creates a direct permission grant (tuple).
+      summary: Create ACL tuple (admin-only)
       requestBody:
         content:
           application/json:
@@ -229,37 +207,78 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    delete:
       security:
         - BearerAuth: []
-      summary: Create ACL tuple (admin-only)
+      description: Deletes a direct permission grant (tuple).
       tags:
         - auth.admin
+      summary: Delete ACL tuple (admin-only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.fgaDeleteACLTupleReq"
+        description: tuple selector
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/admin/fga/groups:
     get:
+      security:
+        - BearerAuth: []
       description: Lists groups for the specified tenant.
+      tags:
+        - auth.admin
+      summary: List groups for a tenant (admin-only)
       parameters:
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -275,32 +294,32 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    post:
       security:
         - BearerAuth: []
-      summary: List groups for a tenant (admin-only)
+      description: Creates a new group for the specified tenant.
       tags:
         - auth.admin
-    post:
-      description: Creates a new group for the specified tenant.
+      summary: Create group (admin-only)
       requestBody:
         content:
           application/json:
@@ -320,51 +339,51 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "409":
           description: Conflict
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Create group (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/fga/groups/{id}":
     delete:
+      security:
+        - BearerAuth: []
       description: Deletes a group for the specified tenant.
+      tags:
+        - auth.admin
+      summary: Delete group (admin-only)
       parameters:
         - description: Group ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -376,80 +395,37 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Delete group (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/fga/groups/{id}/members":
-    delete:
-      description: Removes a user from a group.
-      parameters:
-        - description: Group ID (UUID)
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        $ref: "#/components/requestBodies/controller.fgaModifyGroupMemberReq"
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "401":
-          description: Unauthorized
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "403":
-          description: Forbidden
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Remove user from group (admin-only)
-      tags:
-        - auth.admin
     post:
+      security:
+        - BearerAuth: []
       description: Adds a user to a group.
+      tags:
+        - auth.admin
+      summary: Add user to group (admin-only)
       parameters:
         - description: Group ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -463,33 +439,76 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    delete:
       security:
         - BearerAuth: []
-      summary: Add user to group (admin-only)
+      description: Removes a user from a group.
       tags:
         - auth.admin
+      summary: Remove user from group (admin-only)
+      parameters:
+        - description: Group ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: "#/components/requestBodies/controller.fgaModifyGroupMemberReq"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/admin/rbac/permissions:
     get:
+      security:
+        - BearerAuth: []
       description: Returns all known permissions.
+      tags:
+        - auth.admin
+      summary: List all permissions (admin-only)
       responses:
         "200":
           description: OK
@@ -502,29 +521,29 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: List all permissions (admin-only)
-      tags:
-        - auth.admin
   /v1/auth/admin/rbac/roles:
     get:
+      security:
+        - BearerAuth: []
       description: Returns all roles for the specified tenant.
+      tags:
+        - auth.admin
+      summary: List roles for a tenant (admin-only)
       parameters:
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -540,32 +559,32 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    post:
       security:
         - BearerAuth: []
-      summary: List roles for a tenant (admin-only)
+      description: Creates a new role for the specified tenant.
       tags:
         - auth.admin
-    post:
-      description: Creates a new role for the specified tenant.
+      summary: Create role (admin-only)
       requestBody:
         content:
           application/json:
@@ -585,43 +604,43 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Create role (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/rbac/roles/{id}":
     delete:
+      security:
+        - BearerAuth: []
       description: Deletes a role for the specified tenant.
+      tags:
+        - auth.admin
+      summary: Delete role (admin-only)
       parameters:
         - description: Role ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -633,36 +652,36 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    patch:
       security:
         - BearerAuth: []
-      summary: Delete role (admin-only)
+      description: Updates a role's name/description in the specified tenant.
       tags:
         - auth.admin
-    patch:
-      description: Updates a role's name/description in the specified tenant.
+      summary: Update role (admin-only)
       parameters:
         - description: Role ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -685,80 +704,37 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Update role (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/rbac/roles/{id}/permissions":
-    delete:
-      description: Deletes a permission grant for a role, optionally scoped to a resource.
-      parameters:
-        - description: Role ID (UUID)
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        $ref: "#/components/requestBodies/controller.rbacRolePermissionReq"
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "401":
-          description: Unauthorized
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "403":
-          description: Forbidden
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Delete a permission grant from a role (admin-only)
-      tags:
-        - auth.admin
     post:
+      security:
+        - BearerAuth: []
       description: Upserts a permission grant for a role, optionally scoped to a resource.
+      tags:
+        - auth.admin
+      summary: Grant/Update a permission to a role (admin-only)
       parameters:
         - description: Role ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -772,43 +748,86 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    delete:
       security:
         - BearerAuth: []
-      summary: Grant/Update a permission to a role (admin-only)
+      description: Deletes a permission grant for a role, optionally scoped to a resource.
       tags:
         - auth.admin
+      summary: Delete a permission grant from a role (admin-only)
+      parameters:
+        - description: Role ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: "#/components/requestBodies/controller.rbacRolePermissionReq"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   "/v1/auth/admin/rbac/users/{id}/permissions/resolve":
     get:
+      security:
+        - BearerAuth: []
       description: Aggregates user permissions from roles and ACL for a tenant.
+      tags:
+        - auth.admin
+      summary: Resolve user permissions (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -824,86 +843,43 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Resolve user permissions (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/rbac/users/{id}/roles":
-    delete:
-      description: Removes a role assignment for a user within a tenant.
-      parameters:
-        - description: User ID (UUID)
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        $ref: "#/components/requestBodies/controller.rbacModifyUserRoleReq"
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "401":
-          description: Unauthorized
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-        "403":
-          description: Forbidden
-          content:
-            "*/*":
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
+    get:
       security:
         - BearerAuth: []
-      summary: Remove a role from a user (admin-only)
+      description: Lists role assignments for a user within a tenant.
       tags:
         - auth.admin
-    get:
-      description: Lists role assignments for a user within a tenant.
+      summary: List role IDs assigned to a user (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -919,36 +895,36 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    post:
       security:
         - BearerAuth: []
-      summary: List role IDs assigned to a user (admin-only)
+      description: Adds a role assignment for a user within a tenant.
       tags:
         - auth.admin
-    post:
-      description: Adds a role assignment for a user within a tenant.
+      summary: Add a role to a user (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -962,38 +938,81 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    delete:
       security:
         - BearerAuth: []
-      summary: Add a role to a user (admin-only)
+      description: Removes a role assignment for a user within a tenant.
       tags:
         - auth.admin
+      summary: Remove a role from a user (admin-only)
+      parameters:
+        - description: User ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: "#/components/requestBodies/controller.rbacModifyUserRoleReq"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/admin/users:
     get:
+      security:
+        - BearerAuth: []
       description: Lists all users that belong to the specified tenant. Requires
         caller to have the admin role.
+      tags:
+        - auth.admin
+      summary: List users for a tenant (admin-only)
       parameters:
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
@@ -1009,46 +1028,46 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: List users for a tenant (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/users/{id}":
     patch:
+      security:
+        - BearerAuth: []
       description: Updates first and/or last name for a user. Requires caller to have
         the admin role.
+      tags:
+        - auth.admin
+      summary: Update a user's names (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -1067,46 +1086,46 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Update a user's names (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/users/{id}/block":
     post:
+      security:
+        - BearerAuth: []
       description: Sets a user's active status to false. Requires caller to have the
         admin role.
+      tags:
+        - auth.admin
+      summary: Block a user (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -1118,46 +1137,46 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Block a user (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/users/{id}/roles":
     post:
+      security:
+        - BearerAuth: []
       description: Updates the roles array for a user. Requires caller to have the
         admin role.
+      tags:
+        - auth.admin
+      summary: Update a user's roles (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -1176,46 +1195,46 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Update a user's roles (admin-only)
-      tags:
-        - auth.admin
   "/v1/auth/admin/users/{id}/unblock":
     post:
+      security:
+        - BearerAuth: []
       description: Sets a user's active status to true. Requires caller to have the
         admin role.
+      tags:
+        - auth.admin
+      summary: Unblock a user (admin-only)
       parameters:
         - description: User ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -1227,43 +1246,143 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+  "/v1/auth/admin/users/{id}/unverify-email":
+    post:
       security:
         - BearerAuth: []
-      summary: Unblock a user (admin-only)
+      description: Sets email_verified=false for a user. Requires admin role.
       tags:
         - auth.admin
+      summary: Manually unverify user email (admin)
+      parameters:
+        - description: User ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "429":
+          description: Too Many Requests
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  "/v1/auth/admin/users/{id}/verify-email":
+    post:
+      security:
+        - BearerAuth: []
+      description: Sets email_verified=true for a user. Requires admin role.
+      tags:
+        - auth.admin
+      summary: Manually verify user email (admin)
+      parameters:
+        - description: User ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "429":
+          description: Too Many Requests
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/authorize:
     post:
+      security:
+        - BearerAuth: []
       description: "Returns allow/deny for a subject, action (permission_key) and
         object. Note: subject_id is optional when subject_type=self (it will be
         derived from the caller token)."
+      tags:
+        - auth
+      summary: Authorization decision
       requestBody:
         content:
           application/json:
@@ -1283,26 +1402,60 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Authorization decision
+  /v1/auth/email/discover:
+    post:
+      description: Check if an email exists in any tenant and provide guidance
       tags:
         - auth
+      summary: Discover user/tenant by email
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.EmailDiscoveryRequest"
+        description: Email to discover
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.EmailDiscoveryResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/introspect:
     post:
       description: Validate and parse JWT token either from Authorization header or
         request body
+      tags:
+        - auth.introspect
+      summary: Introspect access token
       requestBody:
         content:
           application/json:
@@ -1321,36 +1474,78 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Introspect access token
+  /v1/auth/login-options:
+    get:
+      description: Returns available authentication methods based on email/tenant context.
       tags:
-        - auth.introspect
+        - auth
+      summary: Get available login options
+      parameters:
+        - description: User email for context-aware options
+          name: email
+          in: query
+          schema:
+            type: string
+        - description: Tenant ID to scope options
+          name: tenant_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.LoginOptionsResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/logout:
     post:
-      description: Revokes the provided refresh token if present; idempotent
+      description: Revokes the provided refresh token if present; idempotent. When
+        using cookie mode, Guard reads `guard_refresh_token`, clears both cookie
+        tokens, and still returns 204 even if the JSON body omits the token.
+      tags:
+        - auth.tokens
+      summary: Logout (revoke refresh token)
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/controller.refreshReq"
+              $ref: "#/components/schemas/controller.logoutReq"
         description: refresh_token (optional)
       responses:
         "204":
@@ -1360,23 +1555,23 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Logout (revoke refresh token)
-      tags:
-        - auth.tokens
   /v1/auth/magic/send:
     post:
       description: Sends a single-use magic login link to the user's email
+      tags:
+        - auth.magic
+      summary: Send magic login link
       requestBody:
         content:
           application/json:
@@ -1392,28 +1587,37 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Send magic login link
-      tags:
-        - auth.magic
   /v1/auth/magic/verify:
     get:
-      description: Verifies magic link token from query parameter or request body and
-        returns tokens
+      description: 'Verifies magic link token from query parameter or request body and
+        returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
+      tags:
+        - auth.magic
+      summary: Verify magic link token
       parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
         - description: Magic token (alternative to body)
-          in: query
           name: token
+          in: query
           schema:
             type: string
       requestBody:
@@ -1424,41 +1628,50 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Verify magic link token
-      tags:
-        - auth.magic
     post:
-      description: Verifies magic link token from query parameter or request body and
-        returns tokens
+      description: 'Verifies magic link token from query parameter or request body and
+        returns tokens. When cookie mode is requested via `X-Auth-Mode: cookie`
+        (or defaults), Guard responds with cookies plus `{ "success": true }`.'
+      tags:
+        - auth.magic
+      summary: Verify magic link token
       parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
         - description: Magic token (alternative to body)
-          in: query
           name: token
+          in: query
           schema:
             type: string
       requestBody:
@@ -1469,37 +1682,51 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Verify magic link token
-      tags:
-        - auth.magic
   /v1/auth/me:
     get:
-      description: Returns the authenticated user's profile derived from the access token
+      security:
+        - BearerAuth: []
+      description: "Returns the authenticated user's profile derived from the access
+        token. When cookie mode is requested (`X-Auth-Mode: cookie` or default),
+        Guard will fall back to the `guard_access_token` cookie if the bearer
+        header is missing or invalid."
+      tags:
+        - auth.profile
+      summary: Get current user's profile
+      parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
       responses:
         "200":
           description: OK
@@ -1512,25 +1739,25 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Get current user's profile
-      tags:
-        - auth.profile
   /v1/auth/mfa/backup/consume:
     post:
+      security:
+        - BearerAuth: []
       description: Consumes a single-use backup code
+      tags:
+        - auth.mfa.backup
+      summary: Consume an MFA backup code
       requestBody:
         content:
           application/json:
@@ -1550,33 +1777,33 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Consume an MFA backup code
-      tags:
-        - auth.mfa.backup
   /v1/auth/mfa/backup/count:
     get:
+      security:
+        - BearerAuth: []
       description: Returns number of unused backup codes
+      tags:
+        - auth.mfa.backup
+      summary: Count remaining MFA backup codes
       responses:
         "200":
           description: OK
@@ -1589,25 +1816,25 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Count remaining MFA backup codes
-      tags:
-        - auth.mfa.backup
   /v1/auth/mfa/backup/generate:
     post:
+      security:
+        - BearerAuth: []
       description: Generates backup codes, stores their hashes, and returns the codes
+      tags:
+        - auth.mfa.backup
+      summary: Generate MFA backup codes
       requestBody:
         content:
           application/json:
@@ -1626,33 +1853,33 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Generate MFA backup codes
-      tags:
-        - auth.mfa.backup
   /v1/auth/mfa/totp/activate:
     post:
+      security:
+        - BearerAuth: []
       description: Verifies a TOTP code for the stored secret and enables MFA
+      tags:
+        - auth.mfa.totp
+      summary: Activate TOTP
       requestBody:
         content:
           application/json:
@@ -1668,33 +1895,33 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Activate TOTP
-      tags:
-        - auth.mfa.totp
   /v1/auth/mfa/totp/disable:
     post:
+      security:
+        - BearerAuth: []
       description: Disables TOTP for the user
+      tags:
+        - auth.mfa.totp
+      summary: Disable TOTP
       responses:
         "204":
           description: No Content
@@ -1703,26 +1930,26 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Disable TOTP
-      tags:
-        - auth.mfa.totp
   /v1/auth/mfa/totp/start:
     post:
+      security:
+        - BearerAuth: []
       description: Generates and stores a TOTP secret (disabled) and returns the
         secret and otpauth URL
+      tags:
+        - auth.mfa.totp
+      summary: Start TOTP enrollment
       responses:
         "200":
           description: OK
@@ -1735,18 +1962,28 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Start TOTP enrollment
-      tags:
-        - auth.mfa.totp
   /v1/auth/mfa/verify:
     post:
-      description: Verifies a TOTP or backup code against a challenge token and
-        returns access/refresh tokens.
+      description: 'Verifies a TOTP or backup code against a challenge token and
+        returns access/refresh tokens. When clients opt into cookie auth
+        (`X-Auth-Mode: cookie` or default), Guard sets the session cookies and
+        returns `{ "success": true }` instead of embedding tokens in the JSON
+        body.'
+      tags:
+        - auth.mfa
+      summary: Verify MFA challenge
+      parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
       requestBody:
         content:
           application/json:
@@ -1756,42 +1993,89 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Verify MFA challenge
+  /v1/auth/password/change:
+    post:
+      security:
+        - BearerAuth: []
+      description: Changes the password for the currently authenticated user
       tags:
-        - auth.mfa
+        - auth.password
+      summary: Change password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.changePasswordReq"
+        description: current_password, new_password
+        required: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /v1/auth/password/login:
     post:
-      description: Logs in with email/password. If MFA is enabled for the user,
-        responds 202 with a challenge to complete via /v1/auth/mfa/verify.
+      description: 'Logs in with email/password. If MFA is enabled for the user,
+        responds 202 with a challenge to complete via /v1/auth/mfa/verify. When
+        clients set `X-Auth-Mode: cookie` (or the deployment default is cookie),
+        Guard issues `guard_access_token` / `guard_refresh_token` cookies and
+        returns `{ "success": true }` instead of raw tokens in the JSON
+        payload.'
+      tags:
+        - auth.password
+      summary: Password login
+      parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
       requestBody:
         content:
           application/json:
@@ -1801,11 +2085,11 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "202":
           description: Accepted
           content:
@@ -1817,31 +2101,31 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Password login
-      tags:
-        - auth.password
   /v1/auth/password/reset/confirm:
     post:
       description: Resets the password for the given email address
+      tags:
+        - auth.password
+      summary: Confirm password reset
       requestBody:
         content:
           application/json:
@@ -1857,23 +2141,23 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Confirm password reset
-      tags:
-        - auth.password
   /v1/auth/password/reset/request:
     post:
       description: Requests a password reset for the given email address
+      tags:
+        - auth.password
+      summary: Request password reset
       requestBody:
         content:
           application/json:
@@ -1889,23 +2173,36 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Request password reset
-      tags:
-        - auth.password
   /v1/auth/password/signup:
     post:
-      description: Creates a new user for a tenant with email and password and returns access/refresh tokens
+      description: 'Creates a new user for a tenant with email and password and
+        returns access/refresh tokens. When clients set `X-Auth-Mode: cookie`
+        (or the deployment default is cookie), Guard issues `guard_access_token`
+        / `guard_refresh_token` cookies and returns `{ "success": true }`
+        instead of raw tokens.'
+      tags:
+        - auth.password
+      summary: Password signup
+      parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
       requestBody:
         content:
           application/json:
@@ -1919,135 +2216,119 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Password signup
+  /v1/auth/profile:
+    patch:
+      security:
+        - BearerAuth: []
+      description: Updates the authenticated user's profile (first name, last name)
       tags:
-        - auth.password
-  /v1/auth/email/discover:
-    post:
-      description: Check if an email exists in any tenant and provide guidance for progressive login flows
+        - auth.profile
+      summary: Update current user's profile
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/controller.emailDiscoveryReq"
+              $ref: "#/components/schemas/controller.updateProfileReq"
+        description: first_name, last_name
         required: true
       responses:
         "200":
           description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/controller.emailDiscoveryResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      summary: Discover user/tenant by email
-      tags:
-        - auth.progressive
-  /v1/auth/tenants:
-    get:
-      description: Lists tenants associated with an email for progressive login tenant selection
-      parameters:
-        - in: query
-          name: email
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/controller.authTenantListResp"
-        "400":
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-      summary: Discover tenants by email
-      tags:
-        - auth.progressive
-  /v1/auth/refresh:
-    post:
-      description: Exchanges a refresh token for new access and refresh tokens
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/controller.refreshReq"
-        description: refresh_token
-        required: true
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/controller.tokensResp"
-        "400":
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
+  /v1/auth/refresh:
+    post:
+      description: 'Exchanges a refresh token for new access and refresh tokens. When
+        using cookie mode (`X-Auth-Mode: cookie`), the server will read
+        `guard_refresh_token` from cookies if the body omits `refresh_token`,
+        set rotated cookies, and return `{"success":true}` while omitting token
+        fields from the JSON response.'
+      tags:
+        - auth.tokens
+      summary: Refresh access token
+      parameters:
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.refreshReq"
+        description: refresh_token (required unless using cookie mode)
+      responses:
+        "200":
+          description: Access/refresh tokens (JSON mode) or success flag (cookie mode)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.authExchangeResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
                 type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Refresh access token
-      tags:
-        - auth.tokens
   /v1/auth/revoke:
     post:
       description: Revoke a token; currently supports token_type="refresh"
+      tags:
+        - auth.tokens
+      summary: Revoke token
       requestBody:
         content:
           application/json:
@@ -2063,24 +2344,26 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Revoke token
-      tags:
-        - auth.tokens
   /v1/auth/sessions:
     get:
+      security:
+        - BearerAuth: []
       description: Lists the authenticated user's sessions (refresh tokens) for the
         current tenant.
+      tags:
+        - auth.sessions
+      summary: List my active sessions
       responses:
         "200":
           description: OK
@@ -2093,30 +2376,30 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: List my active sessions
-      tags:
-        - auth.sessions
   "/v1/auth/sessions/{id}/revoke":
     post:
+      security:
+        - BearerAuth: []
       description: Revokes a specific session by ID for the authenticated user within
         the current tenant.
+      tags:
+        - auth.sessions
+      summary: Revoke a specific session
       parameters:
         - description: Session ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -2128,93 +2411,103 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Revoke a specific session
-      tags:
-        - auth.sessions
   "/v1/auth/sso/{provider}/callback":
     get:
-      description: Completes SSO flow and returns access/refresh tokens
+      description: 'Completes SSO flow and returns access/refresh tokens. When cookie
+        mode is requested (`X-Auth-Mode: cookie` or default), Guard issues
+        cookies and returns `{ "success": true }`.'
+      tags:
+        - auth.sso
+      summary: Handle SSO/OAuth callback
       parameters:
         - description: SSO provider (google, github, azuread)
-          in: path
           name: provider
+          in: path
           required: true
           schema:
             type: string
+        - description: Auth response mode override
+          name: X-Auth-Mode
+          in: header
+          schema:
+            type: string
+            enum:
+              - cookie
+              - json
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/controller.tokensResp"
+                $ref: "#/components/schemas/controller.authExchangeResp"
         "400":
           description: Bad Request
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Handle SSO/OAuth callback
-      tags:
-        - auth.sso
   "/v1/auth/sso/{provider}/portal-link":
     get:
+      security:
+        - BearerAuth: []
       description: Generates a link to the organization portal for the given provider
         and organization ID (admin-only)
+      tags:
+        - auth.sso
+      summary: Generate organization portal link
       parameters:
         - description: SSO provider (workos)
-          in: path
           name: provider
+          in: path
           required: true
           schema:
             type: string
         - description: Organization identifier
-          in: query
           name: organization_id
+          in: query
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
         - description: Intent (sso, dsync, audit_logs, log_streams, domain_verification,
             certificate_renewal, user_management)
-          in: query
           name: intent
+          in: query
           schema:
             type: string
       responses:
@@ -2229,73 +2522,71 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Generate organization portal link
-      tags:
-        - auth.sso
   "/v1/auth/sso/{provider}/start":
     get:
       description: Initiates an SSO flow for the given provider and redirects to the
         provider authorization URL
+      tags:
+        - auth.sso
+      summary: Start SSO/OAuth flow
       parameters:
         - description: SSO provider (google, github, azuread, workos)
-          in: path
           name: provider
+          in: path
           required: true
           schema:
             type: string
         - description: Tenant ID (UUID)
-          in: query
           name: tenant_id
+          in: query
           required: true
           schema:
             type: string
         - description: Absolute redirect URL after callback
-          in: query
           name: redirect_url
+          in: query
           schema:
             type: string
         - description: Opaque state to round-trip
-          in: query
           name: state
+          in: query
           schema:
             type: string
         - description: Provider connection identifier
-          in: query
           name: connection_id
+          in: query
           schema:
             type: string
         - description: Organization identifier
-          in: query
           name: organization_id
+          in: query
           schema:
             type: string
       responses:
@@ -2306,19 +2597,76 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      summary: Start SSO/OAuth flow
+  /v1/sso/sp-info:
+    get:
+      security:
+        - BearerAuth: []
+      description: Returns the computed Service Provider URLs (Entity ID, ACS URL, SLO
+        URL) needed to configure an Identity Provider
       tags:
-        - auth.sso
+        - SSO
+      summary: Get SP Info for SAML configuration
+      parameters:
+        - description: Provider slug (e.g. 'okta', 'azure-ad')
+          name: slug
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.spInfoResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   "/v1/tenants/{id}/settings":
     get:
+      security:
+        - BearerAuth: []
       description: Returns tenant-scoped settings required for SSO setup (WorkOS)
+      tags:
+        - tenants
+      summary: Get tenant settings (subset)
       parameters:
         - description: Tenant ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -2334,45 +2682,45 @@ paths:
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             application/json:
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
+    put:
       security:
         - BearerAuth: []
-      summary: Get tenant settings (subset)
-      tags:
-        - tenants
-    put:
       description: Upserts tenant settings for SSO setup (WorkOS). Only whitelisted
         keys are accepted.
+      tags:
+        - tenants
+      summary: Upsert tenant settings (subset)
       parameters:
         - description: Tenant ID (UUID)
-          in: path
           name: id
+          in: path
           required: true
           schema:
             type: string
@@ -2391,38 +2739,33 @@ paths:
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "401":
           description: Unauthorized
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "403":
           description: Forbidden
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
         "429":
           description: Too Many Requests
           content:
             "*/*":
               schema:
+                type: object
                 additionalProperties:
                   type: string
-                type: object
-      security:
-        - BearerAuth: []
-      summary: Upsert tenant settings (subset)
-      tags:
-        - tenants
 servers:
   - url: /
 components:
@@ -2456,27 +2799,116 @@ components:
       required: true
   securitySchemes:
     BearerAuth:
-      in: header
-      name: Authorization
       type: apiKey
+      name: Authorization
+      in: header
   schemas:
+    controller.EmailDiscoveryRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+    controller.EmailDiscoveryResponse:
+      type: object
+      properties:
+        found:
+          type: boolean
+        has_tenant:
+          type: boolean
+        suggestions:
+          type: array
+          items:
+            type: string
+        tenant_id:
+          type: string
+        tenant_name:
+          type: string
+        user_exists:
+          type: boolean
+    controller.LoginOptionsResponse:
+      type: object
+      properties:
+        domain_matched_sso:
+          description: If email domain matches an SSO provider's configured domains
+          allOf:
+            - $ref: "#/components/schemas/controller.SSOProviderOption"
+        magic_link_enabled:
+          type: boolean
+        password_enabled:
+          description: Authentication methods available
+          type: boolean
+        preferred_method:
+          description: |-
+            Recommended/preferred login method based on context
+            Values: "sso", "password", "magic_link", "social"
+          type: string
+        social_providers:
+          description: Social login providers (tenant-wide or global)
+          type: array
+          items:
+            $ref: "#/components/schemas/controller.SocialProviderOption"
+        sso_providers:
+          description: SSO providers configured for this tenant
+          type: array
+          items:
+            $ref: "#/components/schemas/controller.SSOProviderOption"
+        sso_required:
+          description: If true, SSO is required for this domain/tenant (password disabled)
+          type: boolean
+        tenant_id:
+          description: Tenant information (if discovered)
+          type: string
+        tenant_name:
+          type: string
+        user_exists:
+          description: If true, user exists and can use password login
+          type: boolean
+    controller.SSOProviderOption:
+      type: object
+      properties:
+        login_url:
+          type: string
+        logo_url:
+          type: string
+        name:
+          type: string
+        provider_type:
+          description: '"oidc", "saml"'
+          type: string
+        slug:
+          type: string
+    controller.SocialProviderOption:
+      type: object
+      properties:
+        login_url:
+          type: string
+        logo_url:
+          type: string
+        name:
+          type: string
+        provider:
+          description: '"google", "github", "microsoft", etc.'
+          type: string
     controller.adminUpdateNamesReq:
+      type: object
       properties:
         first_name:
           type: string
         last_name:
           type: string
-      type: object
     controller.adminUpdateRolesReq:
-      properties:
-        roles:
-          items:
-            type: string
-          type: array
+      type: object
       required:
         - roles
-      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
     controller.adminUser:
+      type: object
       properties:
         created_at:
           type: string
@@ -2493,36 +2925,62 @@ components:
         last_name:
           type: string
         roles:
+          type: array
           items:
             type: string
-          type: array
         updated_at:
           type: string
-      type: object
     controller.adminUsersResp:
+      type: object
       properties:
         users:
+          type: array
           items:
             $ref: "#/components/schemas/controller.adminUser"
-          type: array
+    controller.authExchangeResp:
       type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        success:
+          type: boolean
+          example: true
+    controller.changePasswordReq:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
     controller.createTenantReq:
+      type: object
+      required:
+        - name
       properties:
         name:
           type: string
-      required:
-        - name
-      type: object
     controller.fgaAuthorizeReq:
+      type: object
+      required:
+        - object_type
+        - permission_key
+        - subject_type
+        - tenant_id
       properties:
         object_id:
           type: string
         object_type:
-          minLength: 1
           type: string
+          minLength: 1
         permission_key:
-          minLength: 1
           type: string
+          minLength: 1
         subject_id:
           description: >-
             SubjectID is optional when subject_type=self; otherwise required.
@@ -2530,92 +2988,87 @@ components:
             When subject_type=self, the server derives the subject from the caller's token.
           type: string
         subject_type:
+          type: string
           enum:
             - self
             - user
             - group
-          type: string
         tenant_id:
           type: string
-      required:
-        - object_type
-        - permission_key
-        - subject_type
-        - tenant_id
-      type: object
     controller.fgaAuthorizeResp:
+      type: object
       properties:
         allowed:
           type: boolean
         reason:
           type: string
-      type: object
     controller.fgaCreateACLTupleReq:
-      properties:
-        object_id:
-          type: string
-        object_type:
-          minLength: 1
-          type: string
-        permission_key:
-          minLength: 1
-          type: string
-        subject_id:
-          type: string
-        subject_type:
-          enum:
-            - user
-            - group
-          type: string
-        tenant_id:
-          type: string
+      type: object
       required:
         - object_type
         - permission_key
         - subject_id
         - subject_type
         - tenant_id
-      type: object
+      properties:
+        object_id:
+          type: string
+        object_type:
+          type: string
+          minLength: 1
+        permission_key:
+          type: string
+          minLength: 1
+        subject_id:
+          type: string
+        subject_type:
+          type: string
+          enum:
+            - user
+            - group
+        tenant_id:
+          type: string
     controller.fgaCreateGroupReq:
+      type: object
+      required:
+        - name
+        - tenant_id
       properties:
         description:
           type: string
         name:
-          minLength: 1
           type: string
+          minLength: 1
         tenant_id:
           type: string
-      required:
-        - name
-        - tenant_id
-      type: object
     controller.fgaDeleteACLTupleReq:
-      properties:
-        object_id:
-          type: string
-        object_type:
-          minLength: 1
-          type: string
-        permission_key:
-          minLength: 1
-          type: string
-        subject_id:
-          type: string
-        subject_type:
-          enum:
-            - user
-            - group
-          type: string
-        tenant_id:
-          type: string
+      type: object
       required:
         - object_type
         - permission_key
         - subject_id
         - subject_type
         - tenant_id
-      type: object
+      properties:
+        object_id:
+          type: string
+        object_type:
+          type: string
+          minLength: 1
+        permission_key:
+          type: string
+          minLength: 1
+        subject_id:
+          type: string
+        subject_type:
+          type: string
+          enum:
+            - user
+            - group
+        tenant_id:
+          type: string
     controller.fgaGroupItem:
+      type: object
       properties:
         description:
           type: string
@@ -2625,32 +3078,32 @@ components:
           type: string
         tenant_id:
           type: string
-      type: object
     controller.fgaListGroupsResp:
+      type: object
       properties:
         groups:
+          type: array
           items:
             $ref: "#/components/schemas/controller.fgaGroupItem"
-          type: array
-      type: object
     controller.fgaModifyGroupMemberReq:
+      type: object
+      required:
+        - user_id
       properties:
         user_id:
           type: string
-      required:
-        - user_id
-      type: object
     controller.introspectReq:
+      type: object
       properties:
         token:
           type: string
-      type: object
     controller.listResponse:
+      type: object
       properties:
         items:
+          type: array
           items:
             $ref: "#/components/schemas/controller.tenantResp"
-          type: array
         page:
           type: integer
         page_size:
@@ -2659,8 +3112,12 @@ components:
           type: integer
         total_pages:
           type: integer
-      type: object
     controller.loginReq:
+      type: object
+      required:
+        - email
+        - password
+        - tenant_id
       properties:
         email:
           type: string
@@ -2668,56 +3125,16 @@ components:
           type: string
         tenant_id:
           type: string
-      required:
-        - email
-        - password
-        - tenant_id
+    controller.logoutReq:
       type: object
-    controller.authTenantListResp:
       properties:
-        tenants:
-          items:
-            $ref: "#/components/schemas/controller.authTenantSummary"
-          type: array
-      type: object
-    controller.authTenantSummary:
-      properties:
-        id:
+        refresh_token:
           type: string
-        name:
-          type: string
-      required:
-        - id
-        - name
-      type: object
-    controller.emailDiscoveryReq:
-      properties:
-        email:
-          type: string
-        tenant_id:
-          description: Optional tenant ID hint to scope the lookup
-          type: string
-      required:
-        - email
-      type: object
-    controller.emailDiscoveryResp:
-      properties:
-        found:
-          type: boolean
-        has_tenant:
-          type: boolean
-        tenant_id:
-          type: string
-        tenant_name:
-          type: string
-        user_exists:
-          type: boolean
-        suggestions:
-          items:
-            type: string
-          type: array
-      type: object
     controller.magicSendReq:
+      type: object
+      required:
+        - email
+        - tenant_id
       properties:
         email:
           type: string
@@ -2725,88 +3142,131 @@ components:
           type: string
         tenant_id:
           type: string
-      required:
-        - email
-        - tenant_id
-      type: object
     controller.magicVerifyReq:
+      type: object
+      required:
+        - token
       properties:
         token:
           type: string
-      required:
-        - token
-      type: object
     controller.mfaBackupConsumeReq:
+      type: object
+      required:
+        - code
       properties:
         code:
           type: string
-      required:
-        - code
-      type: object
     controller.mfaBackupConsumeResp:
+      type: object
       properties:
         consumed:
           type: boolean
-      type: object
     controller.mfaBackupCountResp:
+      type: object
       properties:
         count:
           type: integer
-      type: object
     controller.mfaBackupGenerateReq:
+      type: object
       properties:
         count:
+          type: integer
           maximum: 20
           minimum: 1
-          type: integer
-      type: object
     controller.mfaBackupGenerateResp:
+      type: object
       properties:
         codes:
+          type: array
           items:
             type: string
-          type: array
-      type: object
     controller.mfaChallengeResp:
+      type: object
       properties:
         challenge_token:
           type: string
         methods:
+          type: array
           items:
             type: string
-          type: array
-      type: object
     controller.mfaTOTPActivateReq:
+      type: object
+      required:
+        - code
       properties:
         code:
           type: string
-      required:
-        - code
-      type: object
     controller.mfaTOTPStartResp:
+      type: object
       properties:
         otpauth_url:
           type: string
         secret:
           type: string
-      type: object
     controller.mfaVerifyReq:
+      type: object
+      required:
+        - challenge_token
+        - code
+        - method
       properties:
         challenge_token:
           type: string
         code:
           type: string
         method:
+          type: string
           enum:
             - totp
             - backup_code
-          type: string
-      required:
-        - challenge_token
-        - code
-        - method
+    controller.oauth2MetadataResp:
       type: object
+      properties:
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+        guard_auth_mode_default:
+          type: string
+        guard_auth_modes_supported:
+          description: Guard-specific extensions
+          type: array
+          items:
+            type: string
+        guard_version:
+          type: string
+        introspection_endpoint:
+          type: string
+        introspection_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+        issuer:
+          type: string
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        revocation_endpoint:
+          type: string
+        revocation_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+        scopes_supported:
+          type: array
+          items:
+            type: string
+        token_endpoint:
+          type: string
+        token_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+        userinfo_endpoint:
+          type: string
     controller.permissionGrantItem:
+      type: object
       properties:
         key:
           type: string
@@ -2814,9 +3274,20 @@ components:
           type: string
         object_type:
           type: string
-      type: object
     controller.putSettingsRequest:
+      type: object
       properties:
+        app_cors_allowed_origins:
+          description: App
+          type: string
+        jwt_signing_key:
+          description: Auth
+          type: string
+          minLength: 16
+        scope:
+          description: Scope is deprecated and ignored. Kept for backward compatibility
+            with older SDKs.
+          type: string
         sso_provider:
           type: string
         sso_redirect_allowlist:
@@ -2833,8 +3304,11 @@ components:
           type: string
         workos_default_organization_id:
           type: string
-      type: object
     controller.rbacCreateRoleReq:
+      type: object
+      required:
+        - name
+        - tenant_id
       properties:
         description:
           type: string
@@ -2842,21 +3316,18 @@ components:
           type: string
         tenant_id:
           type: string
-      required:
-        - name
-        - tenant_id
-      type: object
     controller.rbacModifyUserRoleReq:
+      type: object
+      required:
+        - role_id
+        - tenant_id
       properties:
         role_id:
           type: string
         tenant_id:
           type: string
-      required:
-        - role_id
-        - tenant_id
-      type: object
     controller.rbacPermissionItem:
+      type: object
       properties:
         created_at:
           type: string
@@ -2868,22 +3339,22 @@ components:
           type: string
         updated_at:
           type: string
-      type: object
     controller.rbacPermissionsResp:
+      type: object
       properties:
         permissions:
+          type: array
           items:
             $ref: "#/components/schemas/controller.rbacPermissionItem"
-          type: array
-      type: object
     controller.rbacResolvedPermissionsResp:
+      type: object
       properties:
         grants:
+          type: array
           items:
             $ref: "#/components/schemas/controller.permissionGrantItem"
-          type: array
-      type: object
     controller.rbacRoleItem:
+      type: object
       properties:
         created_at:
           type: string
@@ -2897,8 +3368,11 @@ components:
           type: string
         updated_at:
           type: string
-      type: object
     controller.rbacRolePermissionReq:
+      type: object
+      required:
+        - permission_key
+        - scope_type
       properties:
         permission_key:
           type: string
@@ -2908,18 +3382,18 @@ components:
           type: string
         scope_type:
           type: string
-      required:
-        - permission_key
-        - scope_type
-      type: object
     controller.rbacRolesResp:
+      type: object
       properties:
         roles:
+          type: array
           items:
             $ref: "#/components/schemas/controller.rbacRoleItem"
-          type: array
-      type: object
     controller.rbacUpdateRoleReq:
+      type: object
+      required:
+        - name
+        - tenant_id
       properties:
         description:
           type: string
@@ -2927,62 +3401,55 @@ components:
           type: string
         tenant_id:
           type: string
-      required:
-        - name
-        - tenant_id
-      type: object
     controller.rbacUserRolesResp:
+      type: object
       properties:
         role_ids:
+          type: array
           items:
             type: string
-          type: array
-      type: object
     controller.refreshReq:
+      type: object
       properties:
         refresh_token:
           type: string
-      required:
-        - refresh_token
-      type: object
     controller.resetPasswordConfirmReq:
+      type: object
+      required:
+        - new_password
+        - token
       properties:
         new_password:
-          minLength: 8
           type: string
+          minLength: 8
         tenant_id:
           type: string
         token:
           type: string
-      required:
-        - new_password
-        - tenant_id
-        - token
-      type: object
     controller.resetPasswordRequestReq:
+      type: object
+      required:
+        - email
       properties:
         email:
           type: string
         tenant_id:
           type: string
-      required:
-        - email
-        - tenant_id
-      type: object
     controller.revokeReq:
+      type: object
+      required:
+        - token
+        - token_type
       properties:
         token:
           type: string
         token_type:
-          enum:
-            - refresh
           type: string
-      required:
-        - token
-        - token_type
-      type: object
     controller.sessionItem:
+      type: object
       properties:
+        auth_method:
+          type: string
         created_at:
           type: string
         expires_at:
@@ -2993,18 +3460,27 @@ components:
           type: string
         revoked:
           type: boolean
+        sso_provider_id:
+          type: string
+        sso_provider_name:
+          type: string
+        sso_provider_slug:
+          type: string
         user_agent:
           type: string
-      type: object
     controller.sessionsListResp:
+      type: object
       properties:
         sessions:
+          type: array
           items:
             $ref: "#/components/schemas/controller.sessionItem"
-          type: array
-      type: object
     controller.settingsResponse:
+      type: object
       properties:
+        app_cors_allowed_origins:
+          description: App
+          type: string
         sso_provider:
           description: SSO
           type: string
@@ -3024,8 +3500,12 @@ components:
           type: string
         workos_default_organization_id:
           type: string
-      type: object
     controller.signupReq:
+      type: object
+      required:
+        - email
+        - password
+        - tenant_id
       properties:
         email:
           type: string
@@ -3034,16 +3514,29 @@ components:
         last_name:
           type: string
         password:
+          type: string
           minLength: 8
+        tenant_id:
+          type: string
+    controller.spInfoResponse:
+      type: object
+      properties:
+        acs_url:
+          type: string
+        base_url:
+          type: string
+        entity_id:
+          type: string
+        login_url:
+          type: string
+        metadata_url:
+          type: string
+        slo_url:
           type: string
         tenant_id:
           type: string
-      required:
-        - email
-        - password
-        - tenant_id
-      type: object
     controller.tenantResp:
+      type: object
       properties:
         created_at:
           type: string
@@ -3055,15 +3548,15 @@ components:
           type: string
         updated_at:
           type: string
+    controller.updateProfileReq:
       type: object
-    controller.tokensResp:
       properties:
-        access_token:
+        first_name:
           type: string
-        refresh_token:
+        last_name:
           type: string
-      type: object
     domain.Introspection:
+      type: object
       properties:
         active:
           type: boolean
@@ -3078,20 +3571,20 @@ components:
         mfa_verified:
           type: boolean
         roles:
+          type: array
           items:
             type: string
-          type: array
         tenant_id:
           type: string
         user_id:
           type: string
-      type: object
     domain.PortalLink:
+      type: object
       properties:
         link:
           type: string
-      type: object
     domain.UserProfile:
+      type: object
       properties:
         email:
           type: string
@@ -3108,9 +3601,8 @@ components:
         mfa_enabled:
           type: boolean
         roles:
+          type: array
           items:
             type: string
-          type: array
         tenant_id:
           type: string
-      type: object

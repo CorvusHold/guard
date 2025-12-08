@@ -8,11 +8,6 @@
 *.swp
 *.swo
 
-# Documentation
-docs/
-*.md
-!README.md
-
 # CI/CD
 .github/
 
@@ -39,3 +34,6 @@ ops/
 
 # Build artifacts
 dist/
+
+# CLI is a separate module
+cmd/guard-cli/

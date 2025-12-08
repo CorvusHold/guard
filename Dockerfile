@@ -14,18 +14,13 @@ RUN apk add --no-cache git ca-certificates tzdata
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy source code (excludes items in .dockerignore)
 COPY . .
 
 # Build the server binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /guard ./cmd/api
-
-# Build the CLI binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /guard-cli ./cmd/guard-cli
 
 # Runtime stage
 FROM alpine:3.20
@@ -38,9 +33,8 @@ RUN addgroup -g 1000 guard && \
 
 WORKDIR /app
 
-# Copy binaries from builder
+# Copy binary from builder
 COPY --from=builder /guard /usr/local/bin/guard
-COPY --from=builder /guard-cli /usr/local/bin/guard-cli
 
 # Copy migrations for runtime migration support
 COPY --from=builder /app/migrations ./migrations

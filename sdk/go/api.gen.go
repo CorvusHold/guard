@@ -45,10 +45,119 @@ const (
 	Totp       ControllerMfaVerifyReqMethod = "totp"
 )
 
-// Defines values for ControllerRevokeReqTokenType.
+// Defines values for GetV1AuthMagicVerifyParamsXAuthMode.
 const (
-	Refresh ControllerRevokeReqTokenType = "refresh"
+	GetV1AuthMagicVerifyParamsXAuthModeCookie GetV1AuthMagicVerifyParamsXAuthMode = "cookie"
+	GetV1AuthMagicVerifyParamsXAuthModeJson   GetV1AuthMagicVerifyParamsXAuthMode = "json"
 )
+
+// Defines values for PostV1AuthMagicVerifyParamsXAuthMode.
+const (
+	PostV1AuthMagicVerifyParamsXAuthModeCookie PostV1AuthMagicVerifyParamsXAuthMode = "cookie"
+	PostV1AuthMagicVerifyParamsXAuthModeJson   PostV1AuthMagicVerifyParamsXAuthMode = "json"
+)
+
+// Defines values for GetV1AuthMeParamsXAuthMode.
+const (
+	GetV1AuthMeParamsXAuthModeCookie GetV1AuthMeParamsXAuthMode = "cookie"
+	GetV1AuthMeParamsXAuthModeJson   GetV1AuthMeParamsXAuthMode = "json"
+)
+
+// Defines values for PostV1AuthMfaVerifyParamsXAuthMode.
+const (
+	PostV1AuthMfaVerifyParamsXAuthModeCookie PostV1AuthMfaVerifyParamsXAuthMode = "cookie"
+	PostV1AuthMfaVerifyParamsXAuthModeJson   PostV1AuthMfaVerifyParamsXAuthMode = "json"
+)
+
+// Defines values for PostV1AuthPasswordLoginParamsXAuthMode.
+const (
+	PostV1AuthPasswordLoginParamsXAuthModeCookie PostV1AuthPasswordLoginParamsXAuthMode = "cookie"
+	PostV1AuthPasswordLoginParamsXAuthModeJson   PostV1AuthPasswordLoginParamsXAuthMode = "json"
+)
+
+// Defines values for PostV1AuthPasswordSignupParamsXAuthMode.
+const (
+	PostV1AuthPasswordSignupParamsXAuthModeCookie PostV1AuthPasswordSignupParamsXAuthMode = "cookie"
+	PostV1AuthPasswordSignupParamsXAuthModeJson   PostV1AuthPasswordSignupParamsXAuthMode = "json"
+)
+
+// Defines values for PostV1AuthRefreshParamsXAuthMode.
+const (
+	PostV1AuthRefreshParamsXAuthModeCookie PostV1AuthRefreshParamsXAuthMode = "cookie"
+	PostV1AuthRefreshParamsXAuthModeJson   PostV1AuthRefreshParamsXAuthMode = "json"
+)
+
+// Defines values for GetV1AuthSsoProviderCallbackParamsXAuthMode.
+const (
+	GetV1AuthSsoProviderCallbackParamsXAuthModeCookie GetV1AuthSsoProviderCallbackParamsXAuthMode = "cookie"
+	GetV1AuthSsoProviderCallbackParamsXAuthModeJson   GetV1AuthSsoProviderCallbackParamsXAuthMode = "json"
+)
+
+// ControllerEmailDiscoveryRequest defines model for controller.EmailDiscoveryRequest.
+type ControllerEmailDiscoveryRequest struct {
+	Email string `json:"email"`
+}
+
+// ControllerEmailDiscoveryResponse defines model for controller.EmailDiscoveryResponse.
+type ControllerEmailDiscoveryResponse struct {
+	Found       *bool     `json:"found,omitempty"`
+	HasTenant   *bool     `json:"has_tenant,omitempty"`
+	Suggestions *[]string `json:"suggestions,omitempty"`
+	TenantId    *string   `json:"tenant_id,omitempty"`
+	TenantName  *string   `json:"tenant_name,omitempty"`
+	UserExists  *bool     `json:"user_exists,omitempty"`
+}
+
+// ControllerLoginOptionsResponse defines model for controller.LoginOptionsResponse.
+type ControllerLoginOptionsResponse struct {
+	// DomainMatchedSso If email domain matches an SSO provider's configured domains
+	DomainMatchedSso *ControllerSSOProviderOption `json:"domain_matched_sso,omitempty"`
+	MagicLinkEnabled *bool                        `json:"magic_link_enabled,omitempty"`
+
+	// PasswordEnabled Authentication methods available
+	PasswordEnabled *bool `json:"password_enabled,omitempty"`
+
+	// PreferredMethod Recommended/preferred login method based on context
+	// Values: "sso", "password", "magic_link", "social"
+	PreferredMethod *string `json:"preferred_method,omitempty"`
+
+	// SocialProviders Social login providers (tenant-wide or global)
+	SocialProviders *[]ControllerSocialProviderOption `json:"social_providers,omitempty"`
+
+	// SsoProviders SSO providers configured for this tenant
+	SsoProviders *[]ControllerSSOProviderOption `json:"sso_providers,omitempty"`
+
+	// SsoRequired If true, SSO is required for this domain/tenant (password disabled)
+	SsoRequired *bool `json:"sso_required,omitempty"`
+
+	// TenantId Tenant information (if discovered)
+	TenantId   *string `json:"tenant_id,omitempty"`
+	TenantName *string `json:"tenant_name,omitempty"`
+
+	// UserExists If true, user exists and can use password login
+	UserExists *bool `json:"user_exists,omitempty"`
+}
+
+// ControllerSSOProviderOption defines model for controller.SSOProviderOption.
+type ControllerSSOProviderOption struct {
+	LoginUrl *string `json:"login_url,omitempty"`
+	LogoUrl  *string `json:"logo_url,omitempty"`
+	Name     *string `json:"name,omitempty"`
+
+	// ProviderType "oidc", "saml"
+	ProviderType *string `json:"provider_type,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
+}
+
+// ControllerSocialProviderOption defines model for controller.SocialProviderOption.
+type ControllerSocialProviderOption struct {
+	LoginUrl *string `json:"login_url,omitempty"`
+	LogoUrl  *string `json:"logo_url,omitempty"`
+	Name     *string `json:"name,omitempty"`
+
+	// Provider "google", "github", "microsoft", etc.
+	Provider *string `json:"provider,omitempty"`
+}
 
 // ControllerAdminUpdateNamesReq defines model for controller.adminUpdateNamesReq.
 type ControllerAdminUpdateNamesReq struct {
@@ -79,38 +188,22 @@ type ControllerAdminUsersResp struct {
 	Users *[]ControllerAdminUser `json:"users,omitempty"`
 }
 
-// ControllerAuthTenantListResp defines model for controller.authTenantListResp.
-type ControllerAuthTenantListResp struct {
-	Tenants *[]ControllerAuthTenantSummary `json:"tenants,omitempty"`
+// ControllerAuthExchangeResp defines model for controller.authExchangeResp.
+type ControllerAuthExchangeResp struct {
+	AccessToken  *string `json:"access_token,omitempty"`
+	RefreshToken *string `json:"refresh_token,omitempty"`
+	Success      *bool   `json:"success,omitempty"`
 }
 
-// ControllerAuthTenantSummary defines model for controller.authTenantSummary.
-type ControllerAuthTenantSummary struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
+// ControllerChangePasswordReq defines model for controller.changePasswordReq.
+type ControllerChangePasswordReq struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 // ControllerCreateTenantReq defines model for controller.createTenantReq.
 type ControllerCreateTenantReq struct {
 	Name string `json:"name"`
-}
-
-// ControllerEmailDiscoveryReq defines model for controller.emailDiscoveryReq.
-type ControllerEmailDiscoveryReq struct {
-	Email string `json:"email"`
-
-	// TenantId Optional tenant ID hint to scope the lookup
-	TenantId *string `json:"tenant_id,omitempty"`
-}
-
-// ControllerEmailDiscoveryResp defines model for controller.emailDiscoveryResp.
-type ControllerEmailDiscoveryResp struct {
-	Found       *bool     `json:"found,omitempty"`
-	HasTenant   *bool     `json:"has_tenant,omitempty"`
-	Suggestions *[]string `json:"suggestions,omitempty"`
-	TenantId    *string   `json:"tenant_id,omitempty"`
-	TenantName  *string   `json:"tenant_name,omitempty"`
-	UserExists  *bool     `json:"user_exists,omitempty"`
 }
 
 // ControllerFgaAuthorizeReq defines model for controller.fgaAuthorizeReq.
@@ -207,6 +300,11 @@ type ControllerLoginReq struct {
 	TenantId string `json:"tenant_id"`
 }
 
+// ControllerLogoutReq defines model for controller.logoutReq.
+type ControllerLogoutReq struct {
+	RefreshToken *string `json:"refresh_token,omitempty"`
+}
+
 // ControllerMagicSendReq defines model for controller.magicSendReq.
 type ControllerMagicSendReq struct {
 	Email       string  `json:"email"`
@@ -271,6 +369,26 @@ type ControllerMfaVerifyReq struct {
 // ControllerMfaVerifyReqMethod defines model for ControllerMfaVerifyReq.Method.
 type ControllerMfaVerifyReqMethod string
 
+// ControllerOauth2MetadataResp defines model for controller.oauth2MetadataResp.
+type ControllerOauth2MetadataResp struct {
+	GrantTypesSupported  *[]string `json:"grant_types_supported,omitempty"`
+	GuardAuthModeDefault *string   `json:"guard_auth_mode_default,omitempty"`
+
+	// GuardAuthModesSupported Guard-specific extensions
+	GuardAuthModesSupported                   *[]string `json:"guard_auth_modes_supported,omitempty"`
+	GuardVersion                              *string   `json:"guard_version,omitempty"`
+	IntrospectionEndpoint                     *string   `json:"introspection_endpoint,omitempty"`
+	IntrospectionEndpointAuthMethodsSupported *[]string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
+	Issuer                                    *string   `json:"issuer,omitempty"`
+	ResponseTypesSupported                    *[]string `json:"response_types_supported,omitempty"`
+	RevocationEndpoint                        *string   `json:"revocation_endpoint,omitempty"`
+	RevocationEndpointAuthMethodsSupported    *[]string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
+	ScopesSupported                           *[]string `json:"scopes_supported,omitempty"`
+	TokenEndpoint                             *string   `json:"token_endpoint,omitempty"`
+	TokenEndpointAuthMethodsSupported         *[]string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	UserinfoEndpoint                          *string   `json:"userinfo_endpoint,omitempty"`
+}
+
 // ControllerPermissionGrantItem defines model for controller.permissionGrantItem.
 type ControllerPermissionGrantItem struct {
 	Key        *string `json:"key,omitempty"`
@@ -280,6 +398,14 @@ type ControllerPermissionGrantItem struct {
 
 // ControllerPutSettingsRequest defines model for controller.putSettingsRequest.
 type ControllerPutSettingsRequest struct {
+	// AppCorsAllowedOrigins App
+	AppCorsAllowedOrigins *string `json:"app_cors_allowed_origins,omitempty"`
+
+	// JwtSigningKey Auth
+	JwtSigningKey *string `json:"jwt_signing_key,omitempty"`
+
+	// Scope Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.
+	Scope                       *string `json:"scope,omitempty"`
 	SsoProvider                 *string `json:"sso_provider,omitempty"`
 	SsoRedirectAllowlist        *string `json:"sso_redirect_allowlist,omitempty"`
 	SsoStateTtl                 *string `json:"sso_state_ttl,omitempty"`
@@ -359,39 +485,40 @@ type ControllerRbacUserRolesResp struct {
 
 // ControllerRefreshReq defines model for controller.refreshReq.
 type ControllerRefreshReq struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
 // ControllerResetPasswordConfirmReq defines model for controller.resetPasswordConfirmReq.
 type ControllerResetPasswordConfirmReq struct {
-	NewPassword string `json:"new_password"`
-	TenantId    string `json:"tenant_id"`
-	Token       string `json:"token"`
+	NewPassword string  `json:"new_password"`
+	TenantId    *string `json:"tenant_id,omitempty"`
+	Token       string  `json:"token"`
 }
 
 // ControllerResetPasswordRequestReq defines model for controller.resetPasswordRequestReq.
 type ControllerResetPasswordRequestReq struct {
-	Email    string `json:"email"`
-	TenantId string `json:"tenant_id"`
+	Email    string  `json:"email"`
+	TenantId *string `json:"tenant_id,omitempty"`
 }
 
 // ControllerRevokeReq defines model for controller.revokeReq.
 type ControllerRevokeReq struct {
-	Token     string                       `json:"token"`
-	TokenType ControllerRevokeReqTokenType `json:"token_type"`
+	Token     string `json:"token"`
+	TokenType string `json:"token_type"`
 }
-
-// ControllerRevokeReqTokenType defines model for ControllerRevokeReq.TokenType.
-type ControllerRevokeReqTokenType string
 
 // ControllerSessionItem defines model for controller.sessionItem.
 type ControllerSessionItem struct {
-	CreatedAt *string `json:"created_at,omitempty"`
-	ExpiresAt *string `json:"expires_at,omitempty"`
-	Id        *string `json:"id,omitempty"`
-	Ip        *string `json:"ip,omitempty"`
-	Revoked   *bool   `json:"revoked,omitempty"`
-	UserAgent *string `json:"user_agent,omitempty"`
+	AuthMethod      *string `json:"auth_method,omitempty"`
+	CreatedAt       *string `json:"created_at,omitempty"`
+	ExpiresAt       *string `json:"expires_at,omitempty"`
+	Id              *string `json:"id,omitempty"`
+	Ip              *string `json:"ip,omitempty"`
+	Revoked         *bool   `json:"revoked,omitempty"`
+	SsoProviderId   *string `json:"sso_provider_id,omitempty"`
+	SsoProviderName *string `json:"sso_provider_name,omitempty"`
+	SsoProviderSlug *string `json:"sso_provider_slug,omitempty"`
+	UserAgent       *string `json:"user_agent,omitempty"`
 }
 
 // ControllerSessionsListResp defines model for controller.sessionsListResp.
@@ -401,6 +528,9 @@ type ControllerSessionsListResp struct {
 
 // ControllerSettingsResponse defines model for controller.settingsResponse.
 type ControllerSettingsResponse struct {
+	// AppCorsAllowedOrigins App
+	AppCorsAllowedOrigins *string `json:"app_cors_allowed_origins,omitempty"`
+
 	// SsoProvider SSO
 	SsoProvider          *string `json:"sso_provider,omitempty"`
 	SsoRedirectAllowlist *string `json:"sso_redirect_allowlist,omitempty"`
@@ -425,6 +555,17 @@ type ControllerSignupReq struct {
 	TenantId  string  `json:"tenant_id"`
 }
 
+// ControllerSpInfoResponse defines model for controller.spInfoResponse.
+type ControllerSpInfoResponse struct {
+	AcsUrl      *string `json:"acs_url,omitempty"`
+	BaseUrl     *string `json:"base_url,omitempty"`
+	EntityId    *string `json:"entity_id,omitempty"`
+	LoginUrl    *string `json:"login_url,omitempty"`
+	MetadataUrl *string `json:"metadata_url,omitempty"`
+	SloUrl      *string `json:"slo_url,omitempty"`
+	TenantId    *string `json:"tenant_id,omitempty"`
+}
+
 // ControllerTenantResp defines model for controller.tenantResp.
 type ControllerTenantResp struct {
 	CreatedAt *string `json:"created_at,omitempty"`
@@ -434,10 +575,10 @@ type ControllerTenantResp struct {
 	UpdatedAt *string `json:"updated_at,omitempty"`
 }
 
-// ControllerTokensResp defines model for controller.tokensResp.
-type ControllerTokensResp struct {
-	AccessToken  *string `json:"access_token,omitempty"`
-	RefreshToken *string `json:"refresh_token,omitempty"`
+// ControllerUpdateProfileReq defines model for controller.updateProfileReq.
+type ControllerUpdateProfileReq struct {
+	FirstName *string `json:"first_name,omitempty"`
+	LastName  *string `json:"last_name,omitempty"`
 }
 
 // DomainIntrospection defines model for domain.Introspection.
@@ -528,17 +669,92 @@ type GetV1AuthAdminUsersParams struct {
 	TenantId string `form:"tenant_id" json:"tenant_id"`
 }
 
+// GetV1AuthLoginOptionsParams defines parameters for GetV1AuthLoginOptions.
+type GetV1AuthLoginOptionsParams struct {
+	// Email User email for context-aware options
+	Email *string `form:"email,omitempty" json:"email,omitempty"`
+
+	// TenantId Tenant ID to scope options
+	TenantId *string `form:"tenant_id,omitempty" json:"tenant_id,omitempty"`
+}
+
 // GetV1AuthMagicVerifyParams defines parameters for GetV1AuthMagicVerify.
 type GetV1AuthMagicVerifyParams struct {
 	// Token Magic token (alternative to body)
 	Token *string `form:"token,omitempty" json:"token,omitempty"`
+
+	// XAuthMode Auth response mode override
+	XAuthMode *GetV1AuthMagicVerifyParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
 }
+
+// GetV1AuthMagicVerifyParamsXAuthMode defines parameters for GetV1AuthMagicVerify.
+type GetV1AuthMagicVerifyParamsXAuthMode string
 
 // PostV1AuthMagicVerifyParams defines parameters for PostV1AuthMagicVerify.
 type PostV1AuthMagicVerifyParams struct {
 	// Token Magic token (alternative to body)
 	Token *string `form:"token,omitempty" json:"token,omitempty"`
+
+	// XAuthMode Auth response mode override
+	XAuthMode *PostV1AuthMagicVerifyParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
 }
+
+// PostV1AuthMagicVerifyParamsXAuthMode defines parameters for PostV1AuthMagicVerify.
+type PostV1AuthMagicVerifyParamsXAuthMode string
+
+// GetV1AuthMeParams defines parameters for GetV1AuthMe.
+type GetV1AuthMeParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *GetV1AuthMeParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// GetV1AuthMeParamsXAuthMode defines parameters for GetV1AuthMe.
+type GetV1AuthMeParamsXAuthMode string
+
+// PostV1AuthMfaVerifyParams defines parameters for PostV1AuthMfaVerify.
+type PostV1AuthMfaVerifyParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *PostV1AuthMfaVerifyParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// PostV1AuthMfaVerifyParamsXAuthMode defines parameters for PostV1AuthMfaVerify.
+type PostV1AuthMfaVerifyParamsXAuthMode string
+
+// PostV1AuthPasswordLoginParams defines parameters for PostV1AuthPasswordLogin.
+type PostV1AuthPasswordLoginParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *PostV1AuthPasswordLoginParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// PostV1AuthPasswordLoginParamsXAuthMode defines parameters for PostV1AuthPasswordLogin.
+type PostV1AuthPasswordLoginParamsXAuthMode string
+
+// PostV1AuthPasswordSignupParams defines parameters for PostV1AuthPasswordSignup.
+type PostV1AuthPasswordSignupParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *PostV1AuthPasswordSignupParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// PostV1AuthPasswordSignupParamsXAuthMode defines parameters for PostV1AuthPasswordSignup.
+type PostV1AuthPasswordSignupParamsXAuthMode string
+
+// PostV1AuthRefreshParams defines parameters for PostV1AuthRefresh.
+type PostV1AuthRefreshParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *PostV1AuthRefreshParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// PostV1AuthRefreshParamsXAuthMode defines parameters for PostV1AuthRefresh.
+type PostV1AuthRefreshParamsXAuthMode string
+
+// GetV1AuthSsoProviderCallbackParams defines parameters for GetV1AuthSsoProviderCallback.
+type GetV1AuthSsoProviderCallbackParams struct {
+	// XAuthMode Auth response mode override
+	XAuthMode *GetV1AuthSsoProviderCallbackParamsXAuthMode `json:"X-Auth-Mode,omitempty"`
+}
+
+// GetV1AuthSsoProviderCallbackParamsXAuthMode defines parameters for GetV1AuthSsoProviderCallback.
+type GetV1AuthSsoProviderCallbackParamsXAuthMode string
 
 // GetV1AuthSsoProviderPortalLinkParams defines parameters for GetV1AuthSsoProviderPortalLink.
 type GetV1AuthSsoProviderPortalLinkParams struct {
@@ -570,9 +786,10 @@ type GetV1AuthSsoProviderStartParams struct {
 	OrganizationId *string `form:"organization_id,omitempty" json:"organization_id,omitempty"`
 }
 
-// GetV1AuthTenantsParams defines parameters for GetV1AuthTenants.
-type GetV1AuthTenantsParams struct {
-	Email string `form:"email" json:"email"`
+// GetV1SsoSpInfoParams defines parameters for GetV1SsoSpInfo.
+type GetV1SsoSpInfoParams struct {
+	// Slug Provider slug (e.g. 'okta', 'azure-ad')
+	Slug string `form:"slug" json:"slug"`
 }
 
 // PostTenantsJSONRequestBody defines body for PostTenants for application/json ContentType.
@@ -621,13 +838,13 @@ type PostV1AuthAdminUsersIdRolesJSONRequestBody = ControllerAdminUpdateRolesReq
 type PostV1AuthAuthorizeJSONRequestBody = ControllerFgaAuthorizeReq
 
 // PostV1AuthEmailDiscoverJSONRequestBody defines body for PostV1AuthEmailDiscover for application/json ContentType.
-type PostV1AuthEmailDiscoverJSONRequestBody = ControllerEmailDiscoveryReq
+type PostV1AuthEmailDiscoverJSONRequestBody = ControllerEmailDiscoveryRequest
 
 // PostV1AuthIntrospectJSONRequestBody defines body for PostV1AuthIntrospect for application/json ContentType.
 type PostV1AuthIntrospectJSONRequestBody = ControllerIntrospectReq
 
 // PostV1AuthLogoutJSONRequestBody defines body for PostV1AuthLogout for application/json ContentType.
-type PostV1AuthLogoutJSONRequestBody = ControllerRefreshReq
+type PostV1AuthLogoutJSONRequestBody = ControllerLogoutReq
 
 // PostV1AuthMagicSendJSONRequestBody defines body for PostV1AuthMagicSend for application/json ContentType.
 type PostV1AuthMagicSendJSONRequestBody = ControllerMagicSendReq
@@ -650,6 +867,9 @@ type PostV1AuthMfaTotpActivateJSONRequestBody = ControllerMfaTOTPActivateReq
 // PostV1AuthMfaVerifyJSONRequestBody defines body for PostV1AuthMfaVerify for application/json ContentType.
 type PostV1AuthMfaVerifyJSONRequestBody = ControllerMfaVerifyReq
 
+// PostV1AuthPasswordChangeJSONRequestBody defines body for PostV1AuthPasswordChange for application/json ContentType.
+type PostV1AuthPasswordChangeJSONRequestBody = ControllerChangePasswordReq
+
 // PostV1AuthPasswordLoginJSONRequestBody defines body for PostV1AuthPasswordLogin for application/json ContentType.
 type PostV1AuthPasswordLoginJSONRequestBody = ControllerLoginReq
 
@@ -661,6 +881,9 @@ type PostV1AuthPasswordResetRequestJSONRequestBody = ControllerResetPasswordRequ
 
 // PostV1AuthPasswordSignupJSONRequestBody defines body for PostV1AuthPasswordSignup for application/json ContentType.
 type PostV1AuthPasswordSignupJSONRequestBody = ControllerSignupReq
+
+// PatchV1AuthProfileJSONRequestBody defines body for PatchV1AuthProfile for application/json ContentType.
+type PatchV1AuthProfileJSONRequestBody = ControllerUpdateProfileReq
 
 // PostV1AuthRefreshJSONRequestBody defines body for PostV1AuthRefresh for application/json ContentType.
 type PostV1AuthRefreshJSONRequestBody = ControllerRefreshReq
@@ -744,6 +967,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetWellKnownOauthAuthorizationServer request
+	GetWellKnownOauthAuthorizationServer(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetTenants request
 	GetTenants(ctx context.Context, params *GetTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -856,6 +1082,12 @@ type ClientInterface interface {
 	// PostV1AuthAdminUsersIdUnblock request
 	PostV1AuthAdminUsersIdUnblock(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostV1AuthAdminUsersIdUnverifyEmail request
+	PostV1AuthAdminUsersIdUnverifyEmail(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostV1AuthAdminUsersIdVerifyEmail request
+	PostV1AuthAdminUsersIdVerifyEmail(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostV1AuthAuthorizeWithBody request with any body
 	PostV1AuthAuthorizeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -870,6 +1102,9 @@ type ClientInterface interface {
 	PostV1AuthIntrospectWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PostV1AuthIntrospect(ctx context.Context, body PostV1AuthIntrospectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetV1AuthLoginOptions request
+	GetV1AuthLoginOptions(ctx context.Context, params *GetV1AuthLoginOptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthLogoutWithBody request with any body
 	PostV1AuthLogoutWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -892,7 +1127,7 @@ type ClientInterface interface {
 	PostV1AuthMagicVerify(ctx context.Context, params *PostV1AuthMagicVerifyParams, body PostV1AuthMagicVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetV1AuthMe request
-	GetV1AuthMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetV1AuthMe(ctx context.Context, params *GetV1AuthMeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthMfaBackupConsumeWithBody request with any body
 	PostV1AuthMfaBackupConsumeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -919,14 +1154,19 @@ type ClientInterface interface {
 	PostV1AuthMfaTotpStart(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthMfaVerifyWithBody request with any body
-	PostV1AuthMfaVerifyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthMfaVerifyWithBody(ctx context.Context, params *PostV1AuthMfaVerifyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	PostV1AuthMfaVerify(ctx context.Context, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthMfaVerify(ctx context.Context, params *PostV1AuthMfaVerifyParams, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostV1AuthPasswordChangeWithBody request with any body
+	PostV1AuthPasswordChangeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostV1AuthPasswordChange(ctx context.Context, body PostV1AuthPasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthPasswordLoginWithBody request with any body
-	PostV1AuthPasswordLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthPasswordLoginWithBody(ctx context.Context, params *PostV1AuthPasswordLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	PostV1AuthPasswordLogin(ctx context.Context, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthPasswordLogin(ctx context.Context, params *PostV1AuthPasswordLoginParams, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthPasswordResetConfirmWithBody request with any body
 	PostV1AuthPasswordResetConfirmWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -939,14 +1179,19 @@ type ClientInterface interface {
 	PostV1AuthPasswordResetRequest(ctx context.Context, body PostV1AuthPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthPasswordSignupWithBody request with any body
-	PostV1AuthPasswordSignupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthPasswordSignupWithBody(ctx context.Context, params *PostV1AuthPasswordSignupParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	PostV1AuthPasswordSignup(ctx context.Context, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthPasswordSignup(ctx context.Context, params *PostV1AuthPasswordSignupParams, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchV1AuthProfileWithBody request with any body
+	PatchV1AuthProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PatchV1AuthProfile(ctx context.Context, body PatchV1AuthProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthRefreshWithBody request with any body
-	PostV1AuthRefreshWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthRefreshWithBody(ctx context.Context, params *PostV1AuthRefreshParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	PostV1AuthRefresh(ctx context.Context, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostV1AuthRefresh(ctx context.Context, params *PostV1AuthRefreshParams, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV1AuthRevokeWithBody request with any body
 	PostV1AuthRevokeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -960,7 +1205,7 @@ type ClientInterface interface {
 	PostV1AuthSessionsIdRevoke(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetV1AuthSsoProviderCallback request
-	GetV1AuthSsoProviderCallback(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetV1AuthSsoProviderCallback(ctx context.Context, provider string, params *GetV1AuthSsoProviderCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetV1AuthSsoProviderPortalLink request
 	GetV1AuthSsoProviderPortalLink(ctx context.Context, provider string, params *GetV1AuthSsoProviderPortalLinkParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -968,8 +1213,8 @@ type ClientInterface interface {
 	// GetV1AuthSsoProviderStart request
 	GetV1AuthSsoProviderStart(ctx context.Context, provider string, params *GetV1AuthSsoProviderStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetV1AuthTenants request
-	GetV1AuthTenants(ctx context.Context, params *GetV1AuthTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetV1SsoSpInfo request
+	GetV1SsoSpInfo(ctx context.Context, params *GetV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetV1TenantsIdSettings request
 	GetV1TenantsIdSettings(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -978,6 +1223,18 @@ type ClientInterface interface {
 	PutV1TenantsIdSettingsWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PutV1TenantsIdSettings(ctx context.Context, id string, body PutV1TenantsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetWellKnownOauthAuthorizationServer(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWellKnownOauthAuthorizationServerRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) GetTenants(ctx context.Context, params *GetTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1484,6 +1741,30 @@ func (c *Client) PostV1AuthAdminUsersIdUnblock(ctx context.Context, id string, r
 	return c.Client.Do(req)
 }
 
+func (c *Client) PostV1AuthAdminUsersIdUnverifyEmail(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthAdminUsersIdUnverifyEmailRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV1AuthAdminUsersIdVerifyEmail(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthAdminUsersIdVerifyEmailRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) PostV1AuthAuthorizeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostV1AuthAuthorizeRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -1546,6 +1827,18 @@ func (c *Client) PostV1AuthIntrospectWithBody(ctx context.Context, contentType s
 
 func (c *Client) PostV1AuthIntrospect(ctx context.Context, body PostV1AuthIntrospectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostV1AuthIntrospectRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetV1AuthLoginOptions(ctx context.Context, params *GetV1AuthLoginOptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1AuthLoginOptionsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1652,8 +1945,8 @@ func (c *Client) PostV1AuthMagicVerify(ctx context.Context, params *PostV1AuthMa
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetV1AuthMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetV1AuthMeRequest(c.Server)
+func (c *Client) GetV1AuthMe(ctx context.Context, params *GetV1AuthMeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1AuthMeRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1772,8 +2065,8 @@ func (c *Client) PostV1AuthMfaTotpStart(ctx context.Context, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthMfaVerifyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthMfaVerifyRequestWithBody(c.Server, contentType, body)
+func (c *Client) PostV1AuthMfaVerifyWithBody(ctx context.Context, params *PostV1AuthMfaVerifyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthMfaVerifyRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1784,8 +2077,8 @@ func (c *Client) PostV1AuthMfaVerifyWithBody(ctx context.Context, contentType st
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthMfaVerify(ctx context.Context, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthMfaVerifyRequest(c.Server, body)
+func (c *Client) PostV1AuthMfaVerify(ctx context.Context, params *PostV1AuthMfaVerifyParams, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthMfaVerifyRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1796,8 +2089,8 @@ func (c *Client) PostV1AuthMfaVerify(ctx context.Context, body PostV1AuthMfaVeri
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthPasswordLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthPasswordLoginRequestWithBody(c.Server, contentType, body)
+func (c *Client) PostV1AuthPasswordChangeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordChangeRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1808,8 +2101,32 @@ func (c *Client) PostV1AuthPasswordLoginWithBody(ctx context.Context, contentTyp
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthPasswordLogin(ctx context.Context, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthPasswordLoginRequest(c.Server, body)
+func (c *Client) PostV1AuthPasswordChange(ctx context.Context, body PostV1AuthPasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordChangeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV1AuthPasswordLoginWithBody(ctx context.Context, params *PostV1AuthPasswordLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordLoginRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV1AuthPasswordLogin(ctx context.Context, params *PostV1AuthPasswordLoginParams, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordLoginRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1868,8 +2185,8 @@ func (c *Client) PostV1AuthPasswordResetRequest(ctx context.Context, body PostV1
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthPasswordSignupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthPasswordSignupRequestWithBody(c.Server, contentType, body)
+func (c *Client) PostV1AuthPasswordSignupWithBody(ctx context.Context, params *PostV1AuthPasswordSignupParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordSignupRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1880,8 +2197,8 @@ func (c *Client) PostV1AuthPasswordSignupWithBody(ctx context.Context, contentTy
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthPasswordSignup(ctx context.Context, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthPasswordSignupRequest(c.Server, body)
+func (c *Client) PostV1AuthPasswordSignup(ctx context.Context, params *PostV1AuthPasswordSignupParams, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthPasswordSignupRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1892,8 +2209,8 @@ func (c *Client) PostV1AuthPasswordSignup(ctx context.Context, body PostV1AuthPa
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthRefreshWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthRefreshRequestWithBody(c.Server, contentType, body)
+func (c *Client) PatchV1AuthProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchV1AuthProfileRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1904,8 +2221,32 @@ func (c *Client) PostV1AuthRefreshWithBody(ctx context.Context, contentType stri
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV1AuthRefresh(ctx context.Context, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV1AuthRefreshRequest(c.Server, body)
+func (c *Client) PatchV1AuthProfile(ctx context.Context, body PatchV1AuthProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchV1AuthProfileRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV1AuthRefreshWithBody(ctx context.Context, params *PostV1AuthRefreshParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthRefreshRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV1AuthRefresh(ctx context.Context, params *PostV1AuthRefreshParams, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1AuthRefreshRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1964,8 +2305,8 @@ func (c *Client) PostV1AuthSessionsIdRevoke(ctx context.Context, id string, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetV1AuthSsoProviderCallback(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetV1AuthSsoProviderCallbackRequest(c.Server, provider)
+func (c *Client) GetV1AuthSsoProviderCallback(ctx context.Context, provider string, params *GetV1AuthSsoProviderCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1AuthSsoProviderCallbackRequest(c.Server, provider, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2000,8 +2341,8 @@ func (c *Client) GetV1AuthSsoProviderStart(ctx context.Context, provider string,
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetV1AuthTenants(ctx context.Context, params *GetV1AuthTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetV1AuthTenantsRequest(c.Server, params)
+func (c *Client) GetV1SsoSpInfo(ctx context.Context, params *GetV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV1SsoSpInfoRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2046,6 +2387,33 @@ func (c *Client) PutV1TenantsIdSettings(ctx context.Context, id string, body Put
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetWellKnownOauthAuthorizationServerRequest generates requests for GetWellKnownOauthAuthorizationServer
+func NewGetWellKnownOauthAuthorizationServerRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/.well-known/oauth-authorization-server")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewGetTenantsRequest generates requests for GetTenants
@@ -3308,6 +3676,74 @@ func NewPostV1AuthAdminUsersIdUnblockRequest(server string, id string) (*http.Re
 	return req, nil
 }
 
+// NewPostV1AuthAdminUsersIdUnverifyEmailRequest generates requests for PostV1AuthAdminUsersIdUnverifyEmail
+func NewPostV1AuthAdminUsersIdUnverifyEmailRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/auth/admin/users/%s/unverify-email", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostV1AuthAdminUsersIdVerifyEmailRequest generates requests for PostV1AuthAdminUsersIdVerifyEmail
+func NewPostV1AuthAdminUsersIdVerifyEmailRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/auth/admin/users/%s/verify-email", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostV1AuthAuthorizeRequest calls the generic PostV1AuthAuthorize builder with application/json body
 func NewPostV1AuthAuthorizeRequest(server string, body PostV1AuthAuthorizeJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -3424,6 +3860,71 @@ func NewPostV1AuthIntrospectRequestWithBody(server string, contentType string, b
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetV1AuthLoginOptionsRequest generates requests for GetV1AuthLoginOptions
+func NewGetV1AuthLoginOptionsRequest(server string, params *GetV1AuthLoginOptionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/auth/login-options")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Email != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "email", runtime.ParamLocationQuery, *params.Email); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TenantId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant_id", runtime.ParamLocationQuery, *params.TenantId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -3567,6 +4068,21 @@ func NewGetV1AuthMagicVerifyRequestWithBody(server string, params *GetV1AuthMagi
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -3629,11 +4145,26 @@ func NewPostV1AuthMagicVerifyRequestWithBody(server string, params *PostV1AuthMa
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetV1AuthMeRequest generates requests for GetV1AuthMe
-func NewGetV1AuthMeRequest(server string) (*http.Request, error) {
+func NewGetV1AuthMeRequest(server string, params *GetV1AuthMeParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3654,6 +4185,21 @@ func NewGetV1AuthMeRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -3861,18 +4407,18 @@ func NewPostV1AuthMfaTotpStartRequest(server string) (*http.Request, error) {
 }
 
 // NewPostV1AuthMfaVerifyRequest calls the generic PostV1AuthMfaVerify builder with application/json body
-func NewPostV1AuthMfaVerifyRequest(server string, body PostV1AuthMfaVerifyJSONRequestBody) (*http.Request, error) {
+func NewPostV1AuthMfaVerifyRequest(server string, params *PostV1AuthMfaVerifyParams, body PostV1AuthMfaVerifyJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostV1AuthMfaVerifyRequestWithBody(server, "application/json", bodyReader)
+	return NewPostV1AuthMfaVerifyRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewPostV1AuthMfaVerifyRequestWithBody generates requests for PostV1AuthMfaVerify with any type of body
-func NewPostV1AuthMfaVerifyRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostV1AuthMfaVerifyRequestWithBody(server string, params *PostV1AuthMfaVerifyParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3897,22 +4443,77 @@ func NewPostV1AuthMfaVerifyRequestWithBody(server string, contentType string, bo
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
-// NewPostV1AuthPasswordLoginRequest calls the generic PostV1AuthPasswordLogin builder with application/json body
-func NewPostV1AuthPasswordLoginRequest(server string, body PostV1AuthPasswordLoginJSONRequestBody) (*http.Request, error) {
+// NewPostV1AuthPasswordChangeRequest calls the generic PostV1AuthPasswordChange builder with application/json body
+func NewPostV1AuthPasswordChangeRequest(server string, body PostV1AuthPasswordChangeJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostV1AuthPasswordLoginRequestWithBody(server, "application/json", bodyReader)
+	return NewPostV1AuthPasswordChangeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostV1AuthPasswordChangeRequestWithBody generates requests for PostV1AuthPasswordChange with any type of body
+func NewPostV1AuthPasswordChangeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/auth/password/change")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostV1AuthPasswordLoginRequest calls the generic PostV1AuthPasswordLogin builder with application/json body
+func NewPostV1AuthPasswordLoginRequest(server string, params *PostV1AuthPasswordLoginParams, body PostV1AuthPasswordLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostV1AuthPasswordLoginRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewPostV1AuthPasswordLoginRequestWithBody generates requests for PostV1AuthPasswordLogin with any type of body
-func NewPostV1AuthPasswordLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostV1AuthPasswordLoginRequestWithBody(server string, params *PostV1AuthPasswordLoginParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3936,6 +4537,21 @@ func NewPostV1AuthPasswordLoginRequestWithBody(server string, contentType string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -4021,18 +4637,18 @@ func NewPostV1AuthPasswordResetRequestRequestWithBody(server string, contentType
 }
 
 // NewPostV1AuthPasswordSignupRequest calls the generic PostV1AuthPasswordSignup builder with application/json body
-func NewPostV1AuthPasswordSignupRequest(server string, body PostV1AuthPasswordSignupJSONRequestBody) (*http.Request, error) {
+func NewPostV1AuthPasswordSignupRequest(server string, params *PostV1AuthPasswordSignupParams, body PostV1AuthPasswordSignupJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostV1AuthPasswordSignupRequestWithBody(server, "application/json", bodyReader)
+	return NewPostV1AuthPasswordSignupRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewPostV1AuthPasswordSignupRequestWithBody generates requests for PostV1AuthPasswordSignup with any type of body
-func NewPostV1AuthPasswordSignupRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostV1AuthPasswordSignupRequestWithBody(server string, params *PostV1AuthPasswordSignupParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4057,22 +4673,77 @@ func NewPostV1AuthPasswordSignupRequestWithBody(server string, contentType strin
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
-// NewPostV1AuthRefreshRequest calls the generic PostV1AuthRefresh builder with application/json body
-func NewPostV1AuthRefreshRequest(server string, body PostV1AuthRefreshJSONRequestBody) (*http.Request, error) {
+// NewPatchV1AuthProfileRequest calls the generic PatchV1AuthProfile builder with application/json body
+func NewPatchV1AuthProfileRequest(server string, body PatchV1AuthProfileJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostV1AuthRefreshRequestWithBody(server, "application/json", bodyReader)
+	return NewPatchV1AuthProfileRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPatchV1AuthProfileRequestWithBody generates requests for PatchV1AuthProfile with any type of body
+func NewPatchV1AuthProfileRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/auth/profile")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostV1AuthRefreshRequest calls the generic PostV1AuthRefresh builder with application/json body
+func NewPostV1AuthRefreshRequest(server string, params *PostV1AuthRefreshParams, body PostV1AuthRefreshJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostV1AuthRefreshRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewPostV1AuthRefreshRequestWithBody generates requests for PostV1AuthRefresh with any type of body
-func NewPostV1AuthRefreshRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostV1AuthRefreshRequestWithBody(server string, params *PostV1AuthRefreshParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4096,6 +4767,21 @@ func NewPostV1AuthRefreshRequestWithBody(server string, contentType string, body
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -4202,7 +4888,7 @@ func NewPostV1AuthSessionsIdRevokeRequest(server string, id string) (*http.Reque
 }
 
 // NewGetV1AuthSsoProviderCallbackRequest generates requests for GetV1AuthSsoProviderCallback
-func NewGetV1AuthSsoProviderCallbackRequest(server string, provider string) (*http.Request, error) {
+func NewGetV1AuthSsoProviderCallbackRequest(server string, provider string, params *GetV1AuthSsoProviderCallbackParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4230,6 +4916,21 @@ func NewGetV1AuthSsoProviderCallbackRequest(server string, provider string) (*ht
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAuthMode != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Auth-Mode", runtime.ParamLocationHeader, *params.XAuthMode)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Auth-Mode", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -4431,8 +5132,8 @@ func NewGetV1AuthSsoProviderStartRequest(server string, provider string, params 
 	return req, nil
 }
 
-// NewGetV1AuthTenantsRequest generates requests for GetV1AuthTenants
-func NewGetV1AuthTenantsRequest(server string, params *GetV1AuthTenantsParams) (*http.Request, error) {
+// NewGetV1SsoSpInfoRequest generates requests for GetV1SsoSpInfo
+func NewGetV1SsoSpInfoRequest(server string, params *GetV1SsoSpInfoParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4440,7 +5141,7 @@ func NewGetV1AuthTenantsRequest(server string, params *GetV1AuthTenantsParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/auth/tenants")
+	operationPath := fmt.Sprintf("/v1/sso/sp-info")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4453,7 +5154,7 @@ func NewGetV1AuthTenantsRequest(server string, params *GetV1AuthTenantsParams) (
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "email", runtime.ParamLocationQuery, params.Email); err != nil {
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "slug", runtime.ParamLocationQuery, params.Slug); err != nil {
 			return nil, err
 		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 			return nil, err
@@ -4600,6 +5301,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetWellKnownOauthAuthorizationServerWithResponse request
+	GetWellKnownOauthAuthorizationServerWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetWellKnownOauthAuthorizationServerResponse, error)
+
 	// GetTenantsWithResponse request
 	GetTenantsWithResponse(ctx context.Context, params *GetTenantsParams, reqEditors ...RequestEditorFn) (*GetTenantsResponse, error)
 
@@ -4712,6 +5416,12 @@ type ClientWithResponsesInterface interface {
 	// PostV1AuthAdminUsersIdUnblockWithResponse request
 	PostV1AuthAdminUsersIdUnblockWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthAdminUsersIdUnblockResponse, error)
 
+	// PostV1AuthAdminUsersIdUnverifyEmailWithResponse request
+	PostV1AuthAdminUsersIdUnverifyEmailWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthAdminUsersIdUnverifyEmailResponse, error)
+
+	// PostV1AuthAdminUsersIdVerifyEmailWithResponse request
+	PostV1AuthAdminUsersIdVerifyEmailWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthAdminUsersIdVerifyEmailResponse, error)
+
 	// PostV1AuthAuthorizeWithBodyWithResponse request with any body
 	PostV1AuthAuthorizeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthAuthorizeResponse, error)
 
@@ -4726,6 +5436,9 @@ type ClientWithResponsesInterface interface {
 	PostV1AuthIntrospectWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthIntrospectResponse, error)
 
 	PostV1AuthIntrospectWithResponse(ctx context.Context, body PostV1AuthIntrospectJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthIntrospectResponse, error)
+
+	// GetV1AuthLoginOptionsWithResponse request
+	GetV1AuthLoginOptionsWithResponse(ctx context.Context, params *GetV1AuthLoginOptionsParams, reqEditors ...RequestEditorFn) (*GetV1AuthLoginOptionsResponse, error)
 
 	// PostV1AuthLogoutWithBodyWithResponse request with any body
 	PostV1AuthLogoutWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthLogoutResponse, error)
@@ -4748,7 +5461,7 @@ type ClientWithResponsesInterface interface {
 	PostV1AuthMagicVerifyWithResponse(ctx context.Context, params *PostV1AuthMagicVerifyParams, body PostV1AuthMagicVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthMagicVerifyResponse, error)
 
 	// GetV1AuthMeWithResponse request
-	GetV1AuthMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetV1AuthMeResponse, error)
+	GetV1AuthMeWithResponse(ctx context.Context, params *GetV1AuthMeParams, reqEditors ...RequestEditorFn) (*GetV1AuthMeResponse, error)
 
 	// PostV1AuthMfaBackupConsumeWithBodyWithResponse request with any body
 	PostV1AuthMfaBackupConsumeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthMfaBackupConsumeResponse, error)
@@ -4775,14 +5488,19 @@ type ClientWithResponsesInterface interface {
 	PostV1AuthMfaTotpStartWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostV1AuthMfaTotpStartResponse, error)
 
 	// PostV1AuthMfaVerifyWithBodyWithResponse request with any body
-	PostV1AuthMfaVerifyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error)
+	PostV1AuthMfaVerifyWithBodyWithResponse(ctx context.Context, params *PostV1AuthMfaVerifyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error)
 
-	PostV1AuthMfaVerifyWithResponse(ctx context.Context, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error)
+	PostV1AuthMfaVerifyWithResponse(ctx context.Context, params *PostV1AuthMfaVerifyParams, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error)
+
+	// PostV1AuthPasswordChangeWithBodyWithResponse request with any body
+	PostV1AuthPasswordChangeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordChangeResponse, error)
+
+	PostV1AuthPasswordChangeWithResponse(ctx context.Context, body PostV1AuthPasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordChangeResponse, error)
 
 	// PostV1AuthPasswordLoginWithBodyWithResponse request with any body
-	PostV1AuthPasswordLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error)
+	PostV1AuthPasswordLoginWithBodyWithResponse(ctx context.Context, params *PostV1AuthPasswordLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error)
 
-	PostV1AuthPasswordLoginWithResponse(ctx context.Context, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error)
+	PostV1AuthPasswordLoginWithResponse(ctx context.Context, params *PostV1AuthPasswordLoginParams, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error)
 
 	// PostV1AuthPasswordResetConfirmWithBodyWithResponse request with any body
 	PostV1AuthPasswordResetConfirmWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordResetConfirmResponse, error)
@@ -4795,14 +5513,19 @@ type ClientWithResponsesInterface interface {
 	PostV1AuthPasswordResetRequestWithResponse(ctx context.Context, body PostV1AuthPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordResetRequestResponse, error)
 
 	// PostV1AuthPasswordSignupWithBodyWithResponse request with any body
-	PostV1AuthPasswordSignupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error)
+	PostV1AuthPasswordSignupWithBodyWithResponse(ctx context.Context, params *PostV1AuthPasswordSignupParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error)
 
-	PostV1AuthPasswordSignupWithResponse(ctx context.Context, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error)
+	PostV1AuthPasswordSignupWithResponse(ctx context.Context, params *PostV1AuthPasswordSignupParams, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error)
+
+	// PatchV1AuthProfileWithBodyWithResponse request with any body
+	PatchV1AuthProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchV1AuthProfileResponse, error)
+
+	PatchV1AuthProfileWithResponse(ctx context.Context, body PatchV1AuthProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchV1AuthProfileResponse, error)
 
 	// PostV1AuthRefreshWithBodyWithResponse request with any body
-	PostV1AuthRefreshWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error)
+	PostV1AuthRefreshWithBodyWithResponse(ctx context.Context, params *PostV1AuthRefreshParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error)
 
-	PostV1AuthRefreshWithResponse(ctx context.Context, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error)
+	PostV1AuthRefreshWithResponse(ctx context.Context, params *PostV1AuthRefreshParams, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error)
 
 	// PostV1AuthRevokeWithBodyWithResponse request with any body
 	PostV1AuthRevokeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthRevokeResponse, error)
@@ -4816,7 +5539,7 @@ type ClientWithResponsesInterface interface {
 	PostV1AuthSessionsIdRevokeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthSessionsIdRevokeResponse, error)
 
 	// GetV1AuthSsoProviderCallbackWithResponse request
-	GetV1AuthSsoProviderCallbackWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderCallbackResponse, error)
+	GetV1AuthSsoProviderCallbackWithResponse(ctx context.Context, provider string, params *GetV1AuthSsoProviderCallbackParams, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderCallbackResponse, error)
 
 	// GetV1AuthSsoProviderPortalLinkWithResponse request
 	GetV1AuthSsoProviderPortalLinkWithResponse(ctx context.Context, provider string, params *GetV1AuthSsoProviderPortalLinkParams, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderPortalLinkResponse, error)
@@ -4824,8 +5547,8 @@ type ClientWithResponsesInterface interface {
 	// GetV1AuthSsoProviderStartWithResponse request
 	GetV1AuthSsoProviderStartWithResponse(ctx context.Context, provider string, params *GetV1AuthSsoProviderStartParams, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderStartResponse, error)
 
-	// GetV1AuthTenantsWithResponse request
-	GetV1AuthTenantsWithResponse(ctx context.Context, params *GetV1AuthTenantsParams, reqEditors ...RequestEditorFn) (*GetV1AuthTenantsResponse, error)
+	// GetV1SsoSpInfoWithResponse request
+	GetV1SsoSpInfoWithResponse(ctx context.Context, params *GetV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*GetV1SsoSpInfoResponse, error)
 
 	// GetV1TenantsIdSettingsWithResponse request
 	GetV1TenantsIdSettingsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetV1TenantsIdSettingsResponse, error)
@@ -4834,6 +5557,28 @@ type ClientWithResponsesInterface interface {
 	PutV1TenantsIdSettingsWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutV1TenantsIdSettingsResponse, error)
 
 	PutV1TenantsIdSettingsWithResponse(ctx context.Context, id string, body PutV1TenantsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutV1TenantsIdSettingsResponse, error)
+}
+
+type GetWellKnownOauthAuthorizationServerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControllerOauth2MetadataResp
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWellKnownOauthAuthorizationServerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWellKnownOauthAuthorizationServerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type GetTenantsResponse struct {
@@ -5471,6 +6216,48 @@ func (r PostV1AuthAdminUsersIdUnblockResponse) StatusCode() int {
 	return 0
 }
 
+type PostV1AuthAdminUsersIdUnverifyEmailResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PostV1AuthAdminUsersIdUnverifyEmailResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostV1AuthAdminUsersIdUnverifyEmailResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostV1AuthAdminUsersIdVerifyEmailResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PostV1AuthAdminUsersIdVerifyEmailResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostV1AuthAdminUsersIdVerifyEmailResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostV1AuthAuthorizeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5498,7 +6285,7 @@ func (r PostV1AuthAuthorizeResponse) StatusCode() int {
 type PostV1AuthEmailDiscoverResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerEmailDiscoveryResp
+	JSON200      *ControllerEmailDiscoveryResponse
 	JSON400      *map[string]string
 	JSON500      *map[string]string
 }
@@ -5538,6 +6325,30 @@ func (r PostV1AuthIntrospectResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r PostV1AuthIntrospectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetV1AuthLoginOptionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControllerLoginOptionsResponse
+	JSON400      *map[string]string
+	JSON500      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV1AuthLoginOptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV1AuthLoginOptionsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -5589,7 +6400,7 @@ func (r PostV1AuthMagicSendResponse) StatusCode() int {
 type GetV1AuthMagicVerifyResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
 	JSON429      *map[string]string
@@ -5614,7 +6425,7 @@ func (r GetV1AuthMagicVerifyResponse) StatusCode() int {
 type PostV1AuthMagicVerifyResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
 	JSON429      *map[string]string
@@ -5802,7 +6613,7 @@ func (r PostV1AuthMfaTotpStartResponse) StatusCode() int {
 type PostV1AuthMfaVerifyResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
 	JSON429      *map[string]string
@@ -5824,10 +6635,33 @@ func (r PostV1AuthMfaVerifyResponse) StatusCode() int {
 	return 0
 }
 
+type PostV1AuthPasswordChangeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PostV1AuthPasswordChangeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostV1AuthPasswordChangeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostV1AuthPasswordLoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON202      *ControllerMfaChallengeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
@@ -5899,7 +6733,7 @@ func (r PostV1AuthPasswordResetRequestResponse) StatusCode() int {
 type PostV1AuthPasswordSignupResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON201      *ControllerTokensResp
+	JSON201      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON429      *map[string]string
 }
@@ -5920,10 +6754,33 @@ func (r PostV1AuthPasswordSignupResponse) StatusCode() int {
 	return 0
 }
 
+type PatchV1AuthProfileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchV1AuthProfileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchV1AuthProfileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostV1AuthRefreshResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
 	JSON429      *map[string]string
@@ -6014,7 +6871,7 @@ func (r PostV1AuthSessionsIdRevokeResponse) StatusCode() int {
 type GetV1AuthSsoProviderCallbackResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerTokensResp
+	JSON200      *ControllerAuthExchangeResp
 	JSON400      *map[string]string
 	JSON401      *map[string]string
 }
@@ -6077,15 +6934,18 @@ func (r GetV1AuthSsoProviderStartResponse) StatusCode() int {
 	return 0
 }
 
-type GetV1AuthTenantsResponse struct {
+type GetV1SsoSpInfoResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControllerAuthTenantListResp
+	JSON200      *ControllerSpInfoResponse
 	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+	JSON500      *map[string]string
 }
 
 // Status returns HTTPResponse.Status
-func (r GetV1AuthTenantsResponse) Status() string {
+func (r GetV1SsoSpInfoResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -6093,7 +6953,7 @@ func (r GetV1AuthTenantsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetV1AuthTenantsResponse) StatusCode() int {
+func (r GetV1SsoSpInfoResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6145,6 +7005,15 @@ func (r PutV1TenantsIdSettingsResponse) StatusCode() int {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
+}
+
+// GetWellKnownOauthAuthorizationServerWithResponse request returning *GetWellKnownOauthAuthorizationServerResponse
+func (c *ClientWithResponses) GetWellKnownOauthAuthorizationServerWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetWellKnownOauthAuthorizationServerResponse, error) {
+	rsp, err := c.GetWellKnownOauthAuthorizationServer(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWellKnownOauthAuthorizationServerResponse(rsp)
 }
 
 // GetTenantsWithResponse request returning *GetTenantsResponse
@@ -6511,6 +7380,24 @@ func (c *ClientWithResponses) PostV1AuthAdminUsersIdUnblockWithResponse(ctx cont
 	return ParsePostV1AuthAdminUsersIdUnblockResponse(rsp)
 }
 
+// PostV1AuthAdminUsersIdUnverifyEmailWithResponse request returning *PostV1AuthAdminUsersIdUnverifyEmailResponse
+func (c *ClientWithResponses) PostV1AuthAdminUsersIdUnverifyEmailWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthAdminUsersIdUnverifyEmailResponse, error) {
+	rsp, err := c.PostV1AuthAdminUsersIdUnverifyEmail(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1AuthAdminUsersIdUnverifyEmailResponse(rsp)
+}
+
+// PostV1AuthAdminUsersIdVerifyEmailWithResponse request returning *PostV1AuthAdminUsersIdVerifyEmailResponse
+func (c *ClientWithResponses) PostV1AuthAdminUsersIdVerifyEmailWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostV1AuthAdminUsersIdVerifyEmailResponse, error) {
+	rsp, err := c.PostV1AuthAdminUsersIdVerifyEmail(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1AuthAdminUsersIdVerifyEmailResponse(rsp)
+}
+
 // PostV1AuthAuthorizeWithBodyWithResponse request with arbitrary body returning *PostV1AuthAuthorizeResponse
 func (c *ClientWithResponses) PostV1AuthAuthorizeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthAuthorizeResponse, error) {
 	rsp, err := c.PostV1AuthAuthorizeWithBody(ctx, contentType, body, reqEditors...)
@@ -6560,6 +7447,15 @@ func (c *ClientWithResponses) PostV1AuthIntrospectWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParsePostV1AuthIntrospectResponse(rsp)
+}
+
+// GetV1AuthLoginOptionsWithResponse request returning *GetV1AuthLoginOptionsResponse
+func (c *ClientWithResponses) GetV1AuthLoginOptionsWithResponse(ctx context.Context, params *GetV1AuthLoginOptionsParams, reqEditors ...RequestEditorFn) (*GetV1AuthLoginOptionsResponse, error) {
+	rsp, err := c.GetV1AuthLoginOptions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV1AuthLoginOptionsResponse(rsp)
 }
 
 // PostV1AuthLogoutWithBodyWithResponse request with arbitrary body returning *PostV1AuthLogoutResponse
@@ -6631,8 +7527,8 @@ func (c *ClientWithResponses) PostV1AuthMagicVerifyWithResponse(ctx context.Cont
 }
 
 // GetV1AuthMeWithResponse request returning *GetV1AuthMeResponse
-func (c *ClientWithResponses) GetV1AuthMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetV1AuthMeResponse, error) {
-	rsp, err := c.GetV1AuthMe(ctx, reqEditors...)
+func (c *ClientWithResponses) GetV1AuthMeWithResponse(ctx context.Context, params *GetV1AuthMeParams, reqEditors ...RequestEditorFn) (*GetV1AuthMeResponse, error) {
+	rsp, err := c.GetV1AuthMe(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6718,33 +7614,50 @@ func (c *ClientWithResponses) PostV1AuthMfaTotpStartWithResponse(ctx context.Con
 }
 
 // PostV1AuthMfaVerifyWithBodyWithResponse request with arbitrary body returning *PostV1AuthMfaVerifyResponse
-func (c *ClientWithResponses) PostV1AuthMfaVerifyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error) {
-	rsp, err := c.PostV1AuthMfaVerifyWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthMfaVerifyWithBodyWithResponse(ctx context.Context, params *PostV1AuthMfaVerifyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error) {
+	rsp, err := c.PostV1AuthMfaVerifyWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthMfaVerifyResponse(rsp)
 }
 
-func (c *ClientWithResponses) PostV1AuthMfaVerifyWithResponse(ctx context.Context, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error) {
-	rsp, err := c.PostV1AuthMfaVerify(ctx, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthMfaVerifyWithResponse(ctx context.Context, params *PostV1AuthMfaVerifyParams, body PostV1AuthMfaVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthMfaVerifyResponse, error) {
+	rsp, err := c.PostV1AuthMfaVerify(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthMfaVerifyResponse(rsp)
+}
+
+// PostV1AuthPasswordChangeWithBodyWithResponse request with arbitrary body returning *PostV1AuthPasswordChangeResponse
+func (c *ClientWithResponses) PostV1AuthPasswordChangeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordChangeResponse, error) {
+	rsp, err := c.PostV1AuthPasswordChangeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1AuthPasswordChangeResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostV1AuthPasswordChangeWithResponse(ctx context.Context, body PostV1AuthPasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordChangeResponse, error) {
+	rsp, err := c.PostV1AuthPasswordChange(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1AuthPasswordChangeResponse(rsp)
 }
 
 // PostV1AuthPasswordLoginWithBodyWithResponse request with arbitrary body returning *PostV1AuthPasswordLoginResponse
-func (c *ClientWithResponses) PostV1AuthPasswordLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error) {
-	rsp, err := c.PostV1AuthPasswordLoginWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthPasswordLoginWithBodyWithResponse(ctx context.Context, params *PostV1AuthPasswordLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error) {
+	rsp, err := c.PostV1AuthPasswordLoginWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthPasswordLoginResponse(rsp)
 }
 
-func (c *ClientWithResponses) PostV1AuthPasswordLoginWithResponse(ctx context.Context, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error) {
-	rsp, err := c.PostV1AuthPasswordLogin(ctx, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthPasswordLoginWithResponse(ctx context.Context, params *PostV1AuthPasswordLoginParams, body PostV1AuthPasswordLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordLoginResponse, error) {
+	rsp, err := c.PostV1AuthPasswordLogin(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6786,33 +7699,50 @@ func (c *ClientWithResponses) PostV1AuthPasswordResetRequestWithResponse(ctx con
 }
 
 // PostV1AuthPasswordSignupWithBodyWithResponse request with arbitrary body returning *PostV1AuthPasswordSignupResponse
-func (c *ClientWithResponses) PostV1AuthPasswordSignupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error) {
-	rsp, err := c.PostV1AuthPasswordSignupWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthPasswordSignupWithBodyWithResponse(ctx context.Context, params *PostV1AuthPasswordSignupParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error) {
+	rsp, err := c.PostV1AuthPasswordSignupWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthPasswordSignupResponse(rsp)
 }
 
-func (c *ClientWithResponses) PostV1AuthPasswordSignupWithResponse(ctx context.Context, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error) {
-	rsp, err := c.PostV1AuthPasswordSignup(ctx, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthPasswordSignupWithResponse(ctx context.Context, params *PostV1AuthPasswordSignupParams, body PostV1AuthPasswordSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthPasswordSignupResponse, error) {
+	rsp, err := c.PostV1AuthPasswordSignup(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthPasswordSignupResponse(rsp)
+}
+
+// PatchV1AuthProfileWithBodyWithResponse request with arbitrary body returning *PatchV1AuthProfileResponse
+func (c *ClientWithResponses) PatchV1AuthProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchV1AuthProfileResponse, error) {
+	rsp, err := c.PatchV1AuthProfileWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchV1AuthProfileResponse(rsp)
+}
+
+func (c *ClientWithResponses) PatchV1AuthProfileWithResponse(ctx context.Context, body PatchV1AuthProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchV1AuthProfileResponse, error) {
+	rsp, err := c.PatchV1AuthProfile(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchV1AuthProfileResponse(rsp)
 }
 
 // PostV1AuthRefreshWithBodyWithResponse request with arbitrary body returning *PostV1AuthRefreshResponse
-func (c *ClientWithResponses) PostV1AuthRefreshWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error) {
-	rsp, err := c.PostV1AuthRefreshWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthRefreshWithBodyWithResponse(ctx context.Context, params *PostV1AuthRefreshParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error) {
+	rsp, err := c.PostV1AuthRefreshWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostV1AuthRefreshResponse(rsp)
 }
 
-func (c *ClientWithResponses) PostV1AuthRefreshWithResponse(ctx context.Context, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error) {
-	rsp, err := c.PostV1AuthRefresh(ctx, body, reqEditors...)
+func (c *ClientWithResponses) PostV1AuthRefreshWithResponse(ctx context.Context, params *PostV1AuthRefreshParams, body PostV1AuthRefreshJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1AuthRefreshResponse, error) {
+	rsp, err := c.PostV1AuthRefresh(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6855,8 +7785,8 @@ func (c *ClientWithResponses) PostV1AuthSessionsIdRevokeWithResponse(ctx context
 }
 
 // GetV1AuthSsoProviderCallbackWithResponse request returning *GetV1AuthSsoProviderCallbackResponse
-func (c *ClientWithResponses) GetV1AuthSsoProviderCallbackWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderCallbackResponse, error) {
-	rsp, err := c.GetV1AuthSsoProviderCallback(ctx, provider, reqEditors...)
+func (c *ClientWithResponses) GetV1AuthSsoProviderCallbackWithResponse(ctx context.Context, provider string, params *GetV1AuthSsoProviderCallbackParams, reqEditors ...RequestEditorFn) (*GetV1AuthSsoProviderCallbackResponse, error) {
+	rsp, err := c.GetV1AuthSsoProviderCallback(ctx, provider, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6881,13 +7811,13 @@ func (c *ClientWithResponses) GetV1AuthSsoProviderStartWithResponse(ctx context.
 	return ParseGetV1AuthSsoProviderStartResponse(rsp)
 }
 
-// GetV1AuthTenantsWithResponse request returning *GetV1AuthTenantsResponse
-func (c *ClientWithResponses) GetV1AuthTenantsWithResponse(ctx context.Context, params *GetV1AuthTenantsParams, reqEditors ...RequestEditorFn) (*GetV1AuthTenantsResponse, error) {
-	rsp, err := c.GetV1AuthTenants(ctx, params, reqEditors...)
+// GetV1SsoSpInfoWithResponse request returning *GetV1SsoSpInfoResponse
+func (c *ClientWithResponses) GetV1SsoSpInfoWithResponse(ctx context.Context, params *GetV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*GetV1SsoSpInfoResponse, error) {
+	rsp, err := c.GetV1SsoSpInfo(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetV1AuthTenantsResponse(rsp)
+	return ParseGetV1SsoSpInfoResponse(rsp)
 }
 
 // GetV1TenantsIdSettingsWithResponse request returning *GetV1TenantsIdSettingsResponse
@@ -6914,6 +7844,32 @@ func (c *ClientWithResponses) PutV1TenantsIdSettingsWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParsePutV1TenantsIdSettingsResponse(rsp)
+}
+
+// ParseGetWellKnownOauthAuthorizationServerResponse parses an HTTP response from a GetWellKnownOauthAuthorizationServerWithResponse call
+func ParseGetWellKnownOauthAuthorizationServerResponse(rsp *http.Response) (*GetWellKnownOauthAuthorizationServerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWellKnownOauthAuthorizationServerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControllerOauth2MetadataResp
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseGetTenantsResponse parses an HTTP response from a GetTenantsWithResponse call
@@ -7732,6 +8688,38 @@ func ParsePostV1AuthAdminUsersIdUnblockResponse(rsp *http.Response) (*PostV1Auth
 	return response, nil
 }
 
+// ParsePostV1AuthAdminUsersIdUnverifyEmailResponse parses an HTTP response from a PostV1AuthAdminUsersIdUnverifyEmailWithResponse call
+func ParsePostV1AuthAdminUsersIdUnverifyEmailResponse(rsp *http.Response) (*PostV1AuthAdminUsersIdUnverifyEmailResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostV1AuthAdminUsersIdUnverifyEmailResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostV1AuthAdminUsersIdVerifyEmailResponse parses an HTTP response from a PostV1AuthAdminUsersIdVerifyEmailWithResponse call
+func ParsePostV1AuthAdminUsersIdVerifyEmailResponse(rsp *http.Response) (*PostV1AuthAdminUsersIdVerifyEmailResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostV1AuthAdminUsersIdVerifyEmailResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParsePostV1AuthAuthorizeResponse parses an HTTP response from a PostV1AuthAuthorizeWithResponse call
 func ParsePostV1AuthAuthorizeResponse(rsp *http.Response) (*PostV1AuthAuthorizeResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -7787,7 +8775,7 @@ func ParsePostV1AuthEmailDiscoverResponse(rsp *http.Response) (*PostV1AuthEmailD
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerEmailDiscoveryResp
+		var dest ControllerEmailDiscoveryResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -7859,6 +8847,46 @@ func ParsePostV1AuthIntrospectResponse(rsp *http.Response) (*PostV1AuthIntrospec
 	return response, nil
 }
 
+// ParseGetV1AuthLoginOptionsResponse parses an HTTP response from a GetV1AuthLoginOptionsWithResponse call
+func ParseGetV1AuthLoginOptionsResponse(rsp *http.Response) (*GetV1AuthLoginOptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV1AuthLoginOptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControllerLoginOptionsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostV1AuthLogoutResponse parses an HTTP response from a PostV1AuthLogoutWithResponse call
 func ParsePostV1AuthLogoutResponse(rsp *http.Response) (*PostV1AuthLogoutResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -7906,7 +8934,7 @@ func ParseGetV1AuthMagicVerifyResponse(rsp *http.Response) (*GetV1AuthMagicVerif
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -7953,7 +8981,7 @@ func ParsePostV1AuthMagicVerifyResponse(rsp *http.Response) (*PostV1AuthMagicVer
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8239,7 +9267,7 @@ func ParsePostV1AuthMfaVerifyResponse(rsp *http.Response) (*PostV1AuthMfaVerifyR
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8271,6 +9299,39 @@ func ParsePostV1AuthMfaVerifyResponse(rsp *http.Response) (*PostV1AuthMfaVerifyR
 	return response, nil
 }
 
+// ParsePostV1AuthPasswordChangeResponse parses an HTTP response from a PostV1AuthPasswordChangeWithResponse call
+func ParsePostV1AuthPasswordChangeResponse(rsp *http.Response) (*PostV1AuthPasswordChangeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostV1AuthPasswordChangeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostV1AuthPasswordLoginResponse parses an HTTP response from a PostV1AuthPasswordLoginWithResponse call
 func ParsePostV1AuthPasswordLoginResponse(rsp *http.Response) (*PostV1AuthPasswordLoginResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8286,7 +9347,7 @@ func ParsePostV1AuthPasswordLoginResponse(rsp *http.Response) (*PostV1AuthPasswo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8406,7 +9467,7 @@ func ParsePostV1AuthPasswordSignupResponse(rsp *http.Response) (*PostV1AuthPassw
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8431,6 +9492,39 @@ func ParsePostV1AuthPasswordSignupResponse(rsp *http.Response) (*PostV1AuthPassw
 	return response, nil
 }
 
+// ParsePatchV1AuthProfileResponse parses an HTTP response from a PatchV1AuthProfileWithResponse call
+func ParsePatchV1AuthProfileResponse(rsp *http.Response) (*PatchV1AuthProfileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchV1AuthProfileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostV1AuthRefreshResponse parses an HTTP response from a PostV1AuthRefreshWithResponse call
 func ParsePostV1AuthRefreshResponse(rsp *http.Response) (*PostV1AuthRefreshResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8446,7 +9540,7 @@ func ParsePostV1AuthRefreshResponse(rsp *http.Response) (*PostV1AuthRefreshRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8565,7 +9659,7 @@ func ParseGetV1AuthSsoProviderCallbackResponse(rsp *http.Response) (*GetV1AuthSs
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerTokensResp
+		var dest ControllerAuthExchangeResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8622,22 +9716,22 @@ func ParseGetV1AuthSsoProviderStartResponse(rsp *http.Response) (*GetV1AuthSsoPr
 	return response, nil
 }
 
-// ParseGetV1AuthTenantsResponse parses an HTTP response from a GetV1AuthTenantsWithResponse call
-func ParseGetV1AuthTenantsResponse(rsp *http.Response) (*GetV1AuthTenantsResponse, error) {
+// ParseGetV1SsoSpInfoResponse parses an HTTP response from a GetV1SsoSpInfoWithResponse call
+func ParseGetV1SsoSpInfoResponse(rsp *http.Response) (*GetV1SsoSpInfoResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetV1AuthTenantsResponse{
+	response := &GetV1SsoSpInfoResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControllerAuthTenantListResp
+		var dest ControllerSpInfoResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8649,6 +9743,27 @@ func ParseGetV1AuthTenantsResponse(rsp *http.Response) (*GetV1AuthTenantsRespons
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 

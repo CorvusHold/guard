@@ -3,7 +3,7 @@ name: Release SDK (Go)
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'  # sdk/go/v0.1.0, sdk/go/v0.1.0-rc.1
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions:
   contents: write
@@ -71,13 +71,10 @@ jobs:
 
       - name: Trigger proxy indexing
         run: |
-          VERSION=${{ needs.preflight.outputs.version }}
+          VERSION=v${{ needs.preflight.outputs.version }}
           echo "Triggering proxy.golang.org indexing for $VERSION..."
-          
-          # Request the module version to trigger indexing
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://proxy.golang.org/github.com/corvus!hold/guard/sdk/go/@v/${VERSION}.info")
-          
+            "https://proxy.golang.org/github.com/corvus!hold/guard/sdk/go/@v/${VERSION}.info"\)
           if [[ "$HTTP_STATUS" == "200" ]]; then
             echo "Module version $VERSION is now available on proxy.golang.org"
           else
@@ -86,24 +83,6 @@ jobs:
 
       - name: Verify on pkg.go.dev
         run: |
-          VERSION=${{ needs.preflight.outputs.version }}
+          VERSION=v${{ needs.preflight.outputs.version }}
           echo "Module will be available at:"
           echo "https://pkg.go.dev/github.com/corvusHold/guard/sdk/go@${VERSION}"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "Go SDK ${{ needs.preflight.outputs.version }}"
-          body: |
-            ## Go SDK ${{ needs.preflight.outputs.version }}
-
-            Install via go get:
-            ```bash
-            go get github.com/corvusHold/guard/sdk/go@${{ needs.preflight.outputs.version }}
-            ```
-
-            [View on pkg.go.dev](https://pkg.go.dev/github.com/corvusHold/guard/sdk/go@${{ needs.preflight.outputs.version }})
-          draft: false
-          prerelease: ${{ needs.preflight.outputs.is_prerelease == 'true' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

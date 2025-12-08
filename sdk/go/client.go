@@ -172,7 +172,7 @@ func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
 
 // persistTokens saves tokens to the token store if present (bearer mode only).
 // In cookie mode, tokens are stored in HTTP-only cookies by the server.
-func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerTokensResp) error {
+func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerAuthExchangeResp) error {
 	if c.authMode == AuthModeCookie {
 		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally
 		return nil
@@ -195,11 +195,11 @@ func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerTokensResp
 
 // PasswordLogin performs email/password login. On 200 returns tokens; on 202 returns MFA challenge.
 // It also persists tokens into the configured TokenStore.
-func (c *GuardClient) PasswordLogin(ctx context.Context, req ControllerLoginReq) (*ControllerTokensResp, *ControllerMfaChallengeResp, error) {
+func (c *GuardClient) PasswordLogin(ctx context.Context, req ControllerLoginReq) (*ControllerAuthExchangeResp, *ControllerMfaChallengeResp, error) {
 	if req.TenantId == "" {
 		req.TenantId = c.tenantID
 	}
-	resp, err := c.inner.PostV1AuthPasswordLoginWithResponse(ctx, req)
+	resp, err := c.inner.PostV1AuthPasswordLoginWithResponse(ctx, nil, req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -214,12 +214,12 @@ func (c *GuardClient) PasswordLogin(ctx context.Context, req ControllerLoginReq)
 }
 
 // Refresh exchanges the stored refresh token for new tokens and persists them.
-func (c *GuardClient) Refresh(ctx context.Context) (*ControllerTokensResp, error) {
+func (c *GuardClient) Refresh(ctx context.Context) (*ControllerAuthExchangeResp, error) {
 	_, refresh := c.tokens.Get(ctx)
 	if refresh == "" {
 		return nil, errors.New("no refresh token available")
 	}
-	resp, err := c.inner.PostV1AuthRefreshWithResponse(ctx, ControllerRefreshReq{RefreshToken: refresh})
+	resp, err := c.inner.PostV1AuthRefreshWithResponse(ctx, nil, ControllerRefreshReq{RefreshToken: &refresh})
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (c *GuardClient) Logout(ctx context.Context) error {
 		// Nothing to revoke; clear any residual access token
 		return c.tokens.Clear(ctx)
 	}
-	_, err := c.inner.PostV1AuthLogoutWithResponse(ctx, ControllerRefreshReq{RefreshToken: refresh})
+	_, err := c.inner.PostV1AuthLogoutWithResponse(ctx, nil, ControllerLogoutReq{RefreshToken: &refresh})
 	// Regardless of HTTP outcome, clear local tokens to avoid stale state
 	_ = c.tokens.Clear(ctx)
 	return err
@@ -253,8 +253,8 @@ func (c *GuardClient) MagicSend(ctx context.Context, req ControllerMagicSendReq)
 }
 
 // MagicVerify verifies a magic token and persists returned tokens.
-func (c *GuardClient) MagicVerify(ctx context.Context, token string) (*ControllerTokensResp, error) {
-	resp, err := c.inner.PostV1AuthMagicVerifyWithResponse(ctx, nil, PostV1AuthMagicVerifyJSONRequestBody{Token: token})
+func (c *GuardClient) MagicVerify(ctx context.Context, token string) (*ControllerAuthExchangeResp, error) {
+	resp, err := c.inner.PostV1AuthMagicVerifyWithResponse(ctx, nil, ControllerMagicVerifyReq{Token: token})
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (c *GuardClient) SSOStart(ctx context.Context, provider string, params *Get
 
 // SSOCallback completes the SSO flow by exchanging the authorization code for tokens.
 // It appends the provided code and state as query parameters, persists tokens on success, and returns them.
-func (c *GuardClient) SSOCallback(ctx context.Context, provider, code, state string) (*ControllerTokensResp, error) {
+func (c *GuardClient) SSOCallback(ctx context.Context, provider, code, state string) (*ControllerAuthExchangeResp, error) {
 	editor := func(_ context.Context, req *http.Request) error {
 		q := req.URL.Query()
 		if code != "" {
@@ -541,7 +541,7 @@ func (c *GuardClient) MFATOTPDisable(ctx context.Context) error {
 }
 
 // MFAVerify submits an MFA challenge response and persists the returned tokens.
-func (c *GuardClient) MFAVerify(ctx context.Context, challengeToken string, method ControllerMfaVerifyReqMethod, code string) (*ControllerTokensResp, error) {
+func (c *GuardClient) MFAVerify(ctx context.Context, challengeToken string, method ControllerMfaVerifyReqMethod, code string) (*ControllerAuthExchangeResp, error) {
 	req := ControllerMfaVerifyReq{ChallengeToken: challengeToken, Method: method, Code: code}
 	resp, err := c.inner.PostV1AuthMfaVerifyWithResponse(ctx, req)
 	if err != nil {

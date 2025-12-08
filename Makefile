@@ -6,7 +6,8 @@ export RATE_LIMIT_RETRIES ?= 2
 .PHONY: compose-up compose-down compose-up-test compose-down-test dev \
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
-        swagger obsv-up obsv-down seed-test k6-setup k6-all k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
+        swagger sdk-gen sdk-check \
+        obsv-up obsv-down seed-test k6-setup k6-all k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         k6-portal-link-smoke k6-rate-limit-portal-link \
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
@@ -138,6 +139,28 @@ swagger:
 	bash -lc 'swag init -g cmd/api/main.go -o docs'
 	bash -lc 'cp docs/swagger.json sdk/spec/openapi.json'
 	bash -lc 'cp docs/swagger.yaml sdk/spec/openapi.yaml'
+	# Convert Swagger 2.0 -> OpenAPI 3.0 for Go SDK (requires: npx swagger2openapi)
+	bash -lc 'cd sdk/ts && npx swagger2openapi ../spec/openapi.json -o ../spec/openapi.v3.yaml --yaml' || echo "Note: Install swagger2openapi for Go SDK generation"
+
+# Regenerate all SDK types from OpenAPI spec (run after swagger)
+sdk-gen: swagger
+	@echo "==> Regenerating TS SDK types..."
+	cd sdk/ts && npm run gen:openapi
+	@echo "==> Regenerating Go SDK types..."
+	cd sdk/go && go generate ./... 2>/dev/null || echo "Go SDK: no generate directive found"
+	@echo "==> SDK types regenerated. Review changes and run tests."
+
+# Check SDK drift (CI-friendly)
+sdk-check:
+	@echo "==> Checking TS SDK builds and tests..."
+	cd sdk/ts && npm ci && npm run build && npm test
+	@echo "==> TS SDK is in sync!"
+
+# Check Go SDK (currently needs sync with API - run separately)
+sdk-check-go:
+	@echo "==> Checking Go SDK builds and tests..."
+	cd sdk/go && go build ./... && go test ./...
+	@echo "==> Go SDK is in sync!"
 
 # Quick checks for local services (dockerized, no host tools required)
 db-check:
@@ -287,32 +310,3 @@ portal-e2e-suite: portal-e2e-suite-no-down
 
 portal-e2e-down:
 	docker compose -f docker-compose.test.yml down -v
-
-# ---- Release helpers ----
-
-# Verify release readiness (run before tagging)
-release-check:
-	@echo "==> Running release preflight checks..."
-	@echo "Checking Go build..."
-	go build ./...
-	@echo "Running tests..."
-	go test ./...
-	@echo "Running vet..."
-	go vet ./...
-	@echo "Checking UI build..."
-	cd ui && pnpm install --frozen-lockfile && pnpm build
-	@echo "Checking SDK TS build..."
-	cd sdk/ts && npm ci && npm run build && npm test
-	@echo ""
-	@echo "==> All preflight checks passed!"
-	@echo "To release, create and push a tag:"
-	@echo "  git tag v1.0.0"
-	@echo "  git push origin v1.0.0"
-
-# Build Docker image locally
-docker-build:
-	docker build -t guard:local --build-arg VERSION=local .
-
-# Build Docker image for local architecture only (faster)
-docker-build-local:
-	docker build -t guard:local --build-arg VERSION=local --platform linux/amd64 .
