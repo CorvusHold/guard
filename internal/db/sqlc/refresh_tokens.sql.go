@@ -150,6 +150,39 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error 
 	return err
 }
 
+const revokeRefreshTokenByHash = `-- name: RevokeRefreshTokenByHash :execrows
+UPDATE refresh_tokens 
+SET revoked = TRUE 
+WHERE token_hash = $1 AND revoked = FALSE
+`
+
+func (q *Queries) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeRefreshTokenByHash, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeRefreshTokensByUserAndTenant = `-- name: RevokeRefreshTokensByUserAndTenant :execrows
+UPDATE refresh_tokens 
+SET revoked = TRUE 
+WHERE user_id = $1 AND tenant_id = $2 AND revoked = FALSE
+`
+
+type RevokeRefreshTokensByUserAndTenantParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) RevokeRefreshTokensByUserAndTenant(ctx context.Context, arg RevokeRefreshTokensByUserAndTenantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeRefreshTokensByUserAndTenant, arg.UserID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeTokenChain = `-- name: RevokeTokenChain :exec
 WITH RECURSIVE chain AS (
   SELECT rt.id, rt.parent_id FROM refresh_tokens rt WHERE rt.id = $1

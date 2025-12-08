@@ -800,31 +800,48 @@ export class GuardClient {
   }
 
   /**
-   * Parse SSO callback tokens from URL query parameters.
+   * Parse SSO callback tokens from URL query parameters or fragment.
    * Use this when Guard redirects to your app's callback URL with tokens.
    * 
-   * @param url - The full callback URL or just the query string (e.g., window.location.search)
-   * @returns Tokens if present in URL, null otherwise
+   * @param url - The full callback URL or just the query/fragment string (e.g., window.location.search or window.location.hash)
+   * @returns Tokens if access_token is present in URL, null otherwise
+   * 
+   * @remarks
+   * - access_token is required for a successful return
+   * - refresh_token is optional (some flows don't provide it)
+   * - When refresh_token is missing, token refresh via `refresh()` will not be available
    */
   parseSsoCallbackTokens(url: string): TokensResp | null {
     try {
-      // Handle both full URL and just query string
-      const searchParams = url.startsWith('?') || url.startsWith('http')
-        ? new URL(url.startsWith('?') ? `http://x${url}` : url).searchParams
-        : new URLSearchParams(url);
+      // Handle both full URL and just query/fragment string
+      let searchParams: URLSearchParams;
+      if (url.startsWith('#')) {
+        // Fragment-based tokens (e.g., from SSO redirect)
+        searchParams = new URLSearchParams(url.substring(1));
+      } else if (url.startsWith('?') || url.startsWith('http')) {
+        const parsed = new URL(url.startsWith('?') ? `http://x${url}` : url);
+        // Try fragment first (preferred for security), then query params
+        searchParams = parsed.hash
+          ? new URLSearchParams(parsed.hash.substring(1))
+          : parsed.searchParams;
+      } else {
+        searchParams = new URLSearchParams(url);
+      }
       
       const accessToken = searchParams.get('access_token');
       const refreshToken = searchParams.get('refresh_token');
       
-      if (accessToken && refreshToken) {
-        const tokens: TokensResp = {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        };
-        this.persistTokensFrom(tokens);
-        return tokens;
+      // Access token is required; refresh token is optional
+      if (!accessToken) {
+        return null;
       }
-      return null;
+      
+      const tokens: TokensResp = {
+        access_token: accessToken,
+        refresh_token: refreshToken ?? undefined,
+      };
+      this.persistTokensFrom(tokens);
+      return tokens;
     } catch {
       return null;
     }

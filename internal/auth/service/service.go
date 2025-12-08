@@ -444,6 +444,12 @@ func (s *Service) RevokeSession(ctx context.Context, userID uuid.UUID, tenantID 
 	return s.repo.RevokeTokenChain(ctx, sessionID)
 }
 
+// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+// Returns the number of tokens revoked.
+func (s *Service) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return s.repo.RevokeUserSessions(ctx, userID, tenantID)
+}
+
 // VerifyMFA validates a provided MFA factor against a challenge token and issues tokens on success.
 func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks domain.AccessTokens, err error) {
 	defer func() {
@@ -703,7 +709,16 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 	h := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(h[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, "password", nil); err != nil {
+	// Build metadata for the refresh token
+	createdVia := "login"
+	if parent != nil {
+		createdVia = "refresh"
+	}
+	metadata := &domain.RefreshTokenMetadata{
+		AuthMethod: "password",
+		CreatedVia: createdVia,
+	}
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, "password", nil, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil

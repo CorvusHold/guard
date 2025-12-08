@@ -184,7 +184,11 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 	rh := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(rh[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := m.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt, "magic_link", nil); err != nil {
+	metadata := &domain.RefreshTokenMetadata{
+		AuthMethod: "magic_link",
+		CreatedVia: "login",
+	}
+	if err := m.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt, "magic_link", nil, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	// Publish audit event for successful magic login

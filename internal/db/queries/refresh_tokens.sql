@@ -25,3 +25,13 @@ FROM refresh_tokens rt
 LEFT JOIN sso_providers sp ON rt.sso_provider_id = sp.id
 WHERE rt.user_id = $1 AND rt.tenant_id = $2
 ORDER BY rt.created_at DESC;
+
+-- name: RevokeRefreshTokensByUserAndTenant :execrows
+UPDATE refresh_tokens 
+SET revoked = TRUE 
+WHERE user_id = $1 AND tenant_id = $2 AND revoked = FALSE;
+
+-- name: RevokeRefreshTokenByHash :execrows
+UPDATE refresh_tokens 
+SET revoked = TRUE 
+WHERE token_hash = $1 AND revoked = FALSE;

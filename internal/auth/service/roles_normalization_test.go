@@ -28,7 +28,7 @@ func (f *fakeRepo) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) erro
 func (f *fakeRepo) AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error {
 	return nil
 }
-func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID) error {
+func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
 	return nil
 }
 func (f *fakeRepo) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
@@ -101,6 +101,12 @@ func (f *fakeRepo) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstN
 }
 func (f *fakeRepo) ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.RefreshToken, error) {
 	return nil, nil
+}
+func (f *fakeRepo) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (f *fakeRepo) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
+	return 0, nil
 }
 
 // --- RBAC v2 stubs to satisfy domain.Repository ---

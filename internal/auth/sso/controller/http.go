@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -179,6 +180,79 @@ func (h *SSOController) handleSSOInitiateV2(c echo.Context) error {
 	return c.Redirect(http.StatusFound, resp.AuthorizationURL)
 }
 
+// ============================================================================
+// Shared Callback Processing
+// ============================================================================
+
+// callbackRequest contains the parsed parameters for SSO callback processing.
+type callbackRequest struct {
+	TenantID     uuid.UUID
+	Slug         string
+	Code         string // OIDC authorization code
+	State        string // OIDC state parameter
+	SAMLResponse string // SAML response (POST binding)
+	RelayState   string // SAML relay state
+	IPAddress    string
+	UserAgent    string
+}
+
+// callbackResult contains the result of SSO callback processing.
+type callbackResult struct {
+	Tokens      *authdomain.AccessTokens
+	RedirectURL string
+	UserID      uuid.UUID
+	Email       string
+	IsNewUser   bool
+	Error       error
+}
+
+// processCallback handles the common SSO callback logic:
+// 1. Calls the SSO service to validate the callback and get user info
+// 2. Issues access and refresh tokens for the authenticated user
+// 3. Returns a structured result with tokens or error
+func (h *SSOController) processCallback(ctx context.Context, req callbackRequest) callbackResult {
+	resp, err := h.ssoService.HandleCallback(ctx, service.CallbackRequest{
+		TenantID:     req.TenantID,
+		ProviderSlug: req.Slug,
+		Code:         req.Code,
+		State:        req.State,
+		SAMLResponse: req.SAMLResponse,
+		RelayState:   req.RelayState,
+		IPAddress:    req.IPAddress,
+		UserAgent:    req.UserAgent,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Str("slug", req.Slug).Str("tenant_id", req.TenantID.String()).Msg("SSO callback failed")
+		return callbackResult{Error: err}
+	}
+
+	tokens, err := h.authService.IssueTokensForSSO(ctx, authdomain.SSOTokenInput{
+		UserID:    resp.User.ID,
+		TenantID:  req.TenantID,
+		UserAgent: req.UserAgent,
+		IP:        req.IPAddress,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to issue tokens for SSO user")
+		return callbackResult{Error: fmt.Errorf("failed to create session: %w", err)}
+	}
+
+	h.log.Info().
+		Str("user_id", resp.User.ID.String()).
+		Str("email", resp.Profile.Email).
+		Bool("is_new_user", resp.IsNewUser).
+		Str("redirect_url", resp.RedirectURL).
+		Msg("SSO login successful")
+
+	return callbackResult{
+		Tokens:      &tokens,
+		RedirectURL: resp.RedirectURL,
+		UserID:      resp.User.ID,
+		Email:       resp.Profile.Email,
+		IsNewUser:   resp.IsNewUser,
+	}
+}
+
 // handleSSOCallbackV2 handles the SSO callback using tenant-scoped URLs.
 // GET/POST /auth/sso/t/:tenant_id/:slug/callback
 func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
@@ -197,66 +271,44 @@ func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
 	}
 
-	// Extract callback parameters
-	code := c.QueryParam("code")
-	state := c.QueryParam("state")
-	samlResponse := c.FormValue("SAMLResponse")
-	relayState := c.FormValue("RelayState")
-
-	ipAddress := c.RealIP()
-	userAgent := c.Request().UserAgent()
-
-	resp, err := h.ssoService.HandleCallback(c.Request().Context(), service.CallbackRequest{
+	// Use shared callback processing
+	result := h.processCallback(c.Request().Context(), callbackRequest{
 		TenantID:     tenantID,
-		ProviderSlug: slug,
-		Code:         code,
-		State:        state,
-		SAMLResponse: samlResponse,
-		RelayState:   relayState,
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
+		Slug:         slug,
+		Code:         c.QueryParam("code"),
+		State:        c.QueryParam("state"),
+		SAMLResponse: c.FormValue("SAMLResponse"),
+		RelayState:   c.FormValue("RelayState"),
+		IPAddress:    c.RealIP(),
+		UserAgent:    c.Request().UserAgent(),
 	})
-	if err != nil {
-		h.log.Error().Err(err).Str("slug", slug).Str("tenant_id", tenantIDStr).Msg("SSO callback failed")
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+
+	if result.Error != nil {
+		// Check if it's a session creation error (internal) vs callback validation error (bad request)
+		if strings.Contains(result.Error.Error(), "failed to create session") {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		}
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": result.Error.Error()})
 	}
 
-	tokens, err := h.authService.IssueTokensForSSO(c.Request().Context(), authdomain.SSOTokenInput{
-		UserID:    resp.User.ID,
-		TenantID:  tenantID,
-		UserAgent: userAgent,
-		IP:        ipAddress,
-	})
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to issue tokens for SSO user")
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
-	}
-
-	h.log.Info().
-		Str("user_id", resp.User.ID.String()).
-		Str("email", resp.Profile.Email).
-		Bool("is_new_user", resp.IsNewUser).
-		Str("redirect_url", resp.RedirectURL).
-		Msg("SSO login successful")
-
-	// If a redirect URL was provided during initiation, redirect with tokens as query params
-	if resp.RedirectURL != "" {
-		redirectURL, err := url.Parse(resp.RedirectURL)
+	// If a redirect URL was provided during initiation, redirect with tokens in fragment
+	if result.RedirectURL != "" {
+		redirectURL, err := url.Parse(result.RedirectURL)
 		if err != nil {
-			h.log.Error().Err(err).Str("redirect_url", resp.RedirectURL).Msg("invalid redirect URL")
+			h.log.Error().Err(err).Str("redirect_url", result.RedirectURL).Msg("invalid redirect URL")
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect URL"})
 		}
 		// Use fragment to avoid token leakage in server logs/referrer headers
 		redirectURL.Fragment = fmt.Sprintf("access_token=%s&refresh_token=%s",
-			url.QueryEscape(tokens.AccessToken),
-			url.QueryEscape(tokens.RefreshToken))
+			url.QueryEscape(result.Tokens.AccessToken),
+			url.QueryEscape(result.Tokens.RefreshToken))
 		return c.Redirect(http.StatusFound, redirectURL.String())
 	}
 
 	// Fallback to JSON response if no redirect URL
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"access_token":  tokens.AccessToken,
-		"refresh_token": tokens.RefreshToken,
+		"access_token":  result.Tokens.AccessToken,
+		"refresh_token": result.Tokens.RefreshToken,
 	})
 }
 
@@ -314,10 +366,45 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 	samlResponse := c.FormValue("SAMLResponse")
 	relayState := c.FormValue("RelayState")
 
+	// Try to extract user context from bearer token or cookie for session revocation
+	var userID uuid.UUID
+	var hasUserContext bool
+	token := bearerToken(c)
+	if token == "" {
+		// Try cookie mode
+		if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
+			token = cookie.Value
+		}
+	}
+	if token != "" {
+		if introspection, introErr := h.authService.Introspect(c.Request().Context(), token); introErr == nil && introspection.Active {
+			userID = introspection.UserID
+			hasUserContext = true
+		}
+	}
+
+	// Revoke user sessions before acknowledging logout (Phase 1: Local Session Revocation)
+	if hasUserContext {
+		count, revokeErr := h.authService.RevokeUserSessions(c.Request().Context(), userID, tenantID)
+		if revokeErr != nil {
+			h.log.Error().Err(revokeErr).
+				Str("user_id", userID.String()).
+				Str("tenant_id", tenantIDStr).
+				Msg("failed to revoke sessions during SSO logout")
+			// Continue with logout flow even if revocation fails
+		} else {
+			h.log.Info().
+				Str("user_id", userID.String()).
+				Str("tenant_id", tenantIDStr).
+				Int64("sessions_revoked", count).
+				Msg("revoked user sessions during SSO logout")
+		}
+	}
+
 	// If this is an IdP-initiated logout (SAMLRequest present)
 	if samlRequest != "" {
 		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("processing IdP-initiated logout")
-		// TODO: Implement IdP-initiated SLO
+		// TODO: Implement IdP-initiated SLO (Phase 2)
 		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
 	}
 
@@ -339,7 +426,7 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 
 	// If IdP has SLO URL configured, redirect there
 	if config.IdPSLOUrl != "" {
-		// TODO: Generate proper SAML LogoutRequest
+		// TODO: Generate proper SAML LogoutRequest (Phase 2)
 		return c.Redirect(http.StatusFound, config.IdPSLOUrl)
 	}
 
@@ -411,41 +498,29 @@ func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
 		Str("tenant_id", tenantIDStr).
 		Msg("legacy SSO callback URL used, redirecting to V2 format")
 
-	// For POST requests (SAML), we can't redirect, so handle directly
+	// For POST requests (SAML), we can't redirect, so handle directly using shared callback processing
 	if c.Request().Method == http.MethodPost {
-		// Parse tenant_id and call V2 handler logic directly
 		tenantID, _ := uuid.Parse(tenantIDStr)
-		samlResponse := c.FormValue("SAMLResponse")
-		relayState := c.FormValue("RelayState")
-		ipAddress := c.RealIP()
-		userAgent := c.Request().UserAgent()
 
-		resp, err := h.ssoService.HandleCallback(c.Request().Context(), service.CallbackRequest{
+		result := h.processCallback(c.Request().Context(), callbackRequest{
 			TenantID:     tenantID,
-			ProviderSlug: slug,
-			SAMLResponse: samlResponse,
-			RelayState:   relayState,
-			IPAddress:    ipAddress,
-			UserAgent:    userAgent,
+			Slug:         slug,
+			SAMLResponse: c.FormValue("SAMLResponse"),
+			RelayState:   c.FormValue("RelayState"),
+			IPAddress:    c.RealIP(),
+			UserAgent:    c.Request().UserAgent(),
 		})
-		if err != nil {
-			h.log.Error().Err(err).Str("slug", slug).Msg("SSO callback failed (legacy)")
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		}
 
-		tokens, err := h.authService.IssueTokensForSSO(c.Request().Context(), authdomain.SSOTokenInput{
-			UserID:    resp.User.ID,
-			TenantID:  tenantID,
-			UserAgent: userAgent,
-			IP:        ipAddress,
-		})
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		if result.Error != nil {
+			if strings.Contains(result.Error.Error(), "failed to create session") {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+			}
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": result.Error.Error()})
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"access_token":  tokens.AccessToken,
-			"refresh_token": tokens.RefreshToken,
+			"access_token":  result.Tokens.AccessToken,
+			"refresh_token": result.Tokens.RefreshToken,
 		})
 	}
 

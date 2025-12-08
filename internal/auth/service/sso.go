@@ -363,7 +363,12 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 	rh := sha256.Sum256([]byte(rt))
 	hashB64 := base64.RawURLEncoding.EncodeToString(rh[:])
 	expiresAt := time.Now().Add(refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt, "sso", nil); err != nil {
+	metadata := &domain.RefreshTokenMetadata{
+		AuthMethod:  "sso",
+		SSOProvider: in.Provider,
+		CreatedVia:  "sso_callback",
+	}
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, nil, in.UserAgent, in.IP, expiresAt, "sso", nil, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	// Publish audit event

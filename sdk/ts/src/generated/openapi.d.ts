@@ -1976,6 +1976,174 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/admin/users/{id}/unverify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manually unverify user email (admin)
+         * @description Sets email_verified=false for a user. Requires admin role.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Too Many Requests */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/admin/users/{id}/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manually verify user email (admin)
+         * @description Sets email_verified=true for a user. Requires admin role.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Too Many Requests */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/authorize": {
         parameters: {
             query?: never;
@@ -2179,6 +2347,72 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/login-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get available login options
+         * @description Returns available authentication methods based on email/tenant context.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description User email for context-aware options */
+                    email?: string;
+                    /** @description Tenant ID to scope options */
+                    tenant_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.LoginOptionsResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3910,6 +4144,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sso/sp-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get SP Info for SAML configuration
+         * @description Returns the computed Service Provider URLs (Entity ID, ACS URL, SLO URL) needed to configure an Identity Provider
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Provider slug (e.g. 'okta', 'azure-ad') */
+                    slug: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.spInfoResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{id}/settings": {
         parameters: {
             query?: never;
@@ -4083,6 +4403,42 @@ export interface components {
             tenant_id?: string;
             tenant_name?: string;
             user_exists?: boolean;
+        };
+        "controller.LoginOptionsResponse": {
+            /** @description If email domain matches an SSO provider's configured domains */
+            domain_matched_sso?: components["schemas"]["controller.SSOProviderOption"];
+            magic_link_enabled?: boolean;
+            /** @description Authentication methods available */
+            password_enabled?: boolean;
+            /** @description Recommended/preferred login method based on context
+             *     Values: "sso", "password", "magic_link", "social" */
+            preferred_method?: string;
+            /** @description Social login providers (tenant-wide or global) */
+            social_providers?: components["schemas"]["controller.SocialProviderOption"][];
+            /** @description SSO providers configured for this tenant */
+            sso_providers?: components["schemas"]["controller.SSOProviderOption"][];
+            /** @description If true, SSO is required for this domain/tenant (password disabled) */
+            sso_required?: boolean;
+            /** @description Tenant information (if discovered) */
+            tenant_id?: string;
+            tenant_name?: string;
+            /** @description If true, user exists and can use password login */
+            user_exists?: boolean;
+        };
+        "controller.SSOProviderOption": {
+            login_url?: string;
+            logo_url?: string;
+            name?: string;
+            /** @description "oidc", "saml" */
+            provider_type?: string;
+            slug?: string;
+        };
+        "controller.SocialProviderOption": {
+            login_url?: string;
+            logo_url?: string;
+            name?: string;
+            /** @description "google", "github", "microsoft", etc. */
+            provider?: string;
         };
         "controller.adminUpdateNamesReq": {
             first_name?: string;
@@ -4328,11 +4684,15 @@ export interface components {
             token_type: string;
         };
         "controller.sessionItem": {
+            auth_method?: string;
             created_at?: string;
             expires_at?: string;
             id?: string;
             ip?: string;
             revoked?: boolean;
+            sso_provider_id?: string;
+            sso_provider_name?: string;
+            sso_provider_slug?: string;
             user_agent?: string;
         };
         "controller.sessionsListResp": {
@@ -4359,6 +4719,15 @@ export interface components {
             last_name?: string;
             password: string;
             tenant_id: string;
+        };
+        "controller.spInfoResponse": {
+            acs_url?: string;
+            base_url?: string;
+            entity_id?: string;
+            login_url?: string;
+            metadata_url?: string;
+            slo_url?: string;
+            tenant_id?: string;
         };
         "controller.tenantResp": {
             created_at?: string;

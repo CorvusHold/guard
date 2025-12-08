@@ -100,6 +100,9 @@ type Service interface {
 	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
 	// RevokeSession revokes a specific session (refresh token) by ID for the given user and tenant.
 	RevokeSession(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, sessionID uuid.UUID) error
+	// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+	// Returns the number of tokens revoked.
+	RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error)
 
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
@@ -244,7 +247,7 @@ type Repository interface {
 	UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error
 	AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error
 
-	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID) error
+	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *RefreshTokenMetadata) error
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	RevokeTokenChain(ctx context.Context, id uuid.UUID) error
 
@@ -282,6 +285,12 @@ type Repository interface {
 	UpdateUserNames(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
 	// ListUserSessions lists refresh tokens (sessions) for a user within a tenant.
 	ListUserSessions(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]RefreshToken, error)
+	// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+	// Returns the number of tokens revoked.
+	RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error)
+	// RevokeRefreshTokenByHash revokes a specific refresh token by its hash.
+	// Returns the number of tokens revoked (0 or 1).
+	RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error)
 
 	// --- RBAC v2 ---
 	// Permissions
@@ -352,6 +361,17 @@ type Tenant struct {
 	UpdatedAt time.Time
 }
 
+// RefreshTokenMetadata contains additional context about how a refresh token was created.
+// This metadata is stored as JSON in the database and can be used for debugging,
+// auditing, and analytics purposes.
+type RefreshTokenMetadata struct {
+	AuthMethod    string `json:"auth_method,omitempty"`    // "password", "sso", "magic_link"
+	SSOProvider   string `json:"sso_provider,omitempty"`   // Provider slug when auth_method is "sso"
+	MFAVerified   bool   `json:"mfa_verified,omitempty"`   // Whether MFA was verified during authentication
+	CreatedVia    string `json:"created_via,omitempty"`    // "login", "refresh", "sso_callback"
+	ClientVersion string `json:"client_version,omitempty"` // SDK/client version from X-Guard-Client header
+}
+
 type RefreshToken struct {
 	ID              uuid.UUID
 	UserID          uuid.UUID
@@ -365,6 +385,7 @@ type RefreshToken struct {
 	SSOProviderID   *uuid.UUID // Set when auth_method is "sso"
 	SSOProviderName string     // Provider name (from join)
 	SSOProviderSlug string     // Provider slug (from join)
+	Metadata        *RefreshTokenMetadata
 }
 
 type MagicLink struct {

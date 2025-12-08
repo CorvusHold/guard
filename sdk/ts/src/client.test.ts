@@ -251,6 +251,92 @@ describe('GuardClient', () => {
     expect(hdrs.get('X-Portal-Token')).toBe('raw-token');
   });
 
+  describe('parseSsoCallbackTokens', () => {
+    it('parses both tokens from query string', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?access_token=acc-1&refresh_token=ref-1');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-1');
+      expect(tokens?.refresh_token).toBe('ref-1');
+      expect(storage.getAccessToken()).toBe('acc-1');
+      expect(storage.getRefreshToken()).toBe('ref-1');
+    });
+
+    it('parses both tokens from fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('#access_token=acc-2&refresh_token=ref-2');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-2');
+      expect(tokens?.refresh_token).toBe('ref-2');
+      expect(storage.getAccessToken()).toBe('acc-2');
+      expect(storage.getRefreshToken()).toBe('ref-2');
+    });
+
+    it('parses both tokens from full URL with fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('https://app.example.com/callback#access_token=acc-3&refresh_token=ref-3');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-3');
+      expect(tokens?.refresh_token).toBe('ref-3');
+    });
+
+    it('parses access token only (refresh token optional)', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?access_token=acc-only');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-only');
+      expect(tokens?.refresh_token).toBeUndefined();
+      expect(storage.getAccessToken()).toBe('acc-only');
+      // Refresh token should be null (not set)
+      expect(storage.getRefreshToken()).toBeNull();
+    });
+
+    it('parses access token only from fragment', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('#access_token=acc-frag-only');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('acc-frag-only');
+      expect(tokens?.refresh_token).toBeUndefined();
+    });
+
+    it('returns null when access token is missing', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?refresh_token=ref-only');
+      expect(tokens).toBeNull();
+      expect(storage.getAccessToken()).toBeNull();
+    });
+
+    it('returns null when no tokens present', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('?foo=bar');
+      expect(tokens).toBeNull();
+    });
+
+    it('returns null for empty string', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      const tokens = client.parseSsoCallbackTokens('');
+      expect(tokens).toBeNull();
+    });
+
+    it('prefers fragment over query params in full URL', () => {
+      const storage = new InMemoryStorage();
+      const client = new GuardClient({ baseUrl, storage });
+      // URL has both query and fragment - fragment should win
+      const tokens = client.parseSsoCallbackTokens('https://app.example.com/callback?access_token=query-acc#access_token=frag-acc&refresh_token=frag-ref');
+      expect(tokens).not.toBeNull();
+      expect(tokens?.access_token).toBe('frag-acc');
+      expect(tokens?.refresh_token).toBe('frag-ref');
+    });
+  });
+
   describe('OAuth2 Discovery', () => {
     it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
       const storage = new InMemoryStorage();

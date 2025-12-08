@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -345,7 +346,7 @@ func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, 
 	return r.q.AddUserToTenant(ctx, db.AddUserToTenantParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
 }
 
-func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID) error {
+func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
 	pid := pgtype.UUID{}
 	if parentID != nil {
 		pid = toPgUUID(*parentID)
@@ -353,6 +354,12 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 	spid := pgtype.UUID{}
 	if ssoProviderID != nil {
 		spid = toPgUUID(*ssoProviderID)
+	}
+	metadataJSON := []byte("{}")
+	if metadata != nil {
+		if b, err := json.Marshal(metadata); err == nil {
+			metadataJSON = b
+		}
 	}
 	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
 		ID:            toPgUUID(id),
@@ -365,7 +372,7 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 		ExpiresAt:     toPgTime(expiresAt),
 		AuthMethod:    toPgText(authMethod),
 		SsoProviderID: spid,
-		Metadata:      []byte("{}"),
+		Metadata:      metadataJSON,
 	})
 }
 
@@ -884,4 +891,19 @@ func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantI
 		Email:        email,
 		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
 	})
+}
+
+// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
+// Returns the number of tokens revoked.
+func (r *SQLCRepository) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return r.q.RevokeRefreshTokensByUserAndTenant(ctx, db.RevokeRefreshTokensByUserAndTenantParams{
+		UserID:   toPgUUID(userID),
+		TenantID: toPgUUID(tenantID),
+	})
+}
+
+// RevokeRefreshTokenByHash revokes a specific refresh token by its hash.
+// Returns the number of tokens revoked (0 or 1).
+func (r *SQLCRepository) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
+	return r.q.RevokeRefreshTokenByHash(ctx, tokenHash)
 }
