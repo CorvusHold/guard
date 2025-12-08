@@ -227,10 +227,11 @@ func (h *SSOController) processCallback(ctx context.Context, req callbackRequest
 	}
 
 	tokens, err := h.authService.IssueTokensForSSO(ctx, authdomain.SSOTokenInput{
-		UserID:    resp.User.ID,
-		TenantID:  req.TenantID,
-		UserAgent: req.UserAgent,
-		IP:        req.IPAddress,
+		UserID:        resp.User.ID,
+		TenantID:      req.TenantID,
+		SSOProviderID: &resp.SSOProviderID,
+		UserAgent:     req.UserAgent,
+		IP:            req.IPAddress,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to issue tokens for SSO user")

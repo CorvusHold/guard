@@ -64,10 +64,11 @@ type RefreshInput struct {
 }
 
 type SSOTokenInput struct {
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	UserAgent string
-	IP        string
+	UserID        uuid.UUID
+	TenantID      uuid.UUID
+	SSOProviderID *uuid.UUID // Optional: SSO provider ID for session tracking
+	UserAgent     string
+	IP            string
 }
 
 type Service interface {

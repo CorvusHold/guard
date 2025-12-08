@@ -205,12 +205,13 @@ type CallbackRequest struct {
 
 // CallbackResponse contains the response for handling SSO callback.
 type CallbackResponse struct {
-	User         *authdomain.User
-	Profile      *domain.Profile
-	IsNewUser    bool
-	IdentityID   uuid.UUID
-	SessionToken string // Optional: generated session token
-	RedirectURL  string // The redirect URL from the initiate request (for app callback)
+	User          *authdomain.User
+	Profile       *domain.Profile
+	IsNewUser     bool
+	IdentityID    uuid.UUID
+	SSOProviderID uuid.UUID // The SSO provider ID used for authentication
+	SessionToken  string    // Optional: generated session token
+	RedirectURL   string    // The redirect URL from the initiate request (for app callback)
 }
 
 // HandleCallback handles the SSO callback from the identity provider.
@@ -525,11 +526,12 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 	}
 
 	return &CallbackResponse{
-		User:        linkResult.User,
-		Profile:     profile,
-		IsNewUser:   linkResult.IsNewUser,
-		IdentityID:  linkResult.IdentityID,
-		RedirectURL: redirectURL,
+		User:          linkResult.User,
+		Profile:       profile,
+		IsNewUser:     linkResult.IsNewUser,
+		IdentityID:    linkResult.IdentityID,
+		SSOProviderID: config.ID,
+		RedirectURL:   redirectURL,
 	}, nil
 }
 

@@ -58,7 +58,7 @@ func TestService_Introspect_UsesTenantSpecificSigningKey(t *testing.T) {
 	// Service that issues and introspects tokens using the tenant-specific signing key
 	s := &Service{repo: repo, cfg: cfg, settings: settingsWithTenantKey}
 
-	toks, err := s.issueTokens(ctx, userID, tenantID, "", "", nil, "password")
+	toks, err := s.issueTokens(ctx, userID, tenantID, "", "", nil, "password", nil)
 	if err != nil {
 		t.Fatalf("issueTokens error: %v", err)
 	}

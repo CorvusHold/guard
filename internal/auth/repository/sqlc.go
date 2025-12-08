@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 type SQLCRepository struct {
@@ -366,9 +367,9 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 	if metadata != nil {
 		if b, err := json.Marshal(metadata); err == nil {
 			metadataJSON = b
+		} else {
+			log.Ctx(ctx).Warn().Err(err).Str("user_id", userID.String()).Msg("failed to marshal refresh token metadata, using empty JSON")
 		}
-		// Note: Marshal errors are silently ignored; metadata is supplemental.
-		// The token will still be created with empty metadata {}.
 	}
 	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
 		ID:            toPgUUID(id),

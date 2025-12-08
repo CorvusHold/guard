@@ -518,7 +518,7 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 		return domain.AccessTokens{}, errors.New("unsupported method")
 	}
 	// Issue tokens and publish login success audit event
-	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil, "password")
+	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil, "password", nil)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -565,7 +565,7 @@ func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.Acc
 	if err := s.repo.AddUserToTenant(ctx, userID, in.TenantID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil, "password")
+	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil, "password", nil)
 }
 
 func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.AccessTokens, error) {
@@ -606,7 +606,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	if err := s.repo.UpdateUserLoginAt(ctx, ai.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil, "password")
+	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil, "password", nil)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -644,7 +644,7 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if rt.AuthMethod != "" {
 		originalAuthMethod = rt.AuthMethod
 	}
-	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod)
+	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod, rt.SSOProviderID)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -679,11 +679,11 @@ func (s *Service) IssueTokensForSSO(ctx context.Context, in domain.SSOTokenInput
 	if err := s.repo.UpdateUserLoginAt(ctx, in.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	// Issue tokens for SSO-authenticated users
-	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil, "sso")
+	// Issue tokens for SSO-authenticated users with provider ID for session tracking
+	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil, "sso", in.SSOProviderID)
 }
 
-func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string) (domain.AccessTokens, error) {
+func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string, ssoProviderID *uuid.UUID) (domain.AccessTokens, error) {
 	// Resolve settings with tenant override and env defaults
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
@@ -723,7 +723,7 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 		AuthMethod: authMethod,
 		CreatedVia: createdVia,
 	}
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, nil, metadata); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil

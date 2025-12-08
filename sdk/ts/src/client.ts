@@ -255,7 +255,7 @@ export interface LoginOptionsResp {
   password_enabled: boolean;
   magic_link_enabled: boolean;
   sso_providers: SsoProviderOption[];
-  preferred_method: 'sso' | 'password' | 'magic_link';
+  preferred_method: AuthMethod;
   sso_required: boolean;
   user_exists: boolean;
   tenant_id?: string;
@@ -768,7 +768,7 @@ export class GuardClient {
       let errorMsg = `SSO start failed with status ${res.status}`;
       try {
         const body = await res.json();
-        if (body?.error) errorMsg = body.error;
+        if (body?.error) errorMsg += `: ${body.error}`;
       } catch { /* ignore parse errors */ }
       throw new Error(`${errorMsg}${requestId ? ` (request: ${requestId})` : ''}`);
     }
@@ -832,8 +832,10 @@ export class GuardClient {
       if (url.startsWith('#')) {
         // Fragment-based tokens (e.g., from SSO redirect)
         searchParams = new URLSearchParams(url.substring(1));
-      } else if (url.startsWith('?') || url.startsWith('http')) {
-        const parsed = new URL(url.startsWith('?') ? `http://x${url}` : url);
+      } else if (url.startsWith('?') || url.startsWith('/') || url.startsWith('http')) {
+        // For query-only or path-only strings, prepend a dummy base URL for parsing
+        const needsBase = url.startsWith('?') || url.startsWith('/');
+        const parsed = new URL(needsBase ? `http://x${url}` : url);
         // Try fragment first (preferred for security), then query params
         searchParams = parsed.hash
           ? new URLSearchParams(parsed.hash.substring(1))
