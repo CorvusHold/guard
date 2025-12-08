@@ -5,16 +5,16 @@
   "license": "Apache-2.0",
   "author": {
     "name": "CorvusHold",
-    "url": "https://github.com/corvusHold"
+    "url": "https://github.com/CorvusHold"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/corvusHold/guard.git",
+    "url": "https://github.com/CorvusHold/guard",
     "directory": "sdk/ts"
   },
-  "homepage": "https://github.com/corvusHold/guard/tree/main/sdk/ts#readme",
+  "homepage": "https://github.com/CorvusHold/guard/tree/main/sdk/ts#readme",
   "bugs": {
-    "url": "https://github.com/corvusHold/guard/issues"
+    "url": "https://github.com/CorvusHold/guard/issues"
   },
   "type": "module",
   "main": "./dist/index.cjs",
