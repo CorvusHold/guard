@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -70,5 +71,34 @@ func TestService_RevokeUserSessions_ZeroSessions(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("expected count 0, got %d", count)
+	}
+}
+
+// fakeRepoWithRevokeError extends fakeRepo with error simulation
+type fakeRepoWithRevokeError struct {
+	fakeRepo
+	err error
+}
+
+func (f *fakeRepoWithRevokeError) RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error) {
+	return 0, f.err
+}
+
+func TestService_RevokeUserSessions_Error(t *testing.T) {
+	userID := uuid.New()
+	tenantID := uuid.New()
+	expectedErr := errors.New("db connection error")
+
+	repo := &fakeRepoWithRevokeError{
+		err: expectedErr,
+	}
+	svc := &Service{repo: repo}
+
+	_, err := svc.RevokeUserSessions(context.Background(), userID, tenantID)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if err.Error() != expectedErr.Error() {
+		t.Errorf("expected error %q, got %q", expectedErr.Error(), err.Error())
 	}
 }

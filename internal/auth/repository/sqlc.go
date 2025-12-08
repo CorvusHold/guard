@@ -360,6 +360,8 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 		if b, err := json.Marshal(metadata); err == nil {
 			metadataJSON = b
 		}
+		// Note: Marshal errors are silently ignored; metadata is supplemental.
+		// The token will still be created with empty metadata {}.
 	}
 	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
 		ID:            toPgUUID(id),

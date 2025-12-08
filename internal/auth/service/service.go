@@ -518,7 +518,7 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 		return domain.AccessTokens{}, errors.New("unsupported method")
 	}
 	// Issue tokens and publish login success audit event
-	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil)
+	toks, err = s.issueTokens(ctx, uid, tid, in.UserAgent, in.IP, nil, "password")
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -565,7 +565,7 @@ func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.Acc
 	if err := s.repo.AddUserToTenant(ctx, userID, in.TenantID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil)
+	return s.issueTokens(ctx, userID, in.TenantID, "", "", nil, "password")
 }
 
 func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.AccessTokens, error) {
@@ -606,7 +606,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	if err := s.repo.UpdateUserLoginAt(ctx, ai.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil)
+	toks, err := s.issueTokens(ctx, ai.UserID, ai.TenantID, in.UserAgent, in.IP, nil, "password")
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -639,7 +639,12 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if err := s.repo.RevokeTokenChain(ctx, rt.ID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID)
+	// Preserve the original auth method from the refresh token for the new token
+	originalAuthMethod := "password"
+	if rt.AuthMethod != "" {
+		originalAuthMethod = rt.AuthMethod
+	}
+	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -674,11 +679,11 @@ func (s *Service) IssueTokensForSSO(ctx context.Context, in domain.SSOTokenInput
 	if err := s.repo.UpdateUserLoginAt(ctx, in.UserID); err != nil {
 		return domain.AccessTokens{}, err
 	}
-	// Issue tokens
-	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil)
+	// Issue tokens for SSO-authenticated users
+	return s.issueTokens(ctx, in.UserID, in.TenantID, in.UserAgent, in.IP, nil, "sso")
 }
 
-func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID) (domain.AccessTokens, error) {
+func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string) (domain.AccessTokens, error) {
 	// Resolve settings with tenant override and env defaults
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
@@ -715,10 +720,10 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 		createdVia = "refresh"
 	}
 	metadata := &domain.RefreshTokenMetadata{
-		AuthMethod: "password",
+		AuthMethod: authMethod,
 		CreatedVia: createdVia,
 	}
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, "password", nil, metadata); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, nil, metadata); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
@@ -1075,9 +1080,13 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 		return err
 	}
 
-	// Build reset link (in production, this would be sent via email)
+	// TODO: Send reset link via email service
+	// Build reset link for email delivery
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
-	_ = baseURL + "/reset-password?token=" + token // resetLink would be sent via email service
+	resetLink := baseURL + "/reset-password?token=" + token
+	// In production, integrate with email service:
+	// if err := s.emailService.SendPasswordResetEmail(ctx, email, resetLink); err != nil { ... }
+	_ = resetLink // Suppress unused variable until email service integration
 
 	// Publish audit event
 	_ = s.pub.Publish(ctx, evdomain.Event{

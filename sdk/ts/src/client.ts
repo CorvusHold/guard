@@ -764,7 +764,7 @@ export class GuardClient {
         const body = await res.json();
         if (body?.error) errorMsg = body.error;
       } catch { /* ignore parse errors */ }
-      throw new Error(errorMsg);
+      throw new Error(`${errorMsg}${requestId ? ` (request: ${requestId})` : ''}`);
     }
     
     if (!loc) throw new Error('missing redirect location from SSO start');
