@@ -1,4 +1,12 @@
-# TypeScript SDK (Reference)
+<p align="center">
+  <img src="../../assets/brand/mascot.svg" alt="Guard" width="120" height="120" />
+</p>
+
+<h1 align="center">Guard</h1>
+
+<p align="center">
+  A production-ready, multi-tenant Central Authentication Service (CAS)
+</p>
 
 Reference SDK for Guard CAS targeting Node.js, browsers, and React Native.
 
@@ -84,6 +92,17 @@ const info = await client.introspect();
 // Magic link
 await client.magicSend({ tenant_id: 'tenant_123', email: 'a@example.com', redirect_url: 'https://app.example.com/callback' });
 const verified = await client.magicVerify({ token: 'magic_token_from_email' });
+
+// SSO callback token parsing (after redirect from IdP)
+// Works with query params, fragments, or full URLs
+const tokens = client.parseSsoCallbackTokens(window.location.hash); // or window.location.search
+if (tokens) {
+  console.log('Access token:', tokens.access_token);
+  // refresh_token may be undefined in some SSO flows
+  if (tokens.refresh_token) {
+    console.log('Refresh token available');
+  }
+}
 ```
 
 ## Browser

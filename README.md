@@ -1,6 +1,12 @@
-# Guard
+<p align="center">
+  <img src="assets/brand/mascot.svg" alt="Guard" width="120" height="120" />
+</p>
 
-**A production-ready, multi-tenant Central Authentication Service (CAS)**
+<h1 align="center">Guard</h1>
+
+<p align="center">
+  A production-ready, multi-tenant Central Authentication Service (CAS)
+</p>
 
 Guard is an identity and authentication platform that provides centralized authentication, authorization, and user management for multi-tenant applications. Built with Go and modern web standards, Guard offers OAuth 2.0 / OpenID Connect compliance, comprehensive security features, and flexible deployment options.
 
@@ -412,3 +418,12 @@ Guard is built on top of excellent open-source projects including:
 - [JWT](https://github.com/golang-jwt/jwt) - JSON Web Tokens
 - [Prometheus](https://prometheus.io/) - Monitoring and alerting
 
+---
+
+## License & Trademark
+
+Guard source code is licensed under the [Functional Source License (FSL-1.1-ALv2)](LICENSE.md).
+
+**Brand Assets**: The Guard mascot, logos, and brand imagery are **NOT open source**. They are the exclusive intellectual property of CorvusHold and are protected by copyright. See [TRADEMARK.md](TRADEMARK.md) for details.
+
+Forks may retain the brand assets with proper attribution. See [TRADEMARK.md](TRADEMARK.md) for requirements.
