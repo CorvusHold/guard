@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -105,23 +106,15 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 			// 1) Allow any/global match first
 			allowed := allowAny
 			if !allowed {
-				for _, o := range glob {
-					if origin == o {
-						allowed = true
-						break
-					}
-				}
+				allowed = matchCORSOrigin(origin, glob)
 			}
 
 			// 2) If not globally allowed, attempt per-tenant lookup
 			if !allowed {
 				if tid := resolveTenantID(c); tid != nil {
 					if val, err := s.GetString(c.Request().Context(), settdomain.KeyAppCORSAllowedOrigins, tid, ""); err == nil && val != "" {
-						for _, p := range strings.Split(val, ",") {
-							if strings.TrimSpace(p) == origin {
-								allowed = true
-								break
-							}
+						if matchCORSOrigin(origin, strings.Split(val, ",")) {
+							allowed = true
 						}
 					}
 				}
@@ -136,6 +129,68 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 			return next(c)
 		}
 	}
+}
+
+func matchCORSOrigin(origin string, patterns []string) bool {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return false
+	}
+
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if p == "*" {
+			return true
+		}
+		if origin == p {
+			return true
+		}
+		if matchesWildcardOrigin(origin, p) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchesWildcardOrigin(origin, pattern string) bool {
+	pu, err := url.Parse(pattern)
+	if err != nil {
+		return false
+	}
+	ou, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	if pu.Scheme == "" || ou.Scheme == "" || !strings.EqualFold(pu.Scheme, ou.Scheme) {
+		return false
+	}
+
+	phost := pu.Hostname()
+	if !strings.HasPrefix(phost, "*.") {
+		return false
+	}
+	suffix := strings.TrimPrefix(phost, "*.")
+	if suffix == "" {
+		return false
+	}
+
+	host := ou.Hostname()
+	if host == "" {
+		return false
+	}
+	host = strings.ToLower(host)
+	suffix = strings.ToLower(suffix)
+
+	if strings.HasSuffix(host, "."+suffix) {
+		return true
+	}
+
+	return false
 }
 
 // resolveTenantID tries to find a tenant UUID from query or route params.

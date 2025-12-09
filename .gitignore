@@ -37,3 +37,9 @@ guard-cli
 
 # E2E test env files (generated during test setup)
 .env.sso-portal-e2e
+
+dist
+
+# Helm chart dependencies (downloaded on helm dep update)
+ops/guard-stack/charts/*.tgz
+ops/guard-stack/Chart.lock
