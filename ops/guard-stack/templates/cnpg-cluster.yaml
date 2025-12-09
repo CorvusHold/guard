@@ -60,7 +60,7 @@ spec:
 
   # Monitoring
   monitoring:
-    enablePodMonitor: {{ .Values.monitoring.serviceMonitor.enabled }}
+    enablePodMonitor: {{ .Values.monitoring.podMonitor.enabled | default .Values.monitoring.serviceMonitor.enabled }}
 
   # Security
   enableSuperuserAccess: false

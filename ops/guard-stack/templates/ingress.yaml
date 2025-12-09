@@ -45,9 +45,7 @@ spec:
                 port:
                   number: {{ $.Values.ui.service.port }}
                 {{- else }}
-                name: {{ include "guard-stack.fullname" $ }}
-                port:
-                  number: 80
+                {{- fail (printf "invalid ingress path service %q: must be 'api' or 'ui'" .service) }}
                 {{- end }}
           {{- end }}
     {{- end }}

@@ -22,12 +22,8 @@ coverage.out
 test-results/
 playwright-report/
 
-# UI (built separately)
-ui/
+# UI and SDK (needed for dedicated images and builds)
 examples/
-
-# SDK (published separately)
-sdk/
 
 # Ops (monitoring configs)
 ops/

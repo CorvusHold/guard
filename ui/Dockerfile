@@ -3,16 +3,25 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json ./
-RUN npm ci
+# Copy UI manifest and lockfile
+COPY ui/package.json ui/pnpm-lock.yaml ./ui/
 
-# Copy source and build
-COPY . .
-RUN npm run build
+# Copy SDK sources for monorepo imports
+COPY sdk/ts ./sdk/ts
+
+WORKDIR /app/ui
+
+# Install dependencies
+RUN npm install -g pnpm@10 \
+    && pnpm install --frozen-lockfile
+
+# Copy UI source and build
+COPY ui .
+RUN pnpm build
 
 # Production stage
 FROM nginx:1.27-alpine
+RUN apk add --no-cache wget
 
 # Create non-root user
 RUN addgroup -g 101 -S nginx || true && \
@@ -69,7 +78,7 @@ server {
 EOF
 
 # Copy built assets
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/ui/dist /usr/share/nginx/html
 
 # Create directories for nginx to write to
 RUN mkdir -p /var/cache/nginx /var/run && \

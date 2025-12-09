@@ -186,11 +186,7 @@ func matchesWildcardOrigin(origin, pattern string) bool {
 	host = strings.ToLower(host)
 	suffix = strings.ToLower(suffix)
 
-	if strings.HasSuffix(host, "."+suffix) {
-		return true
-	}
-
-	return false
+	return strings.HasSuffix(host, "."+suffix)
 }
 
 // resolveTenantID tries to find a tenant UUID from query or route params.

@@ -77,7 +77,7 @@ DATABASE MIGRATIONS
 Migrations run automatically as a pre-install/pre-upgrade hook.
 {{- else }}
 To run migrations manually:
-  kubectl create job --from=cronjob/{{ include "guard-stack.fullname" . }}-migration migration-manual -n {{ .Release.Namespace }}
+  kubectl create job migration-manual-$(date +%s) --from=job/{{ include "guard-stack.fullname" . }}-migration -n {{ .Release.Namespace }}
 {{- end }}
 {{- end }}
 

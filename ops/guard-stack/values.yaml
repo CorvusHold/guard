@@ -311,8 +311,10 @@ config:
   # Force HTTPS redirects
   forceHttps: true
 
-  # CORS allowed origins (comma-separated)
+  # CORS allowed origins (comma-separated). Supports wildcard patterns like https://*.example.com
   corsAllowedOrigins: "https://guard.example.com"
+  # Example:
+  # corsAllowedOrigins: "https://guard.example.com,https://*.example.com"
 
   # Default authentication mode: bearer or cookie
   defaultAuthMode: bearer
@@ -530,6 +532,11 @@ monitoring:
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+
+  # PodMonitor for CloudNative-PG (database metrics)
+  podMonitor:
+    # When true, enables the CNPG PodMonitor. If unset, charts may default to serviceMonitor.enabled.
+    enabled: false
 
   # PrometheusRule for alerting
   prometheusRule:

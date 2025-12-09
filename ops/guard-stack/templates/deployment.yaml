@@ -189,7 +189,7 @@ spec:
                   key: brevo-api-key
             {{- end }}
             # WorkOS (optional)
-            {{- if .Values.secrets.workos.apiKey }}
+            {{- if and .Values.secrets.workos.apiKey .Values.secrets.workos.clientId .Values.secrets.workos.clientSecret }}
             - name: WORKOS_API_KEY
               valueFrom:
                 secretKeyRef:
