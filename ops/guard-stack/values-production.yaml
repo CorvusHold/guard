@@ -1,0 +1,328 @@
+# =============================================================================
+# Guard Stack - Production Values Example
+# =============================================================================
+# Copy this file and customize for your production environment.
+# IMPORTANT: Never commit secrets to version control!
+# =============================================================================
+
+global:
+  environment: production
+  domain: auth.yourdomain.com
+  tls:
+    enabled: true
+    certManager: true
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+
+# -----------------------------------------------------------------------------
+# API Configuration
+# -----------------------------------------------------------------------------
+api:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/corvushold/guard/api
+    tag: "1.0.0"  # Pin to specific version in production
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Spread pods across availability zones
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+          topologyKey: topology.kubernetes.io/zone
+
+# -----------------------------------------------------------------------------
+# UI Configuration
+# -----------------------------------------------------------------------------
+ui:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/corvushold/guard/ui
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  config:
+    apiBaseUrl: "https://auth.yourdomain.com"
+
+# -----------------------------------------------------------------------------
+# Ingress Configuration
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # Enable HSTS
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';";
+  hosts:
+    - host: auth.yourdomain.com
+      paths:
+        - path: /v1
+          pathType: Prefix
+          service: api
+        - path: /healthz
+          pathType: Exact
+          service: api
+        - path: /livez
+          pathType: Exact
+          service: api
+        - path: /readyz
+          pathType: Exact
+          service: api
+        - path: /metrics
+          pathType: Exact
+          service: api
+        - path: /swagger
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: ui
+  tls:
+    - secretName: guard-tls
+      hosts:
+        - auth.yourdomain.com
+
+# -----------------------------------------------------------------------------
+# Application Configuration
+# -----------------------------------------------------------------------------
+config:
+  appEnv: production
+  publicBaseUrl: "https://auth.yourdomain.com"
+  forceHttps: true
+  corsAllowedOrigins: "https://auth.yourdomain.com,https://app.yourdomain.com"
+  defaultAuthMode: bearer
+  cookieSameSite: strict
+  trustProxy: true
+  # Restrict metrics to internal network
+  metricsAllowCidrs: "10.0.0.0/8"
+
+  jwt:
+    accessTokenTtl: "15m"
+    refreshTokenTtl: "720h"
+    magicLinkTtl: "15m"
+
+  email:
+    provider: brevo  # or smtp
+    smtp:
+      host: smtp.yourdomain.com
+      port: 587
+      username: noreply@yourdomain.com
+      from: "Guard Auth <noreply@yourdomain.com>"
+    brevo:
+      sender: "Guard Auth <noreply@yourdomain.com>"
+
+# -----------------------------------------------------------------------------
+# Secrets Configuration
+# -----------------------------------------------------------------------------
+# IMPORTANT: Use external secret management in production!
+# Options:
+#   1. External Secrets Operator
+#   2. Sealed Secrets
+#   3. Vault
+#   4. Cloud provider secret managers (AWS Secrets Manager, GCP Secret Manager, etc.)
+#
+# Example with existing secret:
+# secrets:
+#   create: false
+#   existingSecret: guard-secrets
+#
+secrets:
+  create: true
+  # Generate with: openssl rand -base64 32
+  jwtSigningKey: ""  # REQUIRED - set via --set or external secret
+  databasePassword: ""  # REQUIRED
+  valkeyPassword: ""  # REQUIRED
+  smtpPassword: ""
+  brevoApiKey: ""
+  workos:
+    apiKey: ""
+    clientId: ""
+    clientSecret: ""
+
+# -----------------------------------------------------------------------------
+# Database Configuration (CloudNative-PG)
+# -----------------------------------------------------------------------------
+# We recommend CloudNative-PG for production PostgreSQL.
+# Install operator: kubectl apply -f https://github.com/cloudnative-pg/cloudnative-pg/releases/latest/download/cnpg-1.25.0.yaml
+database:
+  # If using external database (RDS, Cloud SQL), set host here
+  # host: "your-rds-instance.region.rds.amazonaws.com"
+  host: ""  # Leave empty when using CNPG
+  port: 5432
+  name: guard
+  user: guard
+  sslMode: require
+
+# Enable CloudNative-PG cluster creation
+cnpg:
+  enabled: true
+  name: guard-db
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  storage:
+    size: 20Gi
+    storageClass: ""  # Use default or specify your storage class
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "512MB"
+      effective_cache_size: "1536MB"
+      maintenance_work_mem: "128MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "16MB"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  affinity:
+    topologyKey: topology.kubernetes.io/zone
+  # Enable backups to S3
+  backup:
+    enabled: false  # Enable and configure for production
+    destinationPath: "s3://your-bucket/guard-db-backup"
+    s3CredentialsSecret: "guard-s3-credentials"
+    retentionPolicy: "30d"
+
+# -----------------------------------------------------------------------------
+# Valkey Configuration
+# -----------------------------------------------------------------------------
+# For production, you can use bundled Valkey with persistence
+# or external managed Redis-compatible service (ElastiCache, Memorystore)
+
+# Option 1: Bundled Valkey (simpler, good for most cases)
+valkey:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+# Option 2: External Valkey/Redis (uncomment and set valkey.enabled=false)
+# externalValkey:
+#   addr: "your-elasticache-cluster.region.cache.amazonaws.com:6379"
+#   db: 0
+#   tls: true
+
+# -----------------------------------------------------------------------------
+# Migration Configuration
+# -----------------------------------------------------------------------------
+migration:
+  enabled: true
+  hook: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  backoffLimit: 5
+
+# -----------------------------------------------------------------------------
+# Network Policies
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+  ingressNamespaces:
+    - ingress-nginx
+    - monitoring
+
+# -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+monitoring:
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    labels:
+      release: prometheus
+
+  prometheusRule:
+    enabled: true
+    namespace: monitoring
+    labels:
+      release: prometheus
+
+# -----------------------------------------------------------------------------
+# Service Account
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  automount: false
+  annotations:
+    # For AWS IRSA
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/guard-role
+    # For GCP Workload Identity
+    # iam.gke.io/gcp-service-account: guard@PROJECT_ID.iam.gserviceaccount.com

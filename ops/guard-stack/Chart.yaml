@@ -1,0 +1,38 @@
+apiVersion: v2
+name: guard-stack
+description: |
+  Production-ready Helm chart for Corvus Guard - a multi-tenant Central Authentication Service (CAS).
+  Includes API server and Admin UI. Recommends CloudNative-PG for PostgreSQL and Valkey for caching.
+
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+home: https://github.com/corvusHold/guard
+icon: https://github.com/corvusHold/guard/blob/main/assets/brand/mascot.svg
+sources:
+  - https://github.com/corvusHold/guard
+
+maintainers:
+  - name: Arnaud Leherpeur
+    email: arnaud@corvushold.com
+    url: https://github.com/martient
+
+keywords:
+  - authentication
+  - identity
+  - sso
+  - mfa
+  - multi-tenant
+  - cas
+
+# Dependencies - can be enabled/disabled via values
+# NOTE: For production, we recommend:
+#   - CloudNative-PG operator for PostgreSQL (install separately)
+#   - Valkey for caching (bundled option below or external)
+dependencies:
+  # Valkey - Redis-compatible cache (optional, for dev/simple deployments)
+  - name: valkey
+    version: "5.0.10"
+    repository: https://charts.bitnami.com/bitnami
+    condition: valkey.enabled

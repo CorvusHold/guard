@@ -1,0 +1,107 @@
+{{- if and .Values.api.enabled .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "guard-stack.api.fullname" . }}
+  {{- if .Values.monitoring.serviceMonitor.namespace }}
+  namespace: {{ .Values.monitoring.serviceMonitor.namespace }}
+  {{- end }}
+  labels:
+    {{- include "guard-stack.api.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "guard-stack.api.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}
+---
+{{- if and .Values.api.enabled .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "guard-stack.fullname" . }}
+  {{- if .Values.monitoring.prometheusRule.namespace }}
+  namespace: {{ .Values.monitoring.prometheusRule.namespace }}
+  {{- end }}
+  labels:
+    {{- include "guard-stack.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: guard.rules
+      rules:
+        # High error rate
+        - alert: GuardHighErrorRate
+          expr: |
+            sum(rate(guard_http_requests_total{status=~"5.."}[5m])) 
+            / sum(rate(guard_http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Guard API high error rate"
+            description: "Guard API error rate is above 5% (current: {{ "{{" }} $value | humanizePercentage {{ "}}" }})"
+        # High latency
+        - alert: GuardHighLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(guard_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Guard API high latency"
+            description: "Guard API 95th percentile latency is above 1s"
+        # Database connection issues
+        - alert: GuardDatabaseDown
+          expr: guard_db_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Guard database connection down"
+            description: "Guard cannot connect to PostgreSQL"
+        # Redis connection issues
+        - alert: GuardRedisDown
+          expr: guard_redis_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Guard Redis connection down"
+            description: "Guard cannot connect to Redis"
+        # High rate limit hits
+        - alert: GuardHighRateLimitHits
+          expr: |
+            sum(rate(guard_http_rate_limit_exceeded_total[5m])) > 100
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High rate limit hits"
+            description: "Guard is experiencing high rate limit hits"
+        # Pod restarts
+        - alert: GuardPodRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{container="api"}[1h]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Guard API pod restarting frequently"
+            description: "Guard API pod has restarted more than 3 times in the last hour"
+        {{- with .Values.monitoring.prometheusRule.rules }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

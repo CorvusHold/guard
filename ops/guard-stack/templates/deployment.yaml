@@ -1,0 +1,256 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "guard-stack.api.fullname" . }}
+  labels:
+    {{- include "guard-stack.api.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "guard-stack.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.api.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "guard-stack.api.labels" . | nindent 8 }}
+        {{- with .Values.api.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "guard-stack.serviceAccountName" . }}
+      {{- with .Values.api.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api
+          {{- with .Values.api.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: {{ include "guard-stack.api.image" . | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Application settings
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: APP_ENV
+            - name: APP_ADDR
+              value: ":8080"
+            - name: PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: PUBLIC_BASE_URL
+            - name: FORCE_HTTPS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: FORCE_HTTPS
+            - name: CORS_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: CORS_ALLOWED_ORIGINS
+            - name: DEFAULT_AUTH_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: DEFAULT_AUTH_MODE
+            - name: COOKIE_SAME_SITE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: COOKIE_SAME_SITE
+            - name: TRUST_PROXY
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: TRUST_PROXY
+            {{- if .Values.config.trustProxyCidrs }}
+            - name: TRUST_PROXY_CIDRS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: TRUST_PROXY_CIDRS
+            {{- end }}
+            {{- if .Values.config.metricsAllowCidrs }}
+            - name: METRICS_ALLOW_CIDRS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: METRICS_ALLOW_CIDRS
+            {{- end }}
+            # JWT settings
+            - name: ACCESS_TOKEN_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: ACCESS_TOKEN_TTL
+            - name: REFRESH_TOKEN_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: REFRESH_TOKEN_TTL
+            - name: MAGIC_LINK_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: MAGIC_LINK_TTL
+            - name: JWT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: jwt-signing-key
+            # Database
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: database-password
+            - name: DATABASE_URL
+              value: {{ include "guard-stack.databaseUrl" . | quote }}
+            # Valkey/Redis
+            - name: REDIS_ADDR
+              value: {{ include "guard-stack.valkeyAddr" . | quote }}
+            - name: REDIS_DB
+              value: {{ include "guard-stack.valkeyDB" . | quote }}
+            {{- if or .Values.valkey.enabled (and .Values.externalValkey.addr .Values.secrets.valkeyPassword) }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: valkey-password
+            {{- end }}
+            # Email settings
+            - name: EMAIL_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: EMAIL_PROVIDER
+            {{- if eq .Values.config.email.provider "smtp" }}
+            - name: SMTP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: SMTP_PORT
+            - name: SMTP_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: SMTP_USERNAME
+            - name: SMTP_FROM
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: SMTP_FROM
+            {{- if .Values.secrets.smtpPassword }}
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: smtp-password
+            {{- end }}
+            {{- end }}
+            {{- if eq .Values.config.email.provider "brevo" }}
+            - name: BREVO_SENDER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "guard-stack.configMapName" . }}
+                  key: BREVO_SENDER
+            - name: BREVO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: brevo-api-key
+            {{- end }}
+            # WorkOS (optional)
+            {{- if .Values.secrets.workos.apiKey }}
+            - name: WORKOS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: workos-api-key
+            - name: WORKOS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: workos-client-id
+            - name: WORKOS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: workos-client-secret
+            {{- end }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.api.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.api.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.api.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

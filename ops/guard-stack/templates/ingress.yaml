@@ -1,0 +1,54 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "guard-stack.fullname" . }}
+  labels:
+    {{- include "guard-stack.labels" . | nindent 4 }}
+  annotations:
+    {{- if and .Values.global.tls.enabled .Values.global.tls.certManager }}
+    cert-manager.io/cluster-issuer: {{ .Values.global.tls.issuerRef.name | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                {{- if eq .service "api" }}
+                name: {{ include "guard-stack.api.fullname" $ }}
+                port:
+                  number: {{ $.Values.api.service.port }}
+                {{- else if eq .service "ui" }}
+                name: {{ include "guard-stack.ui.fullname" $ }}
+                port:
+                  number: {{ $.Values.ui.service.port }}
+                {{- else }}
+                name: {{ include "guard-stack.fullname" $ }}
+                port:
+                  number: 80
+                {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}
