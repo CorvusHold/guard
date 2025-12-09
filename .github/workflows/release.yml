@@ -16,7 +16,8 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}/api
+  UI_IMAGE_NAME: ${{ github.repository }}/ui
 
 jobs:
   preflight:
@@ -210,6 +211,50 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  build-ui-docker:
+    name: Build UI Docker Image
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract UI metadata
+        id: meta-ui
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.UI_IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=raw,value=latest,enable=${{ needs.preflight.outputs.is_prerelease == 'false' }}
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ui
+          file: ./ui/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta-ui.outputs.tags }}
+          labels: ${{ steps.meta-ui.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   build-ui:
     name: Build UI
     runs-on: ubuntu-latest
@@ -254,7 +299,7 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [preflight, build-server, build-cli, build-docker, build-ui]
+    needs: [preflight, build-server, build-cli, build-docker, build-ui, build-ui-docker]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,0 +1,14 @@
+{{- if .Values.ui.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "guard-stack.ui.fullname" . }}-config
+  labels:
+    {{- include "guard-stack.ui.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "apiBaseUrl": {{ .Values.ui.config.apiBaseUrl | quote }},
+      "environment": {{ .Values.global.environment | quote }}
+    }
+{{- end }}

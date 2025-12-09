@@ -1,0 +1,39 @@
+{{- if and .Values.api.enabled .Values.api.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "guard-stack.api.fullname" . }}
+  labels:
+    {{- include "guard-stack.api.labels" . | nindent 4 }}
+spec:
+  {{- if and .Values.api.podDisruptionBudget.minAvailable .Values.api.podDisruptionBudget.maxUnavailable }}
+  {{- fail "Only one of api.podDisruptionBudget.minAvailable or api.podDisruptionBudget.maxUnavailable may be set" }}
+  {{- else if .Values.api.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.api.podDisruptionBudget.minAvailable }}
+  {{- else if .Values.api.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.api.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "guard-stack.api.selectorLabels" . | nindent 6 }}
+{{- end }}
+---
+{{- if and .Values.ui.enabled .Values.ui.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "guard-stack.ui.fullname" . }}
+  labels:
+    {{- include "guard-stack.ui.labels" . | nindent 4 }}
+spec:
+  {{- if and .Values.ui.podDisruptionBudget.minAvailable .Values.ui.podDisruptionBudget.maxUnavailable }}
+  {{- fail "Only one of ui.podDisruptionBudget.minAvailable or ui.podDisruptionBudget.maxUnavailable may be set" }}
+  {{- else if .Values.ui.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.ui.podDisruptionBudget.minAvailable }}
+  {{- else if .Values.ui.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.ui.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "guard-stack.ui.selectorLabels" . | nindent 6 }}
+{{- end }}

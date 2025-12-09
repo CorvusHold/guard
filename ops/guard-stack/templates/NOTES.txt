@@ -1,0 +1,144 @@
+================================================================================
+  ____                     _    ____  _             _    
+ / ___|_   _  __ _ _ __ __| |  / ___|| |_ __ _  ___| | __
+| |  _| | | |/ _` | '__/ _` |  \___ \| __/ _` |/ __| |/ /
+| |_| | |_| | (_| | | | (_| |   ___) | || (_| | (__|   < 
+ \____|\__,_|\__,_|_|  \__,_|  |____/ \__\__,_|\___|_|\_\
+                                                         
+================================================================================
+
+Thank you for installing {{ .Chart.Name }}!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Version: {{ .Chart.AppVersion }}
+
+================================================================================
+ACCESS YOUR APPLICATION
+================================================================================
+
+{{- if .Values.ingress.enabled }}
+Your Guard stack is accessible at:
+
+  API:     https://{{ (index .Values.ingress.hosts 0).host }}/v1
+  UI:      https://{{ (index .Values.ingress.hosts 0).host }}/
+  Swagger: https://{{ (index .Values.ingress.hosts 0).host }}/swagger/
+
+{{- else }}
+
+To access the Guard API, run:
+
+  kubectl port-forward svc/{{ include "guard-stack.api.fullname" . }} 8080:{{ .Values.api.service.port }} -n {{ .Release.Namespace }}
+
+Then visit: http://localhost:8080
+
+{{- if .Values.ui.enabled }}
+
+To access the Guard UI, run:
+
+  kubectl port-forward svc/{{ include "guard-stack.ui.fullname" . }} 3000:{{ .Values.ui.service.port }} -n {{ .Release.Namespace }}
+
+Then visit: http://localhost:3000
+{{- end }}
+{{- end }}
+
+================================================================================
+HEALTH CHECKS
+================================================================================
+
+Check API health:
+  kubectl exec -it deploy/{{ include "guard-stack.api.fullname" . }} -n {{ .Release.Namespace }} -- wget -qO- http://localhost:8080/healthz
+
+Check readiness:
+  kubectl exec -it deploy/{{ include "guard-stack.api.fullname" . }} -n {{ .Release.Namespace }} -- wget -qO- http://localhost:8080/readyz
+
+================================================================================
+USEFUL COMMANDS
+================================================================================
+
+View API logs:
+  kubectl logs -f deploy/{{ include "guard-stack.api.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if .Values.ui.enabled }}
+View UI logs:
+  kubectl logs -f deploy/{{ include "guard-stack.ui.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+View all pods:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+{{- if .Values.migration.enabled }}
+
+================================================================================
+DATABASE MIGRATIONS
+================================================================================
+
+{{- if .Values.migration.hook }}
+Migrations run automatically as a pre-install/pre-upgrade hook.
+{{- else }}
+To run migrations manually:
+  kubectl create job migration-manual-$(date +%s) --from=job/{{ include "guard-stack.fullname" . }}-migration -n {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+{{- if not .Values.secrets.jwtSigningKey }}
+⚠️  WARNING: No JWT signing key configured!
+    Generate one with: openssl rand -base64 32
+    Then set it in your values: secrets.jwtSigningKey
+{{- end }}
+
+{{- if not .Values.secrets.databasePassword }}
+⚠️  WARNING: No database password configured!
+    Set it in your values: secrets.databasePassword
+{{- end }}
+
+{{- if and .Values.valkey.enabled (not .Values.secrets.valkeyPassword) }}
+⚠️  WARNING: No Valkey password configured!
+    Set it in your values: secrets.valkeyPassword
+{{- end }}
+
+{{- if and (not .Values.database.host) (not .Values.cnpg.enabled) }}
+⚠️  WARNING: No database configured!
+    Either set database.host for external PostgreSQL
+    or enable cnpg.enabled for CloudNative-PG
+{{- end }}
+
+================================================================================
+DATABASE SETUP (CloudNative-PG)
+================================================================================
+
+{{- if .Values.cnpg.enabled }}
+CloudNative-PG cluster will be created: {{ .Values.cnpg.name }}
+
+Check cluster status:
+  kubectl get cluster {{ .Values.cnpg.name }} -n {{ .Release.Namespace }}
+
+Get connection details:
+  kubectl get secret {{ .Values.cnpg.name }}-app -n {{ .Release.Namespace }} -o jsonpath='{.data.uri}' | base64 -d
+{{- else }}
+CloudNative-PG is not enabled. Make sure you have:
+  1. Installed CloudNative-PG operator: https://cloudnative-pg.io
+  2. Created a Cluster resource
+  3. Set database.host to point to your cluster's -rw service
+{{- end }}
+
+================================================================================
+PRODUCTION CHECKLIST
+================================================================================
+
+For production deployments, ensure you have:
+  ✓ Installed CloudNative-PG operator
+  ✓ Configured TLS certificates (cert-manager)
+  ✓ Set strong passwords for all services
+  ✓ Configured proper resource limits
+  ✓ Enabled network policies
+  ✓ Set up monitoring and alerting
+  ✓ Configured database backups
+
+Documentation: https://github.com/corvusHold/guard
+
+================================================================================

@@ -1,0 +1,604 @@
+# =============================================================================
+# Guard Stack - Production Helm Values
+# =============================================================================
+# Corvus Guard: Multi-tenant Central Authentication Service
+# Documentation: https://github.com/corvusHold/guard
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global Settings
+# -----------------------------------------------------------------------------
+global:
+  # Environment: development, staging, production
+  environment: production
+  # Domain for the Guard stack
+  domain: guard.example.com
+  # TLS configuration
+  tls:
+    enabled: true
+    # Use cert-manager for automatic certificate management
+    certManager: true
+    # Existing secret name (if not using cert-manager)
+    existingSecret: ""
+    # cert-manager issuer
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+
+# Override names
+nameOverride: ""
+fullnameOverride: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+# - name: regcred
+
+# -----------------------------------------------------------------------------
+# Guard API Server
+# -----------------------------------------------------------------------------
+api:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/corvushold/guard/api
+    tag: ""  # Defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+
+  # Resource limits and requests
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  # Health probes
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  startupProbe:
+    httpGet:
+      path: /livez
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+
+  # Autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    # maxUnavailable: 1
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules - prefer spreading across zones
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: api
+            topologyKey: topology.kubernetes.io/zone
+
+  # Additional pod annotations
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+  # Additional pod labels
+  podLabels: {}
+
+  # Extra environment variables
+  extraEnv: []
+  # - name: EXTRA_VAR
+  #   value: "value"
+
+  # Extra environment variables from secrets/configmaps
+  extraEnvFrom: []
+  # - secretRef:
+  #     name: extra-secrets
+
+  # Additional volumes
+  extraVolumes: []
+
+  # Additional volume mounts
+  extraVolumeMounts: []
+
+# -----------------------------------------------------------------------------
+# Guard Admin UI
+# -----------------------------------------------------------------------------
+ui:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/corvushold/guard/ui
+    tag: ""  # Defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    fsGroup: 101
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  # Health probes
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 15
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  # Autoscaling
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Runtime configuration injected into the UI
+  config:
+    # API base URL (relative or absolute)
+    apiBaseUrl: "/api"
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+  # Additional pod annotations
+  podAnnotations: {}
+
+  # Additional pod labels
+  podLabels: {}
+
+# -----------------------------------------------------------------------------
+# Ingress Configuration
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # Rate limiting at ingress level
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+  hosts:
+    - host: guard.example.com
+      paths:
+        # API routes
+        - path: /v1
+          pathType: Prefix
+          service: api
+        - path: /healthz
+          pathType: Exact
+          service: api
+        - path: /livez
+          pathType: Exact
+          service: api
+        - path: /readyz
+          pathType: Exact
+          service: api
+        - path: /metrics
+          pathType: Exact
+          service: api
+        - path: /swagger
+          pathType: Prefix
+          service: api
+        # UI routes (catch-all)
+        - path: /
+          pathType: Prefix
+          service: ui
+  tls:
+    - secretName: guard-tls
+      hosts:
+        - guard.example.com
+
+# -----------------------------------------------------------------------------
+# Guard Configuration
+# -----------------------------------------------------------------------------
+config:
+  # Application environment
+  appEnv: production
+
+  # Public base URL (used for magic links, callbacks, etc.)
+  publicBaseUrl: "https://guard.example.com"
+
+  # Force HTTPS redirects
+  forceHttps: true
+
+  # CORS allowed origins (comma-separated). Supports wildcard patterns like https://*.example.com
+  corsAllowedOrigins: "https://guard.example.com"
+  # Example:
+  # corsAllowedOrigins: "https://guard.example.com,https://*.example.com"
+
+  # Default authentication mode: bearer or cookie
+  defaultAuthMode: bearer
+
+  # Cookie same-site policy: lax, strict, none
+  cookieSameSite: lax
+
+  # Trust proxy headers (set true when behind load balancer/CDN)
+  trustProxy: true
+
+  # Trusted proxy CIDRs (optional, comma-separated)
+  trustProxyCidrs: ""
+
+  # Metrics endpoint CIDR allowlist (optional)
+  metricsAllowCidrs: ""
+
+  # JWT configuration
+  jwt:
+    # Access token TTL (Go duration format)
+    accessTokenTtl: "15m"
+    # Refresh token TTL
+    refreshTokenTtl: "720h"  # 30 days
+    # Magic link TTL
+    magicLinkTtl: "15m"
+
+  # Email configuration
+  email:
+    # Provider: smtp or brevo
+    provider: smtp
+    # SMTP settings
+    smtp:
+      host: ""
+      port: 587
+      username: ""
+      from: "no-reply@example.com"
+    # Brevo settings (if provider=brevo)
+    brevo:
+      sender: ""
+
+# -----------------------------------------------------------------------------
+# Secrets Configuration
+# -----------------------------------------------------------------------------
+secrets:
+  # Create secrets from values (set to false to use existing secrets)
+  create: true
+
+  # Existing secret name (if create=false)
+  existingSecret: ""
+
+  # JWT signing key (REQUIRED - generate with: openssl rand -base64 32)
+  jwtSigningKey: ""
+
+  # Database password (for CNPG or external PostgreSQL)
+  databasePassword: ""
+
+  # Valkey password (if using bundled Valkey)
+  valkeyPassword: ""
+
+  # SMTP password
+  smtpPassword: ""
+
+  # Brevo API key
+  brevoApiKey: ""
+
+  # WorkOS credentials (optional)
+  workos:
+    apiKey: ""
+    clientId: ""
+    clientSecret: ""
+
+# -----------------------------------------------------------------------------
+# Database Configuration (CloudNative-PG recommended)
+# -----------------------------------------------------------------------------
+# We recommend using CloudNative-PG operator for production PostgreSQL.
+# Install CNPG operator: https://cloudnative-pg.io/documentation/current/installation_upgrade/
+#
+# Example CNPG Cluster (create separately):
+#   apiVersion: postgresql.cnpg.io/v1
+#   kind: Cluster
+#   metadata:
+#     name: guard-db
+#   spec:
+#     instances: 3
+#     storage:
+#       size: 10Gi
+#     postgresql:
+#       parameters:
+#         max_connections: "200"
+#
+database:
+  # Database host (CNPG service: <cluster-name>-rw.<namespace>.svc)
+  host: ""
+
+  # Database port
+  port: 5432
+
+  # Database name
+  name: guard
+
+  # Database user
+  user: guard
+
+  # SSL mode: disable, require, verify-ca, verify-full
+  sslMode: require
+
+# -----------------------------------------------------------------------------
+# Valkey Configuration (Redis-compatible)
+# -----------------------------------------------------------------------------
+valkey:
+  # Enable bundled Valkey (disable for external/production)
+  enabled: true
+
+  architecture: standalone
+
+  auth:
+    enabled: true
+    # Password is set via secrets.valkeyPassword
+    existingSecret: ""
+    existingSecretPasswordKey: valkey-password
+
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  replica:
+    replicaCount: 0
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+
+# External Valkey/Redis configuration (when valkey.enabled=false)
+externalValkey:
+  # External Valkey/Redis address (host:port)
+  addr: ""
+
+  # Database number
+  db: 0
+
+  # Use TLS
+  tls: false
+
+# -----------------------------------------------------------------------------
+# Database Migration Job
+# -----------------------------------------------------------------------------
+migration:
+  enabled: true
+
+  # Run migrations as a pre-install/pre-upgrade hook
+  hook: true
+
+  # Image (uses API image by default)
+  image: {}
+
+  # Resources for migration job
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # Backoff limit for job retries
+  backoffLimit: 3
+
+  # TTL for completed jobs (seconds)
+  ttlSecondsAfterFinished: 300
+
+# -----------------------------------------------------------------------------
+# Service Account
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+# -----------------------------------------------------------------------------
+# Network Policies
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+
+  # Allow ingress from these namespaces
+  ingressNamespaces:
+    - ingress-nginx
+    - monitoring
+
+  # Additional ingress rules
+  additionalIngress: []
+
+  # Additional egress rules
+  additionalEgress: []
+
+# -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+monitoring:
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+  # PodMonitor for CloudNative-PG (database metrics)
+  podMonitor:
+    # When true, enables the CNPG PodMonitor. If unset, charts may default to serviceMonitor.enabled.
+    enabled: false
+
+  # PrometheusRule for alerting
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    # Alert rules
+    rules: []
+
+# -----------------------------------------------------------------------------
+# CloudNative-PG Cluster (Optional - create separately or via this chart)
+# -----------------------------------------------------------------------------
+# Set cnpg.enabled=true to create a CNPG Cluster resource.
+# Requires CloudNative-PG operator to be installed in the cluster.
+cnpg:
+  enabled: false
+
+  # Cluster name
+  name: guard-db
+
+  # Number of instances (1 for dev, 3+ for production)
+  instances: 3
+
+  # Storage configuration
+  storage:
+    size: 10Gi
+    storageClass: ""
+
+  # PostgreSQL version
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+
+  # PostgreSQL parameters
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      maintenance_work_mem: "64MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "8MB"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+
+  # Backup configuration (optional)
+  backup:
+    enabled: false
+    # S3 backup destination
+    destinationPath: ""
+    # Secret containing S3 credentials
+    s3CredentialsSecret: ""
+    # Retention policy
+    retentionPolicy: "30d"
+
+  # Resources
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+  # Affinity for spreading across zones
+  affinity:
+    topologyKey: topology.kubernetes.io/zone
