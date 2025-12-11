@@ -24,6 +24,10 @@ playwright-report/
 
 # UI and SDK (needed for dedicated images and builds)
 examples/
+ui/node_modules/
+ui/dist/
+sdk/ts/node_modules/
+sdk/ts/dist/
 
 # Ops (monitoring configs)
 ops/

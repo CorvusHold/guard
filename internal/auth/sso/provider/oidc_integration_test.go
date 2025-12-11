@@ -191,6 +191,7 @@ func (m *mockOIDCServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		"family_name":    "User",
 		"name":           "Test User",
 		"picture":        "https://example.com/photo.jpg",
+		"locale":         "en-US",
 		"groups":         []string{"users", "developers"},
 	})
 	if err != nil {

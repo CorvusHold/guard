@@ -224,7 +224,10 @@ func main() {
 	}
 
 	log := logger.New(cfg.AppEnv)
-	log.Info().Str("addr", cfg.AppAddr).Msg("starting api server")
+
+	if handleCLICommand(os.Args[1:]) {
+		return
+	}
 
 	// Init Postgres
 	pgCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
@@ -399,9 +402,11 @@ func main() {
 		defer cancel()
 
 		if err := pgPool.Ping(ctx); err != nil {
+			log.Error().Err(err).Msg("readyz: postgres ping failed")
 			return c.NoContent(http.StatusServiceUnavailable)
 		}
 		if _, err := redisClient.Ping(ctx).Result(); err != nil {
+			log.Error().Err(err).Msg("readyz: redis ping failed")
 			return c.NoContent(http.StatusServiceUnavailable)
 		}
 		return c.NoContent(http.StatusOK)
@@ -464,6 +469,7 @@ func main() {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Start server
+	log.Info().Str("addr", cfg.AppAddr).Msg("starting api server")
 	go func() {
 		if err := e.Start(cfg.AppAddr); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("server error")
