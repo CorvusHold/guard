@@ -369,8 +369,8 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 
 	t.Logf("Created provider: %s", providerConfig.ID)
 
-	// 3. Initiate SSO flow (GET /auth/sso/test-oidc/login)
-	initiateURL := fmt.Sprintf("/auth/sso/test-oidc/login?tenant_id=%s&redirect_url=https://app.example.com/dashboard", env.tenantID)
+	// 3. Initiate SSO flow (GET /auth/sso/t/:tenant_id/test-oidc/login)
+	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/login?redirect_url=https://app.example.com/dashboard", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -430,32 +430,45 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 	t.Logf("Authorization code: %s", code)
 
 	// 6. Call SSO callback endpoint with code and state
-	callbackEndpoint := fmt.Sprintf("/auth/sso/test-oidc/callback?tenant_id=%s&code=%s&state=%s",
+	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=%s&state=%s",
 		env.tenantID, code, stateToken)
 	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
 	callbackRec := httptest.NewRecorder()
 
 	env.echo.ServeHTTP(callbackRec, callbackReq)
 
-	if callbackRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 from callback, got %d: %s", callbackRec.Code, callbackRec.Body.String())
+	// With redirect_url set during initiation, the callback should redirect to the app
+	if callbackRec.Code != http.StatusFound {
+		t.Fatalf("expected 302 from callback, got %d: %s", callbackRec.Code, callbackRec.Body.String())
 	}
 
-	// 7. Verify response contains tokens
-	var callbackResp map[string]interface{}
-	if err := json.Unmarshal(callbackRec.Body.Bytes(), &callbackResp); err != nil {
-		t.Fatalf("failed to parse callback response: %v", err)
+	location := callbackRec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected Location header from callback redirect")
 	}
 
-	accessToken, ok := callbackResp["access_token"].(string)
-	if !ok || accessToken == "" {
-		t.Fatalf("expected access_token in response, got: %+v", callbackResp)
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse callback redirect location: %v", err)
 	}
 
-	refreshToken, ok := callbackResp["refresh_token"].(string)
-	if !ok || refreshToken == "" {
-		t.Fatalf("expected refresh_token in response, got: %+v", callbackResp)
+	// Tokens are returned in the URL fragment to avoid leaking them in logs/referrers
+	fragmentValues, err := url.ParseQuery(redirectURL.Fragment)
+	if err != nil {
+		t.Fatalf("failed to parse fragment query: %v", err)
 	}
+
+	accessTokens := fragmentValues["access_token"]
+	if len(accessTokens) == 0 || accessTokens[0] == "" {
+		t.Fatalf("expected access_token in redirect fragment, got: %v", fragmentValues)
+	}
+	accessToken := accessTokens[0]
+
+	refreshTokens := fragmentValues["refresh_token"]
+	if len(refreshTokens) == 0 || refreshTokens[0] == "" {
+		t.Fatalf("expected refresh_token in redirect fragment, got: %v", fragmentValues)
+	}
+	refreshToken := refreshTokens[0]
 
 	t.Logf("Access token: %s...", accessToken[:20])
 	t.Logf("Refresh token: %s...", refreshToken[:20])
@@ -537,8 +550,8 @@ func TestSSOFlow_InvalidState(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	// Try callback with invalid state
-	callbackURL := fmt.Sprintf("/auth/sso/test-oidc/callback?tenant_id=%s&code=test-code&state=invalid-state",
+	// Try callback with invalid state using tenant-scoped callback URL
+	callbackURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=test-code&state=invalid-state",
 		env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, callbackURL, nil)
 	rec := httptest.NewRecorder()
@@ -592,8 +605,8 @@ func TestSSOFlow_DisabledProvider(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	// Try to initiate SSO with disabled provider
-	initiateURL := fmt.Sprintf("/auth/sso/disabled-oidc/login?tenant_id=%s", env.tenantID)
+	// Try to initiate SSO with disabled provider using tenant-scoped URL
+	initiateURL := fmt.Sprintf("/auth/sso/t/%s/disabled-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -646,8 +659,8 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	// Initiate flow
-	initiateURL := fmt.Sprintf("/auth/sso/no-signup-oidc/login?tenant_id=%s", env.tenantID)
+	// Initiate flow using tenant-scoped URL
+	initiateURL := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -671,7 +684,7 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	code := parsedCallback.Query().Get("code")
 
 	// Try callback (should fail since user doesn't exist and signup is disabled)
-	callbackEndpoint := fmt.Sprintf("/auth/sso/no-signup-oidc/callback?tenant_id=%s&code=%s&state=%s",
+	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/callback?code=%s&state=%s",
 		env.tenantID, code, stateToken)
 	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
 	callbackRec := httptest.NewRecorder()
@@ -735,8 +748,8 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 		t.Fatalf("failed to create SAML provider: %v", err)
 	}
 
-	// Test SAML metadata endpoint
-	metadataURL := fmt.Sprintf("/auth/sso/test-saml/metadata?tenant_id=%s", env.tenantID)
+	// Test SAML metadata endpoint using tenant-scoped URL
+	metadataURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/metadata", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, metadataURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -759,8 +772,8 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 
 	t.Log("✓ SAML metadata endpoint works")
 
-	// Test initiation
-	initiateURL := fmt.Sprintf("/auth/sso/test-saml/login?tenant_id=%s", env.tenantID)
+	// Test initiation using tenant-scoped URL
+	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/login", env.tenantID)
 	initReq := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	initRec := httptest.NewRecorder()
 

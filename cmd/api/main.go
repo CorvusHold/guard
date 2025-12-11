@@ -224,7 +224,6 @@ func main() {
 	}
 
 	log := logger.New(cfg.AppEnv)
-	log.Info().Str("addr", cfg.AppAddr).Msg("starting api server")
 
 	if handleCLICommand(os.Args[1:]) {
 		return
@@ -470,6 +469,7 @@ func main() {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Start server
+	log.Info().Str("addr", cfg.AppAddr).Msg("starting api server")
 	go func() {
 		if err := e.Start(cfg.AppAddr); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("server error")

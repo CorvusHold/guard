@@ -83,7 +83,9 @@ func realMigrateRunner(subcmd, databaseURL string) error {
 	}
 	defer db.Close()
 
-	goose.SetDialect("postgres")
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
+	}
 	const migrationsDir = "./migrations"
 
 	switch subcmd {
