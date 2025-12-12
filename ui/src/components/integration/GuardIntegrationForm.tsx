@@ -176,7 +176,7 @@ export default function GuardIntegrationForm({
   }
 
   const callbackUrl = config.baseUrl
-    ? `${config.baseUrl.replace(/\/$/, '')}/v1/auth/sso/callback`
+    ? `${config.baseUrl.replace(/\/$/, '')}/api/v1/auth/sso/callback`
     : ''
 
   return (

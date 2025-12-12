@@ -146,7 +146,7 @@ curl -X POST http://localhost:8080/tenants \
   -d '{"name": "my-company"}'
 
 # 2. Create admin user
-curl -X POST http://localhost:8080/v1/auth/password/signup \
+curl -X POST http://localhost:8080/api/v1/auth/password/signup \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -162,7 +162,7 @@ curl -X POST http://localhost:8080/v1/auth/password/signup \
 #### Password Login
 
 ```bash
-curl -X POST http://localhost:8080/v1/auth/password/login \
+curl -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -176,7 +176,7 @@ curl -X POST http://localhost:8080/v1/auth/password/login \
 Browser-based apps can ask Guard to manage access and refresh tokens as HTTP-only cookies instead of returning them in the JSON body:
 
 ```bash
-curl -X POST http://localhost:8080/v1/auth/password/login \
+curl -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -H "X-Auth-Mode: cookie" \
   -d '{
@@ -192,7 +192,7 @@ When `X-Auth-Mode: cookie` is present, Guard will:
 2. Return `{ "success": true }` in the HTTP body instead of the raw tokens.
 3. Accept future refresh/logout calls by reading the `guard_refresh_token` cookie (omit it from the JSON body).
 
-To refresh cookies, send `POST /v1/auth/refresh` with `X-Auth-Mode: cookie` and omit `refresh_token` from the JSON body. Guard reads `guard_refresh_token` from the cookie jar, rotates both cookies, and responds with `{ "success": true }` (tokens are delivered via cookies only). To terminate the session, call `POST /v1/auth/logout` with the same header and cookies; Guard revokes the refresh token, clears `guard_access_token`/`guard_refresh_token`, and returns HTTP 204 with an empty body.
+To refresh cookies, send `POST /api/v1/auth/refresh` with `X-Auth-Mode: cookie` and omit `refresh_token` from the JSON body. Guard reads `guard_refresh_token` from the cookie jar, rotates both cookies, and responds with `{ "success": true }` (tokens are delivered via cookies only). To terminate the session, call `POST /api/v1/auth/logout` with the same header and cookies; Guard revokes the refresh token, clears `guard_access_token`/`guard_refresh_token`, and returns HTTP 204 with an empty body.
 
 Remember to enable `credentials: 'include'` (or the equivalent in your HTTP client) and configure CORS to allow credentials if you are making cross-origin requests.
 
@@ -200,7 +200,7 @@ Remember to enable `credentials: 'include'` (or the equivalent in your HTTP clie
 
 ```bash
 # Send magic link
-curl -X POST http://localhost:8080/v1/auth/magic/send \
+curl -X POST http://localhost:8080/api/v1/auth/magic/send \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -208,7 +208,7 @@ curl -X POST http://localhost:8080/v1/auth/magic/send \
   }'
 
 # Verify magic link (from email)
-curl -X POST http://localhost:8080/v1/auth/magic/verify \
+curl -X POST http://localhost:8080/api/v1/auth/magic/verify \
   -H "Content-Type: application/json" \
   -d '{
     "token": "magic_token_from_email"
@@ -219,7 +219,7 @@ curl -X POST http://localhost:8080/v1/auth/magic/verify \
 
 ```bash
 # Start SSO authentication
-curl -i "http://localhost:8080/v1/auth/sso/google/start?tenant_id=550e8400-e29b-41d4-a716-446655440000"
+curl -i "http://localhost:8080/api/v1/auth/sso/google/start?tenant_id=550e8400-e29b-41d4-a716-446655440000"
 
 # Follow redirect to provider, complete authentication
 # User will be redirected back with tokens
@@ -230,7 +230,7 @@ curl -i "http://localhost:8080/v1/auth/sso/google/start?tenant_id=550e8400-e29b-
 Configure tenant settings via the API:
 
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/{tenant_id}/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/{tenant_id}/settings \
   -H "Authorization: Bearer {admin_token}" \
   -H "Content-Type: application/json" \
   -d '{

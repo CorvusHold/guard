@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "guard-stack.fullname" . }}-migration
+  name: {{ include "guard-stack.fullname" . }}-migration{{- if .Values.migration.hook }}-{{ .Release.Revision }}{{- end }}
   labels:
     {{- include "guard-stack.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
@@ -35,7 +35,6 @@ spec:
         runAsGroup: 1000
         fsGroup: 1000
       initContainers:
-        # Wait for database to be ready
         - name: wait-for-db
           image: busybox:1.36
           command: ['sh', '-c']
@@ -47,6 +46,23 @@ spec:
                 sleep 2
               done
               echo "PostgreSQL is ready!"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ['sh', '-c']
+          args:
+            - >
+              echo "Waiting for Valkey to be ready..." ;
+              until nc -z {{ printf "%s-valkey-primary" .Release.Name }} 6379; do
+                echo "Valkey is not ready yet..." ;
+                sleep 2 ;
+              done ;
+              echo "Valkey is ready!"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -72,6 +88,18 @@ spec:
                   key: database-password
             - name: DATABASE_URL
               value: {{ include "guard-stack.databaseUrl" . | quote }}
+            # Valkey/Redis configuration (match main API deployment)
+            - name: REDIS_ADDR
+              value: {{ include "guard-stack.valkeyAddr" . | quote }}
+            - name: REDIS_DB
+              value: {{ include "guard-stack.valkeyDB" . | quote }}
+            {{- if or .Values.valkey.enabled (and .Values.externalValkey.addr .Values.secrets.valkeyPassword) }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "guard-stack.secretName" . }}
+                  key: valkey-password
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

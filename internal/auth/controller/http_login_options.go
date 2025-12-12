@@ -69,7 +69,7 @@ type LoginOptionsResponse struct {
 // @Success      200  {object}  LoginOptionsResponse
 // @Failure      400  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
-// @Router       /v1/auth/login-options [get]
+// @Router       /api/v1/auth/login-options [get]
 func (h *Controller) getLoginOptions(c echo.Context) error {
 	email := c.QueryParam("email")
 	tenantIDStr := c.QueryParam("tenant_id")

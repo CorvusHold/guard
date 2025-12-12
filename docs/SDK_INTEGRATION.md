@@ -28,10 +28,10 @@ Guard implements [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth
 ```json
 {
   "issuer": "https://api.example.com",
-  "token_endpoint": "https://api.example.com/v1/auth/refresh",
-  "introspection_endpoint": "https://api.example.com/v1/auth/introspect",
-  "revocation_endpoint": "https://api.example.com/v1/auth/revoke",
-  "userinfo_endpoint": "https://api.example.com/v1/auth/me",
+  "token_endpoint": "https://api.example.com/api/v1/auth/refresh",
+  "introspection_endpoint": "https://api.example.com/api/v1/auth/introspect",
+  "revocation_endpoint": "https://api.example.com/api/v1/auth/revoke",
+  "userinfo_endpoint": "https://api.example.com/api/v1/auth/me",
   "response_types_supported": ["token"],
   "grant_types_supported": [
     "password",
@@ -696,7 +696,7 @@ async function verifyMagicLink(token: string) {
 ```typescript
 // Initiate SSO flow
 function initiateSSO(tenantId: string, provider: string, redirectUri: string) {
-  const ssoUrl = `https://your-guard-api.com/v1/auth/sso/${provider}/start?tenant_id=${tenantId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  const ssoUrl = `https://your-guard-api.com/api/v1/auth/sso/${provider}/start?tenant_id=${tenantId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
   window.location.href = ssoUrl;
 }
 

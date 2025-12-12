@@ -15,7 +15,7 @@ set -euo pipefail
 #   EMAIL             Admin email to seed/login (default: admin@example.com)
 #   PASSWORD          Admin password (default: Password123!)
 #   SMOKE_WRITE_ENV   Controls writes (default: 0)
-#                     0 => read-only: only calls /v1/auth/authorize and exits
+#                     0 => read-only: only calls /api/v1/auth/authorize and exits
 #                     1 => write-enabled: performs group/membership/ACL writes
 #   KEEP_TUPLE        When SMOKE_WRITE_ENV=1, keep the created ACL tuple (default: unset)
 #                     1 => skip deletion and final deny check
@@ -106,14 +106,14 @@ login_json() {
   headers_file=$(mktemp)
   body_file=$(mktemp)
   code=$(curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' \
-    -X POST "$BASE/v1/auth/password/login" -H 'Content-Type: application/json' --data-raw "$body")
+    -X POST "$BASE/api/v1/auth/password/login" -H 'Content-Type: application/json' --data-raw "$body")
   if [[ "$code" == "429" ]]; then
     retry_after=$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {gsub(/\r/,""); print $2; exit}' "$headers_file")
     echo "Login rate-limited (429). Waiting ${retry_after:-60}s then retrying..." >&2
     sleep "${retry_after:-60}"
     : > "$headers_file"; : > "$body_file"
     code=$(curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' \
-      -X POST "$BASE/v1/auth/password/login" -H 'Content-Type: application/json' --data-raw "$body")
+      -X POST "$BASE/api/v1/auth/password/login" -H 'Content-Type: application/json' --data-raw "$body")
   fi
   cat "$body_file"
   rm -f "$headers_file" "$body_file"
@@ -145,7 +145,7 @@ if [[ -z "$ACCESS_TOKEN" || "$ACCESS_TOKEN" == null ]]; then
 fi
 
 # /me
-ME_JSON=$(curl -sS "$BASE/v1/auth/me" -H "Authorization: Bearer $ACCESS_TOKEN")
+ME_JSON=$(curl -sS "$BASE/api/v1/auth/me" -H "Authorization: Bearer $ACCESS_TOKEN")
 USER_ID=$(parse_json_key id "$ME_JSON")
 if [[ -z "$USER_ID" || "$USER_ID" == null ]]; then
   echo "Failed to read user id: $ME_JSON" >&2; exit 1
@@ -156,7 +156,7 @@ echo "User ID: $USER_ID"
 # If writes are disabled, perform a read-only authorize call and exit
 if ! is_true "$SMOKE_WRITE_ENV"; then
   echo "SMOKE_WRITE_ENV disabled; skipping writes. Performing read-only authorization check."
-  AUTH_RO=$(curl -sS -X POST "$BASE/v1/auth/authorize" \
+  AUTH_RO=$(curl -sS -X POST "$BASE/api/v1/auth/authorize" \
     -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
     -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"self\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}")
   echo "Authorize (read-only) result: $AUTH_RO"
@@ -166,7 +166,7 @@ fi
 
 # Ensure group (idempotent)
 # Try to find existing group by name first
-LIST_JSON=$(curl -sS "$BASE/v1/auth/admin/fga/groups?tenant_id=$TENANT_ID" -H "Authorization: Bearer $ACCESS_TOKEN")
+LIST_JSON=$(curl -sS "$BASE/api/v1/auth/admin/fga/groups?tenant_id=$TENANT_ID" -H "Authorization: Bearer $ACCESS_TOKEN")
 if command -v jq >/dev/null 2>&1; then
   GROUP_ID=$(echo "$LIST_JSON" | jq -r '.groups[] | select(.name=="engineering") | .id' | head -n1)
 else
@@ -182,7 +182,7 @@ PY
   )
 fi
 if [[ -z "$GROUP_ID" || "$GROUP_ID" == null ]]; then
-  GRP_JSON=$(curl -sS -X POST "$BASE/v1/auth/admin/fga/groups" \
+  GRP_JSON=$(curl -sS -X POST "$BASE/api/v1/auth/admin/fga/groups" \
     -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
     -d "{\"tenant_id\":\"$TENANT_ID\",\"name\":\"engineering\",\"description\":\"Eng group\"}")
   GROUP_ID=$(parse_json_key id "$GRP_JSON")
@@ -194,7 +194,7 @@ fi
 echo "Group ID: $GROUP_ID"
 
 # Add member
-ADD_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/v1/auth/admin/fga/groups/$GROUP_ID/members" \
+ADD_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/auth/admin/fga/groups/$GROUP_ID/members" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"user_id\":\"$USER_ID\"}")
 [[ "$ADD_CODE" == "204" ]] || { echo "Add member failed: $ADD_CODE" >&2; exit 1; }
@@ -202,7 +202,7 @@ ADD_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/v1/auth/admin/
 echo "Added member ($USER_ID) -> 204"
 
 # Create ACL tuple
-TUP_CREATE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/v1/auth/admin/fga/acl/tuples" \
+TUP_CREATE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/auth/admin/fga/acl/tuples" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"group\",\"subject_id\":\"$GROUP_ID\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}")
 [[ "$TUP_CREATE_CODE" == "201" ]] || { echo "ACL create failed: $TUP_CREATE_CODE" >&2; exit 1; }
@@ -210,7 +210,7 @@ TUP_CREATE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/v1/auth
 echo "ACL tuple created -> 201"
 
 # Authorize should allow
-AUTH_ALLOW=$(curl -sS -X POST "$BASE/v1/auth/authorize" \
+AUTH_ALLOW=$(curl -sS -X POST "$BASE/api/v1/auth/authorize" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"self\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}")
 if ! echo "$AUTH_ALLOW" | grep -q '"allowed":true'; then
@@ -223,7 +223,7 @@ if [[ "${KEEP_TUPLE:-}" == "1" ]]; then
   echo "KEEP_TUPLE=1 set; skipping tuple deletion and deny check"
 else
   # Delete ACL tuple
-  TUP_DELETE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$BASE/v1/auth/admin/fga/acl/tuples" \
+  TUP_DELETE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/auth/admin/fga/acl/tuples" \
     -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
     -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"group\",\"subject_id\":\"$GROUP_ID\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}")
   [[ "$TUP_DELETE_CODE" == "204" ]] || { echo "ACL delete failed: $TUP_DELETE_CODE" >&2; exit 1; }
@@ -231,7 +231,7 @@ else
   echo "ACL tuple deleted -> 204"
 
   # Authorize should deny now
-  AUTH_DENY=$(curl -sS -X POST "$BASE/v1/auth/authorize" \
+  AUTH_DENY=$(curl -sS -X POST "$BASE/api/v1/auth/authorize" \
     -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
     -d "{\"tenant_id\":\"$TENANT_ID\",\"subject_type\":\"self\",\"permission_key\":\"settings:read\",\"object_type\":\"tenant\"}")
   if ! echo "$AUTH_DENY" | grep -q '"allowed":false'; then

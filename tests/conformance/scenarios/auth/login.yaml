@@ -1,0 +1,82 @@
+name: "Authentication Login Tests"
+description: "Test password login flows with valid and invalid credentials"
+scenarios:
+  - id: "auth_login_valid"
+    name: "Valid Credentials Login"
+    description: "Login with correct email and password"
+    method: "POST"
+    endpoint: "/api/v1/auth/login"
+    request:
+      email: "test@example.com"
+      password: "ValidPassword123!"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 200
+      fields:
+        - name: "access_token"
+          type: "string"
+          required: true
+        - name: "refresh_token"
+          type: "string"
+          required: true
+        - name: "user"
+          type: "object"
+          required: true
+          fields:
+            - name: "id"
+              type: "string"
+            - name: "email"
+              type: "string"
+    sdk_method: "PasswordLogin"
+
+  - id: "auth_login_invalid_email"
+    name: "Invalid Email Login"
+    description: "Login with non-existent email"
+    method: "POST"
+    endpoint: "/api/v1/auth/login"
+    request:
+      email: "nonexistent@example.com"
+      password: "AnyPassword123!"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 401
+      fields:
+        - name: "error"
+          type: "string"
+          required: true
+    sdk_method: "PasswordLogin"
+    expected_error: true
+
+  - id: "auth_login_invalid_password"
+    name: "Invalid Password Login"
+    description: "Login with incorrect password"
+    method: "POST"
+    endpoint: "/api/v1/auth/login"
+    request:
+      email: "test@example.com"
+      password: "WrongPassword123!"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 401
+      fields:
+        - name: "error"
+          type: "string"
+          required: true
+    sdk_method: "PasswordLogin"
+    expected_error: true
+
+  - id: "auth_login_missing_tenant"
+    name: "Missing Tenant ID"
+    description: "Login without specifying tenant"
+    method: "POST"
+    endpoint: "/api/v1/auth/login"
+    request:
+      email: "test@example.com"
+      password: "ValidPassword123!"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "PasswordLogin"
+    expected_error: true

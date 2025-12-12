@@ -33,7 +33,7 @@ Based on the codebase analysis, Guard currently uses WorkOS for:
 4. **Multi-Tenant Configuration**
    - Per-tenant WorkOS credentials (client_id, client_secret, api_key)
    - Per-tenant connection/organization defaults
-   - Tenant-scoped settings at `/v1/tenants/{id}/settings`
+   - Tenant-scoped settings at `/api/v1/tenants/{id}/settings`
 
 ### Key Files
 - Backend: `internal/auth/service/sso_workos.go` (507 lines)
@@ -159,11 +159,11 @@ CREATE INDEX idx_sso_providers_issuer ON sso_providers(issuer);
 
 **Configuration API**:
 ```
-POST   /v1/tenants/{id}/sso-providers          # Create provider
-GET    /v1/tenants/{id}/sso-providers          # List providers
-PUT    /v1/tenants/{id}/sso-providers/{pid}    # Update provider
-DELETE /v1/tenants/{id}/sso-providers/{pid}    # Delete provider
-GET    /v1/tenants/{id}/sso-providers/{pid}/test # Test connection
+POST   /api/v1/tenants/{id}/sso-providers          # Create provider
+GET    /api/v1/tenants/{id}/sso-providers          # List providers
+PUT    /api/v1/tenants/{id}/sso-providers/{pid}    # Update provider
+DELETE /api/v1/tenants/{id}/sso-providers/{pid}    # Delete provider
+GET    /api/v1/tenants/{id}/sso-providers/{pid}/test # Test connection
 ```
 
 **OIDC Flow Implementation**:
@@ -272,9 +272,9 @@ ALTER TABLE sso_providers ADD COLUMN entity_id TEXT; -- Service Provider Entity 
 
 **SAML Endpoints**:
 ```
-GET  /v1/auth/sso/saml/metadata                    # SP metadata XML
-POST /v1/auth/sso/saml/acs                         # Assertion Consumer Service
-GET  /v1/auth/sso/saml/slo                         # Single Logout
+GET  /api/v1/auth/sso/saml/metadata                    # SP metadata XML
+POST /api/v1/auth/sso/saml/acs                         # Assertion Consumer Service
+GET  /api/v1/auth/sso/saml/slo                         # Single Logout
 ```
 
 **SAML Flow**:
@@ -285,8 +285,8 @@ GET  /v1/auth/sso/saml/slo                         # Single Logout
        sp := saml.ServiceProvider{
            Key:         privateKey,
            Certificate: certificate,
-           MetadataURL: url.URL{Scheme: "https", Host: "guard.example.com", Path: "/v1/auth/sso/saml/metadata"},
-           AcsURL:      url.URL{Scheme: "https", Host: "guard.example.com", Path: "/v1/auth/sso/saml/acs"},
+           MetadataURL: url.URL{Scheme: "https", Host: "guard.example.com", Path: "/api/v1/auth/sso/saml/metadata"},
+           AcsURL:      url.URL{Scheme: "https", Host: "guard.example.com", Path: "/api/v1/auth/sso/saml/acs"},
            IDPMetadata: idpMetadata,
        }
        return xml.Marshal(sp.Metadata())
@@ -635,7 +635,7 @@ Month 12: Remove WorkOS (optional - keep for enterprise)
 ### Migration API
 
 ```go
-// POST /v1/tenants/{id}/sso-providers/migrate-from-workos
+// POST /api/v1/tenants/{id}/sso-providers/migrate-from-workos
 func MigrateFromWorkOS(ctx context.Context, tenantID uuid.UUID) error {
     // 1. Fetch WorkOS configuration
     workosConfig := getWorkOSConfig(ctx, tenantID)

@@ -241,18 +241,176 @@ func (c *GuardClient) DeleteRolePermission(ctx context.Context, roleID string, p
 	return nil
 }
 
-// ListUserRoles is not yet implemented.
-// See ADR 0008 for status on additional RBAC user assignment endpoints.
-// func (c *GuardClient) ListUserRoles(ctx context.Context, userID, tenantID string) ([]Role, error)
+// ListUserRoles lists all role IDs assigned to a user.
+func (c *GuardClient) ListUserRoles(ctx context.Context, userID, tenantID string) ([]Role, error) {
+	params := &GetApiV1AuthAdminRbacUsersIdRolesParams{
+		TenantId: tenantID,
+	}
 
-// AddUserRole is not yet implemented.
-// See ADR 0008 for status on additional RBAC user assignment endpoints.
-// func (c *GuardClient) AddUserRole(ctx context.Context, userID string, req UserRoleRequest) error
+	resp, err := c.inner.GetApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, params)
+	if err != nil {
+		return nil, err
+	}
 
-// RemoveUserRole is not yet implemented.
-// See ADR 0008 for status on additional RBAC user assignment endpoints.
-// func (c *GuardClient) RemoveUserRole(ctx context.Context, userID string, req UserRoleRequest) error
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
 
-// ResolveUserPermissions is not yet implemented.
-// See ADR 0008 for status on additional RBAC user assignment endpoints.
-// func (c *GuardClient) ResolveUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error)
+	roles := make([]Role, 0)
+	if resp.JSON200.RoleIds != nil {
+		// Backend returns only role IDs; create role stubs with ID populated
+		// Clients can fetch full role details via ListRoles if needed
+		for _, roleID := range *resp.JSON200.RoleIds {
+			roles = append(roles, Role{ID: roleID})
+		}
+	}
+
+	return roles, nil
+}
+
+// AddUserRole adds a role assignment to a user.
+func (c *GuardClient) AddUserRole(ctx context.Context, userID string, req UserRoleRequest) error {
+	body := PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody{
+		RoleId:   req.RoleID,
+		TenantId: req.TenantID,
+	}
+
+	resp, err := c.inner.PostApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != 200 && resp.StatusCode() != 201 {
+		return errors.New(resp.Status())
+	}
+
+	return nil
+}
+
+// RemoveUserRole removes a role assignment from a user.
+func (c *GuardClient) RemoveUserRole(ctx context.Context, userID string, req UserRoleRequest) error {
+	body := DeleteApiV1AuthAdminRbacUsersIdRolesJSONRequestBody{
+		RoleId:   req.RoleID,
+		TenantId: req.TenantID,
+	}
+
+	resp, err := c.inner.DeleteApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
+		return errors.New(resp.Status())
+	}
+
+	return nil
+}
+
+// ResolveUserPermissions resolves all permissions granted to a user through their roles.
+func (c *GuardClient) ResolveUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error) {
+	params := &GetApiV1AuthAdminRbacUsersIdPermissionsResolveParams{
+		TenantId: tenantID,
+	}
+
+	resp, err := c.inner.GetApiV1AuthAdminRbacUsersIdPermissionsResolveWithResponse(ctx, userID, params)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
+
+	permissions := make([]Permission, 0)
+	if resp.JSON200.Grants != nil {
+		for _, grant := range *resp.JSON200.Grants {
+			permission := Permission{}
+			if grant.Key != nil {
+				permission.Key = *grant.Key
+			}
+			permissions = append(permissions, permission)
+		}
+	}
+
+	return permissions, nil
+}
+
+// === ALTERNATIVE BULK OPERATION METHODS (for developers preferring batch operations) ===
+
+// ModifyUserRoles performs bulk role assignment operations on a user.
+// This is an alternative to AddUserRole/RemoveUserRole for batch operations.
+func (c *GuardClient) ModifyUserRoles(ctx context.Context, userID, tenantID string, roleIDs []string, action string) error {
+	// action: "add" or "remove"
+	if action != "add" && action != "remove" {
+		return errors.New("action must be 'add' or 'remove'")
+	}
+
+	for _, roleID := range roleIDs {
+		body := PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody{
+			RoleId:   roleID,
+			TenantId: tenantID,
+		}
+
+		if action == "add" {
+			resp, err := c.inner.PostApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, body)
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode() != 200 && resp.StatusCode() != 201 {
+				return errors.New(resp.Status())
+			}
+		} else {
+			resp, err := c.inner.DeleteApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, body)
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
+				return errors.New(resp.Status())
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetUserRoleObjects retrieves full role objects assigned to a user.
+// This is an enhanced version of ListUserRoles that returns complete role details.
+// Note: This fetches full role details by making additional GetRole calls.
+func (c *GuardClient) GetUserRoleObjects(ctx context.Context, userID, tenantID string) ([]Role, error) {
+	// First get the role IDs
+	params := &GetApiV1AuthAdminRbacUsersIdRolesParams{
+		TenantId: tenantID,
+	}
+
+	resp, err := c.inner.GetApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx, userID, params)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
+
+	// Get all roles in the tenant
+	roles, err := c.ListRoles(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only the roles assigned to this user
+	roleMap := make(map[string]Role)
+	for _, role := range roles {
+		roleMap[role.ID] = role
+	}
+
+	result := make([]Role, 0)
+	if resp.JSON200.RoleIds != nil {
+		for _, roleID := range *resp.JSON200.RoleIds {
+			if role, exists := roleMap[roleID]; exists {
+				result = append(result, role)
+			}
+		}
+	}
+
+	return result, nil
+}

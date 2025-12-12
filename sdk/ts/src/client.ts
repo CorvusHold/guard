@@ -456,7 +456,7 @@ export class GuardClient {
 
   // Auth: Password login -> returns tokens (200) or MFA challenge (202)
   async passwordLogin(body: PasswordLoginInput): Promise<ResponseWrapper<TokensResp | MfaChallengeResp>> {
-    const res = await this.request<TokensResp | MfaChallengeResp>('/v1/auth/password/login', {
+    const res = await this.request<TokensResp | MfaChallengeResp>('/api/v1/auth/password/login', {
       method: 'POST',
       body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
     });
@@ -466,7 +466,7 @@ export class GuardClient {
 
   // Auth: Password signup -> returns tokens (201 Created)
   async passwordSignup(body: PasswordSignupInput): Promise<ResponseWrapper<TokensResp>> {
-    const res = await this.request<TokensResp>('/v1/auth/password/signup', {
+    const res = await this.request<TokensResp>('/api/v1/auth/password/signup', {
       method: 'POST',
       body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
     });
@@ -476,7 +476,7 @@ export class GuardClient {
 
   // Auth: Verify MFA challenge -> tokens
   async mfaVerify(body: MfaVerifyReq): Promise<ResponseWrapper<TokensResp>> {
-    const res = await this.request<TokensResp>('/v1/auth/mfa/verify', {
+    const res = await this.request<TokensResp>('/api/v1/auth/mfa/verify', {
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -488,7 +488,7 @@ export class GuardClient {
   async refresh(body?: Partial<RefreshReq>): Promise<ResponseWrapper<TokensResp>> {
     let refreshToken = body?.refresh_token ?? null;
     if (!refreshToken) refreshToken = (await Promise.resolve(this.storage.getRefreshToken())) ?? null;
-    const res = await this.request<TokensResp>('/v1/auth/refresh', {
+    const res = await this.request<TokensResp>('/api/v1/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
@@ -499,7 +499,7 @@ export class GuardClient {
   // Auth: Logout (revoke refresh token) -> 204
   async logout(body?: { refresh_token?: string | null }): Promise<ResponseWrapper<unknown>> {
     const b = body ?? {};
-    const res = await this.request<unknown>('/v1/auth/logout', {
+    const res = await this.request<unknown>('/api/v1/auth/logout', {
       method: 'POST',
       body: JSON.stringify(b),
     });
@@ -512,7 +512,7 @@ export class GuardClient {
 
   // Auth: Current user profile
   async me(): Promise<ResponseWrapper<UserProfile>> {
-    return this.request<UserProfile>('/v1/auth/me', { method: 'GET' });
+    return this.request<UserProfile>('/api/v1/auth/me', { method: 'GET' });
   }
 
   // Auth: Email discovery (progressive login)
@@ -527,7 +527,7 @@ export class GuardClient {
     const headers: Record<string, string> = {};
     const tid = body.tenant_id ?? this.tenantId;
     if (tid) headers['X-Tenant-ID'] = String(tid);
-    return this.request(`/v1/auth/email/discover`, {
+    return this.request(`/api/v1/auth/email/discover`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ email: body.email })
@@ -538,34 +538,34 @@ export class GuardClient {
   async getLoginOptions(params?: { email?: string; tenant_id?: string }): Promise<ResponseWrapper<LoginOptionsResp>> {
     const tid = params?.tenant_id ?? this.tenantId;
     const qs = this.buildQuery({ email: params?.email, tenant_id: tid });
-    return this.request<LoginOptionsResp>(`/v1/auth/login-options${qs}`, { method: 'GET' });
+    return this.request<LoginOptionsResp>(`/api/v1/auth/login-options${qs}`, { method: 'GET' });
   }
 
   // --- MFA self-service ---
   async mfaStartTotp(): Promise<ResponseWrapper<{ secret: string; otpauth_url: string }>> {
-    return this.request<{ secret: string; otpauth_url: string }>('/v1/auth/mfa/totp/start', { method: 'POST' });
+    return this.request<{ secret: string; otpauth_url: string }>('/api/v1/auth/mfa/totp/start', { method: 'POST' });
   }
 
   async mfaActivateTotp(body: { code: string }): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/mfa/totp/activate', { method: 'POST', body: JSON.stringify(body) });
+    return this.request<unknown>('/api/v1/auth/mfa/totp/activate', { method: 'POST', body: JSON.stringify(body) });
   }
 
   async mfaDisableTotp(): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/mfa/totp/disable', { method: 'POST' });
+    return this.request<unknown>('/api/v1/auth/mfa/totp/disable', { method: 'POST' });
   }
 
   async mfaGenerateBackupCodes(body: { count?: number } = {}): Promise<ResponseWrapper<{ codes: string[] }>> {
-    return this.request<{ codes: string[] }>('/v1/auth/mfa/backup/generate', { method: 'POST', body: JSON.stringify({ count: body.count ?? 5 }) });
+    return this.request<{ codes: string[] }>('/api/v1/auth/mfa/backup/generate', { method: 'POST', body: JSON.stringify({ count: body.count ?? 5 }) });
   }
 
   async mfaCountBackupCodes(): Promise<ResponseWrapper<{ count: number }>> {
-    return this.request<{ count: number }>('/v1/auth/mfa/backup/count', { method: 'GET' });
+    return this.request<{ count: number }>('/api/v1/auth/mfa/backup/count', { method: 'GET' });
   }
 
   // Tenants: Discover tenants for a given email (used by login tenant selection)
   async discoverTenants(params: { email: string }): Promise<ResponseWrapper<DiscoverTenantsResp>> {
     const qs = this.buildQuery({ email: params.email });
-    return this.request<DiscoverTenantsResp>(`/v1/auth/tenants${qs}`, { method: 'GET' });
+    return this.request<DiscoverTenantsResp>(`/api/v1/auth/tenants${qs}`, { method: 'GET' });
   }
 
   // Tenants: Create
@@ -591,7 +591,7 @@ export class GuardClient {
 
   // Auth: Introspect token (from header or body)
   async introspect(body?: { token?: string }): Promise<ResponseWrapper<Introspection>> {
-    return this.request<Introspection>('/v1/auth/introspect', {
+    return this.request<Introspection>('/api/v1/auth/introspect', {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     });
@@ -599,7 +599,7 @@ export class GuardClient {
 
   // Auth: Magic link send
   async magicSend(body: MagicSendReq): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/magic/send', {
+    return this.request<unknown>('/api/v1/auth/magic/send', {
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -608,7 +608,7 @@ export class GuardClient {
   // Auth: Magic verify (token in query preferred)
   async magicVerify(params: { token?: string } = {}, body?: MagicVerifyReq): Promise<ResponseWrapper<TokensResp>> {
     const qs = this.buildQuery(params);
-    const res = await this.request<TokensResp>(`/v1/auth/magic/verify${qs}`, {
+    const res = await this.request<TokensResp>(`/api/v1/auth/magic/verify${qs}`, {
       method: 'GET',
       // Some servers accept body on GET per spec; include if provided
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -619,7 +619,7 @@ export class GuardClient {
 
   // Auth: Request password reset -> 202 (always, to prevent email enumeration)
   async passwordResetRequest(body: { tenant_id?: string; email: string }): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/password/reset/request', {
+    return this.request<unknown>('/api/v1/auth/password/reset/request', {
       method: 'POST',
       body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
     });
@@ -627,7 +627,7 @@ export class GuardClient {
 
   // Auth: Confirm password reset -> 200 on success
   async passwordResetConfirm(body: { tenant_id?: string; token: string; new_password: string }): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/password/reset/confirm', {
+    return this.request<unknown>('/api/v1/auth/password/reset/confirm', {
       method: 'POST',
       body: JSON.stringify({ ...body, tenant_id: body.tenant_id ?? this.tenantId }),
     });
@@ -635,7 +635,7 @@ export class GuardClient {
 
   // Auth: Change password (requires auth) -> 200 on success
   async changePassword(body: { current_password: string; new_password: string }): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/password/change', {
+    return this.request<unknown>('/api/v1/auth/password/change', {
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -643,7 +643,7 @@ export class GuardClient {
 
   // Auth: Update profile (first/last name) -> 200 on success
   async updateProfile(body: { first_name?: string; last_name?: string }): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>('/v1/auth/profile', {
+    return this.request<unknown>('/api/v1/auth/profile', {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
@@ -653,7 +653,7 @@ export class GuardClient {
   async listUsers(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<AdminUsersResp>> {
     const tenant = params.tenant_id ?? this.tenantId;
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<AdminUsersResp>(`/v1/auth/admin/users${qs}`, { method: 'GET' });
+    return this.request<AdminUsersResp>(`/api/v1/auth/admin/users${qs}`, { method: 'GET' });
   }
 
   // Admin: Update user names
@@ -661,7 +661,7 @@ export class GuardClient {
     const payload: any = {};
     if (typeof body?.first_name === 'string') payload.first_name = body.first_name;
     if (typeof body?.last_name === 'string') payload.last_name = body.last_name;
-    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}`, {
+    return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -669,27 +669,27 @@ export class GuardClient {
 
   // Admin: Block user
   async blockUser(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/block`, { method: 'POST' });
+    return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}/block`, { method: 'POST' });
   }
 
   // Admin: Unblock user
   async unblockUser(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/unblock`, { method: 'POST' });
+    return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}/unblock`, { method: 'POST' });
   }
 
   // Admin: Verify user email (set email_verified=true)
   async verifyUserEmail(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/verify-email`, { method: 'POST' });
+    return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}/verify-email`, { method: 'POST' });
   }
 
   // Admin: Unverify user email (set email_verified=false)
   async unverifyUserEmail(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/users/${encodeURIComponent(id)}/unverify-email`, { method: 'POST' });
+    return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}/unverify-email`, { method: 'POST' });
   }
 
   // Sessions: List sessions. When includeAll=false, filter to active (non-revoked, not expired) client-side to match example app UX.
   async listSessions(options: { includeAll?: boolean } = {}): Promise<ResponseWrapper<SessionsListResp>> {
-    const res = await this.request<SessionsListResp>('/v1/auth/sessions', { method: 'GET', cache: 'no-store' as any });
+    const res = await this.request<SessionsListResp>('/api/v1/auth/sessions', { method: 'GET', cache: 'no-store' as any });
     if (res.meta.status >= 200 && res.meta.status < 300) {
       const includeAll = !!options.includeAll;
       const sessions = Array.isArray(res.data?.sessions) ? res.data.sessions : [];
@@ -708,19 +708,19 @@ export class GuardClient {
 
   // Sessions: Revoke session
   async revokeSession(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/sessions/${encodeURIComponent(id)}/revoke`, { method: 'POST' });
+    return this.request<unknown>(`/api/v1/auth/sessions/${encodeURIComponent(id)}/revoke`, { method: 'POST' });
   }
 
   // Tenants: Get settings
   async getTenantSettings(tenantId?: string): Promise<ResponseWrapper<TenantSettingsResponse>> {
     const id = tenantId ?? this.tenantId;
     if (!id) throw new Error('tenantId is required');
-    return this.request<TenantSettingsResponse>(`/v1/tenants/${encodeURIComponent(id)}/settings`, { method: 'GET' });
+    return this.request<TenantSettingsResponse>(`/api/v1/tenants/${encodeURIComponent(id)}/settings`, { method: 'GET' });
   }
 
   // Tenants: Update settings
   async updateTenantSettings(tenantId: string, settings: TenantSettingsPutRequest): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, {
+    return this.request<unknown>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/settings`, {
       method: 'PUT',
       body: JSON.stringify(settings ?? {}),
     });
@@ -877,7 +877,7 @@ export class GuardClient {
       organization_id: params.organization_id,
       intent: params.intent,
     });
-    return this.request<PortalLink>(`/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
+    return this.request<PortalLink>(`/api/v1/auth/sso/${provider}/portal-link${qs}`, { method: 'GET' });
   }
 
   // SSO: Portal token session exchange (public, portal-token gated)
@@ -885,7 +885,7 @@ export class GuardClient {
     if (!token || typeof token !== 'string') {
       throw new Error('token is required');
     }
-    return this.request<SsoPortalSessionResp>('/v1/sso/portal/session', {
+    return this.request<SsoPortalSessionResp>('/api/v1/sso/portal/session', {
       method: 'POST',
       body: JSON.stringify({ token }),
     });
@@ -897,7 +897,7 @@ export class GuardClient {
       throw new Error('token is required');
     }
     const headers: Record<string, string> = { 'X-Portal-Token': token };
-    return this.request<SsoProviderItem>('/v1/sso/portal/provider', {
+    return this.request<SsoProviderItem>('/api/v1/sso/portal/provider', {
       method: 'GET',
       headers,
     });
@@ -950,12 +950,12 @@ export class GuardClient {
   async ssoListProviders(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<SsoProvidersListResp>> {
     const tenant = params.tenant_id ?? this.tenantId;
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<SsoProvidersListResp>(`/v1/sso/providers${qs}`, { method: 'GET' });
+    return this.request<SsoProvidersListResp>(`/api/v1/sso/providers${qs}`, { method: 'GET' });
   }
 
   // Create a new SSO provider
   async ssoCreateProvider(body: CreateSsoProviderReq): Promise<ResponseWrapper<SsoProviderItem>> {
-    return this.request<SsoProviderItem>('/v1/sso/providers', {
+    return this.request<SsoProviderItem>('/api/v1/sso/providers', {
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -963,14 +963,14 @@ export class GuardClient {
 
   // Get a specific SSO provider by ID
   async ssoGetProvider(id: string): Promise<ResponseWrapper<SsoProviderItem>> {
-    return this.request<SsoProviderItem>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+    return this.request<SsoProviderItem>(`/api/v1/sso/providers/${encodeURIComponent(id)}`, {
       method: 'GET',
     });
   }
 
   // Update an existing SSO provider
   async ssoUpdateProvider(id: string, body: UpdateSsoProviderReq): Promise<ResponseWrapper<SsoProviderItem>> {
-    return this.request<SsoProviderItem>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+    return this.request<SsoProviderItem>(`/api/v1/sso/providers/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
@@ -978,14 +978,14 @@ export class GuardClient {
 
   // Delete an SSO provider
   async ssoDeleteProvider(id: string): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/sso/providers/${encodeURIComponent(id)}`, {
+    return this.request<unknown>(`/api/v1/sso/providers/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }
 
   // Test SSO provider configuration
   async ssoTestProvider(id: string): Promise<ResponseWrapper<SsoTestProviderResp>> {
-    return this.request<SsoTestProviderResp>(`/v1/sso/providers/${encodeURIComponent(id)}/test`, {
+    return this.request<SsoTestProviderResp>(`/api/v1/sso/providers/${encodeURIComponent(id)}/test`, {
       method: 'POST',
     });
   }
@@ -1013,7 +1013,7 @@ export class GuardClient {
     const params: Record<string, string> = { slug };
     if (tenant) params.tenant_id = tenant;
     const qs = this.buildQuery(params);
-    return this.request<SsoSPInfoResp>(`/v1/sso/sp-info${qs}`, { method: 'GET' });
+    return this.request<SsoSPInfoResp>(`/api/v1/sso/sp-info${qs}`, { method: 'GET' });
   }
 
   // ==============================
@@ -1022,7 +1022,7 @@ export class GuardClient {
 
   // RBAC: List all permissions (admin-only)
   async rbacListPermissions(): Promise<ResponseWrapper<RbacPermissionsResp>> {
-    return this.request<RbacPermissionsResp>('/v1/auth/admin/rbac/permissions', { method: 'GET' });
+    return this.request<RbacPermissionsResp>('/api/v1/auth/admin/rbac/permissions', { method: 'GET' });
   }
 
   // RBAC: List roles for a tenant
@@ -1030,7 +1030,7 @@ export class GuardClient {
     const tenant = params.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<RbacRolesResp>(`/v1/auth/admin/rbac/roles${qs}`, { method: 'GET' });
+    return this.request<RbacRolesResp>(`/api/v1/auth/admin/rbac/roles${qs}`, { method: 'GET' });
   }
 
   // RBAC: Create role
@@ -1038,7 +1038,7 @@ export class GuardClient {
     const tenant = body.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload: RbacCreateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacCreateRoleReq;
-    return this.request<RbacRoleItem>('/v1/auth/admin/rbac/roles', { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<RbacRoleItem>('/api/v1/auth/admin/rbac/roles', { method: 'POST', body: JSON.stringify(payload) });
   }
 
   // RBAC: Update role
@@ -1046,7 +1046,7 @@ export class GuardClient {
     const tenant = body.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload: RbacUpdateRoleReq = { tenant_id: tenant, name: (body as any).name, description: (body as any).description } as RbacUpdateRoleReq;
-    return this.request<RbacRoleItem>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return this.request<RbacRoleItem>(`/api/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
   }
 
   // RBAC: Delete role
@@ -1054,7 +1054,7 @@ export class GuardClient {
     const tenant = params.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+    return this.request<unknown>(`/api/v1/auth/admin/rbac/roles/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
   }
 
   // RBAC: List user roles
@@ -1062,7 +1062,7 @@ export class GuardClient {
     const tenant = params.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<RbacUserRolesResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles${qs}`, { method: 'GET' });
+    return this.request<RbacUserRolesResp>(`/api/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles${qs}`, { method: 'GET' });
   }
 
   // RBAC: Add user role
@@ -1070,7 +1070,7 @@ export class GuardClient {
     const tenant = body.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
-    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<unknown>(`/api/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
   // RBAC: Remove user role
@@ -1078,17 +1078,17 @@ export class GuardClient {
     const tenant = body.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload: RbacModifyUserRoleReq = { tenant_id: tenant, role_id: (body as any).role_id } as RbacModifyUserRoleReq;
-    return this.request<unknown>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'DELETE', body: JSON.stringify(payload) });
+    return this.request<unknown>(`/api/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/roles`, { method: 'DELETE', body: JSON.stringify(payload) });
   }
 
   // RBAC: Upsert role permission
   async rbacUpsertRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'POST', body: JSON.stringify(body) });
+    return this.request<unknown>(`/api/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'POST', body: JSON.stringify(body) });
   }
 
   // RBAC: Delete role permission
   async rbacDeleteRolePermission(roleId: string, body: RbacRolePermissionReq): Promise<ResponseWrapper<unknown>> {
-    return this.request<unknown>(`/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'DELETE', body: JSON.stringify(body) });
+    return this.request<unknown>(`/api/v1/auth/admin/rbac/roles/${encodeURIComponent(roleId)}/permissions`, { method: 'DELETE', body: JSON.stringify(body) });
   }
 
   // RBAC: Resolve user permissions
@@ -1096,7 +1096,7 @@ export class GuardClient {
     const tenant = params?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<RbacResolvedPermissionsResp>(`/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/permissions/resolve${qs}`, { method: 'GET' });
+    return this.request<RbacResolvedPermissionsResp>(`/api/v1/auth/admin/rbac/users/${encodeURIComponent(userId)}/permissions/resolve${qs}`, { method: 'GET' });
   }
 
   // ==============================
@@ -1108,7 +1108,7 @@ export class GuardClient {
     const tenant = params?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<FgaGroupsResp>(`/v1/auth/admin/fga/groups${qs}`, { method: 'GET' });
+    return this.request<FgaGroupsResp>(`/api/v1/auth/admin/fga/groups${qs}`, { method: 'GET' });
   }
 
   // Groups: create
@@ -1116,7 +1116,7 @@ export class GuardClient {
     const tenant = body?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload = { tenant_id: tenant, name: body.name, description: body?.description ?? null } as any;
-    return this.request<FgaGroup>(`/v1/auth/admin/fga/groups`, { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<FgaGroup>(`/api/v1/auth/admin/fga/groups`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
   // Groups: delete
@@ -1124,19 +1124,19 @@ export class GuardClient {
     const tenant = params?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const qs = this.buildQuery({ tenant_id: tenant });
-    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+    return this.request<unknown>(`/api/v1/auth/admin/fga/groups/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
   }
 
   // Group membership: add
   async fgaAddGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
     const payload = { user_id: body.user_id } as any;
-    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<unknown>(`/api/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'POST', body: JSON.stringify(payload) });
     }
 
   // Group membership: remove
   async fgaRemoveGroupMember(groupId: string, body: { user_id: string }): Promise<ResponseWrapper<unknown>> {
     const payload = { user_id: body.user_id } as any;
-    return this.request<unknown>(`/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'DELETE', body: JSON.stringify(payload) });
+    return this.request<unknown>(`/api/v1/auth/admin/fga/groups/${encodeURIComponent(groupId)}/members`, { method: 'DELETE', body: JSON.stringify(payload) });
   }
 
   // ACL tuples: create
@@ -1144,7 +1144,7 @@ export class GuardClient {
     const tenant = body?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload = { ...body, tenant_id: tenant } as any;
-    return this.request<FgaAclTuple>(`/v1/auth/admin/fga/acl/tuples`, { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<FgaAclTuple>(`/api/v1/auth/admin/fga/acl/tuples`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
   // ACL tuples: delete
@@ -1152,7 +1152,7 @@ export class GuardClient {
     const tenant = body?.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
     const payload = { ...body, tenant_id: tenant } as any;
-    return this.request<unknown>(`/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
+    return this.request<unknown>(`/api/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
   }
 
   // ==============================

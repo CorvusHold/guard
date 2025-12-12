@@ -9,10 +9,18 @@ import (
 	svc "github.com/corvusHold/guard/internal/tenants/service"
 )
 
-// Register wires the tenants module and registers HTTP routes.
+// Register wires the tenants module and registers HTTP routes (deprecated, use RegisterV1).
 func Register(e *echo.Echo, pg *pgxpool.Pool) {
 	r := repo.New(pg)
 	s := svc.New(r)
 	c := ctrl.New(s)
 	c.Register(e)
+}
+
+// RegisterV1 wires the tenants module and registers HTTP routes under /api/v1.
+func RegisterV1(g *echo.Group, pg *pgxpool.Pool) {
+	r := repo.New(pg)
+	s := svc.New(r)
+	c := ctrl.New(s)
+	c.RegisterV1(g)
 }

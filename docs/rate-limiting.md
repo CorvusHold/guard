@@ -1,6 +1,6 @@
 # Tenant-aware Rate Limiting
 
-Guard provides fixed-window rate limiting for all `/v1/auth/*` endpoints. In multi-tenant deployments, limits and windows can be configured per-tenant and per-endpoint via settings.
+Guard provides fixed-window rate limiting for all `/api/v1/auth/*` endpoints. In multi-tenant deployments, limits and windows can be configured per-tenant and per-endpoint via settings.
 
 ## Backend
 
@@ -28,7 +28,7 @@ If no tenant can be resolved, the key falls back to `prefix:ip:<client_ip>`.
 Example (query + body both include tenant):
 
 ```sh
-curl -s -X POST "$BASE_URL/v1/auth/password/login?tenant_id=rl-$TENANT_ID" \
+curl -s -X POST "$BASE_URL/api/v1/auth/password/login?tenant_id=rl-$TENANT_ID" \
   -H 'content-type: application/json' \
   -d '{"tenant_id":"'$TENANT_ID'","email":"user@example.com","password":"Password123!"}'
 ```
@@ -127,4 +127,4 @@ Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header 
 
 ## Swagger
 
-All relevant `/v1/auth/*` endpoints now document `429` responses. See `docs/swagger.yaml` or the Swagger UI at `/swagger/index.html`.
+All relevant `/api/v1/auth/*` endpoints now document `429` responses. See `docs/swagger.yaml` or the Swagger UI at `/swagger/index.html`.

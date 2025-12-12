@@ -31,7 +31,7 @@ export default function () {
     sleep(1);
     return;
   }
-  const url = `${BASE_URL}/v1/auth/sso/workos/portal-link?tenant_id=${encodeURIComponent(TENANT_ID)}&organization_id=${encodeURIComponent(ORG_ID)}&intent=${encodeURIComponent(INTENT)}`;
+  const url = `${BASE_URL}/api/v1/auth/sso/workos/portal-link?tenant_id=${encodeURIComponent(TENANT_ID)}&organization_id=${encodeURIComponent(ORG_ID)}&intent=${encodeURIComponent(INTENT)}`;
   const res = http.get(url, {
     headers: {
       Authorization: `Bearer ${ADMIN_TOKEN}`,

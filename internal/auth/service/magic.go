@@ -69,7 +69,7 @@ func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 	if err != nil {
 		return err
 	}
-	u.Path = "/v1/auth/magic/verify"
+	u.Path = "/api/v1/auth/magic/verify"
 	q := u.Query()
 	q.Set("token", token)
 	u.RawQuery = q.Encode()

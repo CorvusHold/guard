@@ -1,0 +1,87 @@
+name: "Authentication Signup Tests"
+description: "Test password signup flows with various scenarios"
+scenarios:
+  - id: "auth_signup_new_user"
+    name: "New User Registration"
+    description: "Register a new user with valid credentials"
+    method: "POST"
+    endpoint: "/api/v1/auth/signup"
+    request:
+      email: "newuser@example.com"
+      password: "NewPassword123!"
+      first_name: "John"
+      last_name: "Doe"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 201
+      fields:
+        - name: "user"
+          type: "object"
+          required: true
+          fields:
+            - name: "id"
+              type: "string"
+            - name: "email"
+              type: "string"
+            - name: "first_name"
+              type: "string"
+            - name: "last_name"
+              type: "string"
+    sdk_method: "PasswordSignup"
+
+  - id: "auth_signup_duplicate_email"
+    name: "Duplicate Email Registration"
+    description: "Attempt to register with existing email"
+    method: "POST"
+    endpoint: "/api/v1/auth/signup"
+    request:
+      email: "test@example.com"
+      password: "Password123!"
+      first_name: "Jane"
+      last_name: "Doe"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 409
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "PasswordSignup"
+    expected_error: true
+
+  - id: "auth_signup_weak_password"
+    name: "Weak Password Registration"
+    description: "Attempt to register with weak password"
+    method: "POST"
+    endpoint: "/api/v1/auth/signup"
+    request:
+      email: "weakpass@example.com"
+      password: "weak"
+      first_name: "Bob"
+      last_name: "Smith"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "PasswordSignup"
+    expected_error: true
+
+  - id: "auth_signup_invalid_email"
+    name: "Invalid Email Format"
+    description: "Attempt to register with invalid email format"
+    method: "POST"
+    endpoint: "/api/v1/auth/signup"
+    request:
+      email: "not-an-email"
+      password: "ValidPassword123!"
+      first_name: "Alice"
+      last_name: "Johnson"
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "PasswordSignup"
+    expected_error: true

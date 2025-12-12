@@ -32,7 +32,7 @@ go run ./cmd/seed user \
   --roles "admin,owner"
 
 # 3. Login and get admin token
-ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$TENANT_ID\",
@@ -44,7 +44,7 @@ ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
 #### Phase 2: Security Configuration
 ```bash
 # 4. Configure strict rate limits
-curl -X PUT http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$TENANT_ID/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -57,7 +57,7 @@ curl -X PUT http://localhost:8080/v1/tenants/$TENANT_ID/settings \
   }'
 
 # 5. Configure CORS for enterprise domains
-curl -X PUT http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$TENANT_ID/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -78,7 +78,7 @@ go run ./cmd/seed sso-workos \
   --default-connection-id "$WORKOS_CONNECTION_ID"
 
 # 7. Test SSO flow
-curl -i "http://localhost:8080/v1/auth/sso/google/start?tenant_id=$TENANT_ID&redirect_uri=https://app.enterprise-corp.com/auth/callback"
+curl -i "http://localhost:8080/api/v1/auth/sso/google/start?tenant_id=$TENANT_ID&redirect_uri=https://app.enterprise-corp.com/auth/callback"
 ```
 
 #### Phase 4: User Management Setup
@@ -129,7 +129,7 @@ go run ./cmd/seed default \
 export DEV_TENANT_ID="<output-tenant-id>"
 
 # 2. Configure dev-friendly settings
-DEV_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+DEV_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$DEV_TENANT_ID\",
@@ -137,7 +137,7 @@ DEV_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
     \"password\": \"DevPassword123!\"
   }" | jq -r '.access_token')
 
-curl -X PUT http://localhost:8080/v1/tenants/$DEV_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$DEV_TENANT_ID/settings \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -160,7 +160,7 @@ go run ./cmd/seed default \
 export STAGING_TENANT_ID="<output-tenant-id>"
 
 # 4. Configure staging settings
-STAGING_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+STAGING_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$STAGING_TENANT_ID\",
@@ -168,7 +168,7 @@ STAGING_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
     \"password\": \"StagingPassword123!\"
   }" | jq -r '.access_token')
 
-curl -X PUT http://localhost:8080/v1/tenants/$STAGING_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$STAGING_TENANT_ID/settings \
   -H "Authorization: Bearer $STAGING_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -189,7 +189,7 @@ go run ./cmd/seed default \
 export PROD_TENANT_ID="<output-tenant-id>"
 
 # 6. Configure production security
-PROD_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+PROD_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$PROD_TENANT_ID\",
@@ -197,7 +197,7 @@ PROD_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
     \"password\": \"ProductionAdmin123!\"
   }" | jq -r '.access_token')
 
-curl -X PUT http://localhost:8080/v1/tenants/$PROD_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$PROD_TENANT_ID/settings \
   -H "Authorization: Bearer $PROD_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -235,7 +235,7 @@ for customer in "${CUSTOMERS[@]}"; do
   TENANT_ID=$(echo "$TENANT_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
   
   # 2. Get admin token
-  ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+  ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
     -H "Content-Type: application/json" \
     -d "{
       \"tenant_id\": \"$TENANT_ID\",
@@ -244,7 +244,7 @@ for customer in "${CUSTOMERS[@]}"; do
     }" | jq -r '.access_token')
   
   # 3. Configure customer-specific settings
-  curl -X PUT http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+  curl -X PUT http://localhost:8080/api/v1/tenants/$TENANT_ID/settings \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{
@@ -300,7 +300,7 @@ MAIN_TENANT_ID=$(echo "$MAIN_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
 TOTP_SECRET=$(echo "$MAIN_OUTPUT" | grep TOTP_SECRET | cut -d'=' -f2)
 
 # 2. Get admin token
-ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$MAIN_TENANT_ID\",
@@ -309,7 +309,7 @@ ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
   }" | jq -r '.access_token')
 
 # 3. Configure for testing
-curl -X PUT http://localhost:8080/v1/tenants/$MAIN_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$MAIN_TENANT_ID/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -353,7 +353,7 @@ RATE_OUTPUT=$(go run ./cmd/seed default \
 
 RATE_TENANT_ID=$(echo "$RATE_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
 
-RATE_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+RATE_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$RATE_TENANT_ID\",
@@ -361,7 +361,7 @@ RATE_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
     \"password\": \"RateAdmin123!\"
   }" | jq -r '.access_token')
 
-curl -X PUT http://localhost:8080/v1/tenants/$RATE_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$RATE_TENANT_ID/settings \
   -H "Authorization: Bearer $RATE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -381,7 +381,7 @@ SSO_OUTPUT=$(go run ./cmd/seed default \
 SSO_TENANT_ID=$(echo "$SSO_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
 
 # Configure dev SSO
-SSO_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+SSO_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$SSO_TENANT_ID\",
@@ -389,7 +389,7 @@ SSO_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
     \"password\": \"SSOAdmin123!\"
   }" | jq -r '.access_token')
 
-curl -X PUT http://localhost:8080/v1/tenants/$SSO_TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$SSO_TENANT_ID/settings \
   -H "Authorization: Bearer $SSO_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -453,7 +453,7 @@ TENANT_OUTPUT=$(go run ./cmd/seed default \
 TENANT_ID=$(echo "$TENANT_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
 
 # 2. Get admin token
-ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$TENANT_ID\",
@@ -462,7 +462,7 @@ ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
   }" | jq -r '.access_token')
 
 # 3. Configure migration-friendly settings
-curl -X PUT http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/$TENANT_ID/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -543,7 +543,7 @@ fi
 
 # 2. Test admin login
 echo "2. Testing admin login..."
-LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8080/v1/auth/password/login \
+LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$TENANT_ID\",
@@ -562,7 +562,7 @@ fi
 
 # 3. Test settings access
 echo "3. Testing settings access..."
-SETTINGS_RESPONSE=$(curl -s http://localhost:8080/v1/tenants/$TENANT_ID/settings \
+SETTINGS_RESPONSE=$(curl -s http://localhost:8080/api/v1/tenants/$TENANT_ID/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 
 if echo "$SETTINGS_RESPONSE" | jq -e '.tenant_id' > /dev/null; then
@@ -575,7 +575,7 @@ fi
 # 4. Test user creation
 echo "4. Testing user creation..."
 TEST_EMAIL="test-$(date +%s)@example.com"
-SIGNUP_RESPONSE=$(curl -s -X POST http://localhost:8080/v1/auth/signup \
+SIGNUP_RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$TENANT_ID\",

@@ -132,12 +132,12 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 		return "", err
 	}
 
-	// Build callback URL: {base}/v1/auth/sso/{provider}/callback?code=...&state=...
+	// Build callback URL: {base}/api/v1/auth/sso/{provider}/callback?code=...&state=...
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", err
 	}
-	u.Path = "/v1/auth/sso/" + in.Provider + "/callback"
+	u.Path = "/api/v1/auth/sso/" + in.Provider + "/callback"
 	q := u.Query()
 	q.Set("code", code)
 	if in.State != "" {

@@ -32,7 +32,7 @@ func New(repo sdomain.Repository, service sdomain.Service) *Controller {
 	return &Controller{repo: repo, service: service}
 }
 
-// Register mounts settings endpoints under /v1.
+// Register mounts settings endpoints under /v1 (deprecated, use RegisterV1).
 func (h *Controller) Register(e *echo.Echo) {
 	// Build rate limit middlewares (tenant-scoped) with dynamic overrides from settings service.
 	// Defaults: GET 60/min, PUT 10/min
@@ -104,6 +104,78 @@ func (h *Controller) Register(e *echo.Echo) {
 	e.PUT("/v1/tenants/:id/settings", h.putTenantSettings, putMW...)
 }
 
+// RegisterV1 mounts settings endpoints under /api/v1.
+func (h *Controller) RegisterV1(g *echo.Group) {
+	// Build rate limit middlewares (tenant-scoped) with dynamic overrides from settings service.
+	// Defaults: GET 60/min, PUT 10/min
+	getDefaultWin := time.Minute
+	getDefaultLim := 60
+	putDefaultWin := time.Minute
+	putDefaultLim := 10
+
+	mkKey := func(prefix string) func(echo.Context) string {
+		return func(c echo.Context) string { return prefix + ":ten:" + c.Param("id") }
+	}
+	getWinF := func(c echo.Context) time.Duration {
+		if tid, err := uuid.Parse(c.Param("id")); err == nil {
+			if d, err := h.service.GetDuration(c.Request().Context(), sdomain.KeyRLSettingsGetWindow, &tid, getDefaultWin); err == nil {
+				return d
+			}
+		}
+		return getDefaultWin
+	}
+	getLimF := func(c echo.Context) int {
+		if tid, err := uuid.Parse(c.Param("id")); err == nil {
+			if v, err := h.service.GetInt(c.Request().Context(), sdomain.KeyRLSettingsGetLimit, &tid, getDefaultLim); err == nil {
+				return v
+			}
+		}
+		return getDefaultLim
+	}
+	putWinF := func(c echo.Context) time.Duration {
+		if tid, err := uuid.Parse(c.Param("id")); err == nil {
+			if d, err := h.service.GetDuration(c.Request().Context(), sdomain.KeyRLSettingsPutWindow, &tid, putDefaultWin); err == nil {
+				return d
+			}
+		}
+		return putDefaultWin
+	}
+	putLimF := func(c echo.Context) int {
+		if tid, err := uuid.Parse(c.Param("id")); err == nil {
+			if v, err := h.service.GetInt(c.Request().Context(), sdomain.KeyRLSettingsPutLimit, &tid, putDefaultLim); err == nil {
+				return v
+			}
+		}
+		return putDefaultLim
+	}
+
+	getPolicy := rl.Policy{Name: "settings:get", Window: getDefaultWin, Limit: getDefaultLim, Key: mkKey("settings:get"), WindowFunc: getWinF, LimitFunc: getLimF}
+	putPolicy := rl.Policy{Name: "settings:put", Window: putDefaultWin, Limit: putDefaultLim, Key: mkKey("settings:put"), WindowFunc: putWinF, LimitFunc: putLimF}
+
+	var getRL echo.MiddlewareFunc
+	var putRL echo.MiddlewareFunc
+	if h.rlStore != nil {
+		getRL = rl.MiddlewareWithStore(getPolicy, h.rlStore)
+		putRL = rl.MiddlewareWithStore(putPolicy, h.rlStore)
+	} else {
+		getRL = rl.Middleware(getPolicy)
+		putRL = rl.Middleware(putPolicy)
+	}
+
+	// Compose middleware per route
+	getMW := []echo.MiddlewareFunc{}
+	putMW := []echo.MiddlewareFunc{}
+	if h.jwtMW != nil {
+		getMW = append(getMW, h.jwtMW)
+		putMW = append(putMW, h.jwtMW)
+	}
+	getMW = append(getMW, getRL)
+	putMW = append(putMW, putRL)
+
+	g.GET("/tenants/:id/settings", h.getTenantSettings, getMW...)
+	g.PUT("/tenants/:id/settings", h.putTenantSettings, putMW...)
+}
+
 // WithJWT injects a JWT middleware for these endpoints.
 func (h *Controller) WithJWT(mw echo.MiddlewareFunc) *Controller { h.jwtMW = mw; return h }
 
@@ -162,7 +234,7 @@ type putSettingsRequest struct {
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
 // @Security     BearerAuth
-// @Router       /v1/tenants/{id}/settings [get]
+// @Router       /api/v1/tenants/{id}/settings [get]
 func (h *Controller) getTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -222,7 +294,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
 // @Security     BearerAuth
-// @Router       /v1/tenants/{id}/settings [put]
+// @Router       /api/v1/tenants/{id}/settings [put]
 func (h *Controller) putTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

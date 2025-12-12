@@ -42,7 +42,7 @@ import (
 // @title           Guard CAS API
 // @version         1.0
 // @description     Central Authentication Service for multi-tenant identity management.
-// @BasePath        /
+// @BasePath        /api
 // @schemes         http
 // @securityDefinitions.apikey BearerAuth
 // @in              header
@@ -198,8 +198,8 @@ func resolveTenantID(c echo.Context) *uuid.UUID {
 		}
 	}
 	// Route param patterns used in this API
-	// e.g. /v1/tenants/:id/settings
-	if strings.HasPrefix(c.Path(), "/v1/tenants/") {
+	// e.g. /api/v1/tenants/:id/settings
+	if strings.HasPrefix(c.Path(), "/api/v1/tenants/") {
 		if v := strings.TrimSpace(c.Param("id")); v != "" {
 			if id, err := uuid.Parse(v); err == nil {
 				return &id
@@ -333,12 +333,16 @@ func main() {
 	// Validator
 	e.Validator = validation.New()
 
+	// Create versioned API groups
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+
 	// Register domain routes via factories
 	// Settings (tenant-scoped settings management)
-	settings.Register(e, pgPool, cfg)
+	settings.RegisterV1(apiV1, pgPool, cfg)
 	// Tenants and Auth
-	tenants.Register(e, pgPool)
-	auth.Register(e, pgPool, cfg)
+	tenants.RegisterV1(apiV1, pgPool)
+	auth.RegisterV1(apiV1, pgPool, cfg)
 
 	// Background dependency ping metrics
 	go func() {

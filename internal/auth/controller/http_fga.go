@@ -63,7 +63,7 @@ type fgaListGroupsResp struct {
 // @Failure      409   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /v1/auth/admin/fga/groups [post]
+// @Router       /api/v1/auth/admin/fga/groups [post]
 func (h *Controller) fgaCreateGroup(c echo.Context) error {
 	// JWT + admin check
 	tok := h.getToken(c)
@@ -130,7 +130,7 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/fga/groups [get]
+// @Router       /api/v1/auth/admin/fga/groups [get]
 func (h *Controller) fgaListGroups(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -182,7 +182,7 @@ func (h *Controller) fgaListGroups(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/fga/groups/{id} [delete]
+// @Router       /api/v1/auth/admin/fga/groups/{id} [delete]
 func (h *Controller) fgaDeleteGroup(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -249,7 +249,7 @@ type fgaModifyGroupMemberReq struct {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/fga/groups/{id}/members [post]
+// @Router       /api/v1/auth/admin/fga/groups/{id}/members [post]
 func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -314,7 +314,7 @@ func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/fga/groups/{id}/members [delete]
+// @Router       /api/v1/auth/admin/fga/groups/{id}/members [delete]
 func (h *Controller) fgaRemoveGroupMember(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -388,7 +388,7 @@ type fgaCreateACLTupleReq struct {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /v1/auth/admin/fga/acl/tuples [post]
+// @Router       /api/v1/auth/admin/fga/acl/tuples [post]
 func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -470,7 +470,7 @@ type fgaDeleteACLTupleReq struct {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /v1/auth/admin/fga/acl/tuples [delete]
+// @Router       /api/v1/auth/admin/fga/acl/tuples [delete]
 func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
 	tok := h.getToken(c)
 	if tok == "" {
@@ -560,7 +560,7 @@ type fgaAuthorizeResp struct {
 // @Success      200   {object}  fgaAuthorizeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
-// @Router       /v1/auth/authorize [post]
+// @Router       /api/v1/auth/authorize [post]
 func (h *Controller) fgaAuthorize(c echo.Context) error {
 	// JWT check (no admin required)
 	tok := h.getToken(c)

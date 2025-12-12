@@ -38,7 +38,7 @@ type TenantInfo struct {
 // @Success      200  {object}  EmailDiscoveryResponse
 // @Failure      400  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
-// @Router       /v1/auth/email/discover [post]
+// @Router       /api/v1/auth/email/discover [post]
 func (h *Controller) emailDiscovery(c echo.Context) error {
 	var req EmailDiscoveryRequest
 	if err := c.Bind(&req); err != nil {

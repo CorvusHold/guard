@@ -1,0 +1,67 @@
+name: "SSO Flow Tests"
+description: "Test Single Sign-On authentication flows"
+scenarios:
+  - id: "sso_initiate_oidc"
+    name: "Initiate OIDC Flow"
+    description: "Start OpenID Connect authentication flow"
+    method: "GET"
+    endpoint: "/api/v1/auth/sso/oidc/authorize?provider_id=provider-1&redirect_uri=https://app.example.com/callback"
+    expected_response:
+      status: 302
+      fields:
+        - name: "location"
+          type: "string"
+          required: true
+    sdk_method: "InitiateOIDCFlow"
+
+  - id: "sso_callback_oidc"
+    name: "OIDC Callback Handler"
+    description: "Handle OIDC provider callback with authorization code"
+    method: "GET"
+    endpoint: "/api/v1/auth/sso/oidc/callback?code=auth-code-123&state=state-123"
+    expected_response:
+      status: 200
+      fields:
+        - name: "access_token"
+          type: "string"
+          required: true
+        - name: "user"
+          type: "object"
+          required: true
+    sdk_method: "HandleOIDCCallback"
+
+  - id: "sso_initiate_saml"
+    name: "Initiate SAML Flow"
+    description: "Start SAML authentication flow"
+    method: "GET"
+    endpoint: "/api/v1/auth/sso/saml/login?provider_id=provider-2"
+    expected_response:
+      status: 302
+      fields:
+        - name: "location"
+          type: "string"
+          required: true
+    sdk_method: "InitiateSAMLFlow"
+
+  - id: "sso_list_providers"
+    name: "List SSO Providers"
+    description: "Retrieve available SSO provider configurations"
+    method: "GET"
+    endpoint: "/api/v1/auth/sso/providers?tenant_id=tenant-1"
+    expected_response:
+      status: 200
+      fields:
+        - name: "providers"
+          type: "array"
+          required: true
+          items:
+            - name: "id"
+              type: "string"
+              required: true
+            - name: "name"
+              type: "string"
+              required: true
+            - name: "provider_type"
+              type: "string"
+              required: true
+    sdk_method: "ListSSOProviders"

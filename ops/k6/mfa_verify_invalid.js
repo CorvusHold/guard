@@ -18,7 +18,7 @@ export default function () {
     code: '000000',
   });
 
-  const res = http.post(`${BASE_URL}/v1/auth/mfa/verify`, payload, {
+  const res = http.post(`${BASE_URL}/api/v1/auth/mfa/verify`, payload, {
     headers: { 'Content-Type': 'application/json' },
     timeout: '5s',
   });

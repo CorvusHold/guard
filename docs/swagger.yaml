@@ -1,4 +1,4 @@
-basePath: /
+basePath: /api
 definitions:
   controller.EmailDiscoveryRequest:
     properties:
@@ -154,6 +154,89 @@ definitions:
     required:
     - current_password
     - new_password
+    type: object
+  controller.createProviderRequest:
+    properties:
+      acs_url:
+        type: string
+      allow_signup:
+        type: boolean
+      attribute_mapping:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      authorization_endpoint:
+        type: string
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      domains:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      entity_id:
+        description: SAML fields
+        type: string
+      force_authn:
+        type: boolean
+      idp_certificate:
+        type: string
+      idp_entity_id:
+        type: string
+      idp_metadata_url:
+        type: string
+      idp_metadata_xml:
+        type: string
+      idp_slo_url:
+        type: string
+      idp_sso_url:
+        type: string
+      issuer:
+        description: OIDC/OAuth2 fields
+        type: string
+      jwks_uri:
+        type: string
+      name:
+        type: string
+      provider_type:
+        $ref: '#/definitions/domain.ProviderType'
+      response_mode:
+        type: string
+      response_type:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      sign_requests:
+        type: boolean
+      slo_url:
+        type: string
+      slug:
+        type: string
+      sp_certificate:
+        type: string
+      sp_certificate_expires_at:
+        type: string
+      sp_private_key:
+        type: string
+      tenant_id:
+        type: string
+      token_endpoint:
+        type: string
+      trust_email_verified:
+        type: boolean
+      userinfo_endpoint:
+        type: string
+      want_assertions_signed:
+        type: boolean
+      want_response_signed:
+        type: boolean
     type: object
   controller.createTenantReq:
     properties:
@@ -751,6 +834,83 @@ definitions:
       last_name:
         type: string
     type: object
+  controller.updateProviderRequest:
+    properties:
+      acs_url:
+        type: string
+      allow_signup:
+        type: boolean
+      attribute_mapping:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      authorization_endpoint:
+        type: string
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      domains:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      entity_id:
+        description: SAML fields
+        type: string
+      force_authn:
+        type: boolean
+      idp_certificate:
+        type: string
+      idp_entity_id:
+        type: string
+      idp_metadata_url:
+        type: string
+      idp_metadata_xml:
+        type: string
+      idp_slo_url:
+        type: string
+      idp_sso_url:
+        type: string
+      issuer:
+        description: OIDC/OAuth2 fields
+        type: string
+      jwks_uri:
+        type: string
+      name:
+        type: string
+      response_mode:
+        type: string
+      response_type:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      sign_requests:
+        type: boolean
+      slo_url:
+        type: string
+      sp_certificate:
+        type: string
+      sp_certificate_expires_at:
+        type: string
+      sp_private_key:
+        type: string
+      token_endpoint:
+        type: string
+      trust_email_verified:
+        type: boolean
+      userinfo_endpoint:
+        type: string
+      want_assertions_signed:
+        type: boolean
+      want_response_signed:
+        type: boolean
+    type: object
   domain.Introspection:
     properties:
       active:
@@ -779,6 +939,20 @@ definitions:
       link:
         type: string
     type: object
+  domain.ProviderType:
+    enum:
+    - oidc
+    - saml
+    - oauth2
+    - workos
+    - dev
+    type: string
+    x-enum-varnames:
+    - ProviderTypeOIDC
+    - ProviderTypeSAML
+    - ProviderTypeOAuth2
+    - ProviderTypeWorkOS
+    - ProviderTypeDev
   domain.UserProfile:
     properties:
       email:
@@ -822,153 +996,7 @@ paths:
       summary: OAuth 2.0 Authorization Server Metadata
       tags:
       - auth
-  /tenants:
-    get:
-      description: Lists tenants with optional filters and pagination
-      parameters:
-      - description: Search query
-        in: query
-        name: q
-        type: string
-      - description: -1 any, 1 active, 0 inactive
-        in: query
-        name: active
-        type: integer
-      - description: Page number
-        in: query
-        name: page
-        type: integer
-      - description: Page size
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/controller.listResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List tenants
-      tags:
-      - tenants
-    post:
-      consumes:
-      - application/json
-      description: Creates a new tenant
-      parameters:
-      - description: name
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/controller.createTenantReq'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/controller.tenantResp'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Create tenant
-      tags:
-      - tenants
-  /tenants/{id}:
-    get:
-      description: Fetch a tenant by UUID
-      parameters:
-      - description: Tenant ID (UUID)
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/controller.tenantResp'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get tenant by ID
-      tags:
-      - tenants
-  /tenants/{id}/deactivate:
-    patch:
-      description: Deactivates a tenant by ID
-      parameters:
-      - description: Tenant ID (UUID)
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Deactivate tenant
-      tags:
-      - tenants
-  /tenants/by-name/{name}:
-    get:
-      description: Fetch a tenant by unique name
-      parameters:
-      - description: Tenant name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/controller.tenantResp'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get tenant by name
-      tags:
-      - tenants
-  /v1/auth/admin/fga/acl/tuples:
+  /api/v1/auth/admin/fga/acl/tuples:
     delete:
       consumes:
       - application/json
@@ -1043,7 +1071,7 @@ paths:
       summary: Create ACL tuple (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/fga/groups:
+  /api/v1/auth/admin/fga/groups:
     get:
       description: Lists groups for the specified tenant.
       parameters:
@@ -1129,7 +1157,7 @@ paths:
       summary: Create group (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/fga/groups/{id}:
+  /api/v1/auth/admin/fga/groups/{id}:
     delete:
       description: Deletes a group for the specified tenant.
       parameters:
@@ -1169,7 +1197,7 @@ paths:
       summary: Delete group (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/fga/groups/{id}/members:
+  /api/v1/auth/admin/fga/groups/{id}/members:
     delete:
       consumes:
       - application/json
@@ -1254,7 +1282,7 @@ paths:
       summary: Add user to group (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/permissions:
+  /api/v1/auth/admin/rbac/permissions:
     get:
       description: Returns all known permissions.
       produces:
@@ -1281,7 +1309,7 @@ paths:
       summary: List all permissions (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/roles:
+  /api/v1/auth/admin/rbac/roles:
     get:
       description: Returns all roles for the specified tenant.
       parameters:
@@ -1361,7 +1389,7 @@ paths:
       summary: Create role (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/roles/{id}:
+  /api/v1/auth/admin/rbac/roles/{id}:
     delete:
       description: Deletes a role for the specified tenant.
       parameters:
@@ -1447,7 +1475,7 @@ paths:
       summary: Update role (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/roles/{id}/permissions:
+  /api/v1/auth/admin/rbac/roles/{id}/permissions:
     delete:
       consumes:
       - application/json
@@ -1532,7 +1560,7 @@ paths:
       summary: Grant/Update a permission to a role (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/users/{id}/permissions/resolve:
+  /api/v1/auth/admin/rbac/users/{id}/permissions/resolve:
     get:
       description: Aggregates user permissions from roles and ACL for a tenant.
       parameters:
@@ -1576,7 +1604,7 @@ paths:
       summary: Resolve user permissions (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/rbac/users/{id}/roles:
+  /api/v1/auth/admin/rbac/users/{id}/roles:
     delete:
       consumes:
       - application/json
@@ -1704,7 +1732,273 @@ paths:
       summary: Add a role to a user (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users:
+  /api/v1/auth/admin/sso/providers:
+    get:
+      description: Lists all SSO providers for a tenant
+      parameters:
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List SSO Providers
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new SSO provider configuration
+      parameters:
+      - description: Provider configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create SSO Provider
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/sso/providers/{id}:
+    delete:
+      description: Deletes an SSO provider configuration
+      parameters:
+      - description: Provider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete SSO Provider
+      tags:
+      - auth.admin
+    get:
+      description: Retrieves a single SSO provider by ID
+      parameters:
+      - description: Provider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SSO Provider
+      tags:
+      - auth.admin
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing SSO provider configuration
+      parameters:
+      - description: Provider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated provider configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update SSO Provider
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/sso/providers/{id}/test:
+    post:
+      description: Tests an SSO provider configuration for connectivity
+      parameters:
+      - description: Provider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Test SSO Provider
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/users:
     get:
       description: Lists all users that belong to the specified tenant. Requires caller
         to have the admin role.
@@ -1750,7 +2044,7 @@ paths:
       summary: List users for a tenant (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}:
+  /api/v1/auth/admin/users/{id}:
     patch:
       consumes:
       - application/json
@@ -1800,7 +2094,7 @@ paths:
       summary: Update a user's names (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}/block:
+  /api/v1/auth/admin/users/{id}/block:
     post:
       description: Sets a user's active status to false. Requires caller to have the
         admin role.
@@ -1842,7 +2136,7 @@ paths:
       summary: Block a user (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}/roles:
+  /api/v1/auth/admin/users/{id}/roles:
     post:
       consumes:
       - application/json
@@ -1892,7 +2186,7 @@ paths:
       summary: Update a user's roles (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}/unblock:
+  /api/v1/auth/admin/users/{id}/unblock:
     post:
       description: Sets a user's active status to true. Requires caller to have the
         admin role.
@@ -1934,7 +2228,7 @@ paths:
       summary: Unblock a user (admin-only)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}/unverify-email:
+  /api/v1/auth/admin/users/{id}/unverify-email:
     post:
       description: Sets email_verified=false for a user. Requires admin role.
       parameters:
@@ -1975,7 +2269,7 @@ paths:
       summary: Manually unverify user email (admin)
       tags:
       - auth.admin
-  /v1/auth/admin/users/{id}/verify-email:
+  /api/v1/auth/admin/users/{id}/verify-email:
     post:
       description: Sets email_verified=true for a user. Requires admin role.
       parameters:
@@ -2016,7 +2310,7 @@ paths:
       summary: Manually verify user email (admin)
       tags:
       - auth.admin
-  /v1/auth/authorize:
+  /api/v1/auth/authorize:
     post:
       consumes:
       - application/json
@@ -2054,7 +2348,7 @@ paths:
       summary: Authorization decision
       tags:
       - auth
-  /v1/auth/email/discover:
+  /api/v1/auth/email/discover:
     post:
       consumes:
       - application/json
@@ -2088,7 +2382,7 @@ paths:
       summary: Discover user/tenant by email
       tags:
       - auth
-  /v1/auth/introspect:
+  /api/v1/auth/introspect:
     post:
       consumes:
       - application/json
@@ -2128,7 +2422,7 @@ paths:
       summary: Introspect access token
       tags:
       - auth.introspect
-  /v1/auth/login-options:
+  /api/v1/auth/login-options:
     get:
       consumes:
       - application/json
@@ -2165,7 +2459,7 @@ paths:
       summary: Get available login options
       tags:
       - auth
-  /v1/auth/logout:
+  /api/v1/auth/logout:
     post:
       consumes:
       - application/json
@@ -2196,7 +2490,7 @@ paths:
       summary: Logout (revoke refresh token)
       tags:
       - auth.tokens
-  /v1/auth/magic/send:
+  /api/v1/auth/magic/send:
     post:
       consumes:
       - application/json
@@ -2226,7 +2520,7 @@ paths:
       summary: Send magic login link
       tags:
       - auth.magic
-  /v1/auth/magic/verify:
+  /api/v1/auth/magic/verify:
     get:
       consumes:
       - application/json
@@ -2329,7 +2623,7 @@ paths:
       summary: Verify magic link token
       tags:
       - auth.magic
-  /v1/auth/me:
+  /api/v1/auth/me:
     get:
       description: 'Returns the authenticated user''s profile derived from the access
         token. When cookie mode is requested (`X-Auth-Mode: cookie` or default), Guard
@@ -2367,7 +2661,7 @@ paths:
       summary: Get current user's profile
       tags:
       - auth.profile
-  /v1/auth/mfa/backup/consume:
+  /api/v1/auth/mfa/backup/consume:
     post:
       consumes:
       - application/json
@@ -2409,7 +2703,7 @@ paths:
       summary: Consume an MFA backup code
       tags:
       - auth.mfa.backup
-  /v1/auth/mfa/backup/count:
+  /api/v1/auth/mfa/backup/count:
     get:
       description: Returns number of unused backup codes
       produces:
@@ -2436,7 +2730,7 @@ paths:
       summary: Count remaining MFA backup codes
       tags:
       - auth.mfa.backup
-  /v1/auth/mfa/backup/generate:
+  /api/v1/auth/mfa/backup/generate:
     post:
       consumes:
       - application/json
@@ -2477,7 +2771,7 @@ paths:
       summary: Generate MFA backup codes
       tags:
       - auth.mfa.backup
-  /v1/auth/mfa/totp/activate:
+  /api/v1/auth/mfa/totp/activate:
     post:
       consumes:
       - application/json
@@ -2515,7 +2809,7 @@ paths:
       summary: Activate TOTP
       tags:
       - auth.mfa.totp
-  /v1/auth/mfa/totp/disable:
+  /api/v1/auth/mfa/totp/disable:
     post:
       description: Disables TOTP for the user
       responses:
@@ -2538,7 +2832,7 @@ paths:
       summary: Disable TOTP
       tags:
       - auth.mfa.totp
-  /v1/auth/mfa/totp/start:
+  /api/v1/auth/mfa/totp/start:
     post:
       description: Generates and stores a TOTP secret (disabled) and returns the secret
         and otpauth URL
@@ -2560,7 +2854,7 @@ paths:
       summary: Start TOTP enrollment
       tags:
       - auth.mfa.totp
-  /v1/auth/mfa/verify:
+  /api/v1/auth/mfa/verify:
     post:
       consumes:
       - application/json
@@ -2610,7 +2904,7 @@ paths:
       summary: Verify MFA challenge
       tags:
       - auth.mfa
-  /v1/auth/password/change:
+  /api/v1/auth/password/change:
     post:
       consumes:
       - application/json
@@ -2644,7 +2938,7 @@ paths:
       summary: Change password
       tags:
       - auth.password
-  /v1/auth/password/login:
+  /api/v1/auth/password/login:
     post:
       consumes:
       - application/json
@@ -2699,7 +2993,7 @@ paths:
       summary: Password login
       tags:
       - auth.password
-  /v1/auth/password/reset/confirm:
+  /api/v1/auth/password/reset/confirm:
     post:
       consumes:
       - application/json
@@ -2731,7 +3025,7 @@ paths:
       summary: Confirm password reset
       tags:
       - auth.password
-  /v1/auth/password/reset/request:
+  /api/v1/auth/password/reset/request:
     post:
       consumes:
       - application/json
@@ -2763,7 +3057,7 @@ paths:
       summary: Request password reset
       tags:
       - auth.password
-  /v1/auth/password/signup:
+  /api/v1/auth/password/signup:
     post:
       consumes:
       - application/json
@@ -2807,7 +3101,7 @@ paths:
       summary: Password signup
       tags:
       - auth.password
-  /v1/auth/profile:
+  /api/v1/auth/profile:
     patch:
       consumes:
       - application/json
@@ -2841,7 +3135,7 @@ paths:
       summary: Update current user's profile
       tags:
       - auth.profile
-  /v1/auth/refresh:
+  /api/v1/auth/refresh:
     post:
       consumes:
       - application/json
@@ -2890,7 +3184,7 @@ paths:
       summary: Refresh access token
       tags:
       - auth.tokens
-  /v1/auth/revoke:
+  /api/v1/auth/revoke:
     post:
       consumes:
       - application/json
@@ -2920,7 +3214,7 @@ paths:
       summary: Revoke token
       tags:
       - auth.tokens
-  /v1/auth/sessions:
+  /api/v1/auth/sessions:
     get:
       description: Lists the authenticated user's sessions (refresh tokens) for the
         current tenant.
@@ -2948,7 +3242,7 @@ paths:
       summary: List my active sessions
       tags:
       - auth.sessions
-  /v1/auth/sessions/{id}/revoke:
+  /api/v1/auth/sessions/{id}/revoke:
     post:
       description: Revokes a specific session by ID for the authenticated user within
         the current tenant.
@@ -2984,7 +3278,7 @@ paths:
       summary: Revoke a specific session
       tags:
       - auth.sessions
-  /v1/auth/sso/{provider}/callback:
+  /api/v1/auth/sso/{provider}/callback:
     get:
       description: 'Completes SSO flow and returns access/refresh tokens. When cookie
         mode is requested (`X-Auth-Mode: cookie` or default), Guard issues cookies
@@ -3024,7 +3318,7 @@ paths:
       summary: Handle SSO/OAuth callback
       tags:
       - auth.sso
-  /v1/auth/sso/{provider}/portal-link:
+  /api/v1/auth/sso/{provider}/portal-link:
     get:
       description: Generates a link to the organization portal for the given provider
         and organization ID (admin-only)
@@ -3083,7 +3377,7 @@ paths:
       summary: Generate organization portal link
       tags:
       - auth.sso
-  /v1/auth/sso/{provider}/start:
+  /api/v1/auth/sso/{provider}/start:
     get:
       description: Initiates an SSO flow for the given provider and redirects to the
         provider authorization URL
@@ -3126,7 +3420,7 @@ paths:
       summary: Start SSO/OAuth flow
       tags:
       - auth.sso
-  /v1/sso/sp-info:
+  /api/v1/sso/sp-info:
     get:
       consumes:
       - application/json
@@ -3174,7 +3468,122 @@ paths:
       summary: Get SP Info for SAML configuration
       tags:
       - SSO
-  /v1/tenants/{id}/settings:
+  /api/v1/tenants:
+    get:
+      description: Lists tenants with optional filters and pagination
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      - description: -1 any, 1 active, 0 inactive
+        in: query
+        name: active
+        type: integer
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.listResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List tenants
+      tags:
+      - tenants
+    post:
+      consumes:
+      - application/json
+      description: Creates a new tenant
+      parameters:
+      - description: name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createTenantReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.tenantResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create tenant
+      tags:
+      - tenants
+  /api/v1/tenants/{id}:
+    get:
+      description: Fetch a tenant by UUID
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.tenantResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get tenant by ID
+      tags:
+      - tenants
+  /api/v1/tenants/{id}/deactivate:
+    patch:
+      description: Deactivates a tenant by ID
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Deactivate tenant
+      tags:
+      - tenants
+  /api/v1/tenants/{id}/settings:
     get:
       description: Returns tenant-scoped settings required for SSO setup (WorkOS)
       parameters:
@@ -3266,6 +3675,37 @@ paths:
       security:
       - BearerAuth: []
       summary: Upsert tenant settings (subset)
+      tags:
+      - tenants
+  /api/v1/tenants/by-name/{name}:
+    get:
+      description: Fetch a tenant by unique name
+      parameters:
+      - description: Tenant name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.tenantResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get tenant by name
       tags:
       - tenants
 schemes:

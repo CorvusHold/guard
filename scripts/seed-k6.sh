@@ -43,7 +43,7 @@ ENV_OUT="$(
         --output env)"
       TENANT_ID="$(printf "%s\n" "$ENV_OUT" | grep -m 1 "^TENANT_ID=" | cut -d= -f2-)"
       if [ -n "$TENANT_ID" ]; then
-        curl -sS -o /dev/null -X PUT "http://localhost:8080/v1/tenants/$TENANT_ID/settings" \
+        curl -sS -o /dev/null -X PUT "http://localhost:8080/api/v1/tenants/$TENANT_ID/settings" \
           -H "Authorization: Bearer $GUARD_API_TOKEN" \
           -H "Content-Type: application/json" \
           --data-binary @- <<JSON

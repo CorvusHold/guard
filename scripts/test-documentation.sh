@@ -136,7 +136,7 @@ test_api_endpoints() {
     
     # Test authentication
     log_info "Testing password login..."
-    LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/auth/password/login" \
+    LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/v1/auth/password/login" \
         -H "Content-Type: application/json" \
         -d "{
             \"tenant_id\": \"$TEST_TENANT_ID\",
@@ -176,7 +176,7 @@ test_api_endpoints() {
     log_info "Testing settings endpoints..."
     
     # Get settings
-    SETTINGS_RESPONSE=$(curl -s "$BASE_URL/v1/tenants/$TEST_TENANT_ID/settings" \
+    SETTINGS_RESPONSE=$(curl -s "$BASE_URL/api/v1/tenants/$TEST_TENANT_ID/settings" \
         -H "Authorization: Bearer $ACCESS_TOKEN")
     
     if ! echo "$SETTINGS_RESPONSE" | jq -e '.tenant_id' > /dev/null; then
@@ -185,7 +185,7 @@ test_api_endpoints() {
     fi
     
     # Update settings
-    UPDATE_RESPONSE=$(curl -s -X PUT "$BASE_URL/v1/tenants/$TEST_TENANT_ID/settings" \
+    UPDATE_RESPONSE=$(curl -s -X PUT "$BASE_URL/api/v1/tenants/$TEST_TENANT_ID/settings" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
         -d '{
@@ -203,7 +203,7 @@ test_api_endpoints() {
     
     # Test user signup
     log_info "Testing user signup..."
-    SIGNUP_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/auth/signup" \
+    SIGNUP_RESPONSE=$(curl -s -X POST "$BASE_URL/api/v1/auth/signup" \
         -H "Content-Type: application/json" \
         -d "{
             \"tenant_id\": \"$TEST_TENANT_ID\",
@@ -246,7 +246,7 @@ test_workflows() {
     DEV_TENANT_ID=$(echo "$DEV_OUTPUT" | grep TENANT_ID | cut -d'=' -f2)
     
     # Get dev admin token
-    DEV_TOKEN_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/auth/password/login" \
+    DEV_TOKEN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/v1/auth/password/login" \
         -H "Content-Type: application/json" \
         -d "{
             \"tenant_id\": \"$DEV_TENANT_ID\",
@@ -257,7 +257,7 @@ test_workflows() {
     DEV_TOKEN=$(echo "$DEV_TOKEN_RESPONSE" | jq -r '.access_token')
     
     # Configure dev settings
-    curl -s -X PUT "$BASE_URL/v1/tenants/$DEV_TENANT_ID/settings" \
+    curl -s -X PUT "$BASE_URL/api/v1/tenants/$DEV_TENANT_ID/settings" \
         -H "Authorization: Bearer $DEV_TOKEN" \
         -H "Content-Type: application/json" \
         -d '{
