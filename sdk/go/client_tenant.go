@@ -21,26 +21,22 @@ type TenantResponse struct {
 
 // CreateTenant creates a new tenant.
 func (c *GuardClient) CreateTenant(ctx context.Context, req CreateTenantRequest) (*TenantResponse, error) {
-	body := ControllerCreateTenantRequest{Name: req.Name}
-	resp, err := c.inner.PostTenantsWithResponse(ctx, body)
+	body := ControllerCreateTenantReq{Name: req.Name}
+	resp, err := c.inner.PostApiV1TenantsWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.JSON201 == nil && resp.JSON200 == nil {
+	if resp.JSON201 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	// Handle both 201 Created and 200 OK responses
-	var result *ControllerTenantResponse
-	if resp.JSON201 != nil {
-		result = resp.JSON201
-	} else {
-		result = resp.JSON200
+	result := resp.JSON201
+	tenant := &TenantResponse{}
+	if result.Id != nil {
+		tenant.ID = *result.Id
 	}
-
-	tenant := &TenantResponse{
-		ID:   result.Id,
-		Name: result.Name,
+	if result.Name != nil {
+		tenant.Name = *result.Name
 	}
 	if result.IsActive != nil {
 		tenant.IsActive = *result.IsActive
@@ -64,7 +60,7 @@ func (c *GuardClient) GetTenant(ctx context.Context, tenantID string) (*TenantRe
 		return nil, errors.New("tenant ID required")
 	}
 
-	resp, err := c.inner.GetTenantsIdWithResponse(ctx, tenantID)
+	resp, err := c.inner.GetApiV1TenantsIdWithResponse(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +68,12 @@ func (c *GuardClient) GetTenant(ctx context.Context, tenantID string) (*TenantRe
 		return nil, errors.New(resp.Status())
 	}
 
-	tenant := &TenantResponse{
-		ID:   resp.JSON200.Id,
-		Name: resp.JSON200.Name,
+	tenant := &TenantResponse{}
+	if resp.JSON200.Id != nil {
+		tenant.ID = *resp.JSON200.Id
+	}
+	if resp.JSON200.Name != nil {
+		tenant.Name = *resp.JSON200.Name
 	}
 	if resp.JSON200.IsActive != nil {
 		tenant.IsActive = *resp.JSON200.IsActive

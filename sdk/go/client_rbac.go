@@ -50,7 +50,7 @@ type UserRoleRequest struct {
 
 // ListPermissions retrieves all available permissions. Requires admin role.
 func (c *GuardClient) ListPermissions(ctx context.Context) ([]Permission, error) {
-	resp, err := c.inner.GetV1AuthAdminRbacPermissionsWithResponse(ctx)
+	resp, err := c.inner.GetApiV1AuthAdminRbacPermissionsWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +61,9 @@ func (c *GuardClient) ListPermissions(ctx context.Context) ([]Permission, error)
 	var permissions []Permission
 	if resp.JSON200.Permissions != nil {
 		for _, p := range *resp.JSON200.Permissions {
-			perm := Permission{
-				Key:  p.Key,
-				Name: p.Name,
+			perm := Permission{}
+			if p.Key != nil {
+				perm.Key = *p.Key
 			}
 			if p.Description != nil {
 				perm.Description = *p.Description
@@ -84,8 +84,8 @@ func (c *GuardClient) ListRoles(ctx context.Context, tenantID string) ([]Role, e
 		return nil, errors.New("tenant ID required")
 	}
 
-	params := &GetV1AuthAdminRbacRolesParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminRbacRolesWithResponse(ctx, params)
+	params := &GetApiV1AuthAdminRbacRolesParams{TenantId: tenantID}
+	resp, err := c.inner.GetApiV1AuthAdminRbacRolesWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -96,16 +96,18 @@ func (c *GuardClient) ListRoles(ctx context.Context, tenantID string) ([]Role, e
 	var roles []Role
 	if resp.JSON200.Roles != nil {
 		for _, r := range *resp.JSON200.Roles {
-			role := Role{
-				ID:       r.Id,
-				TenantID: r.TenantId,
-				Name:     r.Name,
+			role := Role{}
+			if r.Id != nil {
+				role.ID = *r.Id
+			}
+			if r.TenantId != nil {
+				role.TenantID = *r.TenantId
+			}
+			if r.Name != nil {
+				role.Name = *r.Name
 			}
 			if r.Description != nil {
 				role.Description = *r.Description
-			}
-			if r.IsSystem != nil {
-				role.IsSystem = *r.IsSystem
 			}
 			if r.CreatedAt != nil {
 				role.CreatedAt = *r.CreatedAt
@@ -135,32 +137,27 @@ func (c *GuardClient) CreateRole(ctx context.Context, req CreateRoleRequest) (*R
 		Name:        req.Name,
 		Description: &req.Description,
 	}
-	resp, err := c.inner.PostV1AuthAdminRbacRolesWithResponse(ctx, body)
+	resp, err := c.inner.PostApiV1AuthAdminRbacRolesWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.JSON201 == nil && resp.JSON200 == nil {
+	if resp.JSON201 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	// Handle both 201 Created and 200 OK responses
-	var result *ControllerRbacRoleItem
-	if resp.JSON201 != nil {
-		result = resp.JSON201
-	} else {
-		result = resp.JSON200
+	result := resp.JSON201
+	role := &Role{}
+	if result.Id != nil {
+		role.ID = *result.Id
 	}
-
-	role := &Role{
-		ID:       result.Id,
-		TenantID: result.TenantId,
-		Name:     result.Name,
+	if result.TenantId != nil {
+		role.TenantID = *result.TenantId
+	}
+	if result.Name != nil {
+		role.Name = *result.Name
 	}
 	if result.Description != nil {
 		role.Description = *result.Description
-	}
-	if result.IsSystem != nil {
-		role.IsSystem = *result.IsSystem
 	}
 	if result.CreatedAt != nil {
 		role.CreatedAt = *result.CreatedAt
@@ -180,11 +177,13 @@ func (c *GuardClient) UpdateRole(ctx context.Context, roleID string, req UpdateR
 	}
 
 	body := ControllerRbacUpdateRoleReq{
-		TenantId:    tenantID,
-		Name:        req.Name,
-		Description: req.Description,
+		TenantId: tenantID,
 	}
-	resp, err := c.inner.PatchV1AuthAdminRbacRolesIdWithResponse(ctx, roleID, body)
+	if req.Name != nil {
+		body.Name = *req.Name
+	}
+	body.Description = req.Description
+	resp, err := c.inner.PatchApiV1AuthAdminRbacRolesIdWithResponse(ctx, roleID, body)
 	if err != nil {
 		return err
 	}
@@ -201,8 +200,8 @@ func (c *GuardClient) DeleteRole(ctx context.Context, roleID string) error {
 		return errors.New("tenant ID required")
 	}
 
-	params := &DeleteV1AuthAdminRbacRolesIdParams{TenantId: tenantID}
-	resp, err := c.inner.DeleteV1AuthAdminRbacRolesIdWithResponse(ctx, roleID, params)
+	params := &DeleteApiV1AuthAdminRbacRolesIdParams{TenantId: tenantID}
+	resp, err := c.inner.DeleteApiV1AuthAdminRbacRolesIdWithResponse(ctx, roleID, params)
 	if err != nil {
 		return err
 	}
@@ -217,7 +216,7 @@ func (c *GuardClient) UpsertRolePermission(ctx context.Context, roleID string, r
 	body := ControllerRbacRolePermissionReq{
 		PermissionKey: req.PermissionKey,
 	}
-	resp, err := c.inner.PostV1AuthAdminRbacRolesIdPermissionsWithResponse(ctx, roleID, body)
+	resp, err := c.inner.PostApiV1AuthAdminRbacRolesIdPermissionsWithResponse(ctx, roleID, body)
 	if err != nil {
 		return err
 	}
@@ -232,7 +231,7 @@ func (c *GuardClient) DeleteRolePermission(ctx context.Context, roleID string, p
 	body := ControllerRbacRolePermissionReq{
 		PermissionKey: permissionKey,
 	}
-	resp, err := c.inner.DeleteV1AuthAdminRbacRolesIdPermissionsWithResponse(ctx, roleID, body)
+	resp, err := c.inner.DeleteApiV1AuthAdminRbacRolesIdPermissionsWithResponse(ctx, roleID, body)
 	if err != nil {
 		return err
 	}
@@ -242,131 +241,18 @@ func (c *GuardClient) DeleteRolePermission(ctx context.Context, roleID string, p
 	return nil
 }
 
-// ListUserRoles retrieves all roles for a user in a tenant. Requires admin role.
-func (c *GuardClient) ListUserRoles(ctx context.Context, userID, tenantID string) ([]Role, error) {
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
+// ListUserRoles is not yet implemented.
+// See ADR 0008 for status on additional RBAC user assignment endpoints.
+// func (c *GuardClient) ListUserRoles(ctx context.Context, userID, tenantID string) ([]Role, error)
 
-	params := &GetV1AuthAdminRbacUsersUserIdRolesParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminRbacUsersUserIdRolesWithResponse(ctx, userID, params)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
+// AddUserRole is not yet implemented.
+// See ADR 0008 for status on additional RBAC user assignment endpoints.
+// func (c *GuardClient) AddUserRole(ctx context.Context, userID string, req UserRoleRequest) error
 
-	var roles []Role
-	if resp.JSON200.Roles != nil {
-		for _, r := range *resp.JSON200.Roles {
-			role := Role{
-				ID:       r.Id,
-				TenantID: r.TenantId,
-				Name:     r.Name,
-			}
-			if r.Description != nil {
-				role.Description = *r.Description
-			}
-			if r.IsSystem != nil {
-				role.IsSystem = *r.IsSystem
-			}
-			if r.CreatedAt != nil {
-				role.CreatedAt = *r.CreatedAt
-			}
-			if r.UpdatedAt != nil {
-				role.UpdatedAt = *r.UpdatedAt
-			}
-			roles = append(roles, role)
-		}
-	}
+// RemoveUserRole is not yet implemented.
+// See ADR 0008 for status on additional RBAC user assignment endpoints.
+// func (c *GuardClient) RemoveUserRole(ctx context.Context, userID string, req UserRoleRequest) error
 
-	return roles, nil
-}
-
-// AddUserRole assigns a role to a user. Requires admin role.
-func (c *GuardClient) AddUserRole(ctx context.Context, userID string, req UserRoleRequest) error {
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return errors.New("tenant ID required")
-	}
-
-	body := ControllerRbacModifyUserRoleReq{
-		TenantId: tenantID,
-		RoleId:   req.RoleID,
-	}
-	resp, err := c.inner.PostV1AuthAdminRbacUsersUserIdRolesWithResponse(ctx, userID, body)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent && resp.StatusCode() != http.StatusCreated) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// RemoveUserRole removes a role from a user. Requires admin role.
-func (c *GuardClient) RemoveUserRole(ctx context.Context, userID string, req UserRoleRequest) error {
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return errors.New("tenant ID required")
-	}
-
-	body := ControllerRbacModifyUserRoleReq{
-		TenantId: tenantID,
-		RoleId:   req.RoleID,
-	}
-	resp, err := c.inner.DeleteV1AuthAdminRbacUsersUserIdRolesWithResponse(ctx, userID, body)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// ResolveUserPermissions retrieves all resolved permissions for a user in a tenant.
-// This includes permissions from all assigned roles. Requires admin role.
-func (c *GuardClient) ResolveUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error) {
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
-
-	params := &GetV1AuthAdminRbacUsersUserIdPermissionsResolveParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminRbacUsersUserIdPermissionsResolveWithResponse(ctx, userID, params)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
-
-	var permissions []Permission
-	if resp.JSON200.Permissions != nil {
-		for _, p := range *resp.JSON200.Permissions {
-			perm := Permission{
-				Key:  p.Key,
-				Name: p.Name,
-			}
-			if p.Description != nil {
-				perm.Description = *p.Description
-			}
-			permissions = append(permissions, perm)
-		}
-	}
-
-	return permissions, nil
-}
+// ResolveUserPermissions is not yet implemented.
+// See ADR 0008 for status on additional RBAC user assignment endpoints.
+// func (c *GuardClient) ResolveUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error)

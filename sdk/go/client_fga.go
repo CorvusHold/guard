@@ -3,7 +3,6 @@ package guard
 import (
 	"context"
 	"errors"
-	"net/http"
 )
 
 // FGAGroup represents a Fine-Grained Authorization group.
@@ -89,8 +88,8 @@ func (c *GuardClient) ListFGAGroups(ctx context.Context, tenantID string) ([]FGA
 		return nil, errors.New("tenant ID required")
 	}
 
-	params := &GetV1AuthAdminFgaGroupsParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminFgaGroupsWithResponse(ctx, params)
+	params := &GetApiV1AuthAdminFgaGroupsParams{TenantId: tenantID}
+	resp, err := c.inner.GetApiV1AuthAdminFgaGroupsWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -101,19 +100,18 @@ func (c *GuardClient) ListFGAGroups(ctx context.Context, tenantID string) ([]FGA
 	var groups []FGAGroup
 	if resp.JSON200.Groups != nil {
 		for _, g := range *resp.JSON200.Groups {
-			group := FGAGroup{
-				ID:       g.Id,
-				TenantID: g.TenantId,
-				Name:     g.Name,
+			group := FGAGroup{}
+			if g.Id != nil {
+				group.ID = *g.Id
+			}
+			if g.TenantId != nil {
+				group.TenantID = *g.TenantId
+			}
+			if g.Name != nil {
+				group.Name = *g.Name
 			}
 			if g.Description != nil {
 				group.Description = *g.Description
-			}
-			if g.CreatedAt != nil {
-				group.CreatedAt = *g.CreatedAt
-			}
-			if g.UpdatedAt != nil {
-				group.UpdatedAt = *g.UpdatedAt
 			}
 			groups = append(groups, group)
 		}
@@ -137,281 +135,64 @@ func (c *GuardClient) CreateFGAGroup(ctx context.Context, req CreateFGAGroupRequ
 		Name:        req.Name,
 		Description: &req.Description,
 	}
-	resp, err := c.inner.PostV1AuthAdminFgaGroupsWithResponse(ctx, body)
+	resp, err := c.inner.PostApiV1AuthAdminFgaGroupsWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.JSON201 == nil && resp.JSON200 == nil {
+	if resp.JSON201 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	// Handle both 201 Created and 200 OK responses
-	var result *ControllerFgaGroupItem
-	if resp.JSON201 != nil {
-		result = resp.JSON201
-	} else {
-		result = resp.JSON200
+	result := resp.JSON201
+	group := &FGAGroup{}
+	if result.Id != nil {
+		group.ID = *result.Id
 	}
-
-	group := &FGAGroup{
-		ID:       result.Id,
-		TenantID: result.TenantId,
-		Name:     result.Name,
+	if result.TenantId != nil {
+		group.TenantID = *result.TenantId
+	}
+	if result.Name != nil {
+		group.Name = *result.Name
 	}
 	if result.Description != nil {
 		group.Description = *result.Description
-	}
-	if result.CreatedAt != nil {
-		group.CreatedAt = *result.CreatedAt
-	}
-	if result.UpdatedAt != nil {
-		group.UpdatedAt = *result.UpdatedAt
 	}
 
 	return group, nil
 }
 
-// UpdateFGAGroup updates an existing FGA group. Requires admin role.
-func (c *GuardClient) UpdateFGAGroup(ctx context.Context, groupID string, req UpdateFGAGroupRequest) error {
-	tenantID := c.tenantID
-	if tenantID == "" {
-		return errors.New("tenant ID required")
-	}
+// UpdateFGAGroup is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) UpdateFGAGroup(ctx context.Context, groupID string, req UpdateFGAGroupRequest) error
 
-	body := ControllerFgaUpdateGroupReq{
-		TenantId:    tenantID,
-		Name:        req.Name,
-		Description: req.Description,
-	}
-	resp, err := c.inner.PatchV1AuthAdminFgaGroupsIdWithResponse(ctx, groupID, body)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
+// DeleteFGAGroup is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) DeleteFGAGroup(ctx context.Context, groupID string) error
 
-// DeleteFGAGroup deletes an FGA group. Requires admin role.
-func (c *GuardClient) DeleteFGAGroup(ctx context.Context, groupID string) error {
-	tenantID := c.tenantID
-	if tenantID == "" {
-		return errors.New("tenant ID required")
-	}
+// ListFGAGroupMembers is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) ListFGAGroupMembers(ctx context.Context, groupID string) ([]FGAGroupMember, error)
 
-	params := &DeleteV1AuthAdminFgaGroupsIdParams{TenantId: tenantID}
-	resp, err := c.inner.DeleteV1AuthAdminFgaGroupsIdWithResponse(ctx, groupID, params)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
+// AddFGAGroupMember is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) AddFGAGroupMember(ctx context.Context, groupID string, req AddFGAGroupMemberRequest) error
 
-// ListFGAGroupMembers retrieves all members of an FGA group. Requires admin role.
-func (c *GuardClient) ListFGAGroupMembers(ctx context.Context, groupID string) ([]FGAGroupMember, error) {
-	resp, err := c.inner.GetV1AuthAdminFgaGroupsIdMembersWithResponse(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
+// RemoveFGAGroupMember is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) RemoveFGAGroupMember(ctx context.Context, groupID, userID string) error
 
-	var members []FGAGroupMember
-	if resp.JSON200.Members != nil {
-		for _, m := range *resp.JSON200.Members {
-			member := FGAGroupMember{
-				UserID:  m.UserId,
-				GroupID: m.GroupId,
-			}
-			if m.AddedAt != nil {
-				member.AddedAt = *m.AddedAt
-			}
-			if m.AddedBy != nil {
-				member.AddedBy = *m.AddedBy
-			}
-			members = append(members, member)
-		}
-	}
+// ListFGAACLTuples is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) ListFGAACLTuples(ctx context.Context, tenantID string) ([]FGAACLTuple, error)
 
-	return members, nil
-}
+// CreateFGAACLTuple is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) CreateFGAACLTuple(ctx context.Context, req CreateFGAACLTupleRequest) (*FGAACLTuple, error)
 
-// AddFGAGroupMember adds a user to an FGA group. Requires admin role.
-func (c *GuardClient) AddFGAGroupMember(ctx context.Context, groupID string, req AddFGAGroupMemberRequest) error {
-	body := ControllerFgaAddGroupMemberReq{
-		UserId: req.UserID,
-	}
-	resp, err := c.inner.PostV1AuthAdminFgaGroupsIdMembersWithResponse(ctx, groupID, body)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent && resp.StatusCode() != http.StatusCreated) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
+// DeleteFGAACLTuple is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) DeleteFGAACLTuple(ctx context.Context, tupleID string) error
 
-// RemoveFGAGroupMember removes a user from an FGA group. Requires admin role.
-func (c *GuardClient) RemoveFGAGroupMember(ctx context.Context, groupID, userID string) error {
-	resp, err := c.inner.DeleteV1AuthAdminFgaGroupsIdMembersUserIdWithResponse(ctx, groupID, userID)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// ListFGAACLTuples retrieves all ACL tuples for a tenant. Requires admin role.
-func (c *GuardClient) ListFGAACLTuples(ctx context.Context, tenantID string) ([]FGAACLTuple, error) {
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
-
-	params := &GetV1AuthAdminFgaAclTuplesParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminFgaAclTuplesWithResponse(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
-
-	var tuples []FGAACLTuple
-	if resp.JSON200.Tuples != nil {
-		for _, t := range *resp.JSON200.Tuples {
-			tuple := FGAACLTuple{
-				ID:            t.Id,
-				TenantID:      t.TenantId,
-				SubjectType:   t.SubjectType,
-				SubjectID:     t.SubjectId,
-				PermissionKey: t.PermissionKey,
-				ObjectType:    t.ObjectType,
-			}
-			if t.ObjectId != nil {
-				tuple.ObjectID = t.ObjectId
-			}
-			if t.CreatedBy != nil {
-				tuple.CreatedBy = t.CreatedBy
-			}
-			if t.CreatedAt != nil {
-				tuple.CreatedAt = *t.CreatedAt
-			}
-			tuples = append(tuples, tuple)
-		}
-	}
-
-	return tuples, nil
-}
-
-// CreateFGAACLTuple creates a new ACL tuple. Requires admin role.
-func (c *GuardClient) CreateFGAACLTuple(ctx context.Context, req CreateFGAACLTupleRequest) (*FGAACLTuple, error) {
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
-
-	body := ControllerFgaCreateAclTupleReq{
-		TenantId:      tenantID,
-		SubjectType:   req.SubjectType,
-		SubjectId:     req.SubjectID,
-		PermissionKey: req.PermissionKey,
-		ObjectType:    req.ObjectType,
-		ObjectId:      req.ObjectID,
-	}
-	resp, err := c.inner.PostV1AuthAdminFgaAclTuplesWithResponse(ctx, body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON201 == nil && resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
-
-	// Handle both 201 Created and 200 OK responses
-	var result *ControllerFgaAclTupleItem
-	if resp.JSON201 != nil {
-		result = resp.JSON201
-	} else {
-		result = resp.JSON200
-	}
-
-	tuple := &FGAACLTuple{
-		ID:            result.Id,
-		TenantID:      result.TenantId,
-		SubjectType:   result.SubjectType,
-		SubjectID:     result.SubjectId,
-		PermissionKey: result.PermissionKey,
-		ObjectType:    result.ObjectType,
-	}
-	if result.ObjectId != nil {
-		tuple.ObjectID = result.ObjectId
-	}
-	if result.CreatedBy != nil {
-		tuple.CreatedBy = result.CreatedBy
-	}
-	if result.CreatedAt != nil {
-		tuple.CreatedAt = *result.CreatedAt
-	}
-
-	return tuple, nil
-}
-
-// DeleteFGAACLTuple deletes an ACL tuple by ID. Requires admin role.
-func (c *GuardClient) DeleteFGAACLTuple(ctx context.Context, tupleID string) error {
-	resp, err := c.inner.DeleteV1AuthAdminFgaAclTuplesIdWithResponse(ctx, tupleID)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// FGAAuthorize checks if a subject has a specific permission on an object. Requires admin role.
-func (c *GuardClient) FGAAuthorize(ctx context.Context, req FGAAuthorizeRequest) (*FGAAuthorizeResponse, error) {
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
-
-	body := ControllerFgaAuthorizeReq{
-		TenantId:      tenantID,
-		SubjectType:   req.SubjectType,
-		SubjectId:     req.SubjectID,
-		PermissionKey: req.PermissionKey,
-		ObjectType:    req.ObjectType,
-		ObjectId:      req.ObjectID,
-	}
-	resp, err := c.inner.PostV1AuthAdminFgaAuthorizeWithResponse(ctx, body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, errors.New(resp.Status())
-	}
-
-	allowed := false
-	if resp.JSON200.Allowed != nil {
-		allowed = *resp.JSON200.Allowed
-	}
-
-	return &FGAAuthorizeResponse{
-		Allowed: allowed,
-	}, nil
-}
+// FGAAuthorize is not yet implemented.
+// See ADR 0008 for status on additional FGA management endpoints.
+// func (c *GuardClient) FGAAuthorize(ctx context.Context, req FGAAuthorizeRequest) (*FGAAuthorizeResponse, error)
