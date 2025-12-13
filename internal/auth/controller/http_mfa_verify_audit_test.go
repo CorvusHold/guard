@@ -77,6 +77,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	sb, _ := json.Marshal(sBody)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -116,6 +117,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	})
 	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
+	lreq.Header.Set("X-Auth-Mode", "bearer")
 	lreq.Header.Set("User-Agent", "itest-agent")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
@@ -133,6 +135,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	})
 	vreq := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
 	vreq.Header.Set("Content-Type", "application/json")
+	vreq.Header.Set("X-Auth-Mode", "bearer")
 	vreq.Header.Set("User-Agent", "itest-agent")
 	vrec := httptest.NewRecorder()
 	e.ServeHTTP(vrec, vreq)

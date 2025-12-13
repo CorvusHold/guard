@@ -88,6 +88,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	sb, _ := json.Marshal(sBody)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -147,6 +148,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	rf, _ := json.Marshal(map[string]string{"refresh_token": stoks.RefreshToken})
 	rreq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewReader(rf))
 	rreq.Header.Set("Content-Type", "application/json")
+	rreq.Header.Set("X-Auth-Mode", "bearer")
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)
 	if rrec.Code == http.StatusOK {
@@ -236,6 +238,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	sb, _ := json.Marshal(sBody)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {

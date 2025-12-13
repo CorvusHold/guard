@@ -110,6 +110,7 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 	bb, _ := json.Marshal(body)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(bb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -175,6 +176,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	sb, _ := json.Marshal(sBody)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {

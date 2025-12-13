@@ -68,6 +68,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	sb, _ := json.Marshal(sBody)
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -99,6 +100,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	ub, _ := json.Marshal(uBody)
 	ureq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(ub))
 	ureq.Header.Set("Content-Type", "application/json")
+	ureq.Header.Set("X-Auth-Mode", "bearer")
 	urec := httptest.NewRecorder()
 	e.ServeHTTP(urec, ureq)
 	if urec.Code != http.StatusCreated {

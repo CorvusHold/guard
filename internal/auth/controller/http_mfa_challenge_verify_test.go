@@ -79,6 +79,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 	})
 	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
+	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
 	e.ServeHTTP(recVerify, reqVerify)
 	if recVerify.Code != http.StatusOK {
@@ -165,6 +166,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 	})
 	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
+	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
 	e.ServeHTTP(recVerify, reqVerify)
 	if recVerify.Code != http.StatusOK {

@@ -73,12 +73,14 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 	e := echo.New()
 	e.Validator = noopValidatorWorkOS{}
 	c := New(auth, magic, sso)
-	c.Register(e)
+ api := e.Group("/api")
+ apiV1 := api.Group("/v1")
+ c.RegisterV1(apiV1)
 
 	// Start: expect redirect to WorkOS authorize
 	qs := url.Values{}
 	qs.Set("tenant_id", tenantID.String())
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?"+qs.Encode(), nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
@@ -106,7 +108,7 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 			b, _ := io.ReadAll(r.Body)
 			_ = r.Body.Close()
 			formVals, _ := url.ParseQuery(string(b))
-			expectedRedirect := cfg.PublicBaseURL + "/v1/auth/sso/google/callback"
+			expectedRedirect := cfg.PublicBaseURL + "/api/v1/auth/sso/google/callback"
 			if formVals.Get("redirect_uri") != expectedRedirect {
 				return httpmock.NewStringResponse(400, `{"error":"bad_redirect_uri"}`), nil
 			}
@@ -127,7 +129,8 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 	cbQS := url.Values{}
 	cbQS.Set("code", "code_logout_test")
 	cbQS.Set("state", state)
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
+ req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
@@ -152,7 +155,7 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 
 	// Call logout with the refresh token
 	logoutBody := strings.NewReader(`{"refresh_token":"` + trsp.RefreshToken + `"}`)
-	req3 := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", logoutBody)
+	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", logoutBody)
 	req3.Header.Set("Content-Type", "application/json")
 	rec3 := httptest.NewRecorder()
 	e.ServeHTTP(rec3, req3)
@@ -169,7 +172,7 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 
 	// Attempt to refresh should now fail (401)
 	refreshBody := strings.NewReader(`{"refresh_token":"` + trsp.RefreshToken + `"}`)
-	req4 := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", refreshBody)
+	req4 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", refreshBody)
 	req4.Header.Set("Content-Type", "application/json")
 	rec4 := httptest.NewRecorder()
 	e.ServeHTTP(rec4, req4)

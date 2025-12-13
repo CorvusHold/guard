@@ -66,15 +66,17 @@ func TestHTTP_SSO_Dev_RedirectAllowlist_Disallowed_400(t *testing.T) {
 
 	e := echo.New()
 	e.Validator = noopValidatorSSO{}
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
 	c := New(auth, magic, sso)
-	c.Register(e)
+	c.RegisterV1(apiV1)
 
 	// Start with a redirect not on allowlist
 	qs := url.Values{}
 	qs.Set("tenant_id", tenantID.String())
 	qs.Set("redirect_url", "http://localhost/cb")
 	qs.Set("state", "x")
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?"+qs.Encode(), nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -134,15 +136,17 @@ func TestHTTP_SSO_Dev_RedirectAllowlist_AllowedPrefix_OK(t *testing.T) {
 
 	e := echo.New()
 	e.Validator = noopValidatorSSO{}
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
 	c := New(auth, magic, sso)
-	c.Register(e)
+	c.RegisterV1(apiV1)
 
 	// Start with an allowed redirect prefix
 	qs := url.Values{}
 	qs.Set("tenant_id", tenantID.String())
 	qs.Set("redirect_url", "http://localhost/cb?ok=1")
 	qs.Set("state", "abc")
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?"+qs.Encode(), nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
@@ -162,6 +166,7 @@ func TestHTTP_SSO_Dev_RedirectAllowlist_AllowedPrefix_OK(t *testing.T) {
 
 	// Follow callback
 	req2 := httptest.NewRequest(http.MethodGet, u.RequestURI(), nil)
+	req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
@@ -228,15 +233,17 @@ func TestHTTP_SSO_Dev_StartAndCallback(t *testing.T) {
 
 	e := echo.New()
 	e.Validator = noopValidatorSSO{}
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
 	c := New(auth, magic, sso)
-	c.Register(e)
+	c.RegisterV1(apiV1)
 
-	// GET /v1/auth/sso/google/start
+	// GET /api/v1/auth/sso/google/start
 	qs := url.Values{}
 	qs.Set("tenant_id", tenantID.String())
 	qs.Set("redirect_url", "http://localhost/cb")
 	qs.Set("state", "abc")
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?"+qs.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?"+qs.Encode(), nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
@@ -256,6 +263,7 @@ func TestHTTP_SSO_Dev_StartAndCallback(t *testing.T) {
 
 	// Follow callback
 	req2 := httptest.NewRequest(http.MethodGet, u.RequestURI(), nil)
+	req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {

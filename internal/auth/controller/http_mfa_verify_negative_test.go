@@ -59,6 +59,7 @@ func TestHTTP_MFA_Verify_WrongCode_TOTP(t *testing.T) {
 	})
 	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
+	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
 	e.ServeHTTP(recVerify, reqVerify)
 	if recVerify.Code != http.StatusUnauthorized {
