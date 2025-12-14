@@ -121,7 +121,7 @@ export default function SsoProviderOidcFields({
                 type="url"
                 value={form.userinfo_endpoint || ''}
                 onChange={e => updateForm('userinfo_endpoint', e.target.value)}
-                placeholder="https://openidconnect.googleapis.com/v1/userinfo"
+                placeholder="https://openidconnect.googleapis.com/api/v1/userinfo"
               />
             </div>
 

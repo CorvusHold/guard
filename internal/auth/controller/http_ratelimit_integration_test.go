@@ -66,7 +66,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 	lb, _ := json.Marshal(lBody)
 
 	// first
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
@@ -93,7 +93,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 	}
 
 	// second
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
@@ -102,7 +102,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 	}
 
 	// third -> expect 429
-	r3 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r3.Header.Set("Content-Type", "application/json")
 	w3 := httptest.NewRecorder()
 	e.ServeHTTP(w3, r3)
@@ -154,7 +154,7 @@ func TestHTTP_RateLimit_Magic_Send(t *testing.T) {
 		"email":     "rl.magic@example.com",
 	}
 	b, _ := json.Marshal(body)
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/magic/send?tenant_id="+tenantID.String(), bytes.NewReader(b))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/magic/send?tenant_id="+tenantID.String(), bytes.NewReader(b))
 	r1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
@@ -163,7 +163,7 @@ func TestHTTP_RateLimit_Magic_Send(t *testing.T) {
 	}
 
 	// second send in window -> 429
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/magic/send?tenant_id="+tenantID.String(), bytes.NewReader(b))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/magic/send?tenant_id="+tenantID.String(), bytes.NewReader(b))
 	r2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
@@ -214,7 +214,7 @@ func TestHTTP_RateLimit_MFA_Verify(t *testing.T) {
 		"code":            "000000",
 		"method":          "totp",
 	})
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(v1b))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(v1b))
 	r1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
@@ -223,7 +223,7 @@ func TestHTTP_RateLimit_MFA_Verify(t *testing.T) {
 	}
 
 	// second verify in window -> 429 due to RL
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(v1b))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(v1b))
 	r2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
@@ -268,7 +268,7 @@ func TestHTTP_RateLimit_SSO_Start(t *testing.T) {
 	c.Register(e)
 
 	// first start -> expect 302 or 400 depending on provider config, but allowed by RL
-	r1 := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?tenant_id="+tenantID.String()+"&redirect_url=https://example.com/callback", nil)
+	r1 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?tenant_id="+tenantID.String()+"&redirect_url=https://example.com/callback", nil)
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
 	if w1.Code == http.StatusTooManyRequests {
@@ -276,7 +276,7 @@ func TestHTTP_RateLimit_SSO_Start(t *testing.T) {
 	}
 
 	// second start in window -> 429
-	r2 := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/google/start?tenant_id="+tenantID.String()+"&redirect_url=https://example.com/callback", nil)
+	r2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/start?tenant_id="+tenantID.String()+"&redirect_url=https://example.com/callback", nil)
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
 	if w2.Code != http.StatusTooManyRequests {
@@ -327,7 +327,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideLimit(t *testing.T) {
 
 	// signup once
 	sb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": email, "password": password})
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -339,7 +339,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideLimit(t *testing.T) {
 	lb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": email, "password": password})
 
 	// first login -> allowed
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
@@ -348,7 +348,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideLimit(t *testing.T) {
 	}
 
 	// second login in same window -> 429 because limit=1
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
@@ -400,7 +400,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 	password := "Password!123"
 
 	sb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": email, "password": password})
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -412,7 +412,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 	lb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": email, "password": password})
 
 	// request #1
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	e.ServeHTTP(w1, r1)
@@ -420,7 +420,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 		t.Fatalf("login#1 expected 200/202, got %d: %s", w1.Code, w1.Body.String())
 	}
 	// request #2 (still within 2s) -> allowed
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	e.ServeHTTP(w2, r2)
@@ -428,7 +428,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 		t.Fatalf("login#2 expected 200/202, got %d: %s", w2.Code, w2.Body.String())
 	}
 	// request #3 -> 429
-	r3 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r3.Header.Set("Content-Type", "application/json")
 	w3 := httptest.NewRecorder()
 	e.ServeHTTP(w3, r3)
@@ -437,7 +437,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 	}
 	// wait for window to reset, then allowed again
 	time.Sleep(2200 * time.Millisecond)
-	r4 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r4 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
 	r4.Header.Set("Content-Type", "application/json")
 	w4 := httptest.NewRecorder()
 	e.ServeHTTP(w4, r4)
@@ -497,7 +497,7 @@ func TestHTTP_RateLimit_MFA_Verify_11th429_ShortWindow(t *testing.T) {
 
 	// First 10 requests should not be 429 (likely 400 due to invalid payload)
 	for i := 1; i <= 10; i++ {
-		r := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		e.ServeHTTP(w, r)
@@ -507,7 +507,7 @@ func TestHTTP_RateLimit_MFA_Verify_11th429_ShortWindow(t *testing.T) {
 	}
 
 	// 11th request within the same 1s window should be 429
-	r11 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
+	r11 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify?tenant_id="+tenantID.String(), bytes.NewReader(body))
 	r11.Header.Set("Content-Type", "application/json")
 	w11 := httptest.NewRecorder()
 	e.ServeHTTP(w11, r11)

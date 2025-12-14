@@ -39,8 +39,8 @@ func (c *GuardClient) PasswordSignup(ctx context.Context, req ControllerSignupRe
 // EmailDiscover performs email discovery for progressive login flows.
 // It determines if an email exists and which tenant it belongs to.
 func (c *GuardClient) EmailDiscover(ctx context.Context, email string, tenantID *string) (*EmailDiscoveryResult, error) {
-	req := PostApiV1AuthEmailDiscoverJSONRequestBody{Email: email}
-	resp, err := c.inner.PostApiV1AuthEmailDiscoverWithResponse(ctx, req)
+	params := &GetApiV1AuthLoginOptionsParams{Email: &email, TenantId: tenantID}
+	resp, err := c.inner.GetApiV1AuthLoginOptionsWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -53,13 +53,11 @@ func (c *GuardClient) EmailDiscover(ctx context.Context, email string, tenantID 
 		HasTenant: false,
 	}
 
-	if resp.JSON200.Found != nil {
-		result.Found = *resp.JSON200.Found
+	if resp.JSON200.UserExists != nil {
+		result.Found = *resp.JSON200.UserExists
 	}
-	if resp.JSON200.HasTenant != nil {
-		result.HasTenant = *resp.JSON200.HasTenant
-	}
-	if resp.JSON200.TenantId != nil {
+	if resp.JSON200.TenantId != nil && *resp.JSON200.TenantId != "" {
+		result.HasTenant = true
 		result.TenantID = resp.JSON200.TenantId
 	}
 	if resp.JSON200.TenantName != nil {

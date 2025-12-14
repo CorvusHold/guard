@@ -50,7 +50,7 @@ func (h *SSOController) WithRateLimitStore(store ratelimit.Store) *SSOController
 // Register registers SSO routes with the Echo router.
 func (h *SSOController) Register(e *echo.Echo) {
 	// Rate limiting middleware for public SSO endpoints
-	var rlInitiate, rlCallback, rlPortalSession, rlPortalProvider echo.MiddlewareFunc
+	var rlInitiate, rlCallback echo.MiddlewareFunc
 	if h.rl != nil {
 		rlInitiate = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:initiate",
@@ -61,20 +61,6 @@ func (h *SSOController) Register(e *echo.Echo) {
 
 		rlCallback = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:callback",
-			Limit:  20,
-			Window: time.Minute,
-			Key:    func(c echo.Context) string { return c.RealIP() },
-		}, h.rl)
-
-		rlPortalSession = ratelimit.MiddlewareWithStore(ratelimit.Policy{
-			Name:   "sso:portal_session",
-			Limit:  10,
-			Window: time.Minute,
-			Key:    func(c echo.Context) string { return c.RealIP() },
-		}, h.rl)
-
-		rlPortalProvider = ratelimit.MiddlewareWithStore(ratelimit.Policy{
-			Name:   "sso:portal_provider",
 			Limit:  20,
 			Window: time.Minute,
 			Key:    func(c echo.Context) string { return c.RealIP() },
@@ -107,28 +93,6 @@ func (h *SSOController) Register(e *echo.Echo) {
 	e.GET("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout)
 	e.POST("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout) // SAML SLO POST binding
 	e.GET("/auth/sso/:slug/metadata", h.handleSAMLMetadataLegacy)    // Legacy redirect
-
-	// Admin API endpoints (authentication required)
-	admin := e.Group("/v1/sso")
-	admin.POST("/providers", h.handleCreateProvider)
-	admin.GET("/providers", h.handleListProviders)
-	admin.GET("/providers/:id", h.handleGetProvider)
-	admin.PUT("/providers/:id", h.handleUpdateProvider)
-	admin.DELETE("/providers/:id", h.handleDeleteProvider)
-	admin.POST("/providers/:id/test", h.handleTestProvider)
-	admin.GET("/sp-info", h.handleGetSPInfo)
-
-	// Portal token endpoints (no Guard auth, portal-token gated)
-	if rlPortalSession != nil {
-		e.POST("/v1/sso/portal/session", h.handlePortalSession, rlPortalSession)
-	} else {
-		e.POST("/v1/sso/portal/session", h.handlePortalSession)
-	}
-	if rlPortalProvider != nil {
-		e.GET("/v1/sso/portal/provider", h.handlePortalProvider, rlPortalProvider)
-	} else {
-		e.GET("/v1/sso/portal/provider", h.handlePortalProvider)
-	}
 }
 
 // RegisterV1 registers SSO JSON APIs under /api/v1/sso.
@@ -618,6 +582,15 @@ type portalSessionResponse struct {
 }
 
 // POST /v1/sso/portal/session
+// @Summary Exchange portal token for session
+// @Description Exchanges a one-time portal token for validated portal session context
+// @Tags SSO
+// @Accept json
+// @Produce json
+// @Param body body portalSessionRequest true "Portal token exchange request"
+// @Success 200 {object} portalSessionResponse
+// @Failure 400 {object} map[string]string
+// @Router /api/v1/sso/portal/session [post]
 func (h *SSOController) handlePortalSession(c echo.Context) error {
 	var req portalSessionRequest
 	if err := c.Bind(&req); err != nil {
@@ -645,6 +618,16 @@ func (h *SSOController) handlePortalSession(c echo.Context) error {
 }
 
 // GET /v1/sso/portal/provider
+// @Summary Get masked SSO provider via portal token
+// @Description Fetches the masked SSO provider configuration using a portal token
+// @Tags SSO
+// @Produce json
+// @Param X-Portal-Token header string false "Portal token"
+// @Param token query string false "Portal token (fallback)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /api/v1/sso/portal/provider [get]
 func (h *SSOController) handlePortalProvider(c echo.Context) error {
 	token := strings.TrimSpace(c.Request().Header.Get("X-Portal-Token"))
 	if token == "" {
@@ -682,7 +665,7 @@ func (h *SSOController) handlePortalProvider(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers [post]
+// @Router       /api/v1/sso/providers [post]
 func (h *SSOController) handleCreateProvider(c echo.Context) error {
 	// Check authentication
 	userID, tenantID, isAdmin, err := h.requireAdmin(c)
@@ -774,7 +757,7 @@ func (h *SSOController) handleCreateProvider(c echo.Context) error {
 // @Failure      400        {object}  map[string]string
 // @Failure      401        {object}  map[string]string
 // @Failure      403        {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers [get]
+// @Router       /api/v1/sso/providers [get]
 func (h *SSOController) handleListProviders(c echo.Context) error {
 	// Check authentication
 	_, tenantID, _, err := h.requireAdmin(c)
@@ -823,7 +806,7 @@ func (h *SSOController) handleListProviders(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers/{id} [get]
+// @Router       /api/v1/sso/providers/{id} [get]
 func (h *SSOController) handleGetProvider(c echo.Context) error {
 	// Check authentication
 	_, tenantID, _, err := h.requireAdmin(c)
@@ -859,7 +842,7 @@ func (h *SSOController) handleGetProvider(c echo.Context) error {
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
 // @Failure      404   {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers/{id} [put]
+// @Router       /api/v1/sso/providers/{id} [put]
 func (h *SSOController) handleUpdateProvider(c echo.Context) error {
 	// Check authentication
 	_, tenantID, _, err := h.requireAdmin(c)
@@ -939,7 +922,7 @@ func (h *SSOController) handleUpdateProvider(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers/{id} [delete]
+// @Router       /api/v1/sso/providers/{id} [delete]
 func (h *SSOController) handleDeleteProvider(c echo.Context) error {
 	// Check authentication
 	_, tenantID, _, err := h.requireAdmin(c)
@@ -972,7 +955,7 @@ func (h *SSOController) handleDeleteProvider(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /api/v1/auth/admin/sso/providers/{id}/test [post]
+// @Router       /api/v1/sso/providers/{id}/test [post]
 func (h *SSOController) handleTestProvider(c echo.Context) error {
 	// Check authentication
 	_, tenantID, _, err := h.requireAdmin(c)

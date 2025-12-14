@@ -470,7 +470,7 @@ func (c *GuardClient) Introspect(ctx context.Context, token *string) (*DomainInt
 
 // MFABackupCount returns how many backup codes remain.
 func (c *GuardClient) MFABackupCount(ctx context.Context) (int, error) {
-	resp, err := c.inner.GetApiV1AuthMfaBackupCountWithResponse(ctx, nil)
+	resp, err := c.inner.GetApiV1AuthMfaBackupCountWithResponse(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -560,7 +560,7 @@ func (c *GuardClient) MFAVerify(ctx context.Context, challengeToken string, meth
 
 // Sessions lists active sessions for the current user.
 func (c *GuardClient) Sessions(ctx context.Context) ([]ControllerSessionItem, error) {
-	resp, err := c.inner.GetApiV1AuthSessionsWithResponse(ctx, nil)
+	resp, err := c.inner.GetApiV1AuthSessionsWithResponse(ctx)
 	if err != nil {
 		return nil, err
 	}

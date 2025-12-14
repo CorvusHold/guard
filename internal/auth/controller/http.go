@@ -894,19 +894,19 @@ func (h *Controller) OAuth2Metadata(c echo.Context) error {
 
 	resp := oauth2MetadataResp{
 		Issuer:                baseURL,
-		TokenEndpoint:         baseURL + "/v1/auth/refresh",
-		IntrospectionEndpoint: baseURL + "/v1/auth/introspect",
-		RevocationEndpoint:    baseURL + "/v1/auth/revoke",
-		UserinfoEndpoint:      baseURL + "/v1/auth/me",
+		TokenEndpoint:         baseURL + "/api/v1/auth/refresh",
+		IntrospectionEndpoint: baseURL + "/api/v1/auth/introspect",
+		RevocationEndpoint:    baseURL + "/api/v1/auth/revoke",
+		UserinfoEndpoint:      baseURL + "/api/v1/auth/me",
 		ResponseTypesSupported: []string{
 			"token", // Direct token response (password, magic link, SSO)
 		},
 		GrantTypesSupported: []string{
-			"password",      // /v1/auth/password/login, /v1/auth/password/signup
-			"refresh_token", // /v1/auth/refresh
+			"password",      // /api/v1/auth/password/login, /api/v1/auth/password/signup
+			"refresh_token", // /api/v1/auth/refresh
 			// Custom grant types
-			"urn:guard:params:oauth:grant-type:magic-link", // /v1/auth/magic/verify
-			"urn:guard:params:oauth:grant-type:sso",        // /v1/auth/sso/:provider/callback
+			"urn:guard:params:oauth:grant-type:magic-link", // /api/v1/auth/magic/verify
+			"urn:guard:params:oauth:grant-type:sso",        // /api/v1/auth/sso/:provider/callback
 		},
 		TokenEndpointAuthMethodsSupported: []string{
 			"none", // Public client, no client authentication required
@@ -936,7 +936,7 @@ func (h *Controller) Register(e *echo.Echo) {
 	// RFC 8414 OAuth 2.0 Authorization Server Metadata (well-known endpoint)
 	e.GET("/.well-known/oauth-authorization-server", h.OAuth2Metadata)
 
-	g := e.Group("/v1/auth")
+	g := e.Group("/api/v1/auth")
 	h.registerAuthRoutes(g)
 }
 

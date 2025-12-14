@@ -650,7 +650,13 @@ export default function TenantOnboardingWizard({ onComplete, onCancel }: TenantO
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">SSO Provider:</span>
-              <Badge variant="outline" data-testid="review-sso-provider">{settings.ssoProvider}</Badge>
+              <Badge variant="outline" data-testid="review-sso-provider">
+                {settings.ssoProvider === 'workos'
+                  ? 'WorkOS'
+                  : settings.ssoProvider === 'dev'
+                    ? 'Dev'
+                    : 'None'}
+              </Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-sm font-medium">Login Rate Limit:</span>

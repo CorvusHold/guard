@@ -128,7 +128,7 @@ var seedUserCmd = &cobra.Command{
 			"last_name":  lastName,
 		}
 
-		resp, err := client.makeRequest("POST", "/v1/auth/password/signup", payload)
+		resp, err := client.makeRequest("POST", "/api/v1/auth/password/signup", payload)
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -162,7 +162,7 @@ var seedUserCmd = &cobra.Command{
 				rolePayload := map[string]interface{}{
 					"roles": roles,
 				}
-				roleResp, err := client.makeRequest("POST", "/v1/auth/admin/users/"+userID+"/roles", rolePayload)
+				roleResp, err := client.makeRequest("POST", "/api/v1/auth/admin/users/"+userID+"/roles", rolePayload)
 				if err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to assign roles: %v\n", err)
 				} else {
@@ -256,7 +256,7 @@ Example:
 			"last_name":  lastName,
 		}
 
-		userResp, err := client.makeRequest("POST", "/v1/auth/password/signup", userPayload)
+		userResp, err := client.makeRequest("POST", "/api/v1/auth/password/signup", userPayload)
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -397,7 +397,7 @@ var seedSSOWorkOSCmd = &cobra.Command{
 		}
 
 		// Apply settings via API
-		resp, err := client.makeRequest("PUT", "/v1/tenants/"+tid+"/settings", settings)
+		resp, err := client.makeRequest("PUT", "/api/v1/tenants/"+tid+"/settings", settings)
 		if err != nil {
 			return fmt.Errorf("failed to configure SSO: %w", err)
 		}
@@ -504,7 +504,7 @@ func enableUserMFAViaAPI(client *GuardClient, userAccessToken string) (string, e
 	userClient.Token = userAccessToken
 
 	// Step 1: Start TOTP enrollment as the user
-	startResp, err := userClient.makeRequest("POST", "/v1/auth/mfa/totp/start", nil)
+	startResp, err := userClient.makeRequest("POST", "/api/v1/auth/mfa/totp/start", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to start TOTP enrollment: %w", err)
 	}
@@ -531,7 +531,7 @@ func enableUserMFAViaAPI(client *GuardClient, userAccessToken string) (string, e
 	activatePayload := map[string]interface{}{
 		"code": code,
 	}
-	activateResp, err := userClient.makeRequest("POST", "/v1/auth/mfa/totp/activate", activatePayload)
+	activateResp, err := userClient.makeRequest("POST", "/api/v1/auth/mfa/totp/activate", activatePayload)
 	if err != nil {
 		return "", fmt.Errorf("failed to activate TOTP: %w", err)
 	}
@@ -587,7 +587,7 @@ func lookupUserProfile(accessToken string) (userProfile, error) {
 	if base == "" {
 		base = "http://localhost:8080"
 	}
-	req, err := http.NewRequest("GET", strings.TrimRight(base, "/")+"/v1/auth/me", nil)
+	req, err := http.NewRequest("GET", strings.TrimRight(base, "/")+"/api/v1/auth/me", nil)
 	if err != nil {
 		return userProfile{}, err
 	}
@@ -600,14 +600,14 @@ func lookupUserProfile(accessToken string) (userProfile, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(resp.Body)
-		return userProfile{}, fmt.Errorf("/v1/auth/me failed: %s: %s", resp.Status, string(b))
+		return userProfile{}, fmt.Errorf("/api/v1/auth/me failed: %s: %s", resp.Status, string(b))
 	}
 	var prof userProfile
 	if err := json.NewDecoder(resp.Body).Decode(&prof); err != nil {
 		return userProfile{}, err
 	}
 	if prof.ID == "" {
-		return userProfile{}, fmt.Errorf("/v1/auth/me response missing id")
+		return userProfile{}, fmt.Errorf("/api/v1/auth/me response missing id")
 	}
 	return prof, nil
 }
@@ -620,7 +620,7 @@ func findOrCreateTenantByName(c *GuardClient, name string) (string, error) {
 		name = "test"
 	}
 	// 1) Try lookup by name
-	lookupPath := "/tenants/by-name/" + url.PathEscape(name)
+	lookupPath := "/api/v1/tenants/by-name/" + url.PathEscape(name)
 	resp, err := c.makeRequest("GET", lookupPath, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to lookup tenant by name: %w", err)
@@ -645,7 +645,7 @@ func findOrCreateTenantByName(c *GuardClient, name string) (string, error) {
 
 	// 2) Create tenant when not found
 	payload := map[string]interface{}{"name": name}
-	createResp, err := c.makeRequest("POST", "/tenants", payload)
+	createResp, err := c.makeRequest("POST", "/api/v1/tenants", payload)
 	if err != nil {
 		return "", fmt.Errorf("failed to create tenant: %w", err)
 	}

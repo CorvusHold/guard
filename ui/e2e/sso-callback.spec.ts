@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
-const UI_BASE = 'http://localhost:5173'
+const UI_BASE = 'http://localhost:4173'
+const TENANT_ID = 'tenant-123'
 
 function cors(headers: Record<string, string> = {}) {
   return {
@@ -12,19 +13,19 @@ function cors(headers: Record<string, string> = {}) {
 
 test.describe('SSO Callback', () => {
   test.beforeEach(async ({ page }) => {
-    // Catch-all logger for any /v1/** requests to verify routing and matching
-    await page.route('**/v1/**', async (route) => {
+    // Catch-all logger for any /api/v1/** requests to verify routing and matching
+    await page.route('**/api/v1/**', async (route) => {
       const req = route.request()
       console.log('ROUTE CATCHALL', req.method(), req.url())
       await route.fallback()
     })
     // Global debug logging for API traffic
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
     // Surface page console logs (including errors)
@@ -43,7 +44,7 @@ test.describe('SSO Callback', () => {
     // Synchronize on callback and profile
     let cbResolve: (() => void) | null = null
     const cbHit = new Promise<void>((r) => (cbResolve = r))
-    await page.route('**/v1/auth/sso/workos/callback**', async (route) => {
+    await page.route('**/auth/sso/t/*/workos/callback*', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -66,7 +67,7 @@ test.describe('SSO Callback', () => {
 
     let meResolve: (() => void) | null = null
     const meHit = new Promise<void>((r) => (meResolve = r))
-    await page.route('**/v1/auth/me', async (route) => {
+    await page.route('**/api/v1/auth/me', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -92,7 +93,7 @@ test.describe('SSO Callback', () => {
     })
 
     await page.goto(
-      `/auth/callback?guard-base-url=${encodeURIComponent(UI_BASE)}&source=redirect&provider=workos&code=abc123&state=xyz&email=${encodeURIComponent('user@example.com')}`
+      `/auth/callback?guard-base-url=${encodeURIComponent(UI_BASE)}&source=redirect&provider=workos&code=abc123&state=xyz&tenant_id=${encodeURIComponent(TENANT_ID)}&email=${encodeURIComponent('user@example.com')}`
     )
     // Ensure runtime config is persisted before SDK calls
     await page.waitForFunction(() => !!localStorage.getItem('guard_runtime'))
@@ -106,7 +107,7 @@ test.describe('SSO Callback', () => {
   test('workos callback error shows error UI', async ({ page }) => {
     let cbResolve: (() => void) | null = null
     const cbHit = new Promise<void>((r) => (cbResolve = r))
-    await page.route('**/v1/auth/sso/workos/callback**', async (route) => {
+    await page.route('**/auth/sso/t/*/workos/callback*', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -128,7 +129,7 @@ test.describe('SSO Callback', () => {
     })
 
     await page.goto(
-      `/auth/callback?guard-base-url=${encodeURIComponent(UI_BASE)}&source=redirect&provider=workos&code=bad`
+      `/auth/callback?guard-base-url=${encodeURIComponent(UI_BASE)}&source=redirect&provider=workos&code=bad&tenant_id=${encodeURIComponent(TENANT_ID)}`
     )
     await page.waitForFunction(() => !!localStorage.getItem('guard_runtime'))
     await cbHit // ensure callback processed

@@ -155,7 +155,7 @@ describe('GuardClient', () => {
     expect(storage.getRefreshToken()).toBe('ref-3');
 
     // Ensure token is in query string
-    expect(calls[0].input).toBe(`${baseUrl}/v1/auth/magic/verify?token=tok-1`);
+    expect(calls[0].input).toBe(`${baseUrl}/api/v1/auth/magic/verify?token=tok-1`);
   });
 
   it('sso portal link builds query with default tenant, includes intent, parses link, and sends Authorization', async () => {
@@ -178,7 +178,7 @@ describe('GuardClient', () => {
     expect(res.data.link).toBe('https://portal.example.com/org_1?sso');
 
     // URL and headers
-    expect(calls[0].input).toBe(`${baseUrl}/v1/auth/sso/workos/portal-link?tenant_id=t-1&organization_id=org_1&intent=sso`);
+    expect(calls[0].input).toBe(`${baseUrl}/api/v1/auth/sso/workos/portal-link?tenant_id=t-1&organization_id=org_1&intent=sso`);
     const hdrs = new Headers(calls[0].init?.headers);
     expect(hdrs.get('authorization')).toBe('Bearer acc-admin');
   });
@@ -215,7 +215,7 @@ describe('GuardClient', () => {
     expect(res.data.provider_slug).toBe('oidc-main');
     expect(res.data.portal_token_id).toBe('pt-1');
 
-    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/session`);
+    expect(calls[0].input).toBe(`${baseUrl}/api/v1/sso/portal/session`);
     expect(calls[0].init?.method).toBe('POST');
     const body = JSON.parse(calls[0].init?.body as string);
     expect(body).toEqual({ token: 'raw-token' });
@@ -246,7 +246,7 @@ describe('GuardClient', () => {
     expect(res.data.id).toBe('prov-1');
     expect(res.data.slug).toBe('oidc-main');
 
-    expect(calls[0].input).toBe(`${baseUrl}/v1/sso/portal/provider`);
+    expect(calls[0].input).toBe(`${baseUrl}/api/v1/sso/portal/provider`);
     const hdrs = new Headers(calls[0].init?.headers);
     expect(hdrs.get('X-Portal-Token')).toBe('raw-token');
   });
@@ -346,10 +346,10 @@ describe('GuardClient', () => {
           headers: { 'content-type': 'application/json' },
           jsonBody: {
             issuer: 'https://api.example.com',
-            token_endpoint: 'https://api.example.com/v1/auth/refresh',
-            introspection_endpoint: 'https://api.example.com/v1/auth/introspect',
-            revocation_endpoint: 'https://api.example.com/v1/auth/revoke',
-            userinfo_endpoint: 'https://api.example.com/v1/auth/me',
+            token_endpoint: 'https://api.example.com/api/v1/auth/refresh',
+            introspection_endpoint: 'https://api.example.com/api/v1/auth/introspect',
+            revocation_endpoint: 'https://api.example.com/api/v1/auth/revoke',
+            userinfo_endpoint: 'https://api.example.com/api/v1/auth/me',
             response_types_supported: ['token'],
             grant_types_supported: ['password', 'refresh_token'],
             scopes_supported: ['openid', 'profile', 'email'],
@@ -377,10 +377,10 @@ describe('GuardClient', () => {
     it('static discover() fetches metadata without creating client instance', async () => {
       const mockMetadata = {
         issuer: 'https://api.example.com',
-        token_endpoint: 'https://api.example.com/v1/auth/refresh',
-        introspection_endpoint: 'https://api.example.com/v1/auth/introspect',
-        revocation_endpoint: 'https://api.example.com/v1/auth/revoke',
-        userinfo_endpoint: 'https://api.example.com/v1/auth/me',
+        token_endpoint: 'https://api.example.com/api/v1/auth/refresh',
+        introspection_endpoint: 'https://api.example.com/api/v1/auth/introspect',
+        revocation_endpoint: 'https://api.example.com/api/v1/auth/revoke',
+        userinfo_endpoint: 'https://api.example.com/api/v1/auth/me',
         response_types_supported: ['token'],
         grant_types_supported: ['password', 'refresh_token', 'urn:guard:params:oauth:grant-type:magic-link', 'urn:guard:params:oauth:grant-type:sso'],
         scopes_supported: ['openid', 'profile', 'email'],

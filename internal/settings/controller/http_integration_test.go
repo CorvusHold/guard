@@ -62,7 +62,7 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 
 	userID := uuid.New()
 	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
-	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -118,7 +118,7 @@ func TestSettings_GET_RateLimit_429(t *testing.T) {
 	userID := uuid.New()
 	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
 	// first GET allowed
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	req1.Header.Set("Authorization", "Bearer "+tok)
 	rec1 := httptest.NewRecorder()
 	e.ServeHTTP(rec1, req1)
@@ -127,7 +127,7 @@ func TestSettings_GET_RateLimit_429(t *testing.T) {
 	}
 
 	// second GET within window should be rate limited
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	req2.Header.Set("Authorization", "Bearer "+tok)
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
@@ -182,7 +182,7 @@ func TestSettings_GET_RequiresAuth_401(t *testing.T) {
 	e := echo.New()
 	c.Register(e)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantID.String()+"/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -222,7 +222,7 @@ func TestSettings_TenantMismatch_403(t *testing.T) {
 
 	userID := uuid.New()
 	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantA)
-	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/"+tenantB.String()+"/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantB.String()+"/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -264,7 +264,7 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 	userID := uuid.New()
 	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
 	body := strings.NewReader(`{"sso_provider":"dev"}`)
-	req := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", body)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -312,7 +312,7 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(tc.payload))
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(tc.payload))
 			req.Header.Set("Authorization", "Bearer "+tok)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
@@ -368,7 +368,7 @@ func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
 		"sso_state_ttl":"10m",
 		"sso_redirect_allowlist":"https://allowed.example/"
 	}`
-	req := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -425,7 +425,7 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
 	payload := `{"sso_provider":"dev"}`
 	// first request allowed
-	req1 := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
+	req1 := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
 	req1.Header.Set("Authorization", "Bearer "+tok)
 	req1.Header.Set("Content-Type", "application/json")
 	rec1 := httptest.NewRecorder()
@@ -435,7 +435,7 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 	}
 
 	// second request within window should be rate limited
-	req2 := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
+	req2 := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))
 	req2.Header.Set("Authorization", "Bearer "+tok)
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()

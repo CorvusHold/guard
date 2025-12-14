@@ -33,7 +33,33 @@ async function registerLoginFlowRoutes(
   }
   let sessionActive = false
 
-  await page.route('**/v1/auth/email/discover', async (route) => {
+  await page.route('**/api/v1/auth/login-options*', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: cors({
+          'access-control-allow-methods': 'GET,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        })
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      headers: cors({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        tenant_id: 'tenant_1',
+        tenant_name: 'Acme Corp',
+        user_exists: true,
+        password_enabled: true,
+        domain_matched_sso: false,
+        sso_providers: []
+      })
+    })
+  })
+
+  await page.route('**/api/v1/auth/email/discover', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -58,7 +84,7 @@ async function registerLoginFlowRoutes(
     })
   })
 
-  await page.route('**/v1/auth/password/login', async (route) => {
+  await page.route('**/api/v1/auth/password/login', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -86,7 +112,7 @@ async function registerLoginFlowRoutes(
     })
   })
 
-  await page.route('**/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -128,18 +154,18 @@ async function completeLoginFlow(page: import('@playwright/test').Page) {
   await page.getByTestId('password-input').fill('super-secret')
   await Promise.all([
     page.waitForResponse((res) =>
-      res.url().includes('/v1/auth/password/login') && res.request().method() === 'POST'
+      res.url().includes('/api/v1/auth/password/login') && res.request().method() === 'POST'
     ),
     page.getByTestId('signin-button').click()
   ])
-  await expect(page.locator('text=Logged in')).toBeVisible()
+  await expect(page.getByTestId('toast')).toContainText(/login successful/i)
 }
 
 async function gotoAdminAndWaitForMe(page: import('@playwright/test').Page) {
   await Promise.all([
     page.waitForResponse(
       (res) =>
-        res.url().includes('/v1/auth/me') &&
+        res.url().includes('/api/v1/auth/me') &&
         res.request().method() === 'GET' &&
         res.status() === 200
     ),
@@ -152,7 +178,7 @@ async function reloadAndAssertAdmin(page: import('@playwright/test').Page) {
   await Promise.all([
     page.waitForResponse(
       (res) =>
-        res.url().includes('/v1/auth/me') &&
+        res.url().includes('/api/v1/auth/me') &&
         res.request().method() === 'GET' &&
         res.status() === 200
     ),

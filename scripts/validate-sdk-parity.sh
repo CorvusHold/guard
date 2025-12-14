@@ -237,8 +237,9 @@ check_api_paths() {
   GO_API_PATHS=$(grep -o "/api/v1/" "$GO_SDK_DIR/client.go" 2>/dev/null | wc -l || echo "0")
   TS_API_PATHS=$(grep -o "/api/v1/" "$TS_SDK_DIR/src/client.ts" 2>/dev/null | wc -l || echo "0")
 
-  GO_OLD_PATHS=$(grep -o "/v1/" "$GO_SDK_DIR/client.go" 2>/dev/null | wc -l || echo "0")
-  TS_OLD_PATHS=$(grep -o "/v1/" "$TS_SDK_DIR/src/client.ts" 2>/dev/null | wc -l || echo "0")
+  # Detect legacy /v1/ paths but do not count canonical /api/v1/
+  GO_OLD_PATHS=$(grep -o "[^a]\/v1/" "$GO_SDK_DIR/client.go" 2>/dev/null | wc -l || echo "0")
+  TS_OLD_PATHS=$(grep -o "[^a]\/v1/" "$TS_SDK_DIR/src/client.ts" 2>/dev/null | wc -l || echo "0")
 
   print_info "Go SDK: $GO_API_PATHS /api/v1/ paths"
   print_info "TypeScript SDK: $TS_API_PATHS /api/v1/ paths"

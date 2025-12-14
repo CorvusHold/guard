@@ -8,7 +8,7 @@
     {
       "request": {
         "method": "GET",
-        "path": "/v1/auth/sso/workos/portal-link?tenant_id={{TENANT_ID}}&organization_id={{ORG_ID}}",
+        "path": "/api/v1/auth/sso/workos/portal-link?tenant_id={{TENANT_ID}}&organization_id={{ORG_ID}}",
         "headers": { "authorization": "Bearer {{ADMIN_TOKEN}}" }
       },
       "expect": {

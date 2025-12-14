@@ -19,6 +19,59 @@ import (
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
 )
 
+// RegisterWellKnown registers root-level endpoints that must not be under /api.
+// This is intended to be used alongside RegisterV1 in cmd/api/main.go.
+func RegisterWellKnown(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
+	r := repo.New(pg)
+	// settings service (DB-backed, with tenant overrides)
+	sr := srepo.New(pg)
+	settings := ssvc.New(sr)
+	s := svc.New(r, cfg, settings)
+	// Inject module logger (debug in development)
+	s.SetLogger(logger.New(cfg.AppEnv))
+	emailSender := emailsvc.NewRouter(settings, cfg)
+	magic := svc.NewMagic(r, cfg, settings, emailSender)
+	sso := svc.NewSSO(r, cfg, settings)
+	sso.SetLogger(logger.New(cfg.AppEnv))
+	rlStore := rl.NewRedisStore(cfg)
+	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rlStore)
+
+	e.GET("/.well-known/oauth-authorization-server", c.OAuth2Metadata)
+}
+
+// RegisterSSOBrowser wires the SSO module and registers browser-based SSO flows under /auth/sso/*.
+// This is intended to be used alongside RegisterV1 in cmd/api/main.go.
+func RegisterSSOBrowser(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
+	r := repo.New(pg)
+	// settings service (DB-backed, with tenant overrides)
+	sr := srepo.New(pg)
+	settings := ssvc.New(sr)
+	s := svc.New(r, cfg, settings)
+	// Inject module logger (debug in development)
+	s.SetLogger(logger.New(cfg.AppEnv))
+
+	pub := evsvc.NewLogger()
+	rlStore := rl.NewRedisStore(cfg)
+
+	// SSO provider management + browser flows
+	ssoRedis := redis.NewClient(&redis.Options{
+		Addr: cfg.RedisAddr,
+		DB:   cfg.RedisDB,
+	})
+	ssoService := ssosvc.New(pg, ssoRedis, cfg.PublicBaseURL)
+	ssoService.SetLogger(logger.New(cfg.AppEnv))
+	ssoService.SetPublisher(pub)
+
+	// Wire the native SSO provider service into the auth service for portal link generation.
+	authSSO := svc.NewSSO(r, cfg, settings)
+	authSSO.SetLogger(logger.New(cfg.AppEnv))
+	authSSO.SetSSOProviderService(ssoService)
+
+	ssoController := ssoctrl.New(ssoService, s).WithRateLimitStore(rlStore)
+	ssoController.SetLogger(logger.New(cfg.AppEnv))
+	ssoController.Register(e)
+}
+
 // Register wires the auth module and registers HTTP routes (deprecated, use RegisterV1).
 func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	r := repo.New(pg)
@@ -49,7 +102,12 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	sso.SetSSOProviderService(ssoService)
 	ssoController := ssoctrl.New(ssoService, s).WithRateLimitStore(rlStore)
 	ssoController.SetLogger(logger.New(cfg.AppEnv))
+	// Browser SSO flows (/auth/sso/*)
 	ssoController.Register(e)
+	// JSON SSO APIs (/api/v1/sso/*)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	ssoController.RegisterV1(apiV1)
 }
 
 // RegisterV1 wires the auth module and registers HTTP routes under /api/v1.

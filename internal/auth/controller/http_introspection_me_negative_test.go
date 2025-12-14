@@ -46,7 +46,7 @@ func TestHTTP_Introspect_MissingToken(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/introspect", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -78,7 +78,7 @@ func TestHTTP_Introspect_InvalidToken(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/introspect", nil)
 	req.Header.Set("Authorization", "Bearer not-a-valid-jwt")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -111,7 +111,7 @@ func TestHTTP_Me_MissingBearer(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -143,7 +143,7 @@ func TestHTTP_Me_InvalidToken(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -177,7 +177,7 @@ func TestHTTP_Revoke_ValidationErrors(t *testing.T) {
 	c.Register(e)
 
 	// Missing fields
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/revoke", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -187,7 +187,7 @@ func TestHTTP_Revoke_ValidationErrors(t *testing.T) {
 
 	// Unsupported token_type
 	body, _ := json.Marshal(map[string]string{"token": "dummy", "token_type": "access"})
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/revoke", bytes.NewReader(body))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader(body))
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)

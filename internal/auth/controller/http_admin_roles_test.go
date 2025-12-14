@@ -66,7 +66,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 		"password":  password,
 	}
 	tsb, _ := json.Marshal(tsBody)
-	tsreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(tsb))
+	tsreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(tsb))
 	tsreq.Header.Set("Content-Type", "application/json")
 	tsreq.Header.Set("X-Auth-Mode", "bearer")
 	tsrec := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 
 	// 401: missing token
 	b, _ := json.Marshal(map[string]any{"roles": []string{"member"}})
-	req401 := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(b))
+	req401 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(b))
 	rec401 := httptest.NewRecorder()
 	e.ServeHTTP(rec401, req401)
 	if rec401.Code != http.StatusUnauthorized {
@@ -125,7 +125,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(tsrec.Body.Bytes())).Decode(&ttoks); err != nil {
 		t.Fatalf("decode target tokens: %v", err)
 	}
-	req403 := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(b))
+	req403 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(b))
 	req403.Header.Set("Authorization", "Bearer "+ttoks.AccessToken)
 	rec403 := httptest.NewRecorder()
 	e.ServeHTTP(rec403, req403)
@@ -134,7 +134,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	}
 
 	// 400: invalid user id
-	req400 := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/not-a-uuid/roles", bytes.NewReader(b))
+	req400 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/not-a-uuid/roles", bytes.NewReader(b))
 	req400.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rec400 := httptest.NewRecorder()
 	e.ServeHTTP(rec400, req400)
@@ -144,7 +144,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 
 	// 400: invalid JSON body
 	badBody := []byte("not-json")
-	reqBad := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(badBody))
+	reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(badBody))
 	reqBad.Header.Set("Content-Type", "application/json")
 	reqBad.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	recBad := httptest.NewRecorder()
@@ -155,7 +155,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 
 	// 400: empty roles array should fail validation
 	emptyRolesBody, _ := json.Marshal(map[string]any{"roles": []string{}})
-	reqEmpty := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(emptyRolesBody))
+	reqEmpty := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(emptyRolesBody))
 	reqEmpty.Header.Set("Content-Type", "application/json")
 	reqEmpty.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	recEmpty := httptest.NewRecorder()
@@ -166,7 +166,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 
 	// 204: success and verify roles updated in DB
 	rolesBody, _ := json.Marshal(map[string]any{"roles": []string{"member", "editor"}})
-	req204 := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(rolesBody))
+	req204 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(rolesBody))
 	req204.Header.Set("Content-Type", "application/json")
 	req204.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rec204 := httptest.NewRecorder()
@@ -186,7 +186,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	}
 
 	// Verify roles reflected via /v1/auth/me using target user's token
-	meReq := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	meReq.Header.Set("Authorization", "Bearer "+ttoks.AccessToken)
 	meRec := httptest.NewRecorder()
 	e.ServeHTTP(meRec, meReq)

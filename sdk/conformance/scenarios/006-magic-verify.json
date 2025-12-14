@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "path": "/v1/auth/magic/verify",
+        "path": "/api/v1/auth/magic/verify",
         "query": { "token": "{{MAGIC_TOKEN}}" }
       },
       "expect": {
@@ -20,7 +20,7 @@
     {
       "request": {
         "method": "GET",
-        "path": "/v1/auth/me",
+        "path": "/api/v1/auth/me",
         "headers": { "authorization": "Bearer {{ACCESS_TOKEN}}" }
       },
       "expect": { "status": 200 }

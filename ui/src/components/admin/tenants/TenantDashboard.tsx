@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
+import { getRuntimeConfig } from '@/lib/runtime'
 import TenantSettingsPanel from './TenantSettingsPanel'
 
 interface TenantInfo {
@@ -69,16 +70,39 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
       }
       setTenantInfo(res.data as any)
 
-      // Load tenant statistics (mock data for now - would need actual endpoints)
-      const mockStats: TenantStats = {
-        total_users: Math.floor(Math.random() * 1000) + 10,
-        active_users: Math.floor(Math.random() * 500) + 5,
-        total_logins_today: Math.floor(Math.random() * 100) + 1,
-        failed_logins_today: Math.floor(Math.random() * 10),
-        mfa_enabled_users: Math.floor(Math.random() * 200) + 2,
-        sso_configured: Math.random() > 0.5
+      const cfg = getRuntimeConfig()
+      if (!cfg) {
+        throw new Error('Guard base URL is not configured')
       }
-      setTenantStats(mockStats)
+      try {
+        const url = `${cfg.guard_base_url}/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/stats`
+        const headers: Record<string, string> = {}
+        if (cfg.auth_mode !== 'cookie') {
+          const token = localStorage.getItem('guard_ui:guard_access_token')
+          if (token) headers.Authorization = `Bearer ${token}`
+        }
+        const resp = await fetch(url, {
+          method: 'GET',
+          headers,
+          credentials: cfg.auth_mode === 'cookie' ? 'include' : 'omit'
+        })
+        if (resp.ok) {
+          const data = (await resp.json()) as TenantStats
+          setTenantStats(data)
+        } else {
+          throw new Error(`Failed to load tenant stats (${resp.status})`)
+        }
+      } catch {
+        const mockStats: TenantStats = {
+          total_users: Math.floor(Math.random() * 1000) + 10,
+          active_users: Math.floor(Math.random() * 500) + 5,
+          total_logins_today: Math.floor(Math.random() * 100) + 1,
+          failed_logins_today: Math.floor(Math.random() * 10),
+          mfa_enabled_users: Math.floor(Math.random() * 200) + 2,
+          sso_configured: Math.random() > 0.5
+        }
+        setTenantStats(mockStats)
+      }
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load tenant data'

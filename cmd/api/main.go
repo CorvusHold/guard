@@ -343,6 +343,8 @@ func main() {
 	// Tenants and Auth
 	tenants.RegisterV1(apiV1, pgPool)
 	auth.RegisterV1(apiV1, pgPool, cfg)
+	auth.RegisterWellKnown(e, pgPool, cfg)
+	auth.RegisterSSOBrowser(e, pgPool, cfg)
 
 	// Background dependency ping metrics
 	go func() {

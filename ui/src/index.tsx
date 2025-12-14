@@ -65,6 +65,23 @@ if (path.startsWith('/auth/callback')) {
   )
 } else if (path.startsWith('/admin')) {
   // Admin subroutes
+  if (path === '/admin/tenants/create') {
+    element = (
+      <RequireAuth>
+        <div className="p-4">
+          <TenantCreationPanel />
+        </div>
+      </RequireAuth>
+    )
+  } else if (path === '/admin/tenants/onboard') {
+    element = (
+      <RequireAuth>
+        <div className="p-4">
+          <TenantOnboardingWizard />
+        </div>
+      </RequireAuth>
+    )
+  } else {
   const mSettings = path.match(/^\/admin\/tenants\/([^/]+)\/settings$/)
   const mDashboard = path.match(/^\/admin\/tenants\/([^/]+)$/)
   if (mSettings) {
@@ -85,28 +102,13 @@ if (path.startsWith('/auth/callback')) {
         </div>
       </RequireAuth>
     )
-  } else if (path === '/admin/tenants/create') {
-    element = (
-      <RequireAuth>
-        <div className="p-4">
-          <TenantCreationPanel />
-        </div>
-      </RequireAuth>
-    )
-  } else if (path === '/admin/tenants/onboard') {
-    element = (
-      <RequireAuth>
-        <div className="p-4">
-          <TenantOnboardingWizard />
-        </div>
-      </RequireAuth>
-    )
   } else {
     element = (
       <RequireAuth>
         <AdminSettings />
       </RequireAuth>
     )
+  }
   }
 }
 

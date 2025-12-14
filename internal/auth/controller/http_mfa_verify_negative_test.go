@@ -15,7 +15,7 @@ func TestHTTP_MFA_Verify_WrongCode_TOTP(t *testing.T) {
 	e, tenantID, toks := setupAuthApp(t)
 
 	// Enroll and activate TOTP
-	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	reqStart := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
@@ -26,7 +26,7 @@ func TestHTTP_MFA_Verify_WrongCode_TOTP(t *testing.T) {
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
 	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
@@ -41,7 +41,7 @@ func TestHTTP_MFA_Verify_WrongCode_TOTP(t *testing.T) {
 		"email":     "user.mfa.itest@example.com",
 		"password":  "Password!123",
 	})
-	reqLogin := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	reqLogin.Header.Set("Content-Type", "application/json")
 	recLogin := httptest.NewRecorder()
 	e.ServeHTTP(recLogin, reqLogin)
@@ -57,7 +57,7 @@ func TestHTTP_MFA_Verify_WrongCode_TOTP(t *testing.T) {
 		"method":          "totp",
 		"code":            "000000", // almost certainly wrong
 	})
-	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
+	reqVerify := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
 	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
@@ -71,7 +71,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 	e, tenantID, toks := setupAuthApp(t)
 
 	// Enroll TOTP (to enable MFA) and activate
-	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	reqStart := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
@@ -82,7 +82,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
 	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
@@ -93,7 +93,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 
 	// Generate one backup code
 	gb, _ := json.Marshal(map[string]int{"count": 1})
-	reqGen := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
+	reqGen := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
 	reqGen.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqGen.Header.Set("Content-Type", "application/json")
 	recGen := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 		"email":     "user.mfa.itest@example.com",
 		"password":  "Password!123",
 	})
-	reqLogin := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	reqLogin.Header.Set("Content-Type", "application/json")
 	recLogin := httptest.NewRecorder()
 	e.ServeHTTP(recLogin, reqLogin)
@@ -129,7 +129,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 		"method":          "backup_code",
 		"code":            genResp.Codes[0],
 	})
-	reqVerify1 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb1))
+	reqVerify1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb1))
 	reqVerify1.Header.Set("Content-Type", "application/json")
 	recVerify1 := httptest.NewRecorder()
 	e.ServeHTTP(recVerify1, reqVerify1)
@@ -138,7 +138,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 	}
 
 	// Login again -> new challenge
-	reqLogin2 := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	reqLogin2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	reqLogin2.Header.Set("Content-Type", "application/json")
 	recLogin2 := httptest.NewRecorder()
 	e.ServeHTTP(recLogin2, reqLogin2)
@@ -154,7 +154,7 @@ func TestHTTP_MFA_Verify_BackupCode_SingleUse(t *testing.T) {
 		"method":          "backup_code",
 		"code":            genResp.Codes[0],
 	})
-	reqVerify2 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb2))
+	reqVerify2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb2))
 	reqVerify2.Header.Set("Content-Type", "application/json")
 	recVerify2 := httptest.NewRecorder()
 	e.ServeHTTP(recVerify2, reqVerify2)

@@ -141,12 +141,12 @@ type TestSSOProviderResponse struct {
 
 // ListSSOProviders lists all SSO providers for the authenticated tenant.
 func (c *GuardClient) ListSSOProviders(ctx context.Context, tenantID *string) ([]SSOProvider, error) {
-	params := &GetApiV1AuthAdminSsoProvidersParams{}
+	params := &GetApiV1SsoProvidersParams{}
 	if tenantID != nil {
 		params.TenantId = tenantID
 	}
 
-	resp, err := c.inner.GetApiV1AuthAdminSsoProvidersWithResponse(ctx, params)
+	resp, err := c.inner.GetApiV1SsoProvidersWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (c *GuardClient) ListSSOProviders(ctx context.Context, tenantID *string) ([
 
 // GetSSOProvider retrieves a specific SSO provider by ID.
 func (c *GuardClient) GetSSOProvider(ctx context.Context, providerID string) (*SSOProvider, error) {
-	resp, err := c.inner.GetApiV1AuthAdminSsoProvidersIdWithResponse(ctx, providerID)
+	resp, err := c.inner.GetApiV1SsoProvidersIdWithResponse(ctx, providerID)
 	if err != nil {
 		return nil, err
 	}
@@ -199,44 +199,44 @@ func (c *GuardClient) CreateSSOProvider(ctx context.Context, req CreateSSOProvid
 		}
 		attrMapping = &converted
 	}
-	body := PostApiV1AuthAdminSsoProvidersJSONRequestBody{
-		TenantId:           &req.TenantID,
-		Name:               &req.Name,
-		Slug:               &req.Slug,
-		ProviderType:       &providerType,
-		Enabled:            req.Enabled,
-		AllowSignup:        req.AllowSignup,
-		TrustEmailVerified: req.TrustEmailVerified,
-		Domains:            &req.Domains,
-		AttributeMapping:   attrMapping,
-		Issuer:             req.Issuer,
+	body := PostApiV1SsoProvidersJSONRequestBody{
+		TenantId:              &req.TenantID,
+		Name:                  &req.Name,
+		Slug:                  &req.Slug,
+		ProviderType:          &providerType,
+		Enabled:               req.Enabled,
+		AllowSignup:           req.AllowSignup,
+		TrustEmailVerified:    req.TrustEmailVerified,
+		Domains:               &req.Domains,
+		AttributeMapping:      attrMapping,
+		Issuer:                req.Issuer,
 		AuthorizationEndpoint: req.AuthorizationEndpoint,
-		TokenEndpoint:      req.TokenEndpoint,
-		UserinfoEndpoint:   req.UserinfoEndpoint,
-		JwksUri:            req.JWKSURI,
-		ClientId:           req.ClientID,
-		ClientSecret:       req.ClientSecret,
-		Scopes:             &req.Scopes,
-		ResponseType:       req.ResponseType,
-		ResponseMode:       req.ResponseMode,
-		EntityId:           req.EntityID,
-		AcsUrl:             req.ACSURL,
-		SloUrl:             req.SLOURL,
-		IdpMetadataUrl:     req.IDPMetadataURL,
-		IdpMetadataXml:     req.IDPMetadataXML,
-		IdpEntityId:        req.IDPEntityID,
-		IdpSsoUrl:          req.IDPSSOURL,
-		IdpSloUrl:          req.IDPSLOURL,
-		IdpCertificate:     req.IDPCertificate,
-		SpCertificate:      req.SPCertificate,
-		SpPrivateKey:       req.SPPrivateKey,
-		WantAssertionsSigned: req.WantAssertionsSigned,
-		WantResponseSigned: req.WantResponseSigned,
-		SignRequests:       req.SignRequests,
-		ForceAuthn:         req.ForceAuthn,
+		TokenEndpoint:         req.TokenEndpoint,
+		UserinfoEndpoint:      req.UserinfoEndpoint,
+		JwksUri:               req.JWKSURI,
+		ClientId:              req.ClientID,
+		ClientSecret:          req.ClientSecret,
+		Scopes:                &req.Scopes,
+		ResponseType:          req.ResponseType,
+		ResponseMode:          req.ResponseMode,
+		EntityId:              req.EntityID,
+		AcsUrl:                req.ACSURL,
+		SloUrl:                req.SLOURL,
+		IdpMetadataUrl:        req.IDPMetadataURL,
+		IdpMetadataXml:        req.IDPMetadataXML,
+		IdpEntityId:           req.IDPEntityID,
+		IdpSsoUrl:             req.IDPSSOURL,
+		IdpSloUrl:             req.IDPSLOURL,
+		IdpCertificate:        req.IDPCertificate,
+		SpCertificate:         req.SPCertificate,
+		SpPrivateKey:          req.SPPrivateKey,
+		WantAssertionsSigned:  req.WantAssertionsSigned,
+		WantResponseSigned:    req.WantResponseSigned,
+		SignRequests:          req.SignRequests,
+		ForceAuthn:            req.ForceAuthn,
 	}
 
-	resp, err := c.inner.PostApiV1AuthAdminSsoProvidersWithResponse(ctx, body)
+	resp, err := c.inner.PostApiV1SsoProvidersWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
@@ -262,41 +262,41 @@ func (c *GuardClient) UpdateSSOProvider(ctx context.Context, providerID string, 
 		}
 		attrMapping = &converted
 	}
-	body := PutApiV1AuthAdminSsoProvidersIdJSONRequestBody{
-		Name:               req.Name,
-		Enabled:            req.Enabled,
-		AllowSignup:        req.AllowSignup,
-		TrustEmailVerified: req.TrustEmailVerified,
-		Domains:            req.Domains,
-		AttributeMapping:   attrMapping,
-		Issuer:             req.Issuer,
+	body := PutApiV1SsoProvidersIdJSONRequestBody{
+		Name:                  req.Name,
+		Enabled:               req.Enabled,
+		AllowSignup:           req.AllowSignup,
+		TrustEmailVerified:    req.TrustEmailVerified,
+		Domains:               req.Domains,
+		AttributeMapping:      attrMapping,
+		Issuer:                req.Issuer,
 		AuthorizationEndpoint: req.AuthorizationEndpoint,
-		TokenEndpoint:      req.TokenEndpoint,
-		UserinfoEndpoint:   req.UserinfoEndpoint,
-		JwksUri:            req.JWKSURI,
-		ClientId:           req.ClientID,
-		ClientSecret:       req.ClientSecret,
-		Scopes:             req.Scopes,
-		ResponseType:       req.ResponseType,
-		ResponseMode:       req.ResponseMode,
-		EntityId:           req.EntityID,
-		AcsUrl:             req.ACSURL,
-		SloUrl:             req.SLOURL,
-		IdpMetadataUrl:     req.IDPMetadataURL,
-		IdpMetadataXml:     req.IDPMetadataXML,
-		IdpEntityId:        req.IDPEntityID,
-		IdpSsoUrl:          req.IDPSSOURL,
-		IdpSloUrl:          req.IDPSLOURL,
-		IdpCertificate:     req.IDPCertificate,
-		SpCertificate:      req.SPCertificate,
-		SpPrivateKey:       req.SPPrivateKey,
-		WantAssertionsSigned: req.WantAssertionsSigned,
-		WantResponseSigned: req.WantResponseSigned,
-		SignRequests:       req.SignRequests,
-		ForceAuthn:         req.ForceAuthn,
+		TokenEndpoint:         req.TokenEndpoint,
+		UserinfoEndpoint:      req.UserinfoEndpoint,
+		JwksUri:               req.JWKSURI,
+		ClientId:              req.ClientID,
+		ClientSecret:          req.ClientSecret,
+		Scopes:                req.Scopes,
+		ResponseType:          req.ResponseType,
+		ResponseMode:          req.ResponseMode,
+		EntityId:              req.EntityID,
+		AcsUrl:                req.ACSURL,
+		SloUrl:                req.SLOURL,
+		IdpMetadataUrl:        req.IDPMetadataURL,
+		IdpMetadataXml:        req.IDPMetadataXML,
+		IdpEntityId:           req.IDPEntityID,
+		IdpSsoUrl:             req.IDPSSOURL,
+		IdpSloUrl:             req.IDPSLOURL,
+		IdpCertificate:        req.IDPCertificate,
+		SpCertificate:         req.SPCertificate,
+		SpPrivateKey:          req.SPPrivateKey,
+		WantAssertionsSigned:  req.WantAssertionsSigned,
+		WantResponseSigned:    req.WantResponseSigned,
+		SignRequests:          req.SignRequests,
+		ForceAuthn:            req.ForceAuthn,
 	}
 
-	resp, err := c.inner.PutApiV1AuthAdminSsoProvidersIdWithResponse(ctx, providerID, body)
+	resp, err := c.inner.PutApiV1SsoProvidersIdWithResponse(ctx, providerID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +311,7 @@ func (c *GuardClient) UpdateSSOProvider(ctx context.Context, providerID string, 
 
 // DeleteSSOProvider deletes an SSO provider configuration.
 func (c *GuardClient) DeleteSSOProvider(ctx context.Context, providerID string) error {
-	resp, err := c.inner.DeleteApiV1AuthAdminSsoProvidersIdWithResponse(ctx, providerID)
+	resp, err := c.inner.DeleteApiV1SsoProvidersIdWithResponse(ctx, providerID)
 	if err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (c *GuardClient) DeleteSSOProvider(ctx context.Context, providerID string) 
 
 // TestSSOProvider tests an SSO provider configuration for connectivity.
 func (c *GuardClient) TestSSOProvider(ctx context.Context, providerID string) (*TestSSOProviderResponse, error) {
-	resp, err := c.inner.PostApiV1AuthAdminSsoProvidersIdTestWithResponse(ctx, providerID)
+	resp, err := c.inner.PostApiV1SsoProvidersIdTestWithResponse(ctx, providerID)
 	if err != nil {
 		return nil, err
 	}

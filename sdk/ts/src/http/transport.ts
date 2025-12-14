@@ -75,12 +75,12 @@ export class HttpClient {
       } catch {}
 
       if (status === 429) {
-        throw buildRateLimitError({ status, message: (body && body.message) || 'Too Many Requests', requestId, headers: res2.headers, raw: body });
+        throw buildRateLimitError({ status, message: (body && (body.message || body.error)) || 'Too Many Requests', requestId, headers: res2.headers, raw: body });
       }
 
       throw new ApiError({
         status,
-        message: (body && body.message) || res2.statusText || `HTTP ${status}`,
+        message: (body && (body.message || body.error)) || res2.statusText || `HTTP ${status}`,
         code: body && body.code ? String(body.code) : undefined,
         requestId,
         headers: toHeadersMap(res2.headers),

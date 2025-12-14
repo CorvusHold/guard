@@ -25,7 +25,7 @@ At the same time, there are several special endpoints that should not be moved u
 
 We want a consistent, scalable API versioning scheme where:
 
-- All **JSON APIs** live under `/api/api/v1/...`.
+- All **JSON APIs** live under `/api/v1/...`.
 - It is straightforward to introduce `/api/v2/...` later.
 - Operational endpoints and protocol-mandated paths stay where standards and tooling expect them.
 
@@ -39,29 +39,29 @@ All JSON APIs will be served under the canonical base:
 
 - Base prefix: `/api/v1`
 - Namespaces:
-  - `/api/api/v1/auth/...`
-  - `/api/api/v1/sso/...`
-  - `/api/api/v1/tenants/...`
+  - `/api/v1/auth/...`
+  - `/api/v1/sso/...`
+  - `/api/v1/tenants/...`
 
 ### 2. Old → new mappings (breaking)
 
 The following path changes are **breaking** for clients:
 
 - Auth JSON APIs
-  - Old: `/api/v1/auth/...`
-  - New: `/api/api/v1/auth/...`
+  - Old: `/v1/auth/...`
+  - New: `/api/v1/auth/...`
 
 - SSO admin & portal JSON APIs
-  - Old: `/api/v1/sso/...`
-  - New: `/api/api/v1/sso/...`
+  - Old: `/v1/sso/...`
+  - New: `/api/v1/sso/...`
 
 - Tenant settings APIs
-  - Old: `/api/v1/tenants/{id}/settings`
-  - New: `/api/api/v1/tenants/{id}/settings`
+  - Old: `/v1/tenants/{id}/settings`
+  - New: `/api/v1/tenants/{id}/settings`
 
 - Tenant management APIs
   - Old: `/tenants`, `/tenants/{id}`, `/tenants/by-name/{name}`, `/tenants/{id}/deactivate`
-  - New: `/api/api/v1/tenants`, `/api/api/v1/tenants/{id}`, `/api/api/v1/tenants/by-name/{name}`, `/api/api/v1/tenants/{id}/deactivate`
+  - New: `/api/v1/tenants`, `/api/v1/tenants/{id}`, `/api/v1/tenants/by-name/{name}`, `/api/v1/tenants/{id}/deactivate`
 
 These new paths are considered canonical from this ADR forward.
 
@@ -107,13 +107,13 @@ Routing will be restructured around versioned Echo groups:
 Within these functions, routes are defined **relative** to the provided group:
 
 - Tenants:
-  - `apiV1.POST("/tenants", ...)` → `/api/api/v1/tenants`
+  - `apiV1.POST("/tenants", ...)` → `/api/v1/tenants`
 - Auth:
-  - `authGroup := apiV1.Group("/auth")` then `authGroup.POST("/password/login", ...)` → `/api/api/v1/auth/password/login`
+  - `authGroup := apiV1.Group("/auth")` then `authGroup.POST("/password/login", ...)` → `/api/v1/auth/password/login`
 - Settings:
-  - `apiV1.GET("/tenants/:id/settings", ...)` → `/api/api/v1/tenants/:id/settings`
+  - `apiV1.GET("/tenants/:id/settings", ...)` → `/api/v1/tenants/:id/settings`
 - SSO admin & portal:
-  - `ssoGroup := apiV1.Group("/sso")` then `ssoGroup.GET("/sp-info", ...)` → `/api/api/v1/sso/sp-info`
+  - `ssoGroup := apiV1.Group("/sso")` then `ssoGroup.GET("/sp-info", ...)` → `/api/v1/sso/sp-info`
 
 Future API versions (e.g. `/api/v2`) will follow the same pattern:
 
@@ -125,11 +125,11 @@ Future API versions (e.g. `/api/v2`) will follow the same pattern:
 OpenAPI/Swagger will be updated to treat `/api` as the base path for JSON APIs:
 
 - `@BasePath` in `cmd/api/main.go` becomes `/api` instead of `/`.
-- All JSON API `@Router` annotations are updated from `/api/v1/...` or `/tenants...` to `/api/api/v1/...`, for example:
-  - `/api/v1/auth/refresh` → `/api/api/v1/auth/refresh`
-  - `/tenants` → `/api/api/v1/tenants`
-  - `/api/v1/tenants/{id}/settings` → `/api/api/v1/tenants/{id}/settings`
-  - `/api/v1/sso/sp-info` → `/api/api/v1/sso/sp-info`
+- All JSON API `@Router` annotations are updated to match `/api/v1/...` paths, for example:
+  - `/v1/auth/refresh` → `/api/v1/auth/refresh`
+  - `/tenants` → `/api/v1/tenants`
+  - `/v1/tenants/{id}/settings` → `/api/v1/tenants/{id}/settings`
+  - `/v1/sso/sp-info` → `/api/v1/sso/sp-info`
 
 Non-API endpoints keep their existing documented paths, if present.
 
@@ -139,9 +139,9 @@ Non-API endpoints keep their existing documented paths, if present.
 
 This change is **breaking** for existing clients. It will be shipped in a new major version of Guard and its SDKs.
 
-- SDKs (Go, TS) will be bumped to a new major version and updated to target `/api/api/v1/...`.
+- SDKs (Go, TS) will be bumped to a new major version and updated to target `/api/v1/...`.
 - UI and examples should be updated to use the new SDKs and/or new paths.
-- Optionally, thin compatibility aliases may be provided for one release cycle (old paths forwarding to new handlers), but the ADR does not require them; the canonical contract is `/api/api/v1/...`.
+- Optionally, thin compatibility aliases may be provided for one release cycle (old paths forwarding to new handlers), but the ADR does not require them; the canonical contract is `/api/v1/...`.
 
 ## Consequences
 
@@ -189,7 +189,7 @@ This section defines a concrete checklist for an automated AI agent implementing
     - `settings.RegisterV1(apiV1, pgPool, cfg)`
     - `sso.RegisterV1(apiV1, ...)`
   - Inside these functions, change absolute paths to be relative to `apiV1`:
-    - Tenants: from `/tenants` → group relative `/tenants` (effective `/api/api/v1/tenants`).
+    - Tenants: from `/tenants` → group relative `/tenants` (effective `/api/v1/tenants`).
     - Auth: from `/api/v1/auth` group to `apiV1.Group("/auth")`.
     - Settings: from `/api/v1/tenants/:id/settings` to `apiV1.GET("/tenants/:id/settings", ...)`.
     - SSO admin/portal: from `/api/v1/sso/...` to `apiV1.Group("/sso")` relative.
@@ -206,7 +206,7 @@ This section defines a concrete checklist for an automated AI agent implementing
   - Change `@BasePath` from `/` to `/api` in `cmd/api/main.go`.
 
 - **[P7] Update `@Router` annotations**
-  - For every JSON API endpoint, update `@Router` to match `/api/api/v1/...` paths.
+  - For every JSON API endpoint, update `@Router` to match `/api/v1/...` paths.
   - Verify that `.well-known` and health/metrics/debug endpoints keep their existing paths.
 
 - **[P8] Regenerate specs**
@@ -216,29 +216,29 @@ This section defines a concrete checklist for an automated AI agent implementing
 ### Phase 4 – SDKs and UI
 
 - **[P9] Go SDK**
-  - Identify all hard-coded paths using `/api/v1/...` and update them to `/api/api/v1/...`.
+  - Identify all hard-coded paths using legacy `/v1/...` and update them to `/api/v1/...`.
   - Centralize the versioned base path (`/api/v1`) to avoid scattering.
   - Bump the Go SDK major version and update any docs referencing old URLs.
 
 - **[P10] TS SDK**
-  - Update TS client configuration to hit `/api/api/v1/...` instead of `/api/v1/...`.
+  - Update TS client configuration to hit `/api/v1/...`.
   - Ensure base URL logic composes host + `/api/v1`.
   - Bump the TS SDK major version and adjust documentation.
 
 - **[P11] UI**
   - Prefer updating the UI to use the new SDK versions.
-  - If any UI code calls backend endpoints directly, adjust URLs to `/api/api/v1/...`.
+  - If any UI code calls backend endpoints directly, adjust URLs to `/api/v1/...`.
 
 ### Phase 5 – Tests, scripts, infra
 
 - **[P12] Backend tests**
   - Update all test requests that target old paths:
-    - `/api/v1/auth/...`, `/api/v1/sso/...`, `/api/v1/tenants/...`, `/tenants...`.
-  - Replace with `/api/api/v1/...` equivalents.
+    - `/v1/auth/...`, `/v1/sso/...`, `/v1/tenants/...`, `/tenants...`.
+  - Replace with `/api/v1/...` equivalents.
   - Ensure all Go tests pass (`go test ./...`).
 
 - **[P13] Load tests and scripts**
-  - Update k6 scripts under `ops/k6/` and any shell scripts to use `/api/api/v1/...`.
+  - Update k6 scripts under `ops/k6/` and any shell scripts to use `/api/v1/...`.
 
 - **[P14] Helm / infra / monitoring**
   - Update any ingress routes or monitors that refer to old prefixes.

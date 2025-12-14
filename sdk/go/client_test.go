@@ -8,18 +8,19 @@ import (
 	"strings"
 	"testing"
 
-	guard "github.com/corvusHold/guard/sdk/go"
+	guard "github.com/CorvusHold/guard/sdk/go"
 )
 
 // TestPasswordSignup tests the PasswordSignup method
 func TestPasswordSignup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/password/signup" {
-			t.Errorf("Expected path /v1/auth/password/signup, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/password/signup" {
+			t.Errorf("Expected path /api/v1/auth/password/signup, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
 			t.Errorf("Expected POST method, got %s", r.Method)
 		}
+		w.Header().Set("Content-Type", "application/json")
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -55,21 +56,29 @@ func TestPasswordSignup(t *testing.T) {
 // TestEmailDiscover tests the EmailDiscover method
 func TestEmailDiscover(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/email/discover" {
-			t.Errorf("Expected path /v1/auth/email/discover, got %s", r.URL.Path)
+		// Email discovery moved to login-options
+		if r.URL.Path != "/api/v1/auth/login-options" {
+			t.Errorf("Expected path /api/v1/auth/login-options, got %s", r.URL.Path)
 		}
+		email := r.URL.Query().Get("email")
+		if email != "test@example.com" {
+			t.Errorf("Expected email query param 'test@example.com', got %s", email)
+		}
+		w.Header().Set("Content-Type", "application/json")
 
 		found := true
-		hasTenant := true
 		tenantID := "tenant-123"
 		tenantName := "Test Tenant"
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"found":       found,
-			"has_tenant":  hasTenant,
-			"tenant_id":   tenantID,
-			"tenant_name": tenantName,
+			"tenant_id":          tenantID,
+			"tenant_name":        tenantName,
+			"user_exists":        found,
+			"password_enabled":   true,
+			"domain_matched_sso": nil,
+			"sso_required":       false,
+			"sso_providers":      []map[string]string{},
 		})
 	}))
 	defer server.Close()
@@ -98,18 +107,20 @@ func TestEmailDiscover(t *testing.T) {
 // TestDiscoverTenants tests the DiscoverTenants method
 func TestDiscoverTenants(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/tenants" {
-			t.Errorf("Expected path /v1/auth/tenants, got %s", r.URL.Path)
+		// DiscoverTenants uses the tenants list endpoint with a search query
+		if r.URL.Path != "/api/v1/tenants" {
+			t.Errorf("Expected path /api/v1/tenants, got %s", r.URL.Path)
 		}
 
-		email := r.URL.Query().Get("email")
-		if email != "test@example.com" {
-			t.Errorf("Expected email query param 'test@example.com', got %s", email)
+		q := r.URL.Query().Get("q")
+		if q != "test@example.com" {
+			t.Errorf("Expected q query param 'test@example.com', got %s", q)
 		}
+		w.Header().Set("Content-Type", "application/json")
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"tenants": []map[string]string{
+			"items": []map[string]string{
 				{"id": "tenant-1", "name": "Tenant One"},
 				{"id": "tenant-2", "name": "Tenant Two"},
 			},
@@ -138,8 +149,8 @@ func TestDiscoverTenants(t *testing.T) {
 // TestCreateTenant tests the CreateTenant method
 func TestCreateTenant(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/tenants" {
-			t.Errorf("Expected path /tenants, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/tenants" {
+			t.Errorf("Expected path /api/v1/tenants, got %s", r.URL.Path)
 		}
 
 		var req map[string]string
@@ -148,8 +159,10 @@ func TestCreateTenant(t *testing.T) {
 		if req["name"] != "New Tenant" {
 			t.Errorf("Expected name 'New Tenant', got %s", req["name"])
 		}
+		w.Header().Set("Content-Type", "application/json")
 
 		isActive := true
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":        "tenant-new",
@@ -184,8 +197,8 @@ func TestCreateTenant(t *testing.T) {
 // TestListUsers tests the ListUsers method
 func TestListUsers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/users" {
-			t.Errorf("Expected path /v1/auth/admin/users, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/admin/users" {
+			t.Errorf("Expected path /api/v1/auth/admin/users, got %s", r.URL.Path)
 		}
 
 		tenantID := r.URL.Query().Get("tenant_id")
@@ -193,12 +206,12 @@ func TestListUsers(t *testing.T) {
 			t.Errorf("Expected tenant_id query param 'test-tenant', got %s", tenantID)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"users": []map[string]interface{}{
 				{
 					"id":             "user-1",
-					"email":          "user1@example.com",
 					"email_verified": true,
 					"is_active":      true,
 					"first_name":     "John",
@@ -223,18 +236,19 @@ func TestListUsers(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("Expected 1 user, got %d", len(users))
 	}
-	if users[0].Email != "user1@example.com" {
-		t.Errorf("Expected email 'user1@example.com', got %s", users[0].Email)
+	if users[0].FirstName != "John" {
+		t.Errorf("Expected first_name 'John', got %s", users[0].FirstName)
 	}
 }
 
 // TestListPermissions tests the ListPermissions method
 func TestListPermissions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/rbac/permissions" {
-			t.Errorf("Expected path /v1/auth/admin/rbac/permissions, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/admin/rbac/permissions" {
+			t.Errorf("Expected path /api/v1/auth/admin/rbac/permissions, got %s", r.URL.Path)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		desc := "Read permission"
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -270,8 +284,8 @@ func TestListPermissions(t *testing.T) {
 // TestCreateRole tests the CreateRole method
 func TestCreateRole(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/rbac/roles" {
-			t.Errorf("Expected path /v1/auth/admin/rbac/roles, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/admin/rbac/roles" {
+			t.Errorf("Expected path /api/v1/auth/admin/rbac/roles, got %s", r.URL.Path)
 		}
 
 		var req map[string]interface{}
@@ -281,6 +295,7 @@ func TestCreateRole(t *testing.T) {
 			t.Errorf("Expected name 'Editor', got %v", req["name"])
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":        "role-123",
@@ -313,10 +328,11 @@ func TestCreateRole(t *testing.T) {
 // TestListFGAGroups tests the ListFGAGroups method
 func TestListFGAGroups(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/fga/groups" {
-			t.Errorf("Expected path /v1/auth/admin/fga/groups, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/admin/fga/groups" {
+			t.Errorf("Expected path /api/v1/auth/admin/fga/groups, got %s", r.URL.Path)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		desc := "Engineering team"
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -353,8 +369,8 @@ func TestListFGAGroups(t *testing.T) {
 // TestCreateFGAACLTuple tests the CreateFGAACLTuple method
 func TestCreateFGAACLTuple(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/fga/acl/tuples" {
-			t.Errorf("Expected path /v1/auth/admin/fga/acl/tuples, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/admin/fga/acl/tuples" {
+			t.Errorf("Expected path /api/v1/auth/admin/fga/acl/tuples, got %s", r.URL.Path)
 		}
 
 		var req map[string]interface{}
@@ -364,6 +380,7 @@ func TestCreateFGAACLTuple(t *testing.T) {
 			t.Errorf("Expected subject_type 'user', got %v", req["subject_type"])
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":             "tuple-123",
@@ -401,11 +418,12 @@ func TestCreateFGAACLTuple(t *testing.T) {
 // TestFGAAuthorize tests the FGAAuthorize method
 func TestFGAAuthorize(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/admin/fga/authorize" {
-			t.Errorf("Expected path /v1/auth/admin/fga/authorize, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/auth/authorize" {
+			t.Errorf("Expected path /api/v1/auth/authorize, got %s", r.URL.Path)
 		}
 
 		allowed := true
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"allowed": allowed,
@@ -439,9 +457,10 @@ func TestFGAAuthorize(t *testing.T) {
 // TestListSSOProviders tests the ListSSOProviders method
 func TestListSSOProviders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/providers" {
-			t.Errorf("Expected path /v1/sso/providers, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/sso/providers" {
+			t.Errorf("Expected path /api/v1/sso/providers, got %s", r.URL.Path)
 		}
+		w.Header().Set("Content-Type", "application/json")
 
 		enabled := true
 		w.WriteHeader(http.StatusOK)
@@ -465,7 +484,7 @@ func TestListSSOProviders(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	providers, err := client.ListSSOProviders(context.Background(), "")
+	providers, err := client.ListSSOProviders(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListSSOProviders failed: %v", err)
 	}
@@ -484,8 +503,8 @@ func TestListSSOProviders(t *testing.T) {
 // TestSSOPortalSession tests the SSOPortalSession helper
 func TestSSOPortalSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/portal/session" {
-			t.Errorf("Expected path /v1/sso/portal/session, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/sso/portal/session" {
+			t.Errorf("Expected path /api/v1/sso/portal/session, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
 			t.Errorf("Expected POST, got %s", r.Method)
@@ -521,8 +540,8 @@ func TestSSOPortalSession(t *testing.T) {
 // TestSSOPortalProvider tests the SSOPortalProvider helper
 func TestSSOPortalProvider(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/portal/provider" {
-			t.Errorf("Expected path /v1/sso/portal/provider, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/sso/portal/provider" {
+			t.Errorf("Expected path /api/v1/sso/portal/provider, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -569,6 +588,7 @@ func TestCookieMode(t *testing.T) {
 			t.Errorf("Expected no Authorization header in cookie mode, got %s", auth)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":    "user-123",
@@ -597,6 +617,7 @@ func TestBearerMode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// For login endpoint, don't expect auth header
 		if strings.Contains(r.URL.Path, "login") {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]string{
 				"access_token":  "test-access-token",
@@ -614,6 +635,7 @@ func TestBearerMode(t *testing.T) {
 			t.Errorf("Expected Authorization header to start with 'Bearer ', got %s", auth)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":    "user-123",

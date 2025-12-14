@@ -271,7 +271,7 @@ ingress:
     - host: guard.example.com
       paths:
         # API routes
-        - path: /v1
+        - path: /api/v1
           pathType: Prefix
           service: api
         - path: /healthz

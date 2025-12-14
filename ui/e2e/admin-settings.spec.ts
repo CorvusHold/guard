@@ -11,7 +11,7 @@ function cors(headers: Record<string, string> = {}) {
 }
 
 async function mockAuthMe(page: import('@playwright/test').Page) {
-  await page.route('**/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -57,11 +57,11 @@ test.describe('Admin Settings', () => {
     page.on('framenavigated', (fr) => console.log('NAVIGATED', fr.url()))
     // Keep network logs lightweight; do not intercept
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
@@ -76,7 +76,7 @@ test.describe('Admin Settings', () => {
     // Mock GET settings
     let getCalledResolve: (() => void) | null = null
     const getCalled = new Promise<void>((r) => (getCalledResolve = r))
-    await page.route(`**/v1/tenants/${TENANT}/settings`, async (route) => {
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -108,7 +108,7 @@ test.describe('Admin Settings', () => {
 
     // Mock PUT settings
     let putCalled = false
-    await page.route(`**/v1/tenants/${TENANT}/settings`, async (route) => {
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -233,7 +233,7 @@ test.describe('Admin Settings', () => {
     // Note: We avoid triggering GET settings to reduce WebKit flake; portal link does not require form state
 
     // Mock portal link endpoint
-    await page.route('**/v1/auth/sso/workos/portal-link**', async (route) => {
+    await page.route('**/api/v1/auth/sso/workos/portal-link**', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -315,7 +315,7 @@ test.describe('Admin Settings', () => {
     const TENANT = 'tenant_abc'
 
     // basic GET settings so page is ready
-    await page.route(`**/v1/tenants/${TENANT}/settings`, async (route) => {
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({

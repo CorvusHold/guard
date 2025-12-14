@@ -68,7 +68,7 @@ func setupAuthApp(t *testing.T) (*echo.Echo, uuid.UUID, tokensResponse) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestHTTP_MFA_TOTP_Enrollment_Activate_Disable(t *testing.T) {
 	e, _, toks := setupAuthApp(t)
 
 	// start
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -108,7 +108,7 @@ func TestHTTP_MFA_TOTP_Enrollment_Activate_Disable(t *testing.T) {
 		t.Fatalf("generate code: %v", err)
 	}
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	req2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func TestHTTP_MFA_TOTP_Enrollment_Activate_Disable(t *testing.T) {
 	}
 
 	// disable
-	req3 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/disable", nil)
+	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/disable", nil)
 	req3.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec3 := httptest.NewRecorder()
 	e.ServeHTTP(rec3, req3)
@@ -132,7 +132,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 
 	// generate 5
 	gb, _ := json.Marshal(map[string]int{"count": 5})
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
 	req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	}
 
 	// count -> 5
-	reqC := httptest.NewRequest(http.MethodGet, "/v1/auth/mfa/backup/count", nil)
+	reqC := httptest.NewRequest(http.MethodGet, "/api/v1/auth/mfa/backup/count", nil)
 	reqC.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recC := httptest.NewRecorder()
 	e.ServeHTTP(recC, reqC)
@@ -166,7 +166,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 
 	// consume one
 	cb, _ := json.Marshal(map[string]string{"code": genResp.Codes[0]})
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
 	req2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
@@ -183,7 +183,7 @@ func TestHTTP_MFA_BackupCodes_Generate_Consume_Count(t *testing.T) {
 	}
 
 	// consume again -> false
-	req2b := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
+	req2b := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/backup/consume", bytes.NewReader(cb))
 	req2b.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	req2b.Header.Set("Content-Type", "application/json")
 	rec3 := httptest.NewRecorder()

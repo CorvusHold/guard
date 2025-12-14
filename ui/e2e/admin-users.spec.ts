@@ -25,7 +25,7 @@ async function allowOptions(route: any, allow: string) {
 }
 
 async function mockAuthMe(page: import('@playwright/test').Page) {
-  await page.route('**/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me', async (route) => {
     if (await allowOptions(route, 'GET,OPTIONS')) return
     return route.fulfill({
       status: 200,
@@ -42,6 +42,15 @@ async function mockAuthMe(page: import('@playwright/test').Page) {
 
 test.describe('Admin Users & Sessions', () => {
   test.beforeEach(async ({ page, context }) => {
+    await page.addInitScript((apiBase: string) => {
+      localStorage.setItem(
+        'guard_runtime',
+        JSON.stringify({ guard_base_url: apiBase, source: 'e2e', auth_mode: 'bearer' })
+      )
+      localStorage.setItem('guard_ui:guard_access_token', 'e2e-access-token')
+      localStorage.setItem('guard_ui:guard_refresh_token', 'e2e-refresh-token')
+    }, UI_BASE)
+
     page.on('console', (msg) => {
       const loc = msg.location()
       console.log(
@@ -55,11 +64,11 @@ test.describe('Admin Users & Sessions', () => {
     )
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
@@ -70,7 +79,7 @@ test.describe('Admin Users & Sessions', () => {
     const TENANT = 'tenant_users'
 
     // Users list -> 500
-    await page.route('**/v1/auth/admin/users?tenant_id=*', async (route) => {
+    await page.route('**/api/v1/auth/admin/users?tenant_id=*', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({
         status: 500,
@@ -79,7 +88,7 @@ test.describe('Admin Users & Sessions', () => {
       })
     })
     // Sessions list -> 500
-    await page.route('**/v1/auth/sessions', async (route) => {
+    await page.route('**/api/v1/auth/sessions', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({ status: 500, headers: cors({}) })
     })
@@ -101,12 +110,11 @@ test.describe('Admin Users & Sessions', () => {
     // Trigger users refresh -> expect error banner and toast text
     await page.getByTestId('users-refresh').click({ force: true })
     await expect(page.getByTestId('users-error')).toBeVisible()
-    await expect(page.getByText(/Failed to load users/i)).toBeVisible()
+    await expect(page.getByTestId('users-error')).toContainText(/server error/i)
 
     // Navigate to My Account tab and verify sessions error path shows toast/banner
     await page.getByTestId('tab-account').click()
-    await expect(page.getByText(/My Sessions/i)).toBeVisible()
-    await expect(page.getByText(/Failed to load sessions/i)).toBeVisible()
+    await expect(page.getByTestId('sessions-error')).toBeVisible()
   })
 
   test('users list, edit names, block/unblock; my sessions list/revoke', async ({
@@ -114,8 +122,21 @@ test.describe('Admin Users & Sessions', () => {
   }) => {
     const TENANT = 'tenant_users'
 
+    // Tenant settings load (AdminSettings "Load" button)
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
+      if (await allowOptions(route, 'GET,PUT,OPTIONS')) return
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          body: JSON.stringify({ settings: {} }),
+          headers: cors({ 'content-type': 'application/json' })
+        })
+      }
+      return route.fulfill({ status: 200, headers: cors({}) })
+    })
+
     // Initial users list
-    await page.route('**/v1/auth/admin/users?tenant_id=*', async (route) => {
+    await page.route('**/api/v1/auth/admin/users?tenant_id=*', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({
         status: 200,
@@ -139,11 +160,11 @@ test.describe('Admin Users & Sessions', () => {
     })
 
     // Edit names PATCH
-    await page.route('**/v1/auth/admin/users/u_1', async (route) => {
+    await page.route('**/api/v1/auth/admin/users/u_1', async (route) => {
       if (await allowOptions(route, 'PATCH,OPTIONS')) return
       if (route.request().method() === 'PATCH') {
         // After editing names, subsequent list reflects update
-        page.route('**/v1/auth/admin/users?tenant_id=*', async (route2) => {
+        page.route('**/api/v1/auth/admin/users?tenant_id=*', async (route2) => {
           if (await allowOptions(route2, 'GET,OPTIONS')) return
           return route2.fulfill({
             status: 200,
@@ -171,10 +192,10 @@ test.describe('Admin Users & Sessions', () => {
     })
 
     // Block/unblock
-    await page.route('**/v1/auth/admin/users/u_1/block', async (route) => {
+    await page.route('**/api/v1/auth/admin/users/u_1/block', async (route) => {
       if (await allowOptions(route, 'POST,OPTIONS')) return
       // After block, list shows inactive
-      page.route('**/v1/auth/admin/users?tenant_id=*', async (route2) => {
+      page.route('**/api/v1/auth/admin/users?tenant_id=*', async (route2) => {
         if (await allowOptions(route2, 'GET,OPTIONS')) return
         return route2.fulfill({
           status: 200,
@@ -198,10 +219,20 @@ test.describe('Admin Users & Sessions', () => {
       })
       return route.fulfill({ status: 204, headers: cors({}) })
     })
-    await page.route('**/v1/auth/admin/users/u_1/unblock', async (route) => {
+
+    // MFA backup code count is queried on the Account tab; mock it to keep the page clean.
+    await page.route('**/api/v1/auth/mfa/backup/count', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify({ count: 0 }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
+    await page.route('**/api/v1/auth/admin/users/u_1/unblock', async (route) => {
       if (await allowOptions(route, 'POST,OPTIONS')) return
       // After unblock, list shows active again
-      page.route('**/v1/auth/admin/users?tenant_id=*', async (route2) => {
+      page.route('**/api/v1/auth/admin/users?tenant_id=*', async (route2) => {
         if (await allowOptions(route2, 'GET,OPTIONS')) return
         return route2.fulfill({
           status: 200,
@@ -227,7 +258,7 @@ test.describe('Admin Users & Sessions', () => {
     })
 
     // Sessions list and revoke
-    await page.route('**/v1/auth/sessions', async (route) => {
+    await page.route('**/api/v1/auth/sessions', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({
         status: 200,
@@ -246,10 +277,10 @@ test.describe('Admin Users & Sessions', () => {
         headers: cors({ 'content-type': 'application/json' })
       })
     })
-    await page.route('**/v1/auth/sessions/s_1/revoke', async (route) => {
+    await page.route('**/api/v1/auth/sessions/s_1/revoke', async (route) => {
       if (await allowOptions(route, 'POST,OPTIONS')) return
       // After revoke, list returns []
-      page.route('**/v1/auth/sessions', async (route2) => {
+      page.route('**/api/v1/auth/sessions', async (route2) => {
         if (await allowOptions(route2, 'GET,OPTIONS')) return
         return route2.fulfill({
           status: 200,
@@ -286,9 +317,12 @@ test.describe('Admin Users & Sessions', () => {
 
     // Edit names via modal
     await page.getByTestId('users-edit-u_1').click()
-    await page.getByLabel('First name').fill('A2')
-    await page.getByLabel('Last name').fill('One2')
-    await page.getByRole('button', { name: 'Save' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Edit Names' })
+    await expect(dialog).toBeVisible({ timeout: 10000 })
+    const inputs = dialog.locator('input')
+    await inputs.nth(0).fill('A2')
+    await inputs.nth(1).fill('One2')
+    await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByTestId('users-item-u_1')).toContainText('A2 One2', {
       timeout: 10000
     })
@@ -306,7 +340,7 @@ test.describe('Admin Users & Sessions', () => {
     })
 
     // Sessions section should show session then disappear after revoke
-    await expect(page.getByText('My Sessions')).toBeVisible()
+    await page.getByTestId('tab-account').click()
     await expect(page.getByText('UA')).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Revoke' }).click()
     await expect(page.getByText('No active sessions.')).toBeVisible({

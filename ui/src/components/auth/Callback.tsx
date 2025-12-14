@@ -14,6 +14,7 @@ export default function SSOCallback() {
   const provider = (qp.get('provider') || '').toLowerCase()
   const code = qp.get('code') || ''
   const state = qp.get('state') || undefined
+  const tenantIdFromQuery = qp.get('tenant_id') || undefined
 
   useEffect(() => {
     // Persist runtime config if guard-base-url is present
@@ -33,7 +34,19 @@ export default function SSOCallback() {
       setStatus('loading')
       try {
         const client = getClient()
+        let tenant_id = tenantIdFromQuery
+        if (!tenant_id) {
+          try {
+            tenant_id =
+              localStorage.getItem('guard_ui:tenant_id') ||
+              localStorage.getItem('tenant_id') ||
+              undefined
+          } catch {
+            // ignore
+          }
+        }
         const res = await client.handleSsoCallback(provider as any, {
+          tenant_id,
           code,
           state
         })
@@ -53,7 +66,7 @@ export default function SSOCallback() {
     }
 
     void run()
-  }, [provider, code, state])
+  }, [provider, code, state, tenantIdFromQuery])
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center p-6">

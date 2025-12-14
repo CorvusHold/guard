@@ -34,7 +34,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 
 		bodyBytes, _ := json.Marshal(body)
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(bodyBytes))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(bodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		ctx := e.NewContext(req, rec)
@@ -53,7 +53,7 @@ func TestHTTP_CookieMode_Login(t *testing.T) {
 		}
 		bodyBytes, _ := json.Marshal(body)
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(bodyBytes))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(bodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Auth-Mode", "cookie")
 		rec := httptest.NewRecorder()
@@ -128,7 +128,7 @@ func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
 	invalidToken := "totally-wrong"
 
 	t.Run("invalid cookie without bearer fails", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req.Header.Set("X-Auth-Mode", "cookie")
 		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: invalidToken})
 		rec := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
 	})
 
 	t.Run("bearer token overrides invalid cookie", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req.Header.Set("Authorization", "Bearer "+fix.accessToken)
 		req.Header.Set("X-Auth-Mode", "cookie")
 		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: invalidToken})
@@ -158,7 +158,7 @@ func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
 	})
 
 	t.Run("valid cookie succeeds without bearer", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req.Header.Set("X-Auth-Mode", "cookie")
 		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: fix.accessToken})
 		rec := httptest.NewRecorder()
@@ -169,7 +169,7 @@ func TestHTTP_CookieMode_BearerTakesPrecedence(t *testing.T) {
 	})
 
 	t.Run("valid cookie wins when bearer is invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req.Header.Set("Authorization", "Bearer totally-invalid")
 		req.Header.Set("X-Auth-Mode", "cookie")
 		req.AddCookie(&http.Cookie{Name: "guard_access_token", Value: fix.accessToken})
@@ -264,7 +264,7 @@ func TestHTTP_CookieMode_SetCookies(t *testing.T) {
 
 func TestHTTP_CookieMode_RefreshViaCookieMode(t *testing.T) {
 	fix := newCookieModeTestFixture(t)
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewBufferString("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-Mode", "cookie")
 	req.Header.Set("User-Agent", "cookie-itest")
@@ -300,7 +300,7 @@ func TestHTTP_CookieMode_RefreshViaCookieMode(t *testing.T) {
 
 func TestHTTP_CookieMode_LogoutViaCookieMode(t *testing.T) {
 	fix := newCookieModeTestFixture(t)
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", bytes.NewBufferString("{}"))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewBufferString("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-Mode", "cookie")
 	req.AddCookie(&http.Cookie{Name: "guard_refresh_token", Value: fix.refreshToken})
@@ -321,7 +321,7 @@ func TestHTTP_CookieMode_LogoutViaCookieMode(t *testing.T) {
 		t.Fatalf("expected guard_refresh_token cookie to be immediately deleted (MaxAge=-1), got MaxAge=%d", refreshCookie.MaxAge)
 	}
 	// Refreshing with the revoked token (still using cookie mode) should now fail.
-	again := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewBufferString("{}"))
+	again := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewBufferString("{}"))
 	again.Header.Set("Content-Type", "application/json")
 	again.Header.Set("X-Auth-Mode", "cookie")
 	again.AddCookie(&http.Cookie{Name: "guard_refresh_token", Value: fix.refreshToken})
@@ -396,7 +396,7 @@ pollLoop:
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -410,7 +410,7 @@ pollLoop:
 		"password":  password,
 	}
 	lb, _ := json.Marshal(lBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
 	lreq.Header.Set("X-Auth-Mode", "bearer")
 	lreq.Header.Set("User-Agent", "cookie-itest")

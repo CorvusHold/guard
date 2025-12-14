@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 )
 
@@ -277,6 +278,23 @@ func (c *GuardClient) CreateFGAACLTuple(ctx context.Context, req CreateFGAACLTup
 		PermissionKey: req.PermissionKey,
 		ObjectType:    req.ObjectType,
 		ObjectID:      req.ObjectID,
+	}
+
+	// This endpoint's generated response type does not expose a JSON model.
+	// Populate best-effort fields from the raw response body.
+	if len(resp.Body) > 0 {
+		var m map[string]interface{}
+		if err := json.Unmarshal(resp.Body, &m); err == nil {
+			if v, ok := m["id"].(string); ok {
+				tuple.ID = v
+			}
+			if v, ok := m["tenant_id"].(string); ok {
+				tuple.TenantID = v
+			}
+			if v, ok := m["created_at"].(string); ok {
+				tuple.CreatedAt = v
+			}
+		}
 	}
 
 	return tuple, nil

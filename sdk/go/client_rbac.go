@@ -50,7 +50,7 @@ type UserRoleRequest struct {
 
 // ListPermissions retrieves all available permissions. Requires admin role.
 func (c *GuardClient) ListPermissions(ctx context.Context) ([]Permission, error) {
-	resp, err := c.inner.GetApiV1AuthAdminRbacPermissionsWithResponse(ctx, nil)
+	resp, err := c.inner.GetApiV1AuthAdminRbacPermissionsWithResponse(ctx)
 	if err != nil {
 		return nil, err
 	}

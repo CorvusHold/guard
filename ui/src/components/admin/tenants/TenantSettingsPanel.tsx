@@ -160,7 +160,8 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
     key: keyof TenantSettings,
     label: string,
     placeholder: string,
-    required: boolean = false
+    required: boolean = false,
+    testId?: string
   ) => {
     const value = settings[key] || ''
     const isVisible = showSecrets[key] || false
@@ -172,6 +173,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
           <div className="relative flex-1">
             <Input
               id={key}
+              data-testid={testId}
               type={isVisible ? 'text' : 'password'}
               value={value}
               onChange={(e) => updateSetting(key, e.target.value)}
@@ -588,9 +590,9 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                 <div className="space-y-4 border-t pt-4">
                   <h4 className="font-medium">WorkOS Configuration</h4>
                   
-                  {renderSecretInput('sso_workos_client_id', 'Client ID', 'client_01234567890', true)}
-                  {renderSecretInput('sso_workos_client_secret', 'Client Secret', 'wk_live_...', true)}
-                  {renderSecretInput('sso_workos_api_key', 'API Key', 'sk_live_...')}
+                  {renderSecretInput('sso_workos_client_id', 'Client ID', 'client_01234567890', true, 'workos-client-id')}
+                  {renderSecretInput('sso_workos_client_secret', 'Client Secret', 'wk_live_...', true, 'workos-client-secret')}
+                  {renderSecretInput('sso_workos_api_key', 'API Key', 'sk_live_...', false, 'workos-api-key')}
                   
                   <div className="space-y-2">
                     <Label htmlFor="sso_workos_api_base_url">API Base URL</Label>

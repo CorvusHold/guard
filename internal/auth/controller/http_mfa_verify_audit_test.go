@@ -75,7 +75,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
@@ -89,7 +89,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 
 	// enroll + activate TOTP
-	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	reqStart := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
@@ -100,7 +100,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
 	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 		"email":     email,
 		"password":  password,
 	})
-	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
 	lreq.Header.Set("X-Auth-Mode", "bearer")
 	lreq.Header.Set("User-Agent", "itest-agent")
@@ -133,7 +133,7 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 		"method":          "totp",
 		"code":            code,
 	})
-	vreq := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
+	vreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	vreq.Header.Set("Content-Type", "application/json")
 	vreq.Header.Set("X-Auth-Mode", "bearer")
 	vreq.Header.Set("User-Agent", "itest-agent")

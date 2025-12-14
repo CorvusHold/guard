@@ -26,6 +26,15 @@ async function allowOptions(route: any, allow: string) {
 
 test.describe('Admin FGA (Groups, Members, ACL)', () => {
   test.beforeEach(async ({ page, context }) => {
+    await page.addInitScript((apiBase: string) => {
+      localStorage.setItem(
+        'guard_runtime',
+        JSON.stringify({ guard_base_url: apiBase, source: 'e2e', auth_mode: 'bearer' })
+      )
+      localStorage.setItem('guard_ui:guard_access_token', 'e2e-access-token')
+      localStorage.setItem('guard_ui:guard_refresh_token', 'e2e-refresh-token')
+    }, UI_BASE)
+
     page.on('console', (msg) => {
       const loc = msg.location()
       console.log(
@@ -39,11 +48,11 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     )
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
@@ -52,7 +61,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     const TENANT = 'tenant_fga'
 
     // Mock admin user for tab visibility
-    await page.route('**/v1/auth/me', async (route) => {
+    await page.route('**/api/v1/auth/me', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({
         status: 200,
@@ -68,7 +77,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
 
     // Groups list -> 500
     await page.route(
-      '**/v1/auth/admin/fga/groups?tenant_id=*',
+      '**/api/v1/auth/admin/fga/groups?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -94,7 +103,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     await expect(page.getByTestId('fga-groups-error')).toBeVisible()
 
     // ACL create -> 400
-    await page.route('**/v1/auth/admin/fga/acl/tuples', async (route) => {
+    await page.route('**/api/v1/auth/admin/fga/acl/tuples', async (route) => {
       if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return
       const req = route.request()
       if (req.method() === 'POST') {
@@ -121,7 +130,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     const TENANT = 'tenant_fga'
 
     // Mock admin user for tab visibility
-    await page.route('**/v1/auth/me', async (route) => {
+    await page.route('**/api/v1/auth/me', async (route) => {
       if (await allowOptions(route, 'GET,OPTIONS')) return
       return route.fulfill({
         status: 200,
@@ -137,7 +146,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
 
     // Initial groups empty, then reflect created
     await page.route(
-      '**/v1/auth/admin/fga/groups?tenant_id=*',
+      '**/api/v1/auth/admin/fga/groups?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -147,7 +156,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
         })
       }
     )
-    await page.route('**/v1/auth/admin/fga/groups', async (route) => {
+    await page.route('**/api/v1/auth/admin/fga/groups', async (route) => {
       if (await allowOptions(route, 'POST,OPTIONS')) return
       const req = route.request()
       if (req.method() === 'POST') {
@@ -162,7 +171,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
         }
         // After create -> list shows item
         page.route(
-          '**/v1/auth/admin/fga/groups?tenant_id=*',
+          '**/api/v1/auth/admin/fga/groups?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -181,12 +190,12 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
       return route.fallback()
     })
     await page.route(
-      '**/v1/auth/admin/fga/groups/g_1?tenant_id=*',
+      '**/api/v1/auth/admin/fga/groups/g_1?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'DELETE,OPTIONS')) return
         // After delete -> list returns empty
         page.route(
-          '**/v1/auth/admin/fga/groups?tenant_id=*',
+          '**/api/v1/auth/admin/fga/groups?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -202,7 +211,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
 
     // Group members add/remove
     await page.route(
-      '**/v1/auth/admin/fga/groups/g_1/members',
+      '**/api/v1/auth/admin/fga/groups/g_1/members',
       async (route) => {
         if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return
         const req = route.request()
@@ -217,7 +226,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     )
 
     // ACL create/delete
-    await page.route('**/v1/auth/admin/fga/acl/tuples', async (route) => {
+    await page.route('**/api/v1/auth/admin/fga/acl/tuples', async (route) => {
       if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return
       const req = route.request()
       if (req.method() === 'POST') {
@@ -286,7 +295,7 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
 
     // Delete group
     await page.route(
-      '**/v1/auth/admin/fga/groups?tenant_id=*',
+      '**/api/v1/auth/admin/fga/groups?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -310,12 +319,12 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
 
     // Confirm delete path invoked
     await page.route(
-      '**/v1/auth/admin/fga/groups/g_1?tenant_id=*',
+      '**/api/v1/auth/admin/fga/groups/g_1?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'DELETE,OPTIONS')) return
         // After delete -> list empty
         page.route(
-          '**/v1/auth/admin/fga/groups?tenant_id=*',
+          '**/api/v1/auth/admin/fga/groups?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -333,7 +342,9 @@ test.describe('Admin FGA (Groups, Members, ACL)', () => {
     const deleteButton = page.getByRole('button', { name: 'Delete' }).first()
     await deleteButton.click()
     // Confirm modal delete
-    await page.getByRole('button', { name: 'Delete' }).last().click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 10000 })
+    await dialog.getByRole('button', { name: 'Delete' }).click()
     await expect(page.getByTestId('fga-groups-empty')).toBeVisible({
       timeout: 10000
     })

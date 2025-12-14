@@ -12,16 +12,16 @@ function cors(headers: Record<string, string> = {}) {
 
 test.describe('SSO Setup Portal', () => {
   test.beforeEach(async ({ page }) => {
-    await page.route('**/v1/**', async (route) => {
+    await page.route('**/api/v1/**', async (route) => {
       const req = route.request()
       console.log('ROUTE CATCHALL', req.method(), req.url())
       await route.fallback()
     })
     page.on('request', (req) => {
-      if (req.url().includes('/v1/')) console.log('REQ', req.method(), req.url())
+      if (req.url().includes('/api/v1/')) console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/')) console.log('RES', res.status(), res.url())
+      if (res.url().includes('/api/v1/')) console.log('RES', res.status(), res.url())
     })
     page.on('console', (msg) => {
       const loc = msg.location()
@@ -36,7 +36,7 @@ test.describe('SSO Setup Portal', () => {
   test('shows portal context and provider details on success', async ({ page }) => {
     let sessionResolve: (() => void) | null = null
     const sessionHit = new Promise<void>((r) => (sessionResolve = r))
-    await page.route('**/v1/sso/portal/session', async (route) => {
+    await page.route('**/api/v1/sso/portal/session', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -63,7 +63,7 @@ test.describe('SSO Setup Portal', () => {
 
     let providerResolve: (() => void) | null = null
     const providerHit = new Promise<void>((r) => (providerResolve = r))
-    await page.route('**/v1/sso/portal/provider', async (route) => {
+    await page.route('**/api/v1/sso/portal/provider', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -126,7 +126,7 @@ test.describe('SSO Setup Portal', () => {
   test('shows error UI when portal session fails', async ({ page }) => {
     let sessionResolve: (() => void) | null = null
     const sessionHit = new Promise<void>((r) => (sessionResolve = r))
-    await page.route('**/v1/sso/portal/session', async (route) => {
+    await page.route('**/api/v1/sso/portal/session', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({

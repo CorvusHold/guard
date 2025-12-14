@@ -100,8 +100,9 @@ func (h *Controller) Register(e *echo.Echo) {
 	getMW = append(getMW, getRL)
 	putMW = append(putMW, putRL)
 
-	e.GET("/v1/tenants/:id/settings", h.getTenantSettings, getMW...)
-	e.PUT("/v1/tenants/:id/settings", h.putTenantSettings, putMW...)
+	g := e.Group("/api/v1")
+	g.GET("/tenants/:id/settings", h.getTenantSettings, getMW...)
+	g.PUT("/tenants/:id/settings", h.putTenantSettings, putMW...)
 }
 
 // RegisterV1 mounts settings endpoints under /api/v1.

@@ -448,6 +448,19 @@ type ControllerPermissionGrantItem struct {
 	ObjectType *string `json:"object_type,omitempty"`
 }
 
+// ControllerPortalSessionRequest defines model for controller.portalSessionRequest.
+type ControllerPortalSessionRequest struct {
+	Token *string `json:"token,omitempty"`
+}
+
+// ControllerPortalSessionResponse defines model for controller.portalSessionResponse.
+type ControllerPortalSessionResponse struct {
+	Intent        *string `json:"intent,omitempty"`
+	PortalTokenId *string `json:"portal_token_id,omitempty"`
+	ProviderSlug  *string `json:"provider_slug,omitempty"`
+	TenantId      *string `json:"tenant_id,omitempty"`
+}
+
 // ControllerPutSettingsRequest defines model for controller.putSettingsRequest.
 type ControllerPutSettingsRequest struct {
 	// AppCorsAllowedOrigins App
@@ -743,12 +756,6 @@ type GetApiV1AuthAdminRbacUsersIdRolesParams struct {
 	TenantId string `form:"tenant_id" json:"tenant_id"`
 }
 
-// GetApiV1AuthAdminSsoProvidersParams defines parameters for GetApiV1AuthAdminSsoProviders.
-type GetApiV1AuthAdminSsoProvidersParams struct {
-	// TenantId Tenant ID (UUID)
-	TenantId *string `form:"tenant_id,omitempty" json:"tenant_id,omitempty"`
-}
-
 // GetApiV1AuthAdminUsersParams defines parameters for GetApiV1AuthAdminUsers.
 type GetApiV1AuthAdminUsersParams struct {
 	// TenantId Tenant ID (UUID)
@@ -872,6 +879,21 @@ type GetApiV1AuthSsoProviderStartParams struct {
 	OrganizationId *string `form:"organization_id,omitempty" json:"organization_id,omitempty"`
 }
 
+// GetApiV1SsoPortalProviderParams defines parameters for GetApiV1SsoPortalProvider.
+type GetApiV1SsoPortalProviderParams struct {
+	// Token Portal token (fallback)
+	Token *string `form:"token,omitempty" json:"token,omitempty"`
+
+	// XPortalToken Portal token
+	XPortalToken *string `json:"X-Portal-Token,omitempty"`
+}
+
+// GetApiV1SsoProvidersParams defines parameters for GetApiV1SsoProviders.
+type GetApiV1SsoProvidersParams struct {
+	// TenantId Tenant ID (UUID)
+	TenantId *string `form:"tenant_id,omitempty" json:"tenant_id,omitempty"`
+}
+
 // GetApiV1SsoSpInfoParams defines parameters for GetApiV1SsoSpInfo.
 type GetApiV1SsoSpInfoParams struct {
 	// Slug Provider slug (e.g. 'okta', 'azure-ad')
@@ -925,12 +947,6 @@ type DeleteApiV1AuthAdminRbacUsersIdRolesJSONRequestBody = ControllerRbacModifyU
 
 // PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody defines body for PostApiV1AuthAdminRbacUsersIdRoles for application/json ContentType.
 type PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody = ControllerRbacModifyUserRoleReq
-
-// PostApiV1AuthAdminSsoProvidersJSONRequestBody defines body for PostApiV1AuthAdminSsoProviders for application/json ContentType.
-type PostApiV1AuthAdminSsoProvidersJSONRequestBody = ControllerCreateProviderRequest
-
-// PutApiV1AuthAdminSsoProvidersIdJSONRequestBody defines body for PutApiV1AuthAdminSsoProvidersId for application/json ContentType.
-type PutApiV1AuthAdminSsoProvidersIdJSONRequestBody = ControllerUpdateProviderRequest
 
 // PatchApiV1AuthAdminUsersIdJSONRequestBody defines body for PatchApiV1AuthAdminUsersId for application/json ContentType.
 type PatchApiV1AuthAdminUsersIdJSONRequestBody = ControllerAdminUpdateNamesReq
@@ -994,6 +1010,15 @@ type PostApiV1AuthRefreshJSONRequestBody = ControllerRefreshReq
 
 // PostApiV1AuthRevokeJSONRequestBody defines body for PostApiV1AuthRevoke for application/json ContentType.
 type PostApiV1AuthRevokeJSONRequestBody = ControllerRevokeReq
+
+// PostApiV1SsoPortalSessionJSONRequestBody defines body for PostApiV1SsoPortalSession for application/json ContentType.
+type PostApiV1SsoPortalSessionJSONRequestBody = ControllerPortalSessionRequest
+
+// PostApiV1SsoProvidersJSONRequestBody defines body for PostApiV1SsoProviders for application/json ContentType.
+type PostApiV1SsoProvidersJSONRequestBody = ControllerCreateProviderRequest
+
+// PutApiV1SsoProvidersIdJSONRequestBody defines body for PutApiV1SsoProvidersId for application/json ContentType.
+type PutApiV1SsoProvidersIdJSONRequestBody = ControllerUpdateProviderRequest
 
 // PostApiV1TenantsJSONRequestBody defines body for PostApiV1Tenants for application/json ContentType.
 type PostApiV1TenantsJSONRequestBody = ControllerCreateTenantReq
@@ -1153,28 +1178,6 @@ type ClientInterface interface {
 
 	PostApiV1AuthAdminRbacUsersIdRoles(ctx context.Context, id string, body PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetApiV1AuthAdminSsoProviders request
-	GetApiV1AuthAdminSsoProviders(ctx context.Context, params *GetApiV1AuthAdminSsoProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PostApiV1AuthAdminSsoProvidersWithBody request with any body
-	PostApiV1AuthAdminSsoProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	PostApiV1AuthAdminSsoProviders(ctx context.Context, body PostApiV1AuthAdminSsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteApiV1AuthAdminSsoProvidersId request
-	DeleteApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetApiV1AuthAdminSsoProvidersId request
-	GetApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutApiV1AuthAdminSsoProvidersIdWithBody request with any body
-	PutApiV1AuthAdminSsoProvidersIdWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	PutApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, body PutApiV1AuthAdminSsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PostApiV1AuthAdminSsoProvidersIdTest request
-	PostApiV1AuthAdminSsoProvidersIdTest(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetApiV1AuthAdminUsers request
 	GetApiV1AuthAdminUsers(ctx context.Context, params *GetApiV1AuthAdminUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1324,6 +1327,36 @@ type ClientInterface interface {
 
 	// GetApiV1AuthSsoProviderStart request
 	GetApiV1AuthSsoProviderStart(ctx context.Context, provider string, params *GetApiV1AuthSsoProviderStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiV1SsoPortalProvider request
+	GetApiV1SsoPortalProvider(ctx context.Context, params *GetApiV1SsoPortalProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiV1SsoPortalSessionWithBody request with any body
+	PostApiV1SsoPortalSessionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostApiV1SsoPortalSession(ctx context.Context, body PostApiV1SsoPortalSessionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiV1SsoProviders request
+	GetApiV1SsoProviders(ctx context.Context, params *GetApiV1SsoProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiV1SsoProvidersWithBody request with any body
+	PostApiV1SsoProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostApiV1SsoProviders(ctx context.Context, body PostApiV1SsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiV1SsoProvidersId request
+	DeleteApiV1SsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiV1SsoProvidersId request
+	GetApiV1SsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiV1SsoProvidersIdWithBody request with any body
+	PutApiV1SsoProvidersIdWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutApiV1SsoProvidersId(ctx context.Context, id string, body PutApiV1SsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiV1SsoProvidersIdTest request
+	PostApiV1SsoProvidersIdTest(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiV1SsoSpInfo request
 	GetApiV1SsoSpInfo(ctx context.Context, params *GetApiV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1704,102 +1737,6 @@ func (c *Client) PostApiV1AuthAdminRbacUsersIdRolesWithBody(ctx context.Context,
 
 func (c *Client) PostApiV1AuthAdminRbacUsersIdRoles(ctx context.Context, id string, body PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiV1AuthAdminRbacUsersIdRolesRequest(c.Server, id, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetApiV1AuthAdminSsoProviders(ctx context.Context, params *GetApiV1AuthAdminSsoProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetApiV1AuthAdminSsoProvidersRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PostApiV1AuthAdminSsoProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiV1AuthAdminSsoProvidersRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PostApiV1AuthAdminSsoProviders(ctx context.Context, body PostApiV1AuthAdminSsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiV1AuthAdminSsoProvidersRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DeleteApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteApiV1AuthAdminSsoProvidersIdRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetApiV1AuthAdminSsoProvidersIdRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PutApiV1AuthAdminSsoProvidersIdWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutApiV1AuthAdminSsoProvidersIdRequestWithBody(c.Server, id, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PutApiV1AuthAdminSsoProvidersId(ctx context.Context, id string, body PutApiV1AuthAdminSsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutApiV1AuthAdminSsoProvidersIdRequest(c.Server, id, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PostApiV1AuthAdminSsoProvidersIdTest(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiV1AuthAdminSsoProvidersIdTestRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -2484,6 +2421,138 @@ func (c *Client) GetApiV1AuthSsoProviderPortalLink(ctx context.Context, provider
 
 func (c *Client) GetApiV1AuthSsoProviderStart(ctx context.Context, provider string, params *GetApiV1AuthSsoProviderStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiV1AuthSsoProviderStartRequest(c.Server, provider, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetApiV1SsoPortalProvider(ctx context.Context, params *GetApiV1SsoPortalProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiV1SsoPortalProviderRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1SsoPortalSessionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1SsoPortalSessionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1SsoPortalSession(ctx context.Context, body PostApiV1SsoPortalSessionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1SsoPortalSessionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetApiV1SsoProviders(ctx context.Context, params *GetApiV1SsoProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiV1SsoProvidersRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1SsoProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1SsoProvidersRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1SsoProviders(ctx context.Context, body PostApiV1SsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1SsoProvidersRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteApiV1SsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiV1SsoProvidersIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetApiV1SsoProvidersId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiV1SsoProvidersIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutApiV1SsoProvidersIdWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiV1SsoProvidersIdRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutApiV1SsoProvidersId(ctx context.Context, id string, body PutApiV1SsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiV1SsoProvidersIdRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1SsoProvidersIdTest(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1SsoProvidersIdTestRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -3451,244 +3520,6 @@ func NewPostApiV1AuthAdminRbacUsersIdRolesRequestWithBody(server string, id stri
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetApiV1AuthAdminSsoProvidersRequest generates requests for GetApiV1AuthAdminSsoProviders
-func NewGetApiV1AuthAdminSsoProvidersRequest(server string, params *GetApiV1AuthAdminSsoProvidersParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.TenantId != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant_id", runtime.ParamLocationQuery, *params.TenantId); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPostApiV1AuthAdminSsoProvidersRequest calls the generic PostApiV1AuthAdminSsoProviders builder with application/json body
-func NewPostApiV1AuthAdminSsoProvidersRequest(server string, body PostApiV1AuthAdminSsoProvidersJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPostApiV1AuthAdminSsoProvidersRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewPostApiV1AuthAdminSsoProvidersRequestWithBody generates requests for PostApiV1AuthAdminSsoProviders with any type of body
-func NewPostApiV1AuthAdminSsoProvidersRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteApiV1AuthAdminSsoProvidersIdRequest generates requests for DeleteApiV1AuthAdminSsoProvidersId
-func NewDeleteApiV1AuthAdminSsoProvidersIdRequest(server string, id string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetApiV1AuthAdminSsoProvidersIdRequest generates requests for GetApiV1AuthAdminSsoProvidersId
-func NewGetApiV1AuthAdminSsoProvidersIdRequest(server string, id string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPutApiV1AuthAdminSsoProvidersIdRequest calls the generic PutApiV1AuthAdminSsoProvidersId builder with application/json body
-func NewPutApiV1AuthAdminSsoProvidersIdRequest(server string, id string, body PutApiV1AuthAdminSsoProvidersIdJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPutApiV1AuthAdminSsoProvidersIdRequestWithBody(server, id, "application/json", bodyReader)
-}
-
-// NewPutApiV1AuthAdminSsoProvidersIdRequestWithBody generates requests for PutApiV1AuthAdminSsoProvidersId with any type of body
-func NewPutApiV1AuthAdminSsoProvidersIdRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewPostApiV1AuthAdminSsoProvidersIdTestRequest generates requests for PostApiV1AuthAdminSsoProvidersIdTest
-func NewPostApiV1AuthAdminSsoProvidersIdTestRequest(server string, id string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/auth/admin/sso/providers/%s/test", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	return req, nil
 }
@@ -5356,6 +5187,348 @@ func NewGetApiV1AuthSsoProviderStartRequest(server string, provider string, para
 	return req, nil
 }
 
+// NewGetApiV1SsoPortalProviderRequest generates requests for GetApiV1SsoPortalProvider
+func NewGetApiV1SsoPortalProviderRequest(server string, params *GetApiV1SsoPortalProviderParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/portal/provider")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Token != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "token", runtime.ParamLocationQuery, *params.Token); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XPortalToken != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Portal-Token", runtime.ParamLocationHeader, *params.XPortalToken)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Portal-Token", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPostApiV1SsoPortalSessionRequest calls the generic PostApiV1SsoPortalSession builder with application/json body
+func NewPostApiV1SsoPortalSessionRequest(server string, body PostApiV1SsoPortalSessionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiV1SsoPortalSessionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiV1SsoPortalSessionRequestWithBody generates requests for PostApiV1SsoPortalSession with any type of body
+func NewPostApiV1SsoPortalSessionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/portal/session")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetApiV1SsoProvidersRequest generates requests for GetApiV1SsoProviders
+func NewGetApiV1SsoProvidersRequest(server string, params *GetApiV1SsoProvidersParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.TenantId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant_id", runtime.ParamLocationQuery, *params.TenantId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiV1SsoProvidersRequest calls the generic PostApiV1SsoProviders builder with application/json body
+func NewPostApiV1SsoProvidersRequest(server string, body PostApiV1SsoProvidersJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiV1SsoProvidersRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiV1SsoProvidersRequestWithBody generates requests for PostApiV1SsoProviders with any type of body
+func NewPostApiV1SsoProvidersRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteApiV1SsoProvidersIdRequest generates requests for DeleteApiV1SsoProvidersId
+func NewDeleteApiV1SsoProvidersIdRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiV1SsoProvidersIdRequest generates requests for GetApiV1SsoProvidersId
+func NewGetApiV1SsoProvidersIdRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiV1SsoProvidersIdRequest calls the generic PutApiV1SsoProvidersId builder with application/json body
+func NewPutApiV1SsoProvidersIdRequest(server string, id string, body PutApiV1SsoProvidersIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiV1SsoProvidersIdRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewPutApiV1SsoProvidersIdRequestWithBody generates requests for PutApiV1SsoProvidersId with any type of body
+func NewPutApiV1SsoProvidersIdRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiV1SsoProvidersIdTestRequest generates requests for PostApiV1SsoProvidersIdTest
+func NewPostApiV1SsoProvidersIdTestRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/sso/providers/%s/test", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetApiV1SsoSpInfoRequest generates requests for GetApiV1SsoSpInfo
 func NewGetApiV1SsoSpInfoRequest(server string, params *GetApiV1SsoSpInfoParams) (*http.Request, error) {
 	var err error
@@ -5843,28 +6016,6 @@ type ClientWithResponsesInterface interface {
 
 	PostApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx context.Context, id string, body PostApiV1AuthAdminRbacUsersIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminRbacUsersIdRolesResponse, error)
 
-	// GetApiV1AuthAdminSsoProvidersWithResponse request
-	GetApiV1AuthAdminSsoProvidersWithResponse(ctx context.Context, params *GetApiV1AuthAdminSsoProvidersParams, reqEditors ...RequestEditorFn) (*GetApiV1AuthAdminSsoProvidersResponse, error)
-
-	// PostApiV1AuthAdminSsoProvidersWithBodyWithResponse request with any body
-	PostApiV1AuthAdminSsoProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersResponse, error)
-
-	PostApiV1AuthAdminSsoProvidersWithResponse(ctx context.Context, body PostApiV1AuthAdminSsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersResponse, error)
-
-	// DeleteApiV1AuthAdminSsoProvidersIdWithResponse request
-	DeleteApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteApiV1AuthAdminSsoProvidersIdResponse, error)
-
-	// GetApiV1AuthAdminSsoProvidersIdWithResponse request
-	GetApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1AuthAdminSsoProvidersIdResponse, error)
-
-	// PutApiV1AuthAdminSsoProvidersIdWithBodyWithResponse request with any body
-	PutApiV1AuthAdminSsoProvidersIdWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiV1AuthAdminSsoProvidersIdResponse, error)
-
-	PutApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, body PutApiV1AuthAdminSsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiV1AuthAdminSsoProvidersIdResponse, error)
-
-	// PostApiV1AuthAdminSsoProvidersIdTestWithResponse request
-	PostApiV1AuthAdminSsoProvidersIdTestWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersIdTestResponse, error)
-
 	// GetApiV1AuthAdminUsersWithResponse request
 	GetApiV1AuthAdminUsersWithResponse(ctx context.Context, params *GetApiV1AuthAdminUsersParams, reqEditors ...RequestEditorFn) (*GetApiV1AuthAdminUsersResponse, error)
 
@@ -6014,6 +6165,36 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiV1AuthSsoProviderStartWithResponse request
 	GetApiV1AuthSsoProviderStartWithResponse(ctx context.Context, provider string, params *GetApiV1AuthSsoProviderStartParams, reqEditors ...RequestEditorFn) (*GetApiV1AuthSsoProviderStartResponse, error)
+
+	// GetApiV1SsoPortalProviderWithResponse request
+	GetApiV1SsoPortalProviderWithResponse(ctx context.Context, params *GetApiV1SsoPortalProviderParams, reqEditors ...RequestEditorFn) (*GetApiV1SsoPortalProviderResponse, error)
+
+	// PostApiV1SsoPortalSessionWithBodyWithResponse request with any body
+	PostApiV1SsoPortalSessionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1SsoPortalSessionResponse, error)
+
+	PostApiV1SsoPortalSessionWithResponse(ctx context.Context, body PostApiV1SsoPortalSessionJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1SsoPortalSessionResponse, error)
+
+	// GetApiV1SsoProvidersWithResponse request
+	GetApiV1SsoProvidersWithResponse(ctx context.Context, params *GetApiV1SsoProvidersParams, reqEditors ...RequestEditorFn) (*GetApiV1SsoProvidersResponse, error)
+
+	// PostApiV1SsoProvidersWithBodyWithResponse request with any body
+	PostApiV1SsoProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersResponse, error)
+
+	PostApiV1SsoProvidersWithResponse(ctx context.Context, body PostApiV1SsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersResponse, error)
+
+	// DeleteApiV1SsoProvidersIdWithResponse request
+	DeleteApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteApiV1SsoProvidersIdResponse, error)
+
+	// GetApiV1SsoProvidersIdWithResponse request
+	GetApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1SsoProvidersIdResponse, error)
+
+	// PutApiV1SsoProvidersIdWithBodyWithResponse request with any body
+	PutApiV1SsoProvidersIdWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiV1SsoProvidersIdResponse, error)
+
+	PutApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, body PutApiV1SsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiV1SsoProvidersIdResponse, error)
+
+	// PostApiV1SsoProvidersIdTestWithResponse request
+	PostApiV1SsoProvidersIdTestWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersIdTestResponse, error)
 
 	// GetApiV1SsoSpInfoWithResponse request
 	GetApiV1SsoSpInfoWithResponse(ctx context.Context, params *GetApiV1SsoSpInfoParams, reqEditors ...RequestEditorFn) (*GetApiV1SsoSpInfoResponse, error)
@@ -6470,155 +6651,6 @@ func (r PostApiV1AuthAdminRbacUsersIdRolesResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r PostApiV1AuthAdminRbacUsersIdRolesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetApiV1AuthAdminSsoProvidersResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
-	JSON400      *map[string]string
-	JSON401      *map[string]string
-	JSON403      *map[string]string
-}
-
-// Status returns HTTPResponse.Status
-func (r GetApiV1AuthAdminSsoProvidersResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetApiV1AuthAdminSsoProvidersResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type PostApiV1AuthAdminSsoProvidersResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON201      *map[string]interface{}
-	JSON400      *map[string]string
-	JSON401      *map[string]string
-	JSON403      *map[string]string
-}
-
-// Status returns HTTPResponse.Status
-func (r PostApiV1AuthAdminSsoProvidersResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PostApiV1AuthAdminSsoProvidersResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type DeleteApiV1AuthAdminSsoProvidersIdResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteApiV1AuthAdminSsoProvidersIdResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteApiV1AuthAdminSsoProvidersIdResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetApiV1AuthAdminSsoProvidersIdResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
-	JSON400      *map[string]string
-	JSON401      *map[string]string
-	JSON403      *map[string]string
-	JSON404      *map[string]string
-}
-
-// Status returns HTTPResponse.Status
-func (r GetApiV1AuthAdminSsoProvidersIdResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetApiV1AuthAdminSsoProvidersIdResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type PutApiV1AuthAdminSsoProvidersIdResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
-	JSON400      *map[string]string
-	JSON401      *map[string]string
-	JSON403      *map[string]string
-	JSON404      *map[string]string
-}
-
-// Status returns HTTPResponse.Status
-func (r PutApiV1AuthAdminSsoProvidersIdResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PutApiV1AuthAdminSsoProvidersIdResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type PostApiV1AuthAdminSsoProvidersIdTestResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
-	JSON400      *map[string]string
-	JSON401      *map[string]string
-	JSON403      *map[string]string
-	JSON404      *map[string]string
-}
-
-// Status returns HTTPResponse.Status
-func (r PostApiV1AuthAdminSsoProvidersIdTestResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PostApiV1AuthAdminSsoProvidersIdTestResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -7453,6 +7485,202 @@ func (r GetApiV1AuthSsoProviderStartResponse) StatusCode() int {
 	return 0
 }
 
+type GetApiV1SsoPortalProviderResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON404      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiV1SsoPortalProviderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiV1SsoPortalProviderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostApiV1SsoPortalSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControllerPortalSessionResponse
+	JSON400      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1SsoPortalSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1SsoPortalSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetApiV1SsoProvidersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiV1SsoProvidersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiV1SsoProvidersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostApiV1SsoProvidersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1SsoProvidersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1SsoProvidersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteApiV1SsoProvidersIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiV1SsoProvidersIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiV1SsoProvidersIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetApiV1SsoProvidersIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+	JSON404      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiV1SsoProvidersIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiV1SsoProvidersIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutApiV1SsoProvidersIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+	JSON404      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiV1SsoProvidersIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiV1SsoProvidersIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostApiV1SsoProvidersIdTestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON400      *map[string]string
+	JSON401      *map[string]string
+	JSON403      *map[string]string
+	JSON404      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1SsoProvidersIdTestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1SsoProvidersIdTestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetApiV1SsoSpInfoResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7898,76 +8126,6 @@ func (c *ClientWithResponses) PostApiV1AuthAdminRbacUsersIdRolesWithResponse(ctx
 		return nil, err
 	}
 	return ParsePostApiV1AuthAdminRbacUsersIdRolesResponse(rsp)
-}
-
-// GetApiV1AuthAdminSsoProvidersWithResponse request returning *GetApiV1AuthAdminSsoProvidersResponse
-func (c *ClientWithResponses) GetApiV1AuthAdminSsoProvidersWithResponse(ctx context.Context, params *GetApiV1AuthAdminSsoProvidersParams, reqEditors ...RequestEditorFn) (*GetApiV1AuthAdminSsoProvidersResponse, error) {
-	rsp, err := c.GetApiV1AuthAdminSsoProviders(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetApiV1AuthAdminSsoProvidersResponse(rsp)
-}
-
-// PostApiV1AuthAdminSsoProvidersWithBodyWithResponse request with arbitrary body returning *PostApiV1AuthAdminSsoProvidersResponse
-func (c *ClientWithResponses) PostApiV1AuthAdminSsoProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersResponse, error) {
-	rsp, err := c.PostApiV1AuthAdminSsoProvidersWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePostApiV1AuthAdminSsoProvidersResponse(rsp)
-}
-
-func (c *ClientWithResponses) PostApiV1AuthAdminSsoProvidersWithResponse(ctx context.Context, body PostApiV1AuthAdminSsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersResponse, error) {
-	rsp, err := c.PostApiV1AuthAdminSsoProviders(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePostApiV1AuthAdminSsoProvidersResponse(rsp)
-}
-
-// DeleteApiV1AuthAdminSsoProvidersIdWithResponse request returning *DeleteApiV1AuthAdminSsoProvidersIdResponse
-func (c *ClientWithResponses) DeleteApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteApiV1AuthAdminSsoProvidersIdResponse, error) {
-	rsp, err := c.DeleteApiV1AuthAdminSsoProvidersId(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteApiV1AuthAdminSsoProvidersIdResponse(rsp)
-}
-
-// GetApiV1AuthAdminSsoProvidersIdWithResponse request returning *GetApiV1AuthAdminSsoProvidersIdResponse
-func (c *ClientWithResponses) GetApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1AuthAdminSsoProvidersIdResponse, error) {
-	rsp, err := c.GetApiV1AuthAdminSsoProvidersId(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetApiV1AuthAdminSsoProvidersIdResponse(rsp)
-}
-
-// PutApiV1AuthAdminSsoProvidersIdWithBodyWithResponse request with arbitrary body returning *PutApiV1AuthAdminSsoProvidersIdResponse
-func (c *ClientWithResponses) PutApiV1AuthAdminSsoProvidersIdWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiV1AuthAdminSsoProvidersIdResponse, error) {
-	rsp, err := c.PutApiV1AuthAdminSsoProvidersIdWithBody(ctx, id, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutApiV1AuthAdminSsoProvidersIdResponse(rsp)
-}
-
-func (c *ClientWithResponses) PutApiV1AuthAdminSsoProvidersIdWithResponse(ctx context.Context, id string, body PutApiV1AuthAdminSsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiV1AuthAdminSsoProvidersIdResponse, error) {
-	rsp, err := c.PutApiV1AuthAdminSsoProvidersId(ctx, id, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutApiV1AuthAdminSsoProvidersIdResponse(rsp)
-}
-
-// PostApiV1AuthAdminSsoProvidersIdTestWithResponse request returning *PostApiV1AuthAdminSsoProvidersIdTestResponse
-func (c *ClientWithResponses) PostApiV1AuthAdminSsoProvidersIdTestWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostApiV1AuthAdminSsoProvidersIdTestResponse, error) {
-	rsp, err := c.PostApiV1AuthAdminSsoProvidersIdTest(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePostApiV1AuthAdminSsoProvidersIdTestResponse(rsp)
 }
 
 // GetApiV1AuthAdminUsersWithResponse request returning *GetApiV1AuthAdminUsersResponse
@@ -8460,6 +8618,102 @@ func (c *ClientWithResponses) GetApiV1AuthSsoProviderStartWithResponse(ctx conte
 		return nil, err
 	}
 	return ParseGetApiV1AuthSsoProviderStartResponse(rsp)
+}
+
+// GetApiV1SsoPortalProviderWithResponse request returning *GetApiV1SsoPortalProviderResponse
+func (c *ClientWithResponses) GetApiV1SsoPortalProviderWithResponse(ctx context.Context, params *GetApiV1SsoPortalProviderParams, reqEditors ...RequestEditorFn) (*GetApiV1SsoPortalProviderResponse, error) {
+	rsp, err := c.GetApiV1SsoPortalProvider(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiV1SsoPortalProviderResponse(rsp)
+}
+
+// PostApiV1SsoPortalSessionWithBodyWithResponse request with arbitrary body returning *PostApiV1SsoPortalSessionResponse
+func (c *ClientWithResponses) PostApiV1SsoPortalSessionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1SsoPortalSessionResponse, error) {
+	rsp, err := c.PostApiV1SsoPortalSessionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1SsoPortalSessionResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostApiV1SsoPortalSessionWithResponse(ctx context.Context, body PostApiV1SsoPortalSessionJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1SsoPortalSessionResponse, error) {
+	rsp, err := c.PostApiV1SsoPortalSession(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1SsoPortalSessionResponse(rsp)
+}
+
+// GetApiV1SsoProvidersWithResponse request returning *GetApiV1SsoProvidersResponse
+func (c *ClientWithResponses) GetApiV1SsoProvidersWithResponse(ctx context.Context, params *GetApiV1SsoProvidersParams, reqEditors ...RequestEditorFn) (*GetApiV1SsoProvidersResponse, error) {
+	rsp, err := c.GetApiV1SsoProviders(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiV1SsoProvidersResponse(rsp)
+}
+
+// PostApiV1SsoProvidersWithBodyWithResponse request with arbitrary body returning *PostApiV1SsoProvidersResponse
+func (c *ClientWithResponses) PostApiV1SsoProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersResponse, error) {
+	rsp, err := c.PostApiV1SsoProvidersWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1SsoProvidersResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostApiV1SsoProvidersWithResponse(ctx context.Context, body PostApiV1SsoProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersResponse, error) {
+	rsp, err := c.PostApiV1SsoProviders(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1SsoProvidersResponse(rsp)
+}
+
+// DeleteApiV1SsoProvidersIdWithResponse request returning *DeleteApiV1SsoProvidersIdResponse
+func (c *ClientWithResponses) DeleteApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteApiV1SsoProvidersIdResponse, error) {
+	rsp, err := c.DeleteApiV1SsoProvidersId(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiV1SsoProvidersIdResponse(rsp)
+}
+
+// GetApiV1SsoProvidersIdWithResponse request returning *GetApiV1SsoProvidersIdResponse
+func (c *ClientWithResponses) GetApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1SsoProvidersIdResponse, error) {
+	rsp, err := c.GetApiV1SsoProvidersId(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiV1SsoProvidersIdResponse(rsp)
+}
+
+// PutApiV1SsoProvidersIdWithBodyWithResponse request with arbitrary body returning *PutApiV1SsoProvidersIdResponse
+func (c *ClientWithResponses) PutApiV1SsoProvidersIdWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiV1SsoProvidersIdResponse, error) {
+	rsp, err := c.PutApiV1SsoProvidersIdWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiV1SsoProvidersIdResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutApiV1SsoProvidersIdWithResponse(ctx context.Context, id string, body PutApiV1SsoProvidersIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiV1SsoProvidersIdResponse, error) {
+	rsp, err := c.PutApiV1SsoProvidersId(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiV1SsoProvidersIdResponse(rsp)
+}
+
+// PostApiV1SsoProvidersIdTestWithResponse request returning *PostApiV1SsoProvidersIdTestResponse
+func (c *ClientWithResponses) PostApiV1SsoProvidersIdTestWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PostApiV1SsoProvidersIdTestResponse, error) {
+	rsp, err := c.PostApiV1SsoProvidersIdTest(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1SsoProvidersIdTestResponse(rsp)
 }
 
 // GetApiV1SsoSpInfoWithResponse request returning *GetApiV1SsoSpInfoResponse
@@ -9107,278 +9361,6 @@ func ParsePostApiV1AuthAdminRbacUsersIdRolesResponse(rsp *http.Response) (*PostA
 	response := &PostApiV1AuthAdminRbacUsersIdRolesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
-	}
-
-	return response, nil
-}
-
-// ParseGetApiV1AuthAdminSsoProvidersResponse parses an HTTP response from a GetApiV1AuthAdminSsoProvidersWithResponse call
-func ParseGetApiV1AuthAdminSsoProvidersResponse(rsp *http.Response) (*GetApiV1AuthAdminSsoProvidersResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetApiV1AuthAdminSsoProvidersResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePostApiV1AuthAdminSsoProvidersResponse parses an HTTP response from a PostApiV1AuthAdminSsoProvidersWithResponse call
-func ParsePostApiV1AuthAdminSsoProvidersResponse(rsp *http.Response) (*PostApiV1AuthAdminSsoProvidersResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PostApiV1AuthAdminSsoProvidersResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteApiV1AuthAdminSsoProvidersIdResponse parses an HTTP response from a DeleteApiV1AuthAdminSsoProvidersIdWithResponse call
-func ParseDeleteApiV1AuthAdminSsoProvidersIdResponse(rsp *http.Response) (*DeleteApiV1AuthAdminSsoProvidersIdResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteApiV1AuthAdminSsoProvidersIdResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	return response, nil
-}
-
-// ParseGetApiV1AuthAdminSsoProvidersIdResponse parses an HTTP response from a GetApiV1AuthAdminSsoProvidersIdWithResponse call
-func ParseGetApiV1AuthAdminSsoProvidersIdResponse(rsp *http.Response) (*GetApiV1AuthAdminSsoProvidersIdResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetApiV1AuthAdminSsoProvidersIdResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePutApiV1AuthAdminSsoProvidersIdResponse parses an HTTP response from a PutApiV1AuthAdminSsoProvidersIdWithResponse call
-func ParsePutApiV1AuthAdminSsoProvidersIdResponse(rsp *http.Response) (*PutApiV1AuthAdminSsoProvidersIdResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PutApiV1AuthAdminSsoProvidersIdResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePostApiV1AuthAdminSsoProvidersIdTestResponse parses an HTTP response from a PostApiV1AuthAdminSsoProvidersIdTestWithResponse call
-func ParsePostApiV1AuthAdminSsoProvidersIdTestResponse(rsp *http.Response) (*PostApiV1AuthAdminSsoProvidersIdTestResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PostApiV1AuthAdminSsoProvidersIdTestResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest map[string]string
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
 	}
 
 	return response, nil
@@ -10525,6 +10507,351 @@ func ParseGetApiV1AuthSsoProviderStartResponse(rsp *http.Response) (*GetApiV1Aut
 	response := &GetApiV1AuthSsoProviderStartResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiV1SsoPortalProviderResponse parses an HTTP response from a GetApiV1SsoPortalProviderWithResponse call
+func ParseGetApiV1SsoPortalProviderResponse(rsp *http.Response) (*GetApiV1SsoPortalProviderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiV1SsoPortalProviderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiV1SsoPortalSessionResponse parses an HTTP response from a PostApiV1SsoPortalSessionWithResponse call
+func ParsePostApiV1SsoPortalSessionResponse(rsp *http.Response) (*PostApiV1SsoPortalSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1SsoPortalSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControllerPortalSessionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetApiV1SsoProvidersResponse parses an HTTP response from a GetApiV1SsoProvidersWithResponse call
+func ParseGetApiV1SsoProvidersResponse(rsp *http.Response) (*GetApiV1SsoProvidersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiV1SsoProvidersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiV1SsoProvidersResponse parses an HTTP response from a PostApiV1SsoProvidersWithResponse call
+func ParsePostApiV1SsoProvidersResponse(rsp *http.Response) (*PostApiV1SsoProvidersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1SsoProvidersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiV1SsoProvidersIdResponse parses an HTTP response from a DeleteApiV1SsoProvidersIdWithResponse call
+func ParseDeleteApiV1SsoProvidersIdResponse(rsp *http.Response) (*DeleteApiV1SsoProvidersIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiV1SsoProvidersIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiV1SsoProvidersIdResponse parses an HTTP response from a GetApiV1SsoProvidersIdWithResponse call
+func ParseGetApiV1SsoProvidersIdResponse(rsp *http.Response) (*GetApiV1SsoProvidersIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiV1SsoProvidersIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutApiV1SsoProvidersIdResponse parses an HTTP response from a PutApiV1SsoProvidersIdWithResponse call
+func ParsePutApiV1SsoProvidersIdResponse(rsp *http.Response) (*PutApiV1SsoProvidersIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiV1SsoProvidersIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiV1SsoProvidersIdTestResponse parses an HTTP response from a PostApiV1SsoProvidersIdTestWithResponse call
+func ParsePostApiV1SsoProvidersIdTestResponse(rsp *http.Response) (*PostApiV1SsoProvidersIdTestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1SsoProvidersIdTestResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil

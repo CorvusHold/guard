@@ -570,12 +570,12 @@ export class GuardClient {
 
   // Tenants: Create
   async createTenant(body: { name: string }): Promise<ResponseWrapper<{ id: string; name: string; is_active?: boolean; created_at?: string; updated_at?: string }>> {
-    return this.request(`/tenants`, { method: 'POST', body: JSON.stringify({ name: body.name }) });
+    return this.request(`/api/v1/tenants`, { method: 'POST', body: JSON.stringify({ name: body.name }) });
   }
 
   // Tenants: Get by ID
   async getTenant(id: string): Promise<ResponseWrapper<{ id: string; name: string; is_active: boolean; created_at: string; updated_at: string }>> {
-    return this.request(`/tenants/${encodeURIComponent(id)}`, { method: 'GET' });
+    return this.request(`/api/v1/tenants/${encodeURIComponent(id)}`, { method: 'GET' });
   }
 
   // Tenants: List (admin)
@@ -586,7 +586,7 @@ export class GuardClient {
       page_size: params.page_size,
       active: typeof params.active === 'boolean' ? (params.active ? 1 : 0) : params.active
     });
-    return this.request(`/tenants${qs}`, { method: 'GET' });
+    return this.request(`/api/v1/tenants${qs}`, { method: 'GET' });
   }
 
   // Auth: Introspect token (from header or body)

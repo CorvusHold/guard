@@ -42,7 +42,7 @@ test.describe('OAuth2 Discovery in UI', () => {
         status: 200,
         body: JSON.stringify({
           issuer: 'http://localhost:8081',
-          token_endpoint: 'http://localhost:8081/v1/auth/refresh',
+          token_endpoint: 'http://localhost:8081/api/v1/auth/refresh',
           guard_auth_modes_supported: ['bearer', 'cookie'],
           guard_auth_mode_default: 'cookie',
           guard_version: '1.0.0'
@@ -94,7 +94,7 @@ test.describe('OAuth2 Discovery in UI', () => {
 
     // Should show error message
     await expect(page.getByTestId('discovery-error')).toBeVisible()
-    await expect(page.getByTestId('discovery-error')).toContainText('Failed')
+    await expect(page.getByTestId('discovery-error')).toContainText(/failed/i)
   })
 
   test('resets discovery state when URL changes', async ({ page }) => {

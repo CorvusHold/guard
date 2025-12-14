@@ -22,11 +22,8 @@ func New(svc domain.Service) *Controller {
 }
 
 func (h *Controller) Register(e *echo.Echo) {
-	e.POST("/tenants", h.createTenant)
-	e.GET("/tenants/:id", h.getTenantByID)
-	e.GET("/tenants/by-name/:name", h.getTenantByName)
-	e.PATCH("/tenants/:id/deactivate", h.deactivateTenant)
-	e.GET("/tenants", h.listTenants)
+	g := e.Group("/api/v1")
+	h.RegisterV1(g)
 }
 
 func (h *Controller) RegisterV1(g *echo.Group) {

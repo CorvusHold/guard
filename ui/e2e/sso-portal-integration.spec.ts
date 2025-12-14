@@ -27,7 +27,7 @@ test.describe('SSO Setup Portal (fully wired)', () => {
     const slug = PROVIDER_SLUG!
 
     const portalResp = await request.get(
-      `${API_BASE}/v1/auth/sso/${encodeURIComponent(slug)}/portal-link`,
+      `${API_BASE}/api/v1/auth/sso/${encodeURIComponent(slug)}/portal-link`,
       {
         headers: {
           Authorization: `Bearer ${ADMIN_TOKEN}`,

@@ -24,7 +24,7 @@ test.describe('Toast Provider integration (error case)', () => {
     await seedGuardConfigFromQuery(page, 'http://localhost:4173')
 
     // Mock load settings
-    await page.route('**/v1/tenants/tenant_err/settings', async route => {
+    await page.route('**/api/v1/tenants/tenant_err/settings', async route => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
@@ -43,7 +43,7 @@ test.describe('Toast Provider integration (error case)', () => {
     })
 
     // Mock update to fail (PUT 500)
-    await page.route('**/v1/tenants/tenant_err/settings', async route => {
+    await page.route('**/api/v1/tenants/tenant_err/settings', async route => {
       if (route.request().method() === 'PUT') {
         await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'boom' }) })
       } else {

@@ -2,50 +2,36 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v2"
 )
 
-// ConformanceScenario represents a single test scenario
+// ConformanceScenario represents a single test scenario.
+// Note: These tests only validate that scenario fixtures can be loaded and have a basic shape.
+// The canonical conformance executor lives in sdk/conformance.
 type ConformanceScenario struct {
-	ID              string                 `yaml:"id"`
-	Name            string                 `yaml:"name"`
-	Description     string                 `yaml:"description"`
-	Method          string                 `yaml:"method"`
-	Endpoint        string                 `yaml:"endpoint"`
-	Headers         map[string]string      `yaml:"headers"`
-	QueryParams     map[string]string      `yaml:"query_params"`
-	Request         map[string]interface{} `yaml:"request"`
-	ExpectedResponse ExpectedResponse       `yaml:"expected_response"`
-	SDKMethod       string                 `yaml:"sdk_method"`
-	ExpectedError   bool                   `yaml:"expected_error"`
+	ID           string
+	Name         string
+	Method       string
+	Endpoint     string
+	ExpectStatus int
 }
 
-// ExpectedResponse describes expected API response
-type ExpectedResponse struct {
-	Status int              `yaml:"status"`
-	Fields []ExpectedField  `yaml:"fields"`
-}
-
-// ExpectedField describes expected field in response
-type ExpectedField struct {
-	Name     string         `yaml:"name"`
-	Type     string         `yaml:"type"`
-	Required bool           `yaml:"required"`
-	Fields   []ExpectedField `yaml:"fields"`
-	Items    []ExpectedField `yaml:"items"`
-}
-
-// ConformanceTestSuite represents a collection of test scenarios
-type ConformanceTestSuite struct {
-	Name        string                   `yaml:"name"`
-	Description string                   `yaml:"description"`
-	Scenarios   []ConformanceScenario    `yaml:"scenarios"`
+type scenarioFile struct {
+	Name  string `json:"name"`
+	Steps []struct {
+		Request struct {
+			Method string `json:"method"`
+			Path   string `json:"path"`
+		} `json:"request"`
+		Expect struct {
+			Status int `json:"status"`
+		} `json:"expect"`
+	} `json:"steps"`
 }
 
 // ConformanceTestResult tracks individual test results
@@ -60,10 +46,10 @@ type ConformanceTestResult struct {
 
 // ConformanceTestRunner executes conformance tests
 type ConformanceTestRunner struct {
-	baseURL         string
-	accessToken     string
-	results         []ConformanceTestResult
-	scenarioDir     string
+	baseURL     string
+	accessToken string
+	results     []ConformanceTestResult
+	scenarioDir string
 }
 
 // NewConformanceTestRunner creates a new test runner
@@ -72,38 +58,48 @@ func NewConformanceTestRunner(baseURL, accessToken string) *ConformanceTestRunne
 		baseURL:     baseURL,
 		accessToken: accessToken,
 		results:     make([]ConformanceTestResult, 0),
-		scenarioDir: "tests/conformance/scenarios",
+		scenarioDir: filepath.Join("..", "conformance", "scenarios"),
 	}
 }
 
-// LoadScenarios loads all YAML scenario files
+// LoadScenarios loads all JSON scenario files from sdk/conformance/scenarios.
 func (r *ConformanceTestRunner) LoadScenarios() (map[string][]ConformanceScenario, error) {
 	scenarios := make(map[string][]ConformanceScenario)
 
-	err := filepath.Walk(r.scenarioDir, func(path string, info os.FileInfo, err error) error {
+	entries, err := os.ReadDir(r.scenarioDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		filePath := filepath.Join(r.scenarioDir, name)
+		buf, err := os.ReadFile(filePath)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
-			content, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			var suite ConformanceTestSuite
-			if err := yaml.Unmarshal(content, &suite); err != nil {
-				return fmt.Errorf("failed to parse %s: %w", path, err)
-			}
-
-			category := filepath.Base(filepath.Dir(path))
-			scenarios[category] = append(scenarios[category], suite.Scenarios...)
+		var sf scenarioFile
+		if err := json.Unmarshal(buf, &sf); err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", filePath, err)
 		}
+		id := strings.SplitN(name, "-", 2)[0]
+		cs := ConformanceScenario{ID: id, Name: sf.Name}
+		if len(sf.Steps) > 0 {
+			cs.Method = sf.Steps[0].Request.Method
+			cs.Endpoint = sf.Steps[0].Request.Path
+			cs.ExpectStatus = sf.Steps[0].Expect.Status
+		}
+		// Current JSON fixtures are auth-focused. Place them under "auth".
+		scenarios["auth"] = append(scenarios["auth"], cs)
+	}
 
-		return nil
-	})
-
-	return scenarios, err
+	return scenarios, nil
 }
 
 // RunAuthTests runs authentication-related scenarios
@@ -180,12 +176,12 @@ func (r *ConformanceTestRunner) runScenario(ctx context.Context, t *testing.T, s
 		result := ConformanceTestResult{
 			ScenarioID:   scenario.ID,
 			ScenarioName: scenario.Name,
-			Method:       scenario.SDKMethod,
+			Method:       scenario.Method,
 			Details:      make(map[string]interface{}),
 		}
 
 		// Validate scenario structure
-		if scenario.ExpectedResponse.Status == 0 {
+		if scenario.ExpectStatus == 0 {
 			result.Error = "Missing expected status code"
 			result.Passed = false
 			r.results = append(r.results, result)
@@ -194,14 +190,12 @@ func (r *ConformanceTestRunner) runScenario(ctx context.Context, t *testing.T, s
 		}
 
 		// Log scenario info
-		t.Logf("Running: %s (%s)", scenario.Name, scenario.Description)
-		t.Logf("SDK Method: %s", scenario.SDKMethod)
-		t.Logf("Expected Status: %d", scenario.ExpectedResponse.Status)
+		t.Logf("Running: %s", scenario.Name)
+		t.Logf("Expected Status: %d", scenario.ExpectStatus)
 
 		// Record test execution
 		result.Passed = true
-		result.Details["status"] = scenario.ExpectedResponse.Status
-		result.Details["fields_count"] = len(scenario.ExpectedResponse.Fields)
+		result.Details["status"] = scenario.ExpectStatus
 
 		r.results = append(r.results, result)
 	})
@@ -227,7 +221,11 @@ func (r *ConformanceTestRunner) PrintResults(t *testing.T) {
 
 	t.Logf("\nPassed: %d", passed)
 	t.Logf("Failed: %d", failed)
-	t.Logf("Pass Rate: %.1f%%", float64(passed)/float64(len(r.results))*100)
+	if len(r.results) == 0 {
+		t.Logf("Pass Rate: 0.0%%")
+	} else {
+		t.Logf("Pass Rate: %.1f%%", float64(passed)/float64(len(r.results))*100)
+	}
 
 	// Print method coverage
 	methodMap := make(map[string]int)
