@@ -3148,7 +3148,7 @@ paths:
                 additionalProperties:
                   type: string
 servers:
-  - url: /api
+  - url: /
 components:
   requestBodies:
     controller.magicVerifyReq:

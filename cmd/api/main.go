@@ -42,8 +42,8 @@ import (
 // @title           Guard CAS API
 // @version         1.0
 // @description     Central Authentication Service for multi-tenant identity management.
-// @BasePath        /api
-// @schemes         http
+// @BasePath        /
+// @schemes         https http
 // @securityDefinitions.apikey BearerAuth
 // @in              header
 // @name            Authorization
@@ -342,9 +342,10 @@ func main() {
 	settings.RegisterV1(apiV1, pgPool, cfg)
 	// Tenants and Auth
 	tenants.RegisterV1(apiV1, pgPool)
-	auth.RegisterV1(apiV1, pgPool, cfg)
-	auth.RegisterWellKnown(e, pgPool, cfg)
-	auth.RegisterSSOBrowser(e, pgPool, cfg)
+	authReg := auth.NewRegistrar(pgPool, cfg)
+	authReg.RegisterV1(apiV1)
+	authReg.RegisterWellKnown(e)
+	authReg.RegisterSSOBrowser(e)
 
 	// Background dependency ping metrics
 	go func() {

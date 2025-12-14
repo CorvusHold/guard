@@ -101,7 +101,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 	tsb, _ := json.Marshal(tsBody)
 	tsreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(tsb))
 	tsreq.Header.Set("Content-Type", "application/json")
-	sreq.Header.Set("X-Auth-Mode", "bearer")
+	tsreq.Header.Set("X-Auth-Mode", "bearer")
 	tsrec := httptest.NewRecorder()
 	e.ServeHTTP(tsrec, tsreq)
 	if tsrec.Code != http.StatusCreated {

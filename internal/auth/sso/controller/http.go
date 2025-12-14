@@ -105,14 +105,14 @@ func (h *SSOController) RegisterV1(apiV1 *echo.Group) {
 			Name:   "sso:portal_session",
 			Limit:  10,
 			Window: time.Minute,
-			Key:    func(c echo.Context) string { return c.RealIP() },
+			Key:    func(c echo.Context) string { return "sso:portal_session:" + c.RealIP() },
 		}, h.rl)
 
 		rlPortalProvider = ratelimit.MiddlewareWithStore(ratelimit.Policy{
 			Name:   "sso:portal_provider",
 			Limit:  20,
 			Window: time.Minute,
-			Key:    func(c echo.Context) string { return c.RealIP() },
+			Key:    func(c echo.Context) string { return "sso:portal_provider:" + c.RealIP() },
 		}, h.rl)
 	}
 

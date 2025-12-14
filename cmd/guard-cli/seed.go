@@ -56,7 +56,7 @@ var seedTenantCmd = &cobra.Command{
 			"name": name,
 		}
 
-		resp, err := client.makeRequest("POST", "/tenants", payload)
+		resp, err := client.makeRequest("POST", "/api/v1/tenants", payload)
 		if err != nil {
 			return fmt.Errorf("failed to create tenant: %w", err)
 		}

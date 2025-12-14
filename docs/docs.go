@@ -5760,8 +5760,8 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "",
-	BasePath:         "/api",
-	Schemes:          []string{"http"},
+	BasePath:         "/",
+	Schemes:          []string{"https", "http"},
 	Title:            "Guard CAS API",
 	Description:      "Central Authentication Service for multi-tenant identity management.",
 	InfoInstanceName: "swagger",

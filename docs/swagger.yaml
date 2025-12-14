@@ -1,4 +1,4 @@
-basePath: /api
+basePath: /
 definitions:
   controller.EmailDiscoveryRequest:
     properties:
@@ -3789,6 +3789,7 @@ paths:
       tags:
       - tenants
 schemes:
+- https
 - http
 securityDefinitions:
   BearerAuth:

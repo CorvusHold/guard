@@ -22,7 +22,9 @@ func TestRunMigrate_HappyUp(t *testing.T) {
 
 	// Ensure DATABASE_URL is non-empty (config.Load has a default, but be explicit)
 	origEnv := os.Getenv("DATABASE_URL")
-	defer os.Setenv("DATABASE_URL", origEnv)
+	defer func() {
+		_ = os.Setenv("DATABASE_URL", origEnv)
+	}()
 	if origEnv == "" {
 		_ = os.Setenv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
 	}

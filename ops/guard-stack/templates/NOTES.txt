@@ -20,7 +20,7 @@ ACCESS YOUR APPLICATION
 {{- if .Values.ingress.enabled }}
 Your Guard stack is accessible at:
 
-  API:     https://{{ (index .Values.ingress.hosts 0).host }}/v1
+  API:     https://{{ (index .Values.ingress.hosts 0).host }}/api/v1
   UI:      https://{{ (index .Values.ingress.hosts 0).host }}/
   Swagger: https://{{ (index .Values.ingress.hosts 0).host }}/swagger/
 
