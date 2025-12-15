@@ -135,6 +135,5 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 // RegisterV1 wires the auth module and registers HTTP routes under /api/v1.
 func RegisterV1(g *echo.Group, pg *pgxpool.Pool, cfg config.Config) {
 	r := NewRegistrar(pg, cfg)
-	defer func() { _ = r.Close() }()
 	r.RegisterV1(g)
 }

@@ -21,13 +21,27 @@ Initiates an SSO authentication flow.
 **Endpoint (legacy, compatibility):** `GET /auth/sso/{slug}/login` (requires `tenant_id` in query)
 **Endpoint (API v1, start):** `GET /api/v1/auth/sso/{provider}/start` (initiates an SSO flow for built-in providers)
 
-**Parameters:**
+**Parameters (V2, current):**
+- `tenant_id` (path, required): Tenant UUID
 - `slug` (path, required): Provider slug (e.g., "google", "okta")
-- `tenant_id` (path, required): Tenant UUID (V2)
-- `tenant_id` (query, required): Tenant UUID (legacy)
 - `redirect_url` (query, optional): URL to redirect to after successful authentication
 - `login_hint` (query, optional): Email or username hint for the IdP
 - `force_authn` (query, optional): Force re-authentication even if user has valid session
+
+**Parameters (legacy, compatibility):**
+- `slug` (path, required): Provider slug
+- `tenant_id` (query, required): Tenant UUID
+- `redirect_url` (query, optional): URL to redirect to after successful authentication
+- `login_hint` (query, optional): Email or username hint for the IdP
+- `force_authn` (query, optional): Force re-authentication even if user has valid session
+
+**Parameters (API v1, start):**
+- `provider` (path, required): Built-in provider (e.g., "google", "github", "azuread", "workos")
+- `tenant_id` (query, required): Tenant UUID
+- `redirect_url` (query, optional): Absolute redirect URL after callback
+- `state` (query, optional): Opaque state to round-trip
+- `connection_id` (query, optional): Provider connection identifier
+- `organization_id` (query, optional): Organization identifier
 
 **Response:**
 - HTTP 302: Redirects to the identity provider's authorization URL
@@ -47,15 +61,29 @@ Handles the callback from the identity provider after authentication.
 **Endpoint (V2, current):** `POST /auth/sso/t/{tenant_id}/{slug}/callback` (SAML)
 **Endpoint (legacy, compatibility):** `GET /auth/sso/{slug}/callback` (OIDC)
 **Endpoint (legacy, compatibility):** `POST /auth/sso/{slug}/callback` (SAML)
+**Endpoint (API v1, callback):** `GET /api/v1/auth/sso/{provider}/callback`
 
-**Parameters:**
+**Parameters (V2, current):**
+- `tenant_id` (path, required): Tenant UUID
 - `slug` (path, required): Provider slug
-- `tenant_id` (path, required): Tenant UUID (V2)
-- `tenant_id` (query/form, required): Tenant UUID (legacy)
 - `code` (query, OIDC only): Authorization code
 - `state` (query, OIDC only): State token for CSRF protection
 - `SAMLResponse` (form, SAML only): Base64-encoded SAML response
 - `RelayState` (form, SAML only): SAML relay state
+
+**Parameters (legacy, compatibility):**
+- `slug` (path, required): Provider slug
+- `tenant_id` (query/form, required): Tenant UUID
+- `code` (query, OIDC only): Authorization code
+- `state` (query, OIDC only): State token for CSRF protection
+- `SAMLResponse` (form, SAML only): Base64-encoded SAML response
+- `RelayState` (form, SAML only): SAML relay state
+
+**Parameters (API v1, callback):**
+- `provider` (path, required): Built-in provider (e.g., "google", "github", "azuread", "workos")
+- `X-Auth-Mode` (header, optional): `cookie` or `json` (controls whether tokens are returned via cookies or JSON)
+- `code` (query, OIDC only): Authorization code
+- `state` (query, OIDC only): State token for CSRF protection
 
 **Response:**
 - **If `redirect_url` was provided during initiation:** HTTP 302 redirect to `redirect_url` with tokens in the URL fragment.
@@ -75,6 +103,25 @@ Handles the callback from the identity provider after authentication.
     "refresh_token": "..."
   }
   ```
+
+- **API v1 callback response:** returns the same token response behavior as other token-issuing API endpoints.
+
+  - If cookie auth mode is selected (default or `X-Auth-Mode: cookie`): HTTP 200 with auth cookies set and JSON body:
+
+    ```json
+    {
+      "success": true
+    }
+    ```
+
+  - If JSON auth mode is selected (`X-Auth-Mode: json`): HTTP 200 JSON:
+
+    ```json
+    {
+      "access_token": "...",
+      "refresh_token": "..."
+    }
+    ```
 
 **Legacy vs V2 behavior notes:**
 - V2 endpoints use `tenant_id` in the path (`/auth/sso/t/{tenant_id}/...`); legacy endpoints require `tenant_id` in query (OIDC) or query/form (SAML).

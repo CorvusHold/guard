@@ -354,32 +354,7 @@ jobs:
 
       - name: Start test infrastructure
         run: |
-          docker compose -f docker-compose.test.yml up -d db_test valkey_test mailhog_test
-          # Wait for DB to be healthy
-          for i in {1..30}; do
-            if docker compose -f docker-compose.test.yml exec -T db_test pg_isready -U guard > /dev/null 2>&1; then
-              echo "DB is ready"
-              break
-            fi
-            echo "Waiting for DB... ($i/30)"
-            sleep 2
-          done
-
-      - name: Run database migrations
-        run: make migrate-up-test-dc
-
-      - name: Start API server
-        run: |
-          docker compose -f docker-compose.test.yml up -d api_test
-          # Wait for API to be healthy
-          for i in {1..30}; do
-            if curl -sf http://localhost:8081/readyz > /dev/null 2>&1; then
-              echo "API is ready"
-              break
-            fi
-            echo "Waiting for API... ($i/30)"
-            sleep 2
-          done
+          make portal-e2e-infra-up
 
       - name: Seed SSO portal E2E data
         run: bash scripts/seed-sso-portal-e2e.sh

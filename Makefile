@@ -13,7 +13,7 @@ export RATE_LIMIT_RETRIES ?= 2
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
         test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check \
-        portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down \
+        portal-e2e-infra-up portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down \
         release-check docker-build docker-build-local
 
 compose-up:
@@ -100,6 +100,12 @@ migrate-up-test-dc:
 	  sh -lc 'export PATH=/usr/local/go/bin:/go/bin:$$PATH; \
 	  go run github.com/pressly/goose/v3/cmd/goose@latest -dir ./migrations postgres "$$DATABASE_URL" up'
 
+# Bring up the infra + api for the SSO portal E2E stack and ensure migrations are applied.
+portal-e2e-infra-up:
+	docker compose -f docker-compose.test.yml up -d --remove-orphans db_test valkey_test mailhog_test api_test
+	make api-test-wait
+	make migrate-up-test-dc
+
 # Bring up full test stack (db/redis/mailhog/api)
 conformance-up:
 	docker compose -f docker-compose.test.yml up -d --remove-orphans
@@ -149,7 +155,7 @@ sdk-gen: swagger
 	@echo "==> Regenerating TS SDK types..."
 	cd sdk/ts && npm run gen:openapi
 	@echo "==> Regenerating Go SDK types..."
-	cd sdk/go && go generate ./... 2>/dev null || echo "Go SDK: no generate directive found"
+	cd sdk/go && go generate ./... 2>/dev/null || echo "Go SDK: no generate directive found"
 	@echo "==> SDK types regenerated. Review changes and run tests."
 
 # Check SDK drift (CI-friendly)
@@ -293,7 +299,8 @@ seed-test:
 
 # ---- SSO Setup Portal fully wired E2E (Playwright) ----
 
-portal-e2e-setup: conformance-up
+
+portal-e2e-setup: portal-e2e-infra-up
 	make db-purge-test
 	make migrate-up-test-dc
 	bash -lc 'scripts/seed-sso-portal-e2e.sh'
