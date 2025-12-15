@@ -41,12 +41,23 @@ spec:
           command: ['sh', '-c']
           args:
             - >
-              echo "Waiting for Valkey to be ready..." ;
-              until nc -z {{ printf "%s-valkey-primary" .Release.Name }} 6379; do
-                echo "Valkey is not ready yet..." ;
+              set -eu ;
+              host="{{ printf "%s-valkey-primary" .Release.Name }}" ;
+              port="6379" ;
+              max_attempts="30" ;
+              attempt="1" ;
+              echo "Waiting for Valkey at ${host}:${port}..." ;
+              while [ "$attempt" -le "$max_attempts" ]; do
+                if nc -w 2 "$host" "$port" >/dev/null 2>&1 ; then
+                  echo "Valkey is ready!" ;
+                  exit 0 ;
+                fi ;
+                echo "Valkey is not ready yet (attempt ${attempt}/${max_attempts})..." ;
+                attempt=$((attempt+1)) ;
                 sleep 2 ;
               done ;
-              echo "Valkey is ready!"
+              echo "Valkey is still not reachable after ${max_attempts} attempts; failing initContainer." ;
+              exit 1
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
