@@ -160,11 +160,10 @@ count_openapi_endpoints() {
 check_go_sdk_compilation() {
   print_info "Checking Go SDK compilation..."
 
-  if ! cd "$GO_SDK_DIR" && go build ./... 2>&1; then
+  if ! (cd "$GO_SDK_DIR" && go build ./... 2>&1); then
     print_error "Go SDK compilation failed"
     if [ "$VERBOSE" = true ]; then
-      cd "$GO_SDK_DIR"
-      go build ./... 2>&1 | head -20
+      (cd "$GO_SDK_DIR" && go build ./... 2>&1 | head -20)
     fi
     return 1
   fi
@@ -176,8 +175,11 @@ check_go_sdk_compilation() {
 check_ts_sdk_compilation() {
   print_info "Checking TypeScript SDK compilation..."
 
-  if ! cd "$TS_SDK_DIR" && npm run build 2>&1 | grep -q "error"; then
-    print_warning "TypeScript SDK build had warnings"
+  if ! (cd "$TS_SDK_DIR" && npm run build 2>&1); then
+    print_error "TypeScript SDK compilation failed"
+    if [ "$VERBOSE" = true ]; then
+      (cd "$TS_SDK_DIR" && npm run build 2>&1 | head -20)
+    fi
     return 1
   fi
 
@@ -211,7 +213,7 @@ check_ts_methods() {
 
 check_version_alignment() {
   # Check if both SDKs have matching versions
-  GO_VERSION=$(grep -oP 'version = "\K[^"]+' "$GO_SDK_DIR/go.mod" 2>/dev/null || echo "unknown")
+  GO_VERSION=$(grep -oP 'const Version = "\K[^"]+' "$GO_SDK_DIR/version.go" 2>/dev/null || echo "unknown")
   TS_VERSION=$(grep -oP '"version": "\K[^"]+' "$TS_SDK_DIR/package.json" 2>/dev/null || echo "unknown")
 
   print_info "Go SDK version: $GO_VERSION"

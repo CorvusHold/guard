@@ -866,12 +866,12 @@ export class GuardClient {
   // SSO: WorkOS Organization Portal link (admin-only on server)
   async getSsoOrganizationPortalLink(provider: SsoProvider, params: {
     tenant_id?: string;
-    organization_id: string;
+    organization_id?: string;
     intent?: string;
   }): Promise<ResponseWrapper<PortalLink>> {
     const tenant = params.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required');
-    if (!params?.organization_id) throw new Error('organization_id is required');
+    if (provider === 'workos' && !params?.organization_id) throw new Error('organization_id is required');
     const qs = this.buildQuery({
       tenant_id: tenant,
       organization_id: params.organization_id,

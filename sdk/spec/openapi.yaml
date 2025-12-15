@@ -3078,10 +3078,9 @@ paths:
         name: provider
         required: true
         type: string
-      - description: Organization identifier
+      - description: Organization identifier (required when provider=workos)
         in: query
         name: organization_id
-        required: true
         type: string
       - description: Tenant ID (UUID)
         in: query

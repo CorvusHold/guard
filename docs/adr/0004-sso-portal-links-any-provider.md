@@ -76,7 +76,7 @@ Parameters (unchanged at HTTP level, semantics extended):
     - any other configured SSO provider slug (for now, primarily OIDC) → Guard SSO Setup Portal link.
 - Query:
   - `tenant_id` (required, UUID string)
-  - `organization_id` (required only for WorkOS; ignored for internal portal links unless later extended)
+  - `organization_id` (optional; required when `provider=workos`, ignored for internal portal links unless later extended)
   - `intent` (optional; WorkOS intents already supported, extended for internal UI as described below)
 
 Authentication and authorization remain as implemented today:

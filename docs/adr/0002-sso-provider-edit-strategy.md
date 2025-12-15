@@ -7,7 +7,7 @@
 
 ## Context and Problem Statement
 
-During Phase 6 implementation of the SSO Provider Management UI, we encountered the reality that the backend UPDATE endpoint (`PUT /api/v1/sso/providers/:id`) returns `501 Not Implemented`. This raises critical questions about edit functionality, data mutability, and the long-term strategy for managing SSO provider configurations.
+During Phase 6 implementation of the SSO Provider Management UI, we encountered the reality that the backend UPDATE endpoint (`PUT /api/v1/sso/providers/{id}`) must enforce careful mutability rules. This raises critical questions about edit functionality, data mutability, and the long-term strategy for managing SSO provider configurations.
 
 We need to make a clear decision on:
 1. Whether SSO providers should be mutable after creation
@@ -131,20 +131,20 @@ These fields cannot be read but can be replaced:
 3. Secrets shown as "***MASKED***" with optional "Update Secret" flow
 4. `provider_type` selector disabled (showing current type, not editable)
 5. `slug` field disabled (showing current slug, not editable)
-6. When UPDATE endpoint returns 501:
+6. When running against a deployment that does not support provider updates yet (legacy), the UPDATE endpoint may return 501:
    - Show clear error: "Edit functionality not yet available. Please delete and recreate provider."
    - Provide link to deletion flow
    - Log warning for tracking
 
 **Backend Required:**
-- Implement `PUT /api/v1/sso/providers/:id` endpoint
+- Implement `PUT /api/v1/sso/providers/{id}` endpoint
 - Validate mutability rules per tier
 - Return 400 Bad Request with clear message for disallowed changes
 - Audit log all successful edits
 
 **API Contract:**
 ```json
-PUT /api/v1/sso/providers/:id
+PUT /api/v1/sso/providers/{id}
 
 Request:
 {
@@ -169,7 +169,7 @@ Response (Error - Immutable Field):
   "field": "provider_type"
 }
 
-Response (Error - Requires Disabled):
+Response (Error - Requires being disabled):
 {
   "error": "Provider must be disabled before editing authentication endpoints",
   "code": "PROVIDER_MUST_BE_DISABLED",
@@ -339,7 +339,7 @@ For providers created before this ADR:
 
 Track these metrics:
 - Edit attempts by field (which fields are users trying to edit?)
-- Edit failures by reason (immutable field, requires disabled, etc.)
+- Edit failures by reason (immutable field, requires being disabled, etc.)
 - Time between create and first edit
 - Delete-recreate patterns (users working around immutability)
 

@@ -581,7 +581,7 @@ type portalSessionResponse struct {
 	Intent        string    `json:"intent"`
 }
 
-// POST /v1/sso/portal/session
+// POST /api/v1/sso/portal/session
 // @Summary Exchange portal token for session
 // @Description Exchanges a one-time portal token for validated portal session context
 // @Tags SSO
@@ -617,7 +617,7 @@ func (h *SSOController) handlePortalSession(c echo.Context) error {
 	})
 }
 
-// GET /v1/sso/portal/provider
+// GET /api/v1/sso/portal/provider
 // @Summary Get masked SSO provider via portal token
 // @Description Fetches the masked SSO provider configuration using a portal token
 // @Tags SSO
@@ -990,7 +990,7 @@ func (h *SSOController) handleTestProvider(c echo.Context) error {
 	})
 }
 
-// spInfoResponse is the response DTO for GET /v1/sso/sp-info.
+// spInfoResponse is the response DTO for GET /api/v1/sso/sp-info.
 type spInfoResponse struct {
 	EntityID    string `json:"entity_id"`
 	ACSURL      string `json:"acs_url"`
@@ -1002,7 +1002,7 @@ type spInfoResponse struct {
 }
 
 // handleGetSPInfo returns computed Service Provider URLs for SAML configuration.
-// GET /v1/sso/sp-info?slug=xxx
+// GET /api/v1/sso/sp-info?slug=xxx
 // @Summary Get SP Info for SAML configuration
 // @Description Returns the computed Service Provider URLs (Entity ID, ACS URL, SLO URL) needed to configure an Identity Provider
 // @Tags SSO

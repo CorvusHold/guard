@@ -3192,10 +3192,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Organization identifier",
+                        "description": "Organization identifier (required when provider=workos)",
                         "name": "organization_id",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
                         "type": "string",

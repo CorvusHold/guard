@@ -89,7 +89,7 @@ func (h *Controller) setupRateLimiting() (getRL, putRL echo.MiddlewareFunc) {
 	return getRL, putRL
 }
 
-// Register mounts settings endpoints under /v1 (deprecated, use RegisterV1).
+// Register mounts settings endpoints under /api/v1 (deprecated, use RegisterV1).
 func (h *Controller) Register(e *echo.Echo) {
 	getRL, putRL := h.setupRateLimiting()
 

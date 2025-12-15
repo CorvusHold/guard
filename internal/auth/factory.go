@@ -20,8 +20,9 @@ import (
 )
 
 type Registrar struct {
-	ctrl *ctrl.Controller
-	sso  *ssoctrl.SSOController
+	ctrl     *ctrl.Controller
+	sso      *ssoctrl.SSOController
+	ssoRedis *redis.Client
 }
 
 func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
@@ -55,7 +56,14 @@ func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
 	ssoController := ssoctrl.New(ssoService, authSvc).WithRateLimitStore(rlStore)
 	ssoController.SetLogger(logger.New(cfg.AppEnv))
 
-	return &Registrar{ctrl: authCtrl, sso: ssoController}
+	return &Registrar{ctrl: authCtrl, sso: ssoController, ssoRedis: ssoRedis}
+}
+
+func (r *Registrar) Close() error {
+	if r.ssoRedis != nil {
+		return r.ssoRedis.Close()
+	}
+	return nil
 }
 
 func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
@@ -74,13 +82,17 @@ func (r *Registrar) RegisterV1(g *echo.Group) {
 // RegisterWellKnown registers root-level endpoints that must not be under /api.
 // This is intended to be used alongside RegisterV1 in cmd/api/main.go.
 func RegisterWellKnown(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
-	NewRegistrar(pg, cfg).RegisterWellKnown(e)
+	r := NewRegistrar(pg, cfg)
+	defer func() { _ = r.Close() }()
+	r.RegisterWellKnown(e)
 }
 
 // RegisterSSOBrowser wires the SSO module and registers browser-based SSO flows under /auth/sso/*.
 // This is intended to be used alongside RegisterV1 in cmd/api/main.go.
 func RegisterSSOBrowser(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
-	NewRegistrar(pg, cfg).RegisterSSOBrowser(e)
+	r := NewRegistrar(pg, cfg)
+	defer func() { _ = r.Close() }()
+	r.RegisterSSOBrowser(e)
 }
 
 // Register wires the auth module and registers HTTP routes (deprecated, use RegisterV1).
@@ -106,6 +118,7 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 		Addr: cfg.RedisAddr,
 		DB:   cfg.RedisDB,
 	})
+	defer func() { _ = ssoRedis.Close() }()
 	ssoService := ssosvc.New(pg, ssoRedis, cfg.PublicBaseURL)
 	ssoService.SetLogger(logger.New(cfg.AppEnv))
 	ssoService.SetPublisher(pub)

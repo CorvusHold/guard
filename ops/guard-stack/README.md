@@ -210,4 +210,4 @@ kubectl create job --from=job/guard-guard-stack-migration migration-manual -n gu
 
 ## License
 
-MIT License - see [LICENSE](../../LICENSE.md) for details.
+Functional Source License (FSL-1.1-ALv2) - see [LICENSE](../../LICENSE.md) for details.

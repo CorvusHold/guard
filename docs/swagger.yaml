@@ -3078,10 +3078,9 @@ paths:
         name: provider
         required: true
         type: string
-      - description: Organization identifier
+      - description: Organization identifier (required when provider=workos)
         in: query
         name: organization_id
-        required: true
         type: string
       - description: Tenant ID (UUID)
         in: query
@@ -3791,6 +3790,9 @@ paths:
 schemes:
 - https
 - http
+externalDocs:
+  description: "Note: http scheme is intended for local/dev use only. Use https in production."
+  url: https://github.com/corvusHold/guard
 securityDefinitions:
   BearerAuth:
     in: header

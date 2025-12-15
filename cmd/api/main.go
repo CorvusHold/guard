@@ -343,6 +343,11 @@ func main() {
 	// Tenants and Auth
 	tenants.RegisterV1(apiV1, pgPool)
 	authReg := auth.NewRegistrar(pgPool, cfg)
+	defer func() {
+		if cerr := authReg.Close(); cerr != nil {
+			log.Error().Err(cerr).Msg("auth registrar close error")
+		}
+	}()
 	authReg.RegisterV1(apiV1)
 	authReg.RegisterWellKnown(e)
 	authReg.RegisterSSOBrowser(e)

@@ -59,12 +59,12 @@ Google Workspace uses Google's OAuth 2.0 / OIDC implementation. The setup involv
 1. Click **Add or Remove Scopes**
 2. Select the following scopes:
    - ✅ `openid` - OpenID Connect authentication
-   - ✅ `../auth/userinfo.email` - Email address
-   - ✅ `../auth/userinfo.profile` - Basic profile information
+   - ✅ `https://www.googleapis.com/auth/userinfo.email` - Email address
+   - ✅ `https://www.googleapis.com/auth/userinfo.profile` - Basic profile information
 
 3. Optional scopes for additional functionality:
-   - `../auth/admin.directory.user.readonly` - Read user information (requires admin consent)
-   - `../auth/admin.directory.group.readonly` - Read group membership
+   - `https://www.googleapis.com/auth/admin.directory.user.readonly` - Read user information (requires admin consent)
+   - `https://www.googleapis.com/auth/admin.directory.group.readonly` - Read group membership
 
 4. Click **Update** → **Save and Continue**
 
@@ -90,11 +90,11 @@ If you selected "External" user type, add test users during development:
 5. **Authorized redirect URIs**:
    - Add your Guard callback URL:
      ```
-     https://yourapp.com/auth/sso/callback/google
+     https://yourapp.com/auth/sso/t/{tenant_id}/google/callback
      ```
    - For local development:
      ```
-     http://localhost:3000/auth/sso/callback/google
+     http://localhost:3000/auth/sso/t/{tenant_id}/google/callback
      ```
 
 6. Click **Create**
@@ -195,7 +195,7 @@ INSERT INTO sso_providers (
 Create a login button that redirects to:
 
 ```
-https://yourapp.com/auth/sso/start/google
+https://yourapp.com/auth/sso/t/{tenant_id}/google/login
 ```
 
 ### 2. Verify Flow
@@ -315,8 +315,8 @@ if profile.AccessToken != "" {
 1. Go to Google Cloud Console → Credentials
 2. Edit your OAuth client
 3. Ensure exact match (including protocol and path):
-   - `https://yourapp.com/auth/sso/callback/google` ✅
-   - `https://yourapp.com/auth/sso/callback/google/` ❌ (trailing slash)
+   - `https://yourapp.com/auth/sso/t/{tenant_id}/google/callback` ✅
+   - `https://yourapp.com/auth/sso/t/{tenant_id}/google/callback/` ❌ (trailing slash)
 
 ### Error: "access_denied"
 

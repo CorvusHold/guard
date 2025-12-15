@@ -17,11 +17,14 @@ These endpoints are used by end-users to authenticate via SSO providers.
 
 Initiates an SSO authentication flow.
 
-**Endpoint:** `GET /auth/sso/{slug}/login`
+**Endpoint (V2, current):** `GET /auth/sso/t/{tenant_id}/{slug}/login`
+**Endpoint (legacy, compatibility):** `GET /auth/sso/{slug}/login` (requires `tenant_id` in query)
+**Endpoint (API v1, start):** `GET /api/v1/auth/sso/{provider}/start` (initiates an SSO flow for built-in providers)
 
 **Parameters:**
 - `slug` (path, required): Provider slug (e.g., "google", "okta")
-- `tenant_id` (query, required): Tenant UUID
+- `tenant_id` (path, required): Tenant UUID (V2)
+- `tenant_id` (query, required): Tenant UUID (legacy)
 - `redirect_url` (query, optional): URL to redirect to after successful authentication
 - `login_hint` (query, optional): Email or username hint for the IdP
 - `force_authn` (query, optional): Force re-authentication even if user has valid session
@@ -31,7 +34,7 @@ Initiates an SSO authentication flow.
 
 **Example:**
 ```bash
-curl -L "https://auth.example.com/auth/sso/google/login?tenant_id=123e4567-e89b-12d3-a456-426614174000&redirect_url=https://app.example.com/dashboard"
+curl -L "https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/google/login?redirect_url=https://app.example.com/dashboard"
 ```
 
 ---
@@ -40,12 +43,15 @@ curl -L "https://auth.example.com/auth/sso/google/login?tenant_id=123e4567-e89b-
 
 Handles the callback from the identity provider after authentication.
 
-**Endpoint:** `GET /auth/sso/{slug}/callback` (OIDC)
-**Endpoint:** `POST /auth/sso/{slug}/callback` (SAML)
+**Endpoint (V2, current):** `GET /auth/sso/t/{tenant_id}/{slug}/callback` (OIDC)
+**Endpoint (V2, current):** `POST /auth/sso/t/{tenant_id}/{slug}/callback` (SAML)
+**Endpoint (legacy, compatibility):** `GET /auth/sso/{slug}/callback` (OIDC)
+**Endpoint (legacy, compatibility):** `POST /auth/sso/{slug}/callback` (SAML)
 
 **Parameters:**
 - `slug` (path, required): Provider slug
-- `tenant_id` (query/form, required): Tenant UUID
+- `tenant_id` (path, required): Tenant UUID (V2)
+- `tenant_id` (query/form, required): Tenant UUID (legacy)
 - `code` (query, OIDC only): Authorization code
 - `state` (query, OIDC only): State token for CSRF protection
 - `SAMLResponse` (form, SAML only): Base64-encoded SAML response
@@ -80,11 +86,13 @@ Handles the callback from the identity provider after authentication.
 
 Returns SAML Service Provider metadata (for configuring the IdP).
 
-**Endpoint:** `GET /auth/sso/{slug}/metadata`
+**Endpoint (V2, current):** `GET /auth/sso/t/{tenant_id}/{slug}/metadata`
+**Endpoint (legacy, compatibility):** `GET /auth/sso/{slug}/metadata` (requires `tenant_id` in query)
 
 **Parameters:**
 - `slug` (path, required): Provider slug
-- `tenant_id` (query, required): Tenant UUID
+- `tenant_id` (path, required): Tenant UUID (V2)
+- `tenant_id` (query, required): Tenant UUID (legacy)
 
 **Response (SAML):**
 ```xml
@@ -393,7 +401,7 @@ curl -X POST https://auth.example.com/api/v1/sso/providers \
 2. **User Initiates Login**
 
 ```bash
-curl -L "https://auth.example.com/auth/sso/google/login?tenant_id=123e4567-e89b-12d3-a456-426614174000"
+curl -L "https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/google/login"
 ```
 
 This redirects to Google's authorization page.
@@ -402,7 +410,7 @@ This redirects to Google's authorization page.
 
 User authenticates with Google and is redirected back to:
 ```
-https://auth.example.com/auth/sso/google/callback?code=xxx&state=xxx&tenant_id=xxx
+https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/google/callback?code=xxx&state=xxx
 ```
 
 4. **Guard Processes Callback**
@@ -449,7 +457,7 @@ curl -X POST https://auth.example.com/api/v1/sso/providers \
 2. **Download SP Metadata (for IdP configuration)**
 
 ```bash
-curl "https://auth.example.com/auth/sso/okta/metadata?tenant_id=123e4567-e89b-12d3-a456-426614174000" > sp-metadata.xml
+curl "https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/okta/metadata" > sp-metadata.xml
 ```
 
 Upload this metadata to your IdP (Okta, Azure AD, etc.).
@@ -457,7 +465,7 @@ Upload this metadata to your IdP (Okta, Azure AD, etc.).
 3. **User Initiates Login**
 
 ```bash
-curl -L "https://auth.example.com/auth/sso/okta/login?tenant_id=123e4567-e89b-12d3-a456-426614174000"
+curl -L "https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/okta/login"
 ```
 
 This redirects to Okta's login page.
@@ -466,7 +474,7 @@ This redirects to Okta's login page.
 
 User authenticates with Okta, and Okta POSTs the SAML response to:
 ```
-POST https://auth.example.com/auth/sso/okta/callback
+POST https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/okta/callback
 ```
 
 5. **Guard Processes SAML Response**
@@ -475,7 +483,7 @@ Guard validates the SAML assertion, creates/links the user account, and returns 
 
 ---
 
-## Security Considerations
+## Security Considerations (Overview)
 
 1. **CSRF Protection**: All SSO flows use state tokens to prevent CSRF attacks
 2. **State Expiration**: State tokens expire after 10 minutes
@@ -567,15 +575,15 @@ All SSO endpoints are rate-limited to prevent abuse:
 
 | Endpoint | Limit | Window | Key |
 |----------|-------|--------|-----|
-| `/auth/sso/:slug/login` | 10 requests | 1 minute | IP address |
-| `/auth/sso/:slug/callback` | 20 requests | 1 minute | IP address |
+| `/auth/sso/t/:tenant_id/:slug/login` | 10 requests | 1 minute | IP address |
+| `/auth/sso/t/:tenant_id/:slug/callback` | 20 requests | 1 minute | IP address |
 | Admin endpoints (`/api/v1/sso/*`) | Standard API limits | - | Bearer token |
 
 When rate limits are exceeded, the API returns HTTP 429 (Too Many Requests).
 
 ---
 
-## Security Considerations
+## Security Considerations (State Tokens)
 
 ### State Token Security
 

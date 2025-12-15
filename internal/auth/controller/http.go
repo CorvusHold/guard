@@ -2652,7 +2652,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 // @Tags         auth.sso
 // @Security     BearerAuth
 // @Param        provider  path   string  true  "SSO provider (workos)"
-// @Param        organization_id  query   string  true  "Organization identifier"
+// @Param        organization_id  query   string  false  "Organization identifier (required when provider=workos)"
 // @Param        tenant_id  query   string  true  "Tenant ID (UUID)"
 // @Param        intent  query   string  false  "Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management)"
 // @Success      200  {object}  domain.PortalLink

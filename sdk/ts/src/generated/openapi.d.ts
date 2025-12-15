@@ -3726,8 +3726,8 @@ export interface paths {
         get: {
             parameters: {
                 query: {
-                    /** @description Organization identifier */
-                    organization_id: string;
+                    /** @description Organization identifier (required when provider=workos) */
+                    organization_id?: string;
                     /** @description Tenant ID (UUID) */
                     tenant_id: string;
                     /** @description Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management) */
