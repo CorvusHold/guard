@@ -91,7 +91,6 @@ func RegisterWellKnown(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 // This is intended to be used alongside RegisterV1 in cmd/api/main.go.
 func RegisterSSOBrowser(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	r := NewRegistrar(pg, cfg)
-	defer func() { _ = r.Close() }()
 	r.RegisterSSOBrowser(e)
 }
 
@@ -118,7 +117,6 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 		Addr: cfg.RedisAddr,
 		DB:   cfg.RedisDB,
 	})
-	defer func() { _ = ssoRedis.Close() }()
 	ssoService := ssosvc.New(pg, ssoRedis, cfg.PublicBaseURL)
 	ssoService.SetLogger(logger.New(cfg.AppEnv))
 	ssoService.SetPublisher(pub)
@@ -136,5 +134,7 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 
 // RegisterV1 wires the auth module and registers HTTP routes under /api/v1.
 func RegisterV1(g *echo.Group, pg *pgxpool.Pool, cfg config.Config) {
-	NewRegistrar(pg, cfg).RegisterV1(g)
+	r := NewRegistrar(pg, cfg)
+	defer func() { _ = r.Close() }()
+	r.RegisterV1(g)
 }

@@ -58,20 +58,28 @@ Handles the callback from the identity provider after authentication.
 - `RelayState` (form, SAML only): SAML relay state
 
 **Response:**
-```json
-{
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "first_name": "John",
-    "last_name": "Doe",
-    "email_verified": true,
-    "is_active": true
-  },
-  "is_new_user": false,
-  "identity_id": "uuid"
-}
-```
+- **If `redirect_url` was provided during initiation:** HTTP 302 redirect to `redirect_url` with tokens in the URL fragment.
+
+  Example redirect location:
+  ```
+  https://app.example.com/callback#access_token=...&refresh_token=...
+  ```
+
+  Tokens are placed in the fragment (after `#`) to avoid leaking credentials via server logs and `Referer` headers.
+
+- **If no `redirect_url` was provided:** HTTP 200 JSON response with tokens:
+
+  ```json
+  {
+    "access_token": "...",
+    "refresh_token": "..."
+  }
+  ```
+
+**Legacy vs V2 behavior notes:**
+- V2 endpoints use `tenant_id` in the path (`/auth/sso/t/{tenant_id}/...`); legacy endpoints require `tenant_id` in query (OIDC) or query/form (SAML).
+- Legacy `GET /auth/sso/{slug}/callback` responds with an HTTP redirect to the V2 callback URL.
+- Legacy `POST /auth/sso/{slug}/callback` cannot redirect (SAML POST binding), so it responds with the JSON token shape above.
 
 **Error Response:**
 ```json
@@ -415,20 +423,15 @@ https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/google/
 
 4. **Guard Processes Callback**
 
-Guard exchanges the code for tokens, creates/links the user account, and returns:
+Guard exchanges the code for tokens, creates/links the user account, and then:
+
+- redirects with token fragments if the initiate request included `redirect_url`, or
+- returns a JSON token response if no `redirect_url` was provided.
 
 ```json
 {
-  "user": {
-    "id": "user-uuid",
-    "email": "user@example.com",
-    "first_name": "John",
-    "last_name": "Doe",
-    "email_verified": true,
-    "is_active": true
-  },
-  "is_new_user": true,
-  "identity_id": "identity-uuid"
+  "access_token": "...",
+  "refresh_token": "..."
 }
 ```
 
@@ -479,7 +482,7 @@ POST https://auth.example.com/auth/sso/t/123e4567-e89b-12d3-a456-426614174000/ok
 
 5. **Guard Processes SAML Response**
 
-Guard validates the SAML assertion, creates/links the user account, and returns the user info.
+Guard validates the SAML assertion, creates/links the user account, and returns tokens (or redirects with token fragments when `redirect_url` was provided during initiation).
 
 ---
 

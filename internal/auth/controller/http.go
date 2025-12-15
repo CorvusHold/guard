@@ -1388,7 +1388,7 @@ func (h *Controller) signup(c echo.Context) error {
 
 // Password Login godoc
 // @Summary      Password login
-// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
+// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /api/v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
 // @Tags         auth.password
 // @Accept       json
 // @Produce      json

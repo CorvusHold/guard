@@ -144,10 +144,12 @@ swagger:
 
 # Regenerate all SDK types from OpenAPI spec (run after swagger)
 sdk-gen: swagger
+	@echo "==> Generate operations .mjs"
+	node sdk/spec/scripts/generate-operations.mjs --write
 	@echo "==> Regenerating TS SDK types..."
 	cd sdk/ts && npm run gen:openapi
 	@echo "==> Regenerating Go SDK types..."
-	cd sdk/go && go generate ./... 2>/dev/null || echo "Go SDK: no generate directive found"
+	cd sdk/go && go generate ./... 2>/dev null || echo "Go SDK: no generate directive found"
 	@echo "==> SDK types regenerated. Review changes and run tests."
 
 # Check SDK drift (CI-friendly)
