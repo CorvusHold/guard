@@ -32,8 +32,7 @@ func New(repo sdomain.Repository, service sdomain.Service) *Controller {
 	return &Controller{repo: repo, service: service}
 }
 
-// Register mounts settings endpoints under /v1.
-func (h *Controller) Register(e *echo.Echo) {
+func (h *Controller) setupRateLimiting() (getRL, putRL echo.MiddlewareFunc) {
 	// Build rate limit middlewares (tenant-scoped) with dynamic overrides from settings service.
 	// Defaults: GET 60/min, PUT 10/min
 	getDefaultWin := time.Minute
@@ -80,15 +79,19 @@ func (h *Controller) Register(e *echo.Echo) {
 	getPolicy := rl.Policy{Name: "settings:get", Window: getDefaultWin, Limit: getDefaultLim, Key: mkKey("settings:get"), WindowFunc: getWinF, LimitFunc: getLimF}
 	putPolicy := rl.Policy{Name: "settings:put", Window: putDefaultWin, Limit: putDefaultLim, Key: mkKey("settings:put"), WindowFunc: putWinF, LimitFunc: putLimF}
 
-	var getRL echo.MiddlewareFunc
-	var putRL echo.MiddlewareFunc
 	if h.rlStore != nil {
 		getRL = rl.MiddlewareWithStore(getPolicy, h.rlStore)
 		putRL = rl.MiddlewareWithStore(putPolicy, h.rlStore)
-	} else {
-		getRL = rl.Middleware(getPolicy)
-		putRL = rl.Middleware(putPolicy)
+		return getRL, putRL
 	}
+	getRL = rl.Middleware(getPolicy)
+	putRL = rl.Middleware(putPolicy)
+	return getRL, putRL
+}
+
+// Register mounts settings endpoints under /api/v1 (deprecated, use RegisterV1).
+func (h *Controller) Register(e *echo.Echo) {
+	getRL, putRL := h.setupRateLimiting()
 
 	// Compose middleware per route
 	getMW := []echo.MiddlewareFunc{}
@@ -100,8 +103,27 @@ func (h *Controller) Register(e *echo.Echo) {
 	getMW = append(getMW, getRL)
 	putMW = append(putMW, putRL)
 
-	e.GET("/v1/tenants/:id/settings", h.getTenantSettings, getMW...)
-	e.PUT("/v1/tenants/:id/settings", h.putTenantSettings, putMW...)
+	g := e.Group("/api/v1")
+	g.GET("/tenants/:id/settings", h.getTenantSettings, getMW...)
+	g.PUT("/tenants/:id/settings", h.putTenantSettings, putMW...)
+}
+
+// RegisterV1 mounts settings endpoints under /api/v1.
+func (h *Controller) RegisterV1(g *echo.Group) {
+	getRL, putRL := h.setupRateLimiting()
+
+	// Compose middleware per route
+	getMW := []echo.MiddlewareFunc{}
+	putMW := []echo.MiddlewareFunc{}
+	if h.jwtMW != nil {
+		getMW = append(getMW, h.jwtMW)
+		putMW = append(putMW, h.jwtMW)
+	}
+	getMW = append(getMW, getRL)
+	putMW = append(putMW, putRL)
+
+	g.GET("/tenants/:id/settings", h.getTenantSettings, getMW...)
+	g.PUT("/tenants/:id/settings", h.putTenantSettings, putMW...)
 }
 
 // WithJWT injects a JWT middleware for these endpoints.
@@ -162,7 +184,7 @@ type putSettingsRequest struct {
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
 // @Security     BearerAuth
-// @Router       /v1/tenants/{id}/settings [get]
+// @Router       /api/v1/tenants/{id}/settings [get]
 func (h *Controller) getTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -222,7 +244,7 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
 // @Security     BearerAuth
-// @Router       /v1/tenants/{id}/settings [put]
+// @Router       /api/v1/tenants/{id}/settings [put]
 func (h *Controller) putTenantSettings(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

@@ -71,8 +71,9 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -112,7 +113,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	ab, _ := json.Marshal(allowBody)
-	areq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(ab))
+	areq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(ab))
 	areq.Header.Set("Content-Type", "application/json")
 	areq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	arec := httptest.NewRecorder()
@@ -139,7 +140,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	ub, _ := json.Marshal(uBody)
-	ureq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(ub))
+	ureq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(ub))
 	ureq.Header.Set("Content-Type", "application/json")
 	ureq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	urec := httptest.NewRecorder()
@@ -166,7 +167,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	gb, _ := json.Marshal(gBody)
-	greq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(gb))
+	greq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(gb))
 	greq.Header.Set("Content-Type", "application/json")
 	greq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	grec := httptest.NewRecorder()
@@ -192,8 +193,9 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	mb, _ := json.Marshal(missBody)
-	mreq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(mb))
+	mreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(mb))
 	mreq.Header.Set("Content-Type", "application/json")
+	mreq.Header.Set("X-Auth-Mode", "bearer")
 	mreq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	mrec := httptest.NewRecorder()
 	e.ServeHTTP(mrec, mreq)
@@ -210,7 +212,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	ivb, _ := json.Marshal(ivBody)
-	ivreq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(ivb))
+	ivreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(ivb))
 	ivreq.Header.Set("Content-Type", "application/json")
 	ivreq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	ivrec := httptest.NewRecorder()
@@ -227,7 +229,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		"object_type":    "tenant",
 	}
 	dbb, _ := json.Marshal(denyBody)
-	dreq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(dbb))
+	dreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(dbb))
 	dreq.Header.Set("Content-Type", "application/json")
 	dreq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	drec := httptest.NewRecorder()
@@ -250,7 +252,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 		t.Fatalf("delete acl tuple: %v", err)
 	}
 	// self read should now be denied
-	areq2 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(ab))
+	areq2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(ab))
 	areq2.Header.Set("Content-Type", "application/json")
 	areq2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	arec2 := httptest.NewRecorder()
@@ -327,8 +329,9 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -362,7 +365,7 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"object_id":      objID,
 	}
 	a1b, _ := json.Marshal(a1)
-	a1req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a1b))
+	a1req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a1b))
 	a1req.Header.Set("Content-Type", "application/json")
 	a1req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a1rec := httptest.NewRecorder()
@@ -390,7 +393,7 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"object_id":      objID2,
 	}
 	a2b, _ := json.Marshal(a2)
-	a2req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a2b))
+	a2req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a2b))
 	a2req.Header.Set("Content-Type", "application/json")
 	a2req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a2rec := httptest.NewRecorder()
@@ -416,7 +419,7 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"object_type":    "user",
 	}
 	a3b, _ := json.Marshal(a3)
-	a3req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a3b))
+	a3req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a3b))
 	a3req.Header.Set("Content-Type", "application/json")
 	a3req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a3rec := httptest.NewRecorder()
@@ -451,7 +454,7 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"object_id":      objID2,
 	}
 	a4b, _ := json.Marshal(a4)
-	a4req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a4b))
+	a4req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a4b))
 	a4req.Header.Set("Content-Type", "application/json")
 	a4req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a4rec := httptest.NewRecorder()
@@ -477,7 +480,7 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 		"object_type":    "user",
 	}
 	ctb, _ := json.Marshal(ct)
-	ctreq := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(ctb))
+	ctreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(ctb))
 	ctreq.Header.Set("Content-Type", "application/json")
 	ctreq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	ctrec := httptest.NewRecorder()
@@ -551,8 +554,9 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -592,8 +596,9 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 		"password":  password,
 	}
 	lb, _ := json.Marshal(lBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
+	lreq.Header.Set("X-Auth-Mode", "bearer")
 	lreq.Header.Set("User-Agent", "itest-agent")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
@@ -649,8 +654,9 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 		"refresh_token": ltoks.RefreshToken,
 	}
 	rb, _ := json.Marshal(rBody)
-	rreq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewReader(rb))
+	rreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rb))
 	rreq.Header.Set("Content-Type", "application/json")
+	rreq.Header.Set("X-Auth-Mode", "bearer")
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)
 	if rrec.Code != http.StatusOK {
@@ -735,8 +741,9 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -772,7 +779,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"object_id":      oid,
 	}
 	a1b, _ := json.Marshal(a1)
-	a1req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a1b))
+	a1req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a1b))
 	a1req.Header.Set("Content-Type", "application/json")
 	a1req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a1rec := httptest.NewRecorder()
@@ -801,7 +808,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"object_id":      oid2,
 	}
 	a2b, _ := json.Marshal(a2)
-	a2req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a2b))
+	a2req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a2b))
 	a2req.Header.Set("Content-Type", "application/json")
 	a2req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a2rec := httptest.NewRecorder()
@@ -828,7 +835,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"object_type":    otype,
 	}
 	a3b, _ := json.Marshal(a3)
-	a3req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a3b))
+	a3req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a3b))
 	a3req.Header.Set("Content-Type", "application/json")
 	a3req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a3rec := httptest.NewRecorder()
@@ -865,7 +872,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"object_id":      oid2,
 	}
 	a4b, _ := json.Marshal(a4)
-	a4req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a4b))
+	a4req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a4b))
 	a4req.Header.Set("Content-Type", "application/json")
 	a4req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a4rec := httptest.NewRecorder()
@@ -892,7 +899,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 		"object_type":    otype,
 	}
 	a5b, _ := json.Marshal(a5)
-	a5req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(a5b))
+	a5req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(a5b))
 	a5req.Header.Set("Content-Type", "application/json")
 	a5req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	a5rec := httptest.NewRecorder()
@@ -955,8 +962,9 @@ func TestHTTP_Authorize_WildcardObjectType(t *testing.T) {
 	email := "wildcard.itest@example.com"
 	password := "Password!123"
 	sb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": email, "password": password})
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -987,7 +995,7 @@ func TestHTTP_Authorize_WildcardObjectType(t *testing.T) {
 			"object_id":      uuid.New().String(),
 		}
 		bb, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(bb))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(bb))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 		rec := httptest.NewRecorder()
@@ -1014,7 +1022,7 @@ func TestHTTP_Authorize_WildcardObjectType(t *testing.T) {
 		"object_type":    "anything",
 	}
 	b2, _ := json.Marshal(body2)
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b2))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b2))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec2 := httptest.NewRecorder()
@@ -1071,8 +1079,9 @@ func TestHTTP_Authorize_Negative_InvalidInputs(t *testing.T) {
 	c.Register(e)
 
 	sb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": "neg.itest@example.com", "password": "Password!123"})
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -1090,7 +1099,7 @@ func TestHTTP_Authorize_Negative_InvalidInputs(t *testing.T) {
 		"permission_key": "x:y",
 		"object_type":    "z",
 	})
-	req1 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b1))
+	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b1))
 	req1.Header.Set("Content-Type", "application/json")
 	req1.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec1 := httptest.NewRecorder()
@@ -1107,7 +1116,7 @@ func TestHTTP_Authorize_Negative_InvalidInputs(t *testing.T) {
 		"permission_key": "x:y",
 		"object_type":    "z",
 	})
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b2))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b2))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec2 := httptest.NewRecorder()
@@ -1122,7 +1131,7 @@ func TestHTTP_Authorize_Negative_InvalidInputs(t *testing.T) {
 		"subject_type":   "self",
 		"permission_key": "x:y",
 	})
-	req3 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b3))
+	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b3))
 	req3.Header.Set("Content-Type", "application/json")
 	req3.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec3 := httptest.NewRecorder()
@@ -1166,8 +1175,9 @@ func TestHTTP_Authorize_CombinedGrants(t *testing.T) {
 
 	// Signup user
 	sb, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "email": "combined.itest@example.com", "password": "Password!123"})
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -1197,7 +1207,7 @@ func TestHTTP_Authorize_CombinedGrants(t *testing.T) {
 
 	// Allowed with exact object_id
 	b1, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "subject_type": "self", "permission_key": perm, "object_type": otype, "object_id": oid1})
-	r1 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b1))
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b1))
 	r1.Header.Set("Content-Type", "application/json")
 	r1.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	w1 := httptest.NewRecorder()
@@ -1217,7 +1227,7 @@ func TestHTTP_Authorize_CombinedGrants(t *testing.T) {
 
 	// Allowed with different object_id due to type-scoped
 	b2, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "subject_type": "self", "permission_key": perm, "object_type": otype, "object_id": oid2})
-	r2 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b2))
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b2))
 	r2.Header.Set("Content-Type", "application/json")
 	r2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	w2 := httptest.NewRecorder()
@@ -1237,7 +1247,7 @@ func TestHTTP_Authorize_CombinedGrants(t *testing.T) {
 
 	// Allowed when omitting object_id due to type-scoped
 	b3, _ := json.Marshal(map[string]string{"tenant_id": tenantID.String(), "subject_type": "self", "permission_key": perm, "object_type": otype})
-	r3 := httptest.NewRequest(http.MethodPost, "/v1/auth/authorize", bytes.NewReader(b3))
+	r3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/authorize", bytes.NewReader(b3))
 	r3.Header.Set("Content-Type", "application/json")
 	r3.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	w3 := httptest.NewRecorder()
@@ -1305,7 +1315,7 @@ func TestHTTP_Magic_SendAndVerify(t *testing.T) {
 		"email":     "user.http.itest@example.com",
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/magic/send", bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/magic/send", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -1325,7 +1335,8 @@ func TestHTTP_Magic_SendAndVerify(t *testing.T) {
 	token := m[1]
 
 	// GET /v1/auth/magic/verify
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/auth/magic/verify?token="+token, nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/magic/verify?token="+token, nil)
+	req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {

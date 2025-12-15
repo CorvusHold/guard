@@ -1,0 +1,72 @@
+name: "Session Management Tests"
+description: "Test session lifecycle and management operations"
+scenarios:
+  - id: "session_list"
+    name: "List User Sessions"
+    description: "Retrieve all active sessions for user"
+    method: "GET"
+    endpoint: "/api/v1/auth/sessions"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "sessions"
+          type: "array"
+          required: true
+          items:
+            - name: "id"
+              type: "string"
+              required: true
+            - name: "user_id"
+              type: "string"
+              required: true
+            - name: "created_at"
+              type: "string"
+              required: true
+            - name: "last_activity"
+              type: "string"
+    sdk_method: "Sessions"
+
+  - id: "session_revoke"
+    name: "Revoke Session"
+    description: "Invalidate a specific session"
+    method: "POST"
+    endpoint: "/api/v1/auth/sessions/{session_id}/revoke"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 204
+    sdk_method: "RevokeSession"
+
+  - id: "session_revoke_all"
+    name: "Revoke All Sessions"
+    description: "Invalidate all sessions for user"
+    method: "POST"
+    endpoint: "/api/v1/auth/sessions/revoke-all"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 204
+    sdk_method: "RevokeAllSessions"
+
+  - id: "session_get_current"
+    name: "Get Current Session"
+    description: "Retrieve information about current session"
+    method: "GET"
+    endpoint: "/api/v1/auth/sessions/current"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "id"
+          type: "string"
+          required: true
+        - name: "user_id"
+          type: "string"
+          required: true
+        - name: "created_at"
+          type: "string"
+          required: true
+    sdk_method: "GetCurrentSession"

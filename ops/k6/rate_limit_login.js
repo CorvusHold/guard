@@ -29,7 +29,7 @@ export default function () {
       password: PASSWORD,
     });
 
-    const res = http.post(`${BASE_URL}/v1/auth/password/login`, payload, {
+    const res = http.post(`${BASE_URL}/api/v1/auth/password/login`, payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: '10s',
     });

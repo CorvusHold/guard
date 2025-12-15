@@ -26,7 +26,7 @@ test.describe('Toast Provider integration', () => {
     await seedGuardConfigFromQuery(page, 'http://localhost:4173')
 
     // Mock load settings
-    await page.route('**/v1/tenants/tenant_abc/settings', async route => {
+    await page.route('**/api/v1/tenants/tenant_abc/settings', async route => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
@@ -46,7 +46,7 @@ test.describe('Toast Provider integration', () => {
     })
 
     // Mock update to succeed (SDK uses PUT for updateTenantSettings)
-    await page.route('**/v1/tenants/tenant_abc/settings', async route => {
+    await page.route('**/api/v1/tenants/tenant_abc/settings', async route => {
       if (route.request().method() === 'PUT') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) })
       } else {

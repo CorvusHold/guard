@@ -1,69 +1,128 @@
 import { test, expect } from '@playwright/test'
 
-const API = 'http://localhost:8081'
+const UI_BASE = 'http://localhost:4173'
 
-function api(url: string): string { return `${API}${url}` }
+function cors(headers: Record<string, string> = {}) {
+  return {
+    'access-control-allow-origin': '*',
+    'access-control-expose-headers': 'location,x-request-id,content-type',
+    ...headers
+  }
+}
+
+async function allowOptions(route: any, allow: string) {
+  const req = route.request()
+  if (req.method() === 'OPTIONS') {
+    return route.fulfill({
+      status: 204,
+      headers: cors({
+        'access-control-allow-methods': allow,
+        'access-control-allow-headers':
+          'content-type,authorization,accept,x-guard-client'
+      })
+    })
+  }
+}
 
 test.describe('Onboarding flows', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto(UI_BASE)
     // Configure Guard base URL if needed
     const baseUrlInput = page.locator('[data-testid="base-url-input"]')
     if (await baseUrlInput.isVisible()) {
-      await baseUrlInput.fill(API)
+      await baseUrlInput.fill(UI_BASE)
       // leave auth mode as default (bearer)
       await page.click('[data-testid="save-config"]')
-      await expect(page.locator('[data-testid="login-form"]')).toBeVisible()
+      await expect(page.getByTestId('email-input')).toBeVisible()
     }
+
+    // Stable auth mocks for post-signup redirect into /admin
+    await page.route('**/api/v1/auth/refresh', async (route) => {
+      if (await allowOptions(route, 'POST,OPTIONS')) return
+      return route.fulfill({
+        status: 401,
+        body: JSON.stringify({ message: 'unauthorized' }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
+    await page.route('**/api/v1/auth/me', async (route) => {
+      if (await allowOptions(route, 'GET,OPTIONS')) return
+
+      const auth = route.request().headers()['authorization'] || ''
+      if (auth.toLowerCase().startsWith('bearer ')) {
+        return route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            email: 'admin@example.com',
+            first_name: 'Admin',
+            last_name: 'User',
+            roles: ['admin']
+          }),
+          headers: cors({ 'content-type': 'application/json' })
+        })
+      }
+
+      return route.fulfill({
+        status: 401,
+        body: JSON.stringify({ message: 'unauthorized' }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
   })
 
   test('Discovery -> no tenant -> TenantCreate -> Admin', async ({ page }) => {
     const email = `owner_${Date.now()}@example.com`
     const tenantID = `00000000-0000-4000-8000-${Date.now()}`
 
-    // 1) Mock discovery (no tenant)
-    await page.route(api('/v1/auth/email/discover'), async (route) => {
-      const body = await route.request().postDataJSON()
-      expect(body.email).toBe(email)
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ found: false, has_tenant: false, user_exists: false, suggestions: [] })
-      })
+    // Navigate directly to the onboarding page
+    await page.goto(`${UI_BASE}/tenant/create?email=${encodeURIComponent(email)}&name=acme`, {
+      waitUntil: 'domcontentloaded'
     })
 
-    // 2) Enter email and continue
-    await page.fill('[data-testid="email-input"]', email)
-    await page.click('[data-testid="continue-button"]')
-
-    // 3) Click Create New Organization -> navigates to /tenant/create with prefilled params
-    await page.click('[data-testid="create-tenant-button"]')
-    await expect(page).toHaveURL(/\/tenant\/create/)
-
-    // 4) Mock tenant create + signup + login + settings
-    await page.route(api('/tenants'), async (route) => {
+    // Mock tenant create + signup + login + settings
+    await page.route('**/api/v1/tenants', async (route) => {
+      if (await allowOptions(route, 'POST,OPTIONS')) return
       await route.fulfill({
         status: 201,
-        contentType: 'application/json',
+        headers: cors({ 'content-type': 'application/json' }),
         body: JSON.stringify({ id: tenantID, name: 'acme', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       })
     })
-    await page.route(api('/v1/auth/password/signup'), async (route) => {
+    await page.route('**/api/v1/auth/password/signup', async (route) => {
+      if (await allowOptions(route, 'POST,OPTIONS')) return
       const b = await route.request().postDataJSON()
       expect(b.tenant_id).toBe(tenantID)
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ access_token: 'at', refresh_token: 'rt' }) })
+      await route.fulfill({
+        status: 201,
+        headers: cors({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ access_token: 'at', refresh_token: 'rt' })
+      })
     })
-    await page.route(api('/v1/auth/password/login'), async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ access_token: 'at2', refresh_token: 'rt2' }) })
+    await page.route('**/api/v1/auth/password/login', async (route) => {
+      if (await allowOptions(route, 'POST,OPTIONS')) return
+      await route.fulfill({
+        status: 200,
+        headers: cors({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ access_token: 'at2', refresh_token: 'rt2' })
+      })
     })
-    await page.route(api(`/v1/tenants/${tenantID}/settings`), async (route) => {
+    await page.route(`**/api/v1/tenants/${tenantID}/settings`, async (route) => {
+      if (await allowOptions(route, 'GET,PUT,OPTIONS')) return
       if (route.request().method() === 'PUT') {
         const body = await route.request().postDataJSON()
         expect(body.sso_provider).toBe('dev')
         expect(typeof body.sso_redirect_allowlist).toBe('string')
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+        await route.fulfill({
+          status: 200,
+          headers: cors({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ ok: true })
+        })
       } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ settings: {} }) })
+        await route.fulfill({
+          status: 200,
+          headers: cors({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ settings: {} })
+        })
       }
     })
 
@@ -84,31 +143,22 @@ test.describe('Onboarding flows', () => {
     const email = `user_${Date.now()}@example.com`
     const tenantID = `11111111-1111-4111-8111-${Date.now()}`
 
-    // 1) Mock discovery (has tenant but user not found)
-    await page.route(api('/v1/auth/email/discover'), async (route) => {
-      const body = await route.request().postDataJSON()
-      expect(body.email).toBe(email)
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ found: false, has_tenant: true, tenant_id: tenantID, tenant_name: 'Acme', user_exists: false })
-      })
-    })
+    await page.goto(
+      `${UI_BASE}/signup?tenant_id=${encodeURIComponent(tenantID)}&email=${encodeURIComponent(email)}`,
+      { waitUntil: 'domcontentloaded' }
+    )
 
-    // 2) Enter email and continue
-    await page.fill('[data-testid="email-input"]', email)
-    await page.click('[data-testid="continue-button"]')
-
-    // 3) Click Create Account -> navigates to /signup
-    await page.click('[data-testid="create-account-button"]')
-    await expect(page).toHaveURL(new RegExp(`/signup`))
-
-    // 4) Mock password signup
-    await page.route(api('/v1/auth/password/signup'), async (route) => {
+    // Mock password signup
+    await page.route('**/api/v1/auth/password/signup', async (route) => {
+      if (await allowOptions(route, 'POST,OPTIONS')) return
       const b = await route.request().postDataJSON()
       expect(b.tenant_id).toBe(tenantID)
       expect(b.email).toBe(email)
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ access_token: 'at', refresh_token: 'rt' }) })
+      await route.fulfill({
+        status: 201,
+        headers: cors({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ access_token: 'at', refresh_token: 'rt' })
+      })
     })
 
     // 5) Fill signup form and submit

@@ -199,7 +199,7 @@ func (c *GuardClient) PasswordLogin(ctx context.Context, req ControllerLoginReq)
 	if req.TenantId == "" {
 		req.TenantId = c.tenantID
 	}
-	resp, err := c.inner.PostV1AuthPasswordLoginWithResponse(ctx, nil, req)
+	resp, err := c.inner.PostApiV1AuthPasswordLoginWithResponse(ctx, nil, req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,7 +219,8 @@ func (c *GuardClient) Refresh(ctx context.Context) (*ControllerAuthExchangeResp,
 	if refresh == "" {
 		return nil, errors.New("no refresh token available")
 	}
-	resp, err := c.inner.PostV1AuthRefreshWithResponse(ctx, nil, ControllerRefreshReq{RefreshToken: &refresh})
+	body := PostApiV1AuthRefreshJSONRequestBody{RefreshToken: &refresh}
+	resp, err := c.inner.PostApiV1AuthRefreshWithResponse(ctx, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +238,8 @@ func (c *GuardClient) Logout(ctx context.Context) error {
 		// Nothing to revoke; clear any residual access token
 		return c.tokens.Clear(ctx)
 	}
-	_, err := c.inner.PostV1AuthLogoutWithResponse(ctx, nil, ControllerLogoutReq{RefreshToken: &refresh})
+	body := PostApiV1AuthLogoutJSONRequestBody{RefreshToken: &refresh}
+	_, err := c.inner.PostApiV1AuthLogoutWithResponse(ctx, body)
 	// Regardless of HTTP outcome, clear local tokens to avoid stale state
 	_ = c.tokens.Clear(ctx)
 	return err
@@ -248,13 +250,13 @@ func (c *GuardClient) MagicSend(ctx context.Context, req ControllerMagicSendReq)
 	if req.TenantId == "" {
 		req.TenantId = c.tenantID
 	}
-	_, err := c.inner.PostV1AuthMagicSendWithResponse(ctx, req)
+	_, err := c.inner.PostApiV1AuthMagicSendWithResponse(ctx, req)
 	return err
 }
 
 // MagicVerify verifies a magic token and persists returned tokens.
 func (c *GuardClient) MagicVerify(ctx context.Context, token string) (*ControllerAuthExchangeResp, error) {
-	resp, err := c.inner.PostV1AuthMagicVerifyWithResponse(ctx, nil, ControllerMagicVerifyReq{Token: token})
+	resp, err := c.inner.PostApiV1AuthMagicVerifyWithResponse(ctx, nil, ControllerMagicVerifyReq{Token: token})
 	if err != nil {
 		return nil, err
 	}
@@ -272,8 +274,8 @@ func (c *GuardClient) SSOPortalLink(ctx context.Context, provider, organizationI
 	if tenID == "" {
 		return "", errors.New("tenant ID not configured; use WithTenantID or pass tenant_id via params")
 	}
-	params := &GetV1AuthSsoProviderPortalLinkParams{OrganizationId: organizationID, TenantId: tenID, Intent: intent}
-	resp, err := c.inner.GetV1AuthSsoProviderPortalLinkWithResponse(ctx, provider, params)
+	params := &GetApiV1AuthSsoProviderPortalLinkParams{OrganizationId: organizationID, TenantId: tenID, Intent: intent}
+	resp, err := c.inner.GetApiV1AuthSsoProviderPortalLinkWithResponse(ctx, provider, params)
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +306,7 @@ func (c *GuardClient) SSOPortalSession(ctx context.Context, token string) (*SSOP
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/sso/portal/session", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/sso/portal/session", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +336,7 @@ func (c *GuardClient) SSOPortalProvider(ctx context.Context, token string) (*SSO
 	if cli == nil {
 		cli = http.DefaultClient
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/sso/portal/provider", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/sso/portal/provider", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +358,7 @@ func (c *GuardClient) SSOPortalProvider(ctx context.Context, token string) (*SSO
 
 // SSOStart initiates an SSO flow and returns the provider authorization URL to redirect the user to.
 // It uses the client's tenant ID if params.TenantId is empty.
-func (c *GuardClient) SSOStart(ctx context.Context, provider string, params *GetV1AuthSsoProviderStartParams) (string, error) {
+func (c *GuardClient) SSOStart(ctx context.Context, provider string, params *GetApiV1AuthSsoProviderStartParams) (string, error) {
 	if params == nil {
 		return "", errors.New("params required")
 	}
@@ -366,7 +368,7 @@ func (c *GuardClient) SSOStart(ctx context.Context, provider string, params *Get
 	if params.TenantId == "" {
 		return "", errors.New("tenant ID not configured; set params.TenantId or use WithTenantID")
 	}
-	resp, err := c.inner.GetV1AuthSsoProviderStartWithResponse(ctx, provider, params)
+	resp, err := c.inner.GetApiV1AuthSsoProviderStartWithResponse(ctx, provider, params)
 	if err != nil {
 		return "", err
 	}
@@ -394,7 +396,7 @@ func (c *GuardClient) SSOCallback(ctx context.Context, provider, code, state str
 		req.URL.RawQuery = q.Encode()
 		return nil
 	}
-	resp, err := c.inner.GetV1AuthSsoProviderCallbackWithResponse(ctx, provider, editor)
+	resp, err := c.inner.GetApiV1AuthSsoProviderCallbackWithResponse(ctx, provider, nil, editor)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +415,7 @@ func (c *GuardClient) GetTenantSettings(ctx context.Context, tenantID string) (*
 	if tenantID == "" {
 		return nil, errors.New("tenant ID required")
 	}
-	resp, err := c.inner.GetV1TenantsIdSettingsWithResponse(ctx, tenantID)
+	resp, err := c.inner.GetApiV1TenantsIdSettingsWithResponse(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +433,7 @@ func (c *GuardClient) UpdateTenantSettings(ctx context.Context, tenantID string,
 	if tenantID == "" {
 		return errors.New("tenant ID required")
 	}
-	resp, err := c.inner.PutV1TenantsIdSettingsWithResponse(ctx, tenantID, body)
+	resp, err := c.inner.PutApiV1TenantsIdSettingsWithResponse(ctx, tenantID, body)
 	if err != nil {
 		return err
 	}
@@ -443,7 +445,7 @@ func (c *GuardClient) UpdateTenantSettings(ctx context.Context, tenantID string,
 
 // Me fetches the current user's profile using the bearer token.
 func (c *GuardClient) Me(ctx context.Context) (*DomainUserProfile, error) {
-	resp, err := c.inner.GetV1AuthMeWithResponse(ctx)
+	resp, err := c.inner.GetApiV1AuthMeWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +458,7 @@ func (c *GuardClient) Me(ctx context.Context) (*DomainUserProfile, error) {
 // Introspect returns token claims and state. If token is nil, Authorization header is used.
 func (c *GuardClient) Introspect(ctx context.Context, token *string) (*DomainIntrospection, error) {
 	body := ControllerIntrospectReq{Token: token}
-	resp, err := c.inner.PostV1AuthIntrospectWithResponse(ctx, body)
+	resp, err := c.inner.PostApiV1AuthIntrospectWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +470,7 @@ func (c *GuardClient) Introspect(ctx context.Context, token *string) (*DomainInt
 
 // MFABackupCount returns how many backup codes remain.
 func (c *GuardClient) MFABackupCount(ctx context.Context) (int, error) {
-	resp, err := c.inner.GetV1AuthMfaBackupCountWithResponse(ctx)
+	resp, err := c.inner.GetApiV1AuthMfaBackupCountWithResponse(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -480,8 +482,8 @@ func (c *GuardClient) MFABackupCount(ctx context.Context) (int, error) {
 
 // MFABackupGenerate generates backup codes (optionally specifying a count).
 func (c *GuardClient) MFABackupGenerate(ctx context.Context, count *int) ([]string, error) {
-	req := ControllerMfaBackupGenerateReq{Count: count}
-	resp, err := c.inner.PostV1AuthMfaBackupGenerateWithResponse(ctx, req)
+	body := PostApiV1AuthMfaBackupGenerateJSONRequestBody{Count: count}
+	resp, err := c.inner.PostApiV1AuthMfaBackupGenerateWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +496,8 @@ func (c *GuardClient) MFABackupGenerate(ctx context.Context, count *int) ([]stri
 
 // MFABackupConsume consumes a backup code and returns whether it was consumed.
 func (c *GuardClient) MFABackupConsume(ctx context.Context, code string) (bool, error) {
-	resp, err := c.inner.PostV1AuthMfaBackupConsumeWithResponse(ctx, ControllerMfaBackupConsumeReq{Code: code})
+	body := PostApiV1AuthMfaBackupConsumeJSONRequestBody{Code: code}
+	resp, err := c.inner.PostApiV1AuthMfaBackupConsumeWithResponse(ctx, body)
 	if err != nil {
 		return false, err
 	}
@@ -506,7 +509,7 @@ func (c *GuardClient) MFABackupConsume(ctx context.Context, code string) (bool, 
 
 // MFATOTPStart begins TOTP enrollment and returns secret and otpauth URL.
 func (c *GuardClient) MFATOTPStart(ctx context.Context) (*ControllerMfaTOTPStartResp, error) {
-	resp, err := c.inner.PostV1AuthMfaTotpStartWithResponse(ctx)
+	resp, err := c.inner.PostApiV1AuthMfaTotpStartWithResponse(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +521,8 @@ func (c *GuardClient) MFATOTPStart(ctx context.Context) (*ControllerMfaTOTPStart
 
 // MFATOTPActivate verifies the TOTP code to complete enrollment.
 func (c *GuardClient) MFATOTPActivate(ctx context.Context, code string) error {
-	resp, err := c.inner.PostV1AuthMfaTotpActivateWithResponse(ctx, ControllerMfaTOTPActivateReq{Code: code})
+	body := PostApiV1AuthMfaTotpActivateJSONRequestBody{Code: code}
+	resp, err := c.inner.PostApiV1AuthMfaTotpActivateWithResponse(ctx, body)
 	if err != nil {
 		return err
 	}
@@ -530,7 +534,7 @@ func (c *GuardClient) MFATOTPActivate(ctx context.Context, code string) error {
 
 // MFATOTPDisable disables TOTP for the current user.
 func (c *GuardClient) MFATOTPDisable(ctx context.Context) error {
-	resp, err := c.inner.PostV1AuthMfaTotpDisableWithResponse(ctx)
+	resp, err := c.inner.PostApiV1AuthMfaTotpDisableWithResponse(ctx)
 	if err != nil {
 		return err
 	}
@@ -543,7 +547,7 @@ func (c *GuardClient) MFATOTPDisable(ctx context.Context) error {
 // MFAVerify submits an MFA challenge response and persists the returned tokens.
 func (c *GuardClient) MFAVerify(ctx context.Context, challengeToken string, method ControllerMfaVerifyReqMethod, code string) (*ControllerAuthExchangeResp, error) {
 	req := ControllerMfaVerifyReq{ChallengeToken: challengeToken, Method: method, Code: code}
-	resp, err := c.inner.PostV1AuthMfaVerifyWithResponse(ctx, req)
+	resp, err := c.inner.PostApiV1AuthMfaVerifyWithResponse(ctx, nil, req)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +560,7 @@ func (c *GuardClient) MFAVerify(ctx context.Context, challengeToken string, meth
 
 // Sessions lists active sessions for the current user.
 func (c *GuardClient) Sessions(ctx context.Context) ([]ControllerSessionItem, error) {
-	resp, err := c.inner.GetV1AuthSessionsWithResponse(ctx)
+	resp, err := c.inner.GetApiV1AuthSessionsWithResponse(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -568,7 +572,7 @@ func (c *GuardClient) Sessions(ctx context.Context) ([]ControllerSessionItem, er
 
 // RevokeSession revokes a specific session by ID.
 func (c *GuardClient) RevokeSession(ctx context.Context, id string) error {
-	resp, err := c.inner.PostV1AuthSessionsIdRevokeWithResponse(ctx, id)
+	resp, err := c.inner.PostApiV1AuthSessionsIdRevokeWithResponse(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -579,8 +583,8 @@ func (c *GuardClient) RevokeSession(ctx context.Context, id string) error {
 }
 
 // ListTenants returns tenants with optional query, page and page size.
-func (c *GuardClient) ListTenants(ctx context.Context, params *GetTenantsParams) (*ControllerListResponse, error) {
-	resp, err := c.inner.GetTenantsWithResponse(ctx, params)
+func (c *GuardClient) ListTenants(ctx context.Context, params *GetApiV1TenantsParams) (*ControllerListResponse, error) {
+	resp, err := c.inner.GetApiV1TenantsWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}

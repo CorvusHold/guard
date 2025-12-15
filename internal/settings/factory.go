@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Register wires the settings module and registers HTTP routes.
+// Register wires the settings module and registers HTTP routes (deprecated, use RegisterV1).
 func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 	r := repo.New(pg)
 	s := svc.New(r)
@@ -38,4 +38,28 @@ func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
 
 	c.WithJWT(jwt).WithRateLimit(store).WithPublisher(pub).WithRoleFetcher(roleFetcher)
 	c.Register(e)
+}
+
+// RegisterV1 wires the settings module and registers HTTP routes under /api/v1.
+func RegisterV1(g *echo.Group, pg *pgxpool.Pool, cfg config.Config) {
+	r := repo.New(pg)
+	s := svc.New(r)
+	c := ctrl.New(r, s)
+
+	// Dependencies
+	jwt := amw.NewJWT(cfg)
+	store := rl.NewRedisStore(cfg)
+	pub := evsvc.NewLogger()
+	// role fetcher from auth repository (global roles)
+	ar := arepo.New(pg)
+	roleFetcher := func(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error) {
+		u, err := ar.GetUserByID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		return u.Roles, nil
+	}
+
+	c.WithJWT(jwt).WithRateLimit(store).WithPublisher(pub).WithRoleFetcher(roleFetcher)
+	c.RegisterV1(g)
 }

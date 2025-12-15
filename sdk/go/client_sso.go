@@ -3,8 +3,7 @@ package guard
 import (
 	"context"
 	"errors"
-	"net/http"
-)
+) // errors is used in error handling throughout the file
 
 // SSOProvider represents an SSO provider configuration.
 type SSOProvider struct {
@@ -140,69 +139,76 @@ type TestSSOProviderResponse struct {
 	Error    *string
 }
 
-// ListSSOProviders retrieves all SSO providers for a tenant. Requires admin role.
-func (c *GuardClient) ListSSOProviders(ctx context.Context, tenantID string) ([]SSOProvider, error) {
-	if tenantID == "" {
-		tenantID = c.tenantID
-	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
+// ListSSOProviders lists all SSO providers for the authenticated tenant.
+func (c *GuardClient) ListSSOProviders(ctx context.Context, tenantID *string) ([]SSOProvider, error) {
+	params := &GetApiV1SsoProvidersParams{}
+	if tenantID != nil {
+		params.TenantId = tenantID
 	}
 
-	params := &GetV1SsoProvidersParams{TenantId: &tenantID}
-	resp, err := c.inner.GetV1SsoProvidersWithResponse(ctx, params)
+	resp, err := c.inner.GetApiV1SsoProvidersWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.JSON200 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	var providers []SSOProvider
-	if resp.JSON200.Providers != nil {
-		for _, p := range *resp.JSON200.Providers {
-			provider := mapSSOProviderFromResponse(&p)
-			providers = append(providers, provider)
+	// Map the response
+	providers := make([]SSOProvider, 0)
+	if providersList, ok := (*resp.JSON200)["providers"].([]interface{}); ok {
+		result := make([]SSOProvider, len(providersList))
+		for i, p := range providersList {
+			if pm, ok := p.(map[string]interface{}); ok {
+				result[i] = mapSSOProviderFromResponse(pm)
+			}
 		}
+		return result, nil
 	}
 
 	return providers, nil
 }
 
-// GetSSOProvider retrieves a specific SSO provider by ID. Requires admin role.
+// GetSSOProvider retrieves a specific SSO provider by ID.
 func (c *GuardClient) GetSSOProvider(ctx context.Context, providerID string) (*SSOProvider, error) {
-	resp, err := c.inner.GetV1SsoProvidersIdWithResponse(ctx, providerID)
+	resp, err := c.inner.GetApiV1SsoProvidersIdWithResponse(ctx, providerID)
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.JSON200 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	provider := mapSSOProviderFromResponse(resp.JSON200)
+	provider := mapSSOProviderFromResponse(*resp.JSON200)
 	return &provider, nil
 }
 
-// CreateSSOProvider creates a new SSO provider. Requires admin role.
+// CreateSSOProvider creates a new SSO provider configuration.
 func (c *GuardClient) CreateSSOProvider(ctx context.Context, req CreateSSOProviderRequest) (*SSOProvider, error) {
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = c.tenantID
+	providerType := DomainProviderType(req.ProviderType)
+	// Convert attribute mapping from map[string]interface{} to *map[string][]string
+	var attrMapping *map[string][]string
+	if req.AttributeMapping != nil {
+		converted := make(map[string][]string)
+		for k, v := range req.AttributeMapping {
+			if arr, ok := v.([]string); ok {
+				converted[k] = arr
+			}
+		}
+		attrMapping = &converted
 	}
-	if tenantID == "" {
-		return nil, errors.New("tenant ID required")
-	}
-
-	body := ControllerCreateSsoProviderReq{
-		TenantId:              tenantID,
-		Name:                  req.Name,
-		Slug:                  req.Slug,
-		ProviderType:          req.ProviderType,
+	body := PostApiV1SsoProvidersJSONRequestBody{
+		TenantId:              &req.TenantID,
+		Name:                  &req.Name,
+		Slug:                  &req.Slug,
+		ProviderType:          &providerType,
 		Enabled:               req.Enabled,
 		AllowSignup:           req.AllowSignup,
 		TrustEmailVerified:    req.TrustEmailVerified,
 		Domains:               &req.Domains,
-		AttributeMapping:      &req.AttributeMapping,
+		AttributeMapping:      attrMapping,
 		Issuer:                req.Issuer,
 		AuthorizationEndpoint: req.AuthorizationEndpoint,
 		TokenEndpoint:         req.TokenEndpoint,
@@ -230,35 +236,39 @@ func (c *GuardClient) CreateSSOProvider(ctx context.Context, req CreateSSOProvid
 		ForceAuthn:            req.ForceAuthn,
 	}
 
-	resp, err := c.inner.PostV1SsoProvidersWithResponse(ctx, body)
+	resp, err := c.inner.PostApiV1SsoProvidersWithResponse(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.JSON201 == nil && resp.JSON200 == nil {
+
+	if resp.JSON201 == nil {
 		return nil, errors.New(resp.Status())
 	}
 
-	// Handle both 201 Created and 200 OK responses
-	var result *ControllerSsoProviderItem
-	if resp.JSON201 != nil {
-		result = resp.JSON201
-	} else {
-		result = resp.JSON200
-	}
-
-	provider := mapSSOProviderFromResponse(result)
+	provider := mapSSOProviderFromResponse(*resp.JSON201)
 	return &provider, nil
 }
 
-// UpdateSSOProvider updates an existing SSO provider. Requires admin role.
-func (c *GuardClient) UpdateSSOProvider(ctx context.Context, providerID string, req UpdateSSOProviderRequest) error {
-	body := ControllerUpdateSsoProviderReq{
+// UpdateSSOProvider updates an existing SSO provider configuration.
+func (c *GuardClient) UpdateSSOProvider(ctx context.Context, providerID string, req UpdateSSOProviderRequest) (*SSOProvider, error) {
+	// Convert attribute mapping from map[string]interface{} to *map[string][]string
+	var attrMapping *map[string][]string
+	if req.AttributeMapping != nil {
+		converted := make(map[string][]string)
+		for k, v := range req.AttributeMapping {
+			if arr, ok := v.([]string); ok {
+				converted[k] = arr
+			}
+		}
+		attrMapping = &converted
+	}
+	body := PutApiV1SsoProvidersIdJSONRequestBody{
 		Name:                  req.Name,
 		Enabled:               req.Enabled,
 		AllowSignup:           req.AllowSignup,
 		TrustEmailVerified:    req.TrustEmailVerified,
 		Domains:               req.Domains,
-		AttributeMapping:      &req.AttributeMapping,
+		AttributeMapping:      attrMapping,
 		Issuer:                req.Issuer,
 		AuthorizationEndpoint: req.AuthorizationEndpoint,
 		TokenEndpoint:         req.TokenEndpoint,
@@ -286,34 +296,40 @@ func (c *GuardClient) UpdateSSOProvider(ctx context.Context, providerID string, 
 		ForceAuthn:            req.ForceAuthn,
 	}
 
-	resp, err := c.inner.PutV1SsoProvidersIdWithResponse(ctx, providerID, body)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// DeleteSSOProvider deletes an SSO provider. Requires admin role.
-func (c *GuardClient) DeleteSSOProvider(ctx context.Context, providerID string) error {
-	resp, err := c.inner.DeleteV1SsoProvidersIdWithResponse(ctx, providerID)
-	if err != nil {
-		return err
-	}
-	if resp.HTTPResponse == nil || (resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent) {
-		return errors.New(resp.Status())
-	}
-	return nil
-}
-
-// TestSSOProvider tests an SSO provider's configuration. Requires admin role.
-func (c *GuardClient) TestSSOProvider(ctx context.Context, providerID string) (*TestSSOProviderResponse, error) {
-	resp, err := c.inner.PostV1SsoProvidersIdTestWithResponse(ctx, providerID)
+	resp, err := c.inner.PutApiV1SsoProvidersIdWithResponse(ctx, providerID, body)
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
+
+	provider := mapSSOProviderFromResponse(*resp.JSON200)
+	return &provider, nil
+}
+
+// DeleteSSOProvider deletes an SSO provider configuration.
+func (c *GuardClient) DeleteSSOProvider(ctx context.Context, providerID string) error {
+	resp, err := c.inner.DeleteApiV1SsoProvidersIdWithResponse(ctx, providerID)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != 204 {
+		return errors.New(resp.Status())
+	}
+
+	return nil
+}
+
+// TestSSOProvider tests an SSO provider configuration for connectivity.
+func (c *GuardClient) TestSSOProvider(ctx context.Context, providerID string) (*TestSSOProviderResponse, error) {
+	resp, err := c.inner.PostApiV1SsoProvidersIdTestWithResponse(ctx, providerID)
+	if err != nil {
+		return nil, err
+	}
+
 	if resp.JSON200 == nil {
 		return nil, errors.New(resp.Status())
 	}
@@ -321,81 +337,155 @@ func (c *GuardClient) TestSSOProvider(ctx context.Context, providerID string) (*
 	result := &TestSSOProviderResponse{
 		Success: false,
 	}
-	if resp.JSON200.Success != nil {
-		result.Success = *resp.JSON200.Success
+
+	if success, ok := (*resp.JSON200)["success"].(bool); ok {
+		result.Success = success
 	}
-	if resp.JSON200.Metadata != nil {
-		result.Metadata = *resp.JSON200.Metadata
+
+	if errMsg, ok := (*resp.JSON200)["error"].(string); ok {
+		result.Error = &errMsg
 	}
-	if resp.JSON200.Error != nil {
-		result.Error = resp.JSON200.Error
+
+	if metadata, ok := (*resp.JSON200)["metadata"]; ok {
+		if m, ok := metadata.(map[string]interface{}); ok {
+			result.Metadata = m
+		}
 	}
 
 	return result, nil
 }
 
-// mapSSOProviderFromResponse converts the generated type to our SDK type
-func mapSSOProviderFromResponse(p *ControllerSsoProviderItem) SSOProvider {
-	provider := SSOProvider{
-		ID:           p.Id,
-		TenantID:     p.TenantId,
-		Name:         p.Name,
-		Slug:         p.Slug,
-		ProviderType: p.ProviderType,
-	}
+// mapSSOProviderFromResponse maps a response body to an SSOProvider struct.
+func mapSSOProviderFromResponse(data map[string]interface{}) SSOProvider {
+	provider := SSOProvider{}
 
-	if p.Enabled != nil {
-		provider.Enabled = *p.Enabled
+	if v, ok := data["id"].(string); ok {
+		provider.ID = v
 	}
-	if p.AllowSignup != nil {
-		provider.AllowSignup = *p.AllowSignup
+	if v, ok := data["tenant_id"].(string); ok {
+		provider.TenantID = v
 	}
-	if p.TrustEmailVerified != nil {
-		provider.TrustEmailVerified = *p.TrustEmailVerified
+	if v, ok := data["name"].(string); ok {
+		provider.Name = v
 	}
-	if p.Domains != nil {
-		provider.Domains = *p.Domains
+	if v, ok := data["slug"].(string); ok {
+		provider.Slug = v
 	}
-	if p.AttributeMapping != nil {
-		provider.AttributeMapping = *p.AttributeMapping
+	if v, ok := data["provider_type"].(string); ok {
+		provider.ProviderType = v
+	}
+	if v, ok := data["enabled"].(bool); ok {
+		provider.Enabled = v
+	}
+	if v, ok := data["allow_signup"].(bool); ok {
+		provider.AllowSignup = v
+	}
+	if v, ok := data["trust_email_verified"].(bool); ok {
+		provider.TrustEmailVerified = v
+	}
+	if v, ok := data["domains"].([]interface{}); ok {
+		domains := make([]string, len(v))
+		for i, d := range v {
+			if s, ok := d.(string); ok {
+				domains[i] = s
+			}
+		}
+		provider.Domains = domains
+	}
+	if v, ok := data["attribute_mapping"].(map[string]interface{}); ok {
+		provider.AttributeMapping = v
 	}
 
 	// OIDC fields
-	provider.Issuer = p.Issuer
-	provider.AuthorizationEndpoint = p.AuthorizationEndpoint
-	provider.TokenEndpoint = p.TokenEndpoint
-	provider.UserinfoEndpoint = p.UserinfoEndpoint
-	provider.JWKSURI = p.JwksUri
-	provider.ClientID = p.ClientId
-	provider.ClientSecret = p.ClientSecret
-	if p.Scopes != nil {
-		provider.Scopes = *p.Scopes
+	if v, ok := data["issuer"].(string); ok {
+		provider.Issuer = &v
 	}
-	provider.ResponseType = p.ResponseType
-	provider.ResponseMode = p.ResponseMode
+	if v, ok := data["authorization_endpoint"].(string); ok {
+		provider.AuthorizationEndpoint = &v
+	}
+	if v, ok := data["token_endpoint"].(string); ok {
+		provider.TokenEndpoint = &v
+	}
+	if v, ok := data["userinfo_endpoint"].(string); ok {
+		provider.UserinfoEndpoint = &v
+	}
+	if v, ok := data["jwks_uri"].(string); ok {
+		provider.JWKSURI = &v
+	}
+	if v, ok := data["client_id"].(string); ok {
+		provider.ClientID = &v
+	}
+	if v, ok := data["client_secret"].(string); ok {
+		provider.ClientSecret = &v
+	}
+	if v, ok := data["scopes"].([]interface{}); ok {
+		scopes := make([]string, len(v))
+		for i, s := range v {
+			if str, ok := s.(string); ok {
+				scopes[i] = str
+			}
+		}
+		provider.Scopes = scopes
+	}
+	if v, ok := data["response_type"].(string); ok {
+		provider.ResponseType = &v
+	}
+	if v, ok := data["response_mode"].(string); ok {
+		provider.ResponseMode = &v
+	}
 
 	// SAML fields
-	provider.EntityID = p.EntityId
-	provider.ACSURL = p.AcsUrl
-	provider.SLOURL = p.SloUrl
-	provider.IDPMetadataURL = p.IdpMetadataUrl
-	provider.IDPMetadataXML = p.IdpMetadataXml
-	provider.IDPEntityID = p.IdpEntityId
-	provider.IDPSSOURL = p.IdpSsoUrl
-	provider.IDPSLOURL = p.IdpSloUrl
-	provider.IDPCertificate = p.IdpCertificate
-	provider.SPCertificate = p.SpCertificate
-	provider.SPPrivateKey = p.SpPrivateKey
-	provider.WantAssertionsSigned = p.WantAssertionsSigned
-	provider.WantResponseSigned = p.WantResponseSigned
-	provider.SignRequests = p.SignRequests
-	provider.ForceAuthn = p.ForceAuthn
-
-	if p.CreatedAt != nil {
-		provider.CreatedAt = *p.CreatedAt
+	if v, ok := data["entity_id"].(string); ok {
+		provider.EntityID = &v
 	}
-	if p.UpdatedAt != nil {
-		provider.UpdatedAt = *p.UpdatedAt
+	if v, ok := data["acs_url"].(string); ok {
+		provider.ACSURL = &v
+	}
+	if v, ok := data["slo_url"].(string); ok {
+		provider.SLOURL = &v
+	}
+	if v, ok := data["idp_metadata_url"].(string); ok {
+		provider.IDPMetadataURL = &v
+	}
+	if v, ok := data["idp_metadata_xml"].(string); ok {
+		provider.IDPMetadataXML = &v
+	}
+	if v, ok := data["idp_entity_id"].(string); ok {
+		provider.IDPEntityID = &v
+	}
+	if v, ok := data["idp_sso_url"].(string); ok {
+		provider.IDPSSOURL = &v
+	}
+	if v, ok := data["idp_slo_url"].(string); ok {
+		provider.IDPSLOURL = &v
+	}
+	if v, ok := data["idp_certificate"].(string); ok {
+		provider.IDPCertificate = &v
+	}
+	if v, ok := data["sp_certificate"].(string); ok {
+		provider.SPCertificate = &v
+	}
+	if v, ok := data["sp_private_key"].(string); ok {
+		provider.SPPrivateKey = &v
+	}
+	if v, ok := data["want_assertions_signed"].(bool); ok {
+		provider.WantAssertionsSigned = &v
+	}
+	if v, ok := data["want_response_signed"].(bool); ok {
+		provider.WantResponseSigned = &v
+	}
+	if v, ok := data["sign_requests"].(bool); ok {
+		provider.SignRequests = &v
+	}
+	if v, ok := data["force_authn"].(bool); ok {
+		provider.ForceAuthn = &v
+	}
+
+	if v, ok := data["created_at"].(string); ok {
+		provider.CreatedAt = v
+	}
+	if v, ok := data["updated_at"].(string); ok {
+		provider.UpdatedAt = v
 	}
 
 	return provider

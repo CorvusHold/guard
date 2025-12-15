@@ -1,0 +1,117 @@
+name: "RBAC Role Management Tests"
+description: "Test role creation, updates, and deletion"
+scenarios:
+  - id: "rbac_list_roles"
+    name: "List All Roles"
+    description: "Retrieve all roles for tenant"
+    method: "GET"
+    endpoint: "/api/v1/auth/admin/rbac/roles"
+    headers:
+      authorization: "Bearer {access_token}"
+    query_params:
+      tenant_id: "tenant-1"
+    expected_response:
+      status: 200
+      fields:
+        - name: "roles"
+          type: "array"
+          required: true
+          items:
+            - name: "id"
+              type: "string"
+            - name: "name"
+              type: "string"
+            - name: "description"
+              type: "string"
+    sdk_method: "ListRoles"
+
+  - id: "rbac_create_role"
+    name: "Create New Role"
+    description: "Create a new custom role"
+    method: "POST"
+    endpoint: "/api/v1/auth/admin/rbac/roles"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      tenant_id: "tenant-1"
+      name: "Editor"
+      description: "Can edit content and manage permissions"
+    expected_response:
+      status: 201
+      fields:
+        - name: "id"
+          type: "string"
+          required: true
+        - name: "name"
+          type: "string"
+        - name: "description"
+          type: "string"
+        - name: "created_at"
+          type: "string"
+    sdk_method: "CreateRole"
+
+  - id: "rbac_create_duplicate_role"
+    name: "Create Duplicate Role"
+    description: "Attempt to create role with same name"
+    method: "POST"
+    endpoint: "/api/v1/auth/admin/rbac/roles"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      tenant_id: "tenant-1"
+      name: "Admin"
+      description: "Another admin role"
+    expected_response:
+      status: 409
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "CreateRole"
+    expected_error: true
+
+  - id: "rbac_update_role"
+    name: "Update Role"
+    description: "Update role name and description"
+    method: "PATCH"
+    endpoint: "/api/v1/auth/admin/rbac/roles/{role_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      name: "Senior Editor"
+      description: "Can edit and approve content"
+    expected_response:
+      status: 200
+      fields:
+        - name: "id"
+          type: "string"
+        - name: "name"
+          type: "string"
+        - name: "updated_at"
+          type: "string"
+    sdk_method: "UpdateRole"
+
+  - id: "rbac_delete_role"
+    name: "Delete Role"
+    description: "Delete a custom role"
+    method: "DELETE"
+    endpoint: "/api/v1/auth/admin/rbac/roles/{role_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 204
+    sdk_method: "DeleteRole"
+
+  - id: "rbac_delete_system_role"
+    name: "Delete System Role"
+    description: "Attempt to delete system role (should fail)"
+    method: "DELETE"
+    endpoint: "/api/v1/auth/admin/rbac/roles/{system_role_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "DeleteRole"
+    expected_error: true

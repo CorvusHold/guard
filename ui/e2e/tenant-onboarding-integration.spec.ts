@@ -7,12 +7,26 @@ function cors(headers: Record<string, string> = {}) {
   return {
     'access-control-allow-origin': '*',
     'access-control-expose-headers': 'location,x-request-id,content-type',
+    'content-type': 'application/json',
     ...headers
   }
 }
 
 test.describe('Tenant Onboarding Integration', () => {
   test.beforeEach(async ({ page, context }) => {
+    await page.addInitScript((apiBase: string) => {
+      localStorage.setItem(
+        'guard_runtime',
+        JSON.stringify({
+          guard_base_url: apiBase,
+          source: 'e2e',
+          auth_mode: 'bearer'
+        })
+      )
+      localStorage.setItem('guard_ui:guard_access_token', 'e2e-access-token')
+      localStorage.setItem('guard_ui:guard_refresh_token', 'e2e-refresh-token')
+    }, API_BASE)
+
     // Console logging for debugging
     page.on('console', (msg) => {
       const loc = msg.location()
@@ -28,12 +42,24 @@ test.describe('Tenant Onboarding Integration', () => {
     
     // Network request logging
     page.on('request', (req) => {
-      if (req.url().includes('/v1/') || req.url().includes('/tenants'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/') || res.url().includes('/tenants'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
+    })
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({ status: 204, headers: cors() })
+      }
+      return route.fulfill({
+        status: 200,
+        headers: cors({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ id: 'user_e2e', email: 'e2e@example.com' })
+      })
     })
   })
 
@@ -42,7 +68,7 @@ test.describe('Tenant Onboarding Integration', () => {
     const adminEmail = `admin_${Date.now()}@example.com`
     
     // Mock tenant creation API
-    await page.route(`${API_BASE}/tenants`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants`, async (route) => {
       if (route.request().method() === 'POST') {
         const requestBody = await route.request().postDataJSON()
         expect(requestBody.name).toBeTruthy()
@@ -62,7 +88,7 @@ test.describe('Tenant Onboarding Integration', () => {
     })
 
     // Mock admin user creation API
-    await page.route(`${API_BASE}/v1/auth/password/signup`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/auth/password/signup`, async (route) => {
       const requestBody = await route.request().postDataJSON()
       expect(requestBody.email).toBe(adminEmail)
       expect(requestBody.password).toBeTruthy()
@@ -80,7 +106,7 @@ test.describe('Tenant Onboarding Integration', () => {
     })
 
     // Mock tenant settings update API
-    await page.route(`${API_BASE}/v1/tenants/${tenantId}/settings`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants/${tenantId}/settings`, async (route) => {
       if (route.request().method() === 'PUT') {
         const requestBody = await route.request().postDataJSON()
         console.log('Settings update:', requestBody)
@@ -158,7 +184,7 @@ test.describe('Tenant Onboarding Integration', () => {
     const tenantId = 'test-tenant-123'
     
     // Mock get tenant settings API
-    await page.route(`${API_BASE}/v1/tenants/${tenantId}/settings`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants/${tenantId}/settings`, async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
@@ -196,6 +222,9 @@ test.describe('Tenant Onboarding Integration', () => {
     
     // Verify settings are loaded correctly
     await expect(page.locator('[data-testid="access-token-ttl"]')).toHaveValue('15m')
+
+    // CORS field lives under the CORS tab
+    await page.click('[data-testid="settings-tab-cors"]')
     await expect(page.locator('[data-testid="cors-origins"]')).toHaveValue('https://app.example.com')
     
     // Test security settings update
@@ -224,9 +253,21 @@ test.describe('Tenant Onboarding Integration', () => {
 
   test('tenant dashboard integration', async ({ page }) => {
     const tenantId = 'dashboard-tenant-123'
+
+    await page.route(`${API_BASE}/api/v1/tenants/${tenantId}/settings`, async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({ status: 204, headers: cors() })
+      }
+      return route.fulfill({
+        status: 200,
+        headers: cors(),
+        body: JSON.stringify({ settings: {} })
+      })
+    })
     
     // Mock tenant info API
-    await page.route(`${API_BASE}/tenants/${tenantId}`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants/${tenantId}`, async (route) => {
       await route.fulfill({
         status: 200,
         headers: cors(),
@@ -241,7 +282,7 @@ test.describe('Tenant Onboarding Integration', () => {
     })
 
     // Mock tenant statistics API (would be real endpoints in production)
-    await page.route(`${API_BASE}/v1/admin/tenants/${tenantId}/stats`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/admin/tenants/${tenantId}/stats`, async (route) => {
       await route.fulfill({
         status: 200,
         headers: cors(),
@@ -287,7 +328,7 @@ test.describe('Tenant Onboarding Integration', () => {
     const adminEmail = `admin_${Date.now()}@example.com`
     
     // Mock tenant creation
-    await page.route(`${API_BASE}/tenants`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants`, async (route) => {
       const requestBody = await route.request().postDataJSON()
       expect(requestBody.name).toBe(tenantName)
       
@@ -305,7 +346,7 @@ test.describe('Tenant Onboarding Integration', () => {
     })
 
     // Mock admin user creation
-    await page.route(`${API_BASE}/v1/auth/password/signup`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/auth/password/signup`, async (route) => {
       const requestBody = await route.request().postDataJSON()
       
       await route.fulfill({
@@ -341,7 +382,7 @@ test.describe('Tenant Onboarding Integration', () => {
 
   test('error handling and validation', async ({ page }) => {
     // Test API error handling
-    await page.route(`${API_BASE}/tenants`, async (route) => {
+    await page.route(`${API_BASE}/api/v1/tenants`, async (route) => {
       await route.fulfill({
         status: 400,
         headers: cors(),
@@ -356,6 +397,8 @@ test.describe('Tenant Onboarding Integration', () => {
     
     // Fill form with duplicate tenant name
     await page.fill('[data-testid="tenant-name"]', 'Existing Tenant')
+    await page.fill('[data-testid="admin-first-name"]', 'Admin')
+    await page.fill('[data-testid="admin-last-name"]', 'User')
     await page.fill('[data-testid="admin-email"]', 'admin@example.com')
     await page.fill('[data-testid="admin-password"]', 'SecurePass123!')
     

@@ -35,229 +35,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tenants": {
-            "get": {
-                "description": "Lists tenants with optional filters and pagination",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tenants"
-                ],
-                "summary": "List tenants",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Search query",
-                        "name": "q",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "-1 any, 1 active, 0 inactive",
-                        "name": "active",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/controller.listResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Creates a new tenant",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tenants"
-                ],
-                "summary": "Create tenant",
-                "parameters": [
-                    {
-                        "description": "name",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controller.createTenantReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/controller.tenantResp"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/tenants/by-name/{name}": {
-            "get": {
-                "description": "Fetch a tenant by unique name",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tenants"
-                ],
-                "summary": "Get tenant by name",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/controller.tenantResp"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/tenants/{id}": {
-            "get": {
-                "description": "Fetch a tenant by UUID",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tenants"
-                ],
-                "summary": "Get tenant by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID (UUID)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/controller.tenantResp"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/tenants/{id}/deactivate": {
-            "patch": {
-                "description": "Deactivates a tenant by ID",
-                "tags": [
-                    "tenants"
-                ],
-                "summary": "Deactivate tenant",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID (UUID)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/auth/admin/fga/acl/tuples": {
+        "/api/v1/auth/admin/fga/acl/tuples": {
             "post": {
                 "security": [
                     {
@@ -375,7 +153,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/fga/groups": {
+        "/api/v1/auth/admin/fga/groups": {
             "get": {
                 "security": [
                     {
@@ -509,7 +287,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/fga/groups/{id}": {
+        "/api/v1/auth/admin/fga/groups/{id}": {
             "delete": {
                 "security": [
                     {
@@ -571,7 +349,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/fga/groups/{id}/members": {
+        "/api/v1/auth/admin/fga/groups/{id}/members": {
             "post": {
                 "security": [
                     {
@@ -703,7 +481,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/permissions": {
+        "/api/v1/auth/admin/rbac/permissions": {
             "get": {
                 "security": [
                     {
@@ -746,7 +524,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/roles": {
+        "/api/v1/auth/admin/rbac/roles": {
             "get": {
                 "security": [
                     {
@@ -871,7 +649,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/roles/{id}": {
+        "/api/v1/auth/admin/rbac/roles/{id}": {
             "delete": {
                 "security": [
                     {
@@ -1004,7 +782,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/roles/{id}/permissions": {
+        "/api/v1/auth/admin/rbac/roles/{id}/permissions": {
             "post": {
                 "security": [
                     {
@@ -1136,7 +914,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/users/{id}/permissions/resolve": {
+        "/api/v1/auth/admin/rbac/users/{id}/permissions/resolve": {
             "get": {
                 "security": [
                     {
@@ -1204,7 +982,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/rbac/users/{id}/roles": {
+        "/api/v1/auth/admin/rbac/users/{id}/roles": {
             "get": {
                 "security": [
                     {
@@ -1402,7 +1180,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users": {
+        "/api/v1/auth/admin/users": {
             "get": {
                 "security": [
                     {
@@ -1472,7 +1250,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}": {
+        "/api/v1/auth/admin/users/{id}": {
             "patch": {
                 "security": [
                     {
@@ -1548,7 +1326,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}/block": {
+        "/api/v1/auth/admin/users/{id}/block": {
             "post": {
                 "security": [
                     {
@@ -1612,7 +1390,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}/roles": {
+        "/api/v1/auth/admin/users/{id}/roles": {
             "post": {
                 "security": [
                     {
@@ -1688,7 +1466,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}/unblock": {
+        "/api/v1/auth/admin/users/{id}/unblock": {
             "post": {
                 "security": [
                     {
@@ -1752,7 +1530,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}/unverify-email": {
+        "/api/v1/auth/admin/users/{id}/unverify-email": {
             "post": {
                 "security": [
                     {
@@ -1816,7 +1594,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/admin/users/{id}/verify-email": {
+        "/api/v1/auth/admin/users/{id}/verify-email": {
             "post": {
                 "security": [
                     {
@@ -1880,7 +1658,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/authorize": {
+        "/api/v1/auth/authorize": {
             "post": {
                 "security": [
                     {
@@ -1937,7 +1715,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/email/discover": {
+        "/api/v1/auth/email/discover": {
             "post": {
                 "description": "Check if an email exists in any tenant and provide guidance",
                 "consumes": [
@@ -1989,7 +1767,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/introspect": {
+        "/api/v1/auth/introspect": {
             "post": {
                 "description": "Validate and parse JWT token either from Authorization header or request body",
                 "consumes": [
@@ -2049,7 +1827,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/login-options": {
+        "/api/v1/auth/login-options": {
             "get": {
                 "description": "Returns available authentication methods based on email/tenant context.",
                 "consumes": [
@@ -2104,7 +1882,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/logout": {
+        "/api/v1/auth/logout": {
             "post": {
                 "description": "Revokes the provided refresh token if present; idempotent. When using cookie mode, Guard reads ` + "`" + `guard_refresh_token` + "`" + `, clears both cookie tokens, and still returns 204 even if the JSON body omits the token.",
                 "consumes": [
@@ -2149,7 +1927,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/magic/send": {
+        "/api/v1/auth/magic/send": {
             "post": {
                 "description": "Sends a single-use magic login link to the user's email",
                 "consumes": [
@@ -2195,7 +1973,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/magic/verify": {
+        "/api/v1/auth/magic/verify": {
             "get": {
                 "description": "Verifies magic link token from query parameter or request body and returns tokens. When cookie mode is requested via ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or defaults), Guard responds with cookies plus ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "consumes": [
@@ -2345,7 +2123,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/me": {
+        "/api/v1/auth/me": {
             "get": {
                 "security": [
                     {
@@ -2400,7 +2178,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/backup/consume": {
+        "/api/v1/auth/mfa/backup/consume": {
             "post": {
                 "security": [
                     {
@@ -2466,7 +2244,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/backup/count": {
+        "/api/v1/auth/mfa/backup/count": {
             "get": {
                 "security": [
                     {
@@ -2509,7 +2287,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/backup/generate": {
+        "/api/v1/auth/mfa/backup/generate": {
             "post": {
                 "security": [
                     {
@@ -2574,7 +2352,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/totp/activate": {
+        "/api/v1/auth/mfa/totp/activate": {
             "post": {
                 "security": [
                     {
@@ -2634,7 +2412,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/totp/disable": {
+        "/api/v1/auth/mfa/totp/disable": {
             "post": {
                 "security": [
                     {
@@ -2671,7 +2449,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/totp/start": {
+        "/api/v1/auth/mfa/totp/start": {
             "post": {
                 "security": [
                     {
@@ -2705,7 +2483,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/mfa/verify": {
+        "/api/v1/auth/mfa/verify": {
             "post": {
                 "description": "Verifies a TOTP or backup code against a challenge token and returns access/refresh tokens. When clients opt into cookie auth (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard sets the session cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of embedding tokens in the JSON body.",
                 "consumes": [
@@ -2776,7 +2554,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/password/change": {
+        "/api/v1/auth/password/change": {
             "post": {
                 "security": [
                     {
@@ -2830,9 +2608,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/password/login": {
+        "/api/v1/auth/password/login": {
             "post": {
-                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens in the JSON payload.",
+                "description": "Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /api/v1/auth/mfa/verify. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens in the JSON payload.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2907,7 +2685,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/password/reset/confirm": {
+        "/api/v1/auth/password/reset/confirm": {
             "post": {
                 "description": "Resets the password for the given email address",
                 "consumes": [
@@ -2956,7 +2734,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/password/reset/request": {
+        "/api/v1/auth/password/reset/request": {
             "post": {
                 "description": "Requests a password reset for the given email address",
                 "consumes": [
@@ -3005,7 +2783,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/password/signup": {
+        "/api/v1/auth/password/signup": {
             "post": {
                 "description": "Creates a new user for a tenant with email and password and returns access/refresh tokens. When clients set ` + "`" + `X-Auth-Mode: cookie` + "`" + ` (or the deployment default is cookie), Guard issues ` + "`" + `guard_access_token` + "`" + ` / ` + "`" + `guard_refresh_token` + "`" + ` cookies and returns ` + "`" + `{ \"success\": true }` + "`" + ` instead of raw tokens.",
                 "consumes": [
@@ -3067,7 +2845,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/profile": {
+        "/api/v1/auth/profile": {
             "patch": {
                 "security": [
                     {
@@ -3121,7 +2899,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/refresh": {
+        "/api/v1/auth/refresh": {
             "post": {
                 "description": "Exchanges a refresh token for new access and refresh tokens. When using cookie mode (` + "`" + `X-Auth-Mode: cookie` + "`" + `), the server will read ` + "`" + `guard_refresh_token` + "`" + ` from cookies if the body omits ` + "`" + `refresh_token` + "`" + `, set rotated cookies, and return ` + "`" + `{\"success\":true}` + "`" + ` while omitting token fields from the JSON response.",
                 "consumes": [
@@ -3191,7 +2969,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/revoke": {
+        "/api/v1/auth/revoke": {
             "post": {
                 "description": "Revoke a token; currently supports token_type=\"refresh\"",
                 "consumes": [
@@ -3237,7 +3015,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/sessions": {
+        "/api/v1/auth/sessions": {
             "get": {
                 "security": [
                     {
@@ -3280,7 +3058,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/sessions/{id}/revoke": {
+        "/api/v1/auth/sessions/{id}/revoke": {
             "post": {
                 "security": [
                     {
@@ -3335,7 +3113,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/sso/{provider}/callback": {
+        "/api/v1/auth/sso/{provider}/callback": {
             "get": {
                 "description": "Completes SSO flow and returns access/refresh tokens. When cookie mode is requested (` + "`" + `X-Auth-Mode: cookie` + "`" + ` or default), Guard issues cookies and returns ` + "`" + `{ \"success\": true }` + "`" + `.",
                 "produces": [
@@ -3392,7 +3170,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/sso/{provider}/portal-link": {
+        "/api/v1/auth/sso/{provider}/portal-link": {
             "get": {
                 "security": [
                     {
@@ -3414,10 +3192,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Organization identifier",
+                        "description": "Organization identifier (required when provider=workos)",
                         "name": "organization_id",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
                         "type": "string",
@@ -3479,7 +3256,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/auth/sso/{provider}/start": {
+        "/api/v1/auth/sso/{provider}/start": {
             "get": {
                 "description": "Initiates an SSO flow for the given provider and redirects to the provider authorization URL",
                 "tags": [
@@ -3542,7 +3319,514 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/sso/sp-info": {
+        "/api/v1/sso/portal/provider": {
+            "get": {
+                "description": "Fetches the masked SSO provider configuration using a portal token",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSO"
+                ],
+                "summary": "Get masked SSO provider via portal token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Portal token",
+                        "name": "X-Portal-Token",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Portal token (fallback)",
+                        "name": "token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sso/portal/session": {
+            "post": {
+                "description": "Exchanges a one-time portal token for validated portal session context",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSO"
+                ],
+                "summary": "Exchange portal token for session",
+                "parameters": [
+                    {
+                        "description": "Portal token exchange request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.portalSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.portalSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sso/providers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists all SSO providers for a tenant",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "List SSO Providers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new SSO provider configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Create SSO Provider",
+                "parameters": [
+                    {
+                        "description": "Provider configuration",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.createProviderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sso/providers/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves a single SSO provider by ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Get SSO Provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates an existing SSO provider configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Update SSO Provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated provider configuration",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.updateProviderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes an SSO provider configuration",
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Delete SSO Provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sso/providers/{id}/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tests an SSO provider configuration for connectivity",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Test SSO Provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sso/sp-info": {
             "get": {
                 "security": [
                     {
@@ -3615,7 +3899,229 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/tenants/{id}/settings": {
+        "/api/v1/tenants": {
+            "get": {
+                "description": "Lists tenants with optional filters and pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "List tenants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "-1 any, 1 active, 0 inactive",
+                        "name": "active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.listResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new tenant",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "Create tenant",
+                "parameters": [
+                    {
+                        "description": "name",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.createTenantReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.tenantResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tenants/by-name/{name}": {
+            "get": {
+                "description": "Fetch a tenant by unique name",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "Get tenant by name",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.tenantResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tenants/{id}": {
+            "get": {
+                "description": "Fetch a tenant by UUID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "Get tenant by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.tenantResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tenants/{id}/deactivate": {
+            "patch": {
+                "description": "Deactivates a tenant by ID",
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "Deactivate tenant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tenants/{id}/settings": {
             "get": {
                 "security": [
                     {
@@ -3989,6 +4495,130 @@ const docTemplate = `{
                 "new_password": {
                     "type": "string",
                     "minLength": 8
+                }
+            }
+        },
+        "controller.createProviderRequest": {
+            "type": "object",
+            "properties": {
+                "acs_url": {
+                    "type": "string"
+                },
+                "allow_signup": {
+                    "type": "boolean"
+                },
+                "attribute_mapping": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "authorization_endpoint": {
+                    "type": "string"
+                },
+                "client_id": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entity_id": {
+                    "description": "SAML fields",
+                    "type": "string"
+                },
+                "force_authn": {
+                    "type": "boolean"
+                },
+                "idp_certificate": {
+                    "type": "string"
+                },
+                "idp_entity_id": {
+                    "type": "string"
+                },
+                "idp_metadata_url": {
+                    "type": "string"
+                },
+                "idp_metadata_xml": {
+                    "type": "string"
+                },
+                "idp_slo_url": {
+                    "type": "string"
+                },
+                "idp_sso_url": {
+                    "type": "string"
+                },
+                "issuer": {
+                    "description": "OIDC/OAuth2 fields",
+                    "type": "string"
+                },
+                "jwks_uri": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "$ref": "#/definitions/domain.ProviderType"
+                },
+                "response_mode": {
+                    "type": "string"
+                },
+                "response_type": {
+                    "type": "string"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sign_requests": {
+                    "type": "boolean"
+                },
+                "slo_url": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sp_certificate": {
+                    "type": "string"
+                },
+                "sp_certificate_expires_at": {
+                    "type": "string"
+                },
+                "sp_private_key": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "token_endpoint": {
+                    "type": "string"
+                },
+                "trust_email_verified": {
+                    "type": "boolean"
+                },
+                "userinfo_endpoint": {
+                    "type": "string"
+                },
+                "want_assertions_signed": {
+                    "type": "boolean"
+                },
+                "want_response_signed": {
+                    "type": "boolean"
                 }
             }
         },
@@ -4458,6 +5088,31 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.portalSessionRequest": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.portalSessionResponse": {
+            "type": "object",
+            "properties": {
+                "intent": {
+                    "type": "string"
+                },
+                "portal_token_id": {
+                    "type": "string"
+                },
+                "provider_slug": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
         "controller.putSettingsRequest": {
             "type": "object",
             "properties": {
@@ -4880,6 +5535,121 @@ const docTemplate = `{
                 }
             }
         },
+        "controller.updateProviderRequest": {
+            "type": "object",
+            "properties": {
+                "acs_url": {
+                    "type": "string"
+                },
+                "allow_signup": {
+                    "type": "boolean"
+                },
+                "attribute_mapping": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "authorization_endpoint": {
+                    "type": "string"
+                },
+                "client_id": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entity_id": {
+                    "description": "SAML fields",
+                    "type": "string"
+                },
+                "force_authn": {
+                    "type": "boolean"
+                },
+                "idp_certificate": {
+                    "type": "string"
+                },
+                "idp_entity_id": {
+                    "type": "string"
+                },
+                "idp_metadata_url": {
+                    "type": "string"
+                },
+                "idp_metadata_xml": {
+                    "type": "string"
+                },
+                "idp_slo_url": {
+                    "type": "string"
+                },
+                "idp_sso_url": {
+                    "type": "string"
+                },
+                "issuer": {
+                    "description": "OIDC/OAuth2 fields",
+                    "type": "string"
+                },
+                "jwks_uri": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "response_mode": {
+                    "type": "string"
+                },
+                "response_type": {
+                    "type": "string"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sign_requests": {
+                    "type": "boolean"
+                },
+                "slo_url": {
+                    "type": "string"
+                },
+                "sp_certificate": {
+                    "type": "string"
+                },
+                "sp_certificate_expires_at": {
+                    "type": "string"
+                },
+                "sp_private_key": {
+                    "type": "string"
+                },
+                "token_endpoint": {
+                    "type": "string"
+                },
+                "trust_email_verified": {
+                    "type": "boolean"
+                },
+                "userinfo_endpoint": {
+                    "type": "string"
+                },
+                "want_assertions_signed": {
+                    "type": "boolean"
+                },
+                "want_response_signed": {
+                    "type": "boolean"
+                }
+            }
+        },
         "domain.Introspection": {
             "type": "object",
             "properties": {
@@ -4922,6 +5692,23 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "domain.ProviderType": {
+            "type": "string",
+            "enum": [
+                "oidc",
+                "saml",
+                "oauth2",
+                "workos",
+                "dev"
+            ],
+            "x-enum-varnames": [
+                "ProviderTypeOIDC",
+                "ProviderTypeSAML",
+                "ProviderTypeOAuth2",
+                "ProviderTypeWorkOS",
+                "ProviderTypeDev"
+            ]
         },
         "domain.UserProfile": {
             "type": "object",
@@ -4973,7 +5760,7 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "",
 	BasePath:         "/",
-	Schemes:          []string{"http"},
+	Schemes:          []string{"https", "http"},
 	Title:            "Guard CAS API",
 	Description:      "Central Authentication Service for multi-tenant identity management.",
 	InfoInstanceName: "swagger",

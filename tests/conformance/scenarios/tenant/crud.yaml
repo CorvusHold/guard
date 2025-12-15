@@ -1,0 +1,123 @@
+name: "Tenant CRUD Tests"
+description: "Test tenant creation, retrieval, update, and deletion"
+scenarios:
+  - id: "tenant_create"
+    name: "Create Tenant"
+    description: "Create a new tenant"
+    method: "POST"
+    endpoint: "/api/v1/tenants"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      name: "Test Organization"
+      slug: "test-org"
+    expected_response:
+      status: 201
+      fields:
+        - name: "id"
+          type: "string"
+          required: true
+        - name: "name"
+          type: "string"
+        - name: "slug"
+          type: "string"
+        - name: "created_at"
+          type: "string"
+    sdk_method: "CreateTenant"
+
+  - id: "tenant_create_duplicate_slug"
+    name: "Create Tenant with Duplicate Slug"
+    description: "Attempt to create tenant with existing slug"
+    method: "POST"
+    endpoint: "/api/v1/tenants"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      name: "Another Org"
+      slug: "test-org"
+    expected_response:
+      status: 409
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "CreateTenant"
+    expected_error: true
+
+  - id: "tenant_get"
+    name: "Get Tenant by ID"
+    description: "Retrieve tenant details by ID"
+    method: "GET"
+    endpoint: "/api/v1/tenants/{tenant_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "id"
+          type: "string"
+        - name: "name"
+          type: "string"
+        - name: "slug"
+          type: "string"
+    sdk_method: "GetTenant"
+
+  - id: "tenant_get_not_found"
+    name: "Get Non-existent Tenant"
+    description: "Attempt to retrieve tenant that doesn't exist"
+    method: "GET"
+    endpoint: "/api/v1/tenants/non-existent-id"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 404
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "GetTenant"
+    expected_error: true
+
+  - id: "tenant_list"
+    name: "List All Tenants"
+    description: "Retrieve list of all accessible tenants"
+    method: "GET"
+    endpoint: "/api/v1/tenants"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "tenants"
+          type: "array"
+          required: true
+    sdk_method: "ListTenants"
+
+  - id: "tenant_update"
+    name: "Update Tenant"
+    description: "Update tenant details"
+    method: "PATCH"
+    endpoint: "/api/v1/tenants/{tenant_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      name: "Updated Organization Name"
+    expected_response:
+      status: 200
+      fields:
+        - name: "id"
+          type: "string"
+        - name: "name"
+          type: "string"
+        - name: "updated_at"
+          type: "string"
+    sdk_method: "UpdateTenant"
+
+  - id: "tenant_deactivate"
+    name: "Deactivate Tenant"
+    description: "Deactivate a tenant"
+    method: "DELETE"
+    endpoint: "/api/v1/tenants/{tenant_id}"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 204
+    sdk_method: "DeactivateTenant"

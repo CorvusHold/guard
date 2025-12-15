@@ -71,19 +71,19 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 				t.Errorf("expected issuer 'https://api.example.com', got '%s'", metadata.Issuer)
 			}
 
-			if metadata.TokenEndpoint != "https://api.example.com/v1/auth/refresh" {
-				t.Errorf("expected token_endpoint 'https://api.example.com/v1/auth/refresh', got '%s'", metadata.TokenEndpoint)
+			if metadata.TokenEndpoint != "https://api.example.com/api/v1/auth/refresh" {
+				t.Errorf("expected token_endpoint 'https://api.example.com/api/v1/auth/refresh', got '%s'", metadata.TokenEndpoint)
 			}
 
-			if metadata.IntrospectionEndpoint != "https://api.example.com/v1/auth/introspect" {
+			if metadata.IntrospectionEndpoint != "https://api.example.com/api/v1/auth/introspect" {
 				t.Errorf("expected introspection_endpoint, got '%s'", metadata.IntrospectionEndpoint)
 			}
 
-			if metadata.RevocationEndpoint != "https://api.example.com/v1/auth/revoke" {
+			if metadata.RevocationEndpoint != "https://api.example.com/api/v1/auth/revoke" {
 				t.Errorf("expected revocation_endpoint, got '%s'", metadata.RevocationEndpoint)
 			}
 
-			if metadata.UserinfoEndpoint != "https://api.example.com/v1/auth/me" {
+			if metadata.UserinfoEndpoint != "https://api.example.com/api/v1/auth/me" {
 				t.Errorf("expected userinfo_endpoint, got '%s'", metadata.UserinfoEndpoint)
 			}
 

@@ -35,8 +35,8 @@ func (c *GuardClient) ListUsers(ctx context.Context, tenantID string) ([]AdminUs
 		return nil, errors.New("tenant ID required")
 	}
 
-	params := &GetV1AuthAdminUsersParams{TenantId: tenantID}
-	resp, err := c.inner.GetV1AuthAdminUsersWithResponse(ctx, params)
+	params := &GetApiV1AuthAdminUsersParams{TenantId: tenantID}
+	resp, err := c.inner.GetApiV1AuthAdminUsersWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +47,15 @@ func (c *GuardClient) ListUsers(ctx context.Context, tenantID string) ([]AdminUs
 	var users []AdminUser
 	if resp.JSON200.Users != nil {
 		for _, u := range *resp.JSON200.Users {
-			user := AdminUser{
-				ID:            u.Id,
-				Email:         u.Email,
-				EmailVerified: u.EmailVerified,
-				IsActive:      u.IsActive,
+			user := AdminUser{}
+			if u.Id != nil {
+				user.ID = *u.Id
+			}
+			if u.EmailVerified != nil {
+				user.EmailVerified = *u.EmailVerified
+			}
+			if u.IsActive != nil {
+				user.IsActive = *u.IsActive
 			}
 			if u.FirstName != nil {
 				user.FirstName = *u.FirstName
@@ -68,9 +72,7 @@ func (c *GuardClient) ListUsers(ctx context.Context, tenantID string) ([]AdminUs
 			if u.UpdatedAt != nil {
 				user.UpdatedAt = *u.UpdatedAt
 			}
-			if u.LastLoginAt != nil {
-				user.LastLoginAt = u.LastLoginAt
-			}
+			user.LastLoginAt = u.LastLoginAt
 			users = append(users, user)
 		}
 	}
@@ -80,11 +82,11 @@ func (c *GuardClient) ListUsers(ctx context.Context, tenantID string) ([]AdminUs
 
 // UpdateUserNames updates a user's first and last name. Requires admin role.
 func (c *GuardClient) UpdateUserNames(ctx context.Context, userID string, req UpdateUserNamesRequest) error {
-	body := ControllerUpdateUserReq{
+	body := PatchApiV1AuthAdminUsersIdJSONRequestBody{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 	}
-	resp, err := c.inner.PatchV1AuthAdminUsersIdWithResponse(ctx, userID, body)
+	resp, err := c.inner.PatchApiV1AuthAdminUsersIdWithResponse(ctx, userID, body)
 	if err != nil {
 		return err
 	}
@@ -96,7 +98,7 @@ func (c *GuardClient) UpdateUserNames(ctx context.Context, userID string, req Up
 
 // BlockUser blocks a user, preventing them from logging in. Requires admin role.
 func (c *GuardClient) BlockUser(ctx context.Context, userID string) error {
-	resp, err := c.inner.PostV1AuthAdminUsersIdBlockWithResponse(ctx, userID)
+	resp, err := c.inner.PostApiV1AuthAdminUsersIdBlockWithResponse(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -108,7 +110,7 @@ func (c *GuardClient) BlockUser(ctx context.Context, userID string) error {
 
 // UnblockUser unblocks a previously blocked user. Requires admin role.
 func (c *GuardClient) UnblockUser(ctx context.Context, userID string) error {
-	resp, err := c.inner.PostV1AuthAdminUsersIdUnblockWithResponse(ctx, userID)
+	resp, err := c.inner.PostApiV1AuthAdminUsersIdUnblockWithResponse(ctx, userID)
 	if err != nil {
 		return err
 	}

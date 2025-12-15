@@ -86,8 +86,9 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -102,7 +103,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	}
 
 	// introspect using Authorization header
-	ireq := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	ireq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/introspect", nil)
 	ireq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	irec := httptest.NewRecorder()
 	e.ServeHTTP(irec, ireq)
@@ -118,7 +119,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	}
 
 	// me endpoint
-	mreq := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	mreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	mreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	mrec := httptest.NewRecorder()
 	e.ServeHTTP(mrec, mreq)
@@ -135,7 +136,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 
 	// revoke refresh token and ensure refresh fails
 	rb, _ := json.Marshal(map[string]string{"token": stoks.RefreshToken, "token_type": "refresh"})
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/revoke", bytes.NewReader(rb))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader(rb))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -145,8 +146,9 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 
 	// now attempt refresh with revoked token
 	rf, _ := json.Marshal(map[string]string{"refresh_token": stoks.RefreshToken})
-	rreq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", bytes.NewReader(rf))
+	rreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(rf))
 	rreq.Header.Set("Content-Type", "application/json")
+	rreq.Header.Set("X-Auth-Mode", "bearer")
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)
 	if rrec.Code == http.StatusOK {
@@ -215,7 +217,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 	setBody := map[string]string{"jwt_signing_key": tenantSigningKey}
 	setPayload, _ := json.Marshal(setBody)
-	setReq := httptest.NewRequest(http.MethodPut, "/v1/tenants/"+tenantID.String()+"/settings", bytes.NewReader(setPayload))
+	setReq := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", bytes.NewReader(setPayload))
 	setReq.Header.Set("Authorization", "Bearer "+signed)
 	setReq.Header.Set("Content-Type", "application/json")
 	setRec := httptest.NewRecorder()
@@ -234,8 +236,9 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -250,7 +253,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 
 	// Introspect token on the first server (should succeed with tenant-specific signing key)
-	ireq := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	ireq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/introspect", nil)
 	ireq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	irec := httptest.NewRecorder()
 	e.ServeHTTP(irec, ireq)
@@ -272,7 +275,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 
 	// Also verify /me endpoint works with tenant-specific signing key on the first server
-	mreq := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	mreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	mreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	mrec := httptest.NewRecorder()
 	e.ServeHTTP(mrec, mreq)
@@ -301,7 +304,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	c2.Register(e2)
 
 	// Against the second server, the same access token (signed with tenant-specific key) should fail introspection
-	ireq2 := httptest.NewRequest(http.MethodPost, "/v1/auth/introspect", nil)
+	ireq2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/introspect", nil)
 	ireq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	irec2 := httptest.NewRecorder()
 	e2.ServeHTTP(irec2, ireq2)
@@ -310,7 +313,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	}
 
 	// /me should also fail on the second server with the mismatched signing key
-	mreq2 := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	mreq2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	mreq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	mrec2 := httptest.NewRecorder()
 	e2.ServeHTTP(mrec2, mreq2)

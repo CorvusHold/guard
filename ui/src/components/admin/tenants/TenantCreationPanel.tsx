@@ -12,6 +12,7 @@ import { useToast } from '@/lib/toast'
 interface TenantCreationForm {
   // Tenant details
   tenantName: string
+  enableMFA: boolean
   
   // Admin user details
   adminEmail: string
@@ -29,8 +30,11 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
   const { show: showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [createdTenantId, setCreatedTenantId] = useState<string | null>(null)
+  const [createdTenantName, setCreatedTenantName] = useState<string | null>(null)
   const [form, setForm] = useState<TenantCreationForm>({
     tenantName: '',
+    enableMFA: false,
     adminEmail: '',
     adminPassword: '',
     adminFirstName: '',
@@ -70,6 +74,8 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
 
     setLoading(true)
     setError(null)
+    setCreatedTenantId(null)
+    setCreatedTenantName(null)
 
     try {
       const config = getRuntimeConfig()
@@ -100,10 +106,14 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
       console.log('Tenant and admin user created successfully.')
 
       showToast({ description: 'Tenant created successfully!', variant: 'success' })
+
+      setCreatedTenantId(tenantId)
+      setCreatedTenantName(form.tenantName)
       
       // Reset form
       setForm({
         tenantName: '',
+        enableMFA: false,
         adminEmail: '',
         adminPassword: '',
         adminFirstName: '',
@@ -140,6 +150,7 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
               <Input
                 id="tenantName"
                 type="text"
+                data-testid="tenant-name"
                 value={form.tenantName}
                 onChange={(e) => updateForm('tenantName', e.target.value)}
                 placeholder="Enter tenant name"
@@ -160,6 +171,7 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
                 <Input
                   id="adminFirstName"
                   type="text"
+                  data-testid="admin-first-name"
                   value={form.adminFirstName}
                   onChange={(e) => updateForm('adminFirstName', e.target.value)}
                   placeholder="Enter first name"
@@ -172,6 +184,7 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
                 <Input
                   id="adminLastName"
                   type="text"
+                  data-testid="admin-last-name"
                   value={form.adminLastName}
                   onChange={(e) => updateForm('adminLastName', e.target.value)}
                   placeholder="Enter last name"
@@ -185,6 +198,7 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
               <Input
                 id="adminEmail"
                 type="email"
+                data-testid="admin-email"
                 value={form.adminEmail}
                 onChange={(e) => updateForm('adminEmail', e.target.value)}
                 placeholder="Enter admin email"
@@ -197,6 +211,7 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
               <Input
                 id="adminPassword"
                 type="password"
+                data-testid="admin-password"
                 value={form.adminPassword}
                 onChange={(e) => updateForm('adminPassword', e.target.value)}
                 placeholder="Enter admin password"
@@ -208,11 +223,31 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
                 Password must be at least 8 characters long
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="enableMFA">Enable MFA</Label>
+              <Input
+                id="enableMFA"
+                type="checkbox"
+                data-testid="enable-mfa"
+                checked={form.enableMFA}
+                onChange={(e) => updateForm('enableMFA', e.target.checked ? 'true' : '')}
+                disabled={loading}
+              />
+            </div>
           </div>
 
           {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md" data-testid="error-message">
               {error}
+            </div>
+          )}
+
+          {createdTenantId && createdTenantName && (
+            <div className="p-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md" data-testid="creation-success">
+              <div>
+                Created tenant: <span className="font-medium" data-testid="created-tenant-name">{createdTenantName}</span>
+              </div>
             </div>
           )}
 
@@ -223,18 +258,21 @@ export default function TenantCreationPanel({ onTenantCreated }: TenantCreationP
               onClick={() => {
                 setForm({
                   tenantName: '',
+                  enableMFA: false,
                   adminEmail: '',
                   adminPassword: '',
                   adminFirstName: '',
                   adminLastName: ''
                 })
                 setError(null)
+                setCreatedTenantId(null)
+                setCreatedTenantName(null)
               }}
               disabled={loading}
             >
               Reset
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} data-testid="create-tenant">
               {loading ? 'Creating...' : 'Create Tenant'}
             </Button>
           </div>

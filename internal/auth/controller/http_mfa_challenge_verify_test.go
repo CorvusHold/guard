@@ -15,7 +15,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 	e, tenantID, toks := setupAuthApp(t)
 
 	// 1) Enroll TOTP to enable MFA for the user
-	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	reqStart := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
@@ -36,7 +36,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 		t.Fatalf("generate code: %v", err)
 	}
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
@@ -52,7 +52,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 		"password":  "Password!123",
 	}
 	lb, _ := json.Marshal(loginBody)
-	reqLogin := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	reqLogin.Header.Set("Content-Type", "application/json")
 	recLogin := httptest.NewRecorder()
 	e.ServeHTTP(recLogin, reqLogin)
@@ -77,8 +77,9 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_TOTP(t *testing.T) {
 		"method":          "totp",
 		"code":            code2,
 	})
-	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
+	reqVerify := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
+	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
 	e.ServeHTTP(recVerify, reqVerify)
 	if recVerify.Code != http.StatusOK {
@@ -97,7 +98,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 	e, tenantID, toks := setupAuthApp(t)
 
 	// Enroll TOTP first to enable MFA (backup codes require MFA enabled)
-	reqStart := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/start", nil)
+	reqStart := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/start", nil)
 	reqStart.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recStart := httptest.NewRecorder()
 	e.ServeHTTP(recStart, reqStart)
@@ -108,7 +109,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
 	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
 	ab, _ := json.Marshal(map[string]string{"code": code})
-	reqAct := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
+	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
 	recAct := httptest.NewRecorder()
@@ -119,7 +120,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 
 	// Generate one backup code
 	gb, _ := json.Marshal(map[string]int{"count": 1})
-	reqGen := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
+	reqGen := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/backup/generate", bytes.NewReader(gb))
 	reqGen.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	reqGen.Header.Set("Content-Type", "application/json")
 	recGen := httptest.NewRecorder()
@@ -142,7 +143,7 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 		"password":  "Password!123",
 	}
 	lb, _ := json.Marshal(loginBody)
-	reqLogin := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	reqLogin.Header.Set("Content-Type", "application/json")
 	recLogin := httptest.NewRecorder()
 	e.ServeHTTP(recLogin, reqLogin)
@@ -163,8 +164,9 @@ func TestHTTP_MFA_LoginChallenge_Then_Verify_BackupCode(t *testing.T) {
 		"method":          "backup_code",
 		"code":            genResp.Codes[0],
 	})
-	reqVerify := httptest.NewRequest(http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(vb))
+	reqVerify := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	reqVerify.Header.Set("Content-Type", "application/json")
+	reqVerify.Header.Set("X-Auth-Mode", "bearer")
 	recVerify := httptest.NewRecorder()
 	e.ServeHTTP(recVerify, reqVerify)
 	if recVerify.Code != http.StatusOK {

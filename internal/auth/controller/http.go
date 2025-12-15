@@ -50,7 +50,7 @@ const (
 // @Success      200  {object}  rbacPermissionsResp
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/permissions [get]
+// @Router       /api/v1/auth/admin/rbac/permissions [get]
 func (h *Controller) rbacListPermissions(c echo.Context) error {
 	tok := h.resolveAccessToken(c)
 	if tok == "" {
@@ -94,7 +94,7 @@ func (h *Controller) rbacListPermissions(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles [get]
+// @Router       /api/v1/auth/admin/rbac/roles [get]
 func (h *Controller) rbacListRoles(c echo.Context) error {
 	tok := h.resolveAccessToken(c)
 	if tok == "" {
@@ -147,7 +147,7 @@ func (h *Controller) rbacListRoles(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles [post]
+// @Router       /api/v1/auth/admin/rbac/roles [post]
 func (h *Controller) rbacCreateRole(c echo.Context) error {
 	tok := h.resolveAccessToken(c)
 	if tok == "" {
@@ -200,7 +200,7 @@ func (h *Controller) rbacCreateRole(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles/{id} [patch]
+// @Router       /api/v1/auth/admin/rbac/roles/{id} [patch]
 func (h *Controller) rbacUpdateRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -265,7 +265,7 @@ func (h *Controller) rbacUpdateRole(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles/{id} [delete]
+// @Router       /api/v1/auth/admin/rbac/roles/{id} [delete]
 func (h *Controller) rbacDeleteRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -326,7 +326,7 @@ func (h *Controller) rbacDeleteRole(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/users/{id}/roles [get]
+// @Router       /api/v1/auth/admin/rbac/users/{id}/roles [get]
 func (h *Controller) rbacListUserRoles(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -388,7 +388,7 @@ func (h *Controller) rbacListUserRoles(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/users/{id}/roles [post]
+// @Router       /api/v1/auth/admin/rbac/users/{id}/roles [post]
 func (h *Controller) rbacAddUserRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -457,7 +457,7 @@ func (h *Controller) rbacAddUserRole(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/users/{id}/roles [delete]
+// @Router       /api/v1/auth/admin/rbac/users/{id}/roles [delete]
 func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -526,7 +526,7 @@ func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles/{id}/permissions [post]
+// @Router       /api/v1/auth/admin/rbac/roles/{id}/permissions [post]
 func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -594,7 +594,7 @@ func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/roles/{id}/permissions [delete]
+// @Router       /api/v1/auth/admin/rbac/roles/{id}/permissions [delete]
 func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -662,7 +662,7 @@ func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
-// @Router       /v1/auth/admin/rbac/users/{id}/permissions/resolve [get]
+// @Router       /api/v1/auth/admin/rbac/users/{id}/permissions/resolve [get]
 func (h *Controller) rbacResolveUserPermissions(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -894,19 +894,19 @@ func (h *Controller) OAuth2Metadata(c echo.Context) error {
 
 	resp := oauth2MetadataResp{
 		Issuer:                baseURL,
-		TokenEndpoint:         baseURL + "/v1/auth/refresh",
-		IntrospectionEndpoint: baseURL + "/v1/auth/introspect",
-		RevocationEndpoint:    baseURL + "/v1/auth/revoke",
-		UserinfoEndpoint:      baseURL + "/v1/auth/me",
+		TokenEndpoint:         baseURL + "/api/v1/auth/refresh",
+		IntrospectionEndpoint: baseURL + "/api/v1/auth/introspect",
+		RevocationEndpoint:    baseURL + "/api/v1/auth/revoke",
+		UserinfoEndpoint:      baseURL + "/api/v1/auth/me",
 		ResponseTypesSupported: []string{
 			"token", // Direct token response (password, magic link, SSO)
 		},
 		GrantTypesSupported: []string{
-			"password",      // /v1/auth/password/login, /v1/auth/password/signup
-			"refresh_token", // /v1/auth/refresh
+			"password",      // /api/v1/auth/password/login, /api/v1/auth/password/signup
+			"refresh_token", // /api/v1/auth/refresh
 			// Custom grant types
-			"urn:guard:params:oauth:grant-type:magic-link", // /v1/auth/magic/verify
-			"urn:guard:params:oauth:grant-type:sso",        // /v1/auth/sso/:provider/callback
+			"urn:guard:params:oauth:grant-type:magic-link", // /api/v1/auth/magic/verify
+			"urn:guard:params:oauth:grant-type:sso",        // /api/v1/auth/sso/:provider/callback
 		},
 		TokenEndpointAuthMethodsSupported: []string{
 			"none", // Public client, no client authentication required
@@ -936,7 +936,16 @@ func (h *Controller) Register(e *echo.Echo) {
 	// RFC 8414 OAuth 2.0 Authorization Server Metadata (well-known endpoint)
 	e.GET("/.well-known/oauth-authorization-server", h.OAuth2Metadata)
 
-	g := e.Group("/v1/auth")
+	g := e.Group("/api/v1/auth")
+	h.registerAuthRoutes(g)
+}
+
+func (h *Controller) RegisterV1(apiV1 *echo.Group) {
+	g := apiV1.Group("/auth")
+	h.registerAuthRoutes(g)
+}
+
+func (h *Controller) registerAuthRoutes(g *echo.Group) {
 
 	// Rate limits (fixed-window, per-tenant-or-IP)
 	mkPolicy := func(prefix string, limKey, winKey string, defLim int, defWin time.Duration) ratelimit.Policy {
@@ -1350,7 +1359,7 @@ func (h *Controller) resolveAccessToken(c echo.Context) string {
 // @Success      201   {object}  authExchangeResp
 // @Failure      400   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
-// @Router       /v1/auth/password/signup [post]
+// @Router       /api/v1/auth/password/signup [post]
 func (h *Controller) signup(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req signupReq
@@ -1379,7 +1388,7 @@ func (h *Controller) signup(c echo.Context) error {
 
 // Password Login godoc
 // @Summary      Password login
-// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
+// @Description  Logs in with email/password. If MFA is enabled for the user, responds 202 with a challenge to complete via /api/v1/auth/mfa/verify. When clients set `X-Auth-Mode: cookie` (or the deployment default is cookie), Guard issues `guard_access_token` / `guard_refresh_token` cookies and returns `{ "success": true }` instead of raw tokens in the JSON payload.
 // @Tags         auth.password
 // @Accept       json
 // @Produce      json
@@ -1390,7 +1399,7 @@ func (h *Controller) signup(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
-// @Router       /v1/auth/password/login [post]
+// @Router       /api/v1/auth/password/login [post]
 func (h *Controller) login(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req loginReq
@@ -1437,7 +1446,7 @@ func (h *Controller) login(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
-// @Router       /v1/auth/refresh [post]
+// @Router       /api/v1/auth/refresh [post]
 func (h *Controller) refresh(c echo.Context) error {
 	debugEnabled := os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != ""
 	var raw []byte
@@ -1499,7 +1508,7 @@ func (h *Controller) refresh(c echo.Context) error {
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/logout [post]
+// @Router       /api/v1/auth/logout [post]
 func (h *Controller) logout(c echo.Context) error {
 	debugEnabled := os.Getenv("AUTH_DEBUG") != "" || os.Getenv("RATELIMIT_DEBUG") != ""
 	var raw []byte
@@ -1555,7 +1564,7 @@ func (h *Controller) logout(c echo.Context) error {
 // @Success      200  {object}  domain.UserProfile
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/me [get]
+// @Router       /api/v1/auth/me [get]
 func (h *Controller) me(c echo.Context) error {
 	ctx := c.Request().Context()
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
@@ -1614,7 +1623,7 @@ func (h *Controller) me(c echo.Context) error {
 // @Success      200
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
-// @Router       /v1/auth/profile [patch]
+// @Router       /api/v1/auth/profile [patch]
 func (h *Controller) updateProfile(c echo.Context) error {
 	ctx := c.Request().Context()
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
@@ -1658,7 +1667,7 @@ func (h *Controller) updateProfile(c echo.Context) error {
 // // @Success      200  {object}  EmailDiscoveryResponse
 // // @Failure      400  {object}  map[string]string
 // // @Failure      500  {object}  map[string]string
-// // @Router       /v1/auth/email/discover [post]
+// // @Router       /api/v1/auth/email/discover [post]
 // func (h *Controller) emailDiscovery(c echo.Context) error {
 // 	var req EmailDiscoveryRequest
 // 	if err := c.Bind(&req); err != nil {
@@ -1786,7 +1795,7 @@ func generateEmailSuggestions(email string) []string {
 // @Failure      400    {object}  map[string]string
 // @Failure      401    {object}  map[string]string
 // @Failure      429    {object}  map[string]string
-// @Router       /v1/auth/introspect [post]
+// @Router       /api/v1/auth/introspect [post]
 func (h *Controller) introspect(c echo.Context) error {
 	var req introspectReq
 	_ = c.Bind(&req) // optional body
@@ -1814,7 +1823,7 @@ func (h *Controller) introspect(c echo.Context) error {
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/revoke [post]
+// @Router       /api/v1/auth/revoke [post]
 func (h *Controller) revoke(c echo.Context) error {
 	var req revokeReq
 	if err := c.Bind(&req); err != nil {
@@ -1842,7 +1851,7 @@ func (h *Controller) revoke(c echo.Context) error {
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id}/roles [post]
+// @Router       /api/v1/auth/admin/users/{id}/roles [post]
 func (h *Controller) adminUpdateRoles(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -1908,7 +1917,7 @@ func (h *Controller) adminUpdateRoles(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users [get]
+// @Router       /api/v1/auth/admin/users [get]
 func (h *Controller) adminListUsers(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -1981,7 +1990,7 @@ func (h *Controller) adminListUsers(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id} [patch]
+// @Router       /api/v1/auth/admin/users/{id} [patch]
 func (h *Controller) adminUpdateNames(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2042,7 +2051,7 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id}/block [post]
+// @Router       /api/v1/auth/admin/users/{id}/block [post]
 func (h *Controller) adminBlockUser(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2095,7 +2104,7 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id}/unblock [post]
+// @Router       /api/v1/auth/admin/users/{id}/unblock [post]
 func (h *Controller) adminUnblockUser(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2148,7 +2157,7 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id}/verify-email [post]
+// @Router       /api/v1/auth/admin/users/{id}/verify-email [post]
 func (h *Controller) adminVerifyEmail(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2201,7 +2210,7 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/admin/users/{id}/unverify-email [post]
+// @Router       /api/v1/auth/admin/users/{id}/unverify-email [post]
 func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2252,7 +2261,7 @@ func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 // @Success      200  {object}  sessionsListResp
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/sessions [get]
+// @Router       /api/v1/auth/sessions [get]
 func (h *Controller) sessionsList(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2308,7 +2317,7 @@ func (h *Controller) sessionsList(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/sessions/{id}/revoke [post]
+// @Router       /api/v1/auth/sessions/{id}/revoke [post]
 func (h *Controller) sessionRevoke(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2350,7 +2359,7 @@ func (h *Controller) sessionRevoke(c echo.Context) error {
 // @Success      202
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/password/reset/request [post]
+// @Router       /api/v1/auth/password/reset/request [post]
 func (h *Controller) resetPasswordRequest(c echo.Context) error {
 	var req resetPasswordRequestReq
 	if err := c.Bind(&req); err != nil {
@@ -2399,7 +2408,7 @@ func (h *Controller) resetPasswordRequest(c echo.Context) error {
 // @Success      200
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/password/reset/confirm [post]
+// @Router       /api/v1/auth/password/reset/confirm [post]
 func (h *Controller) resetPasswordConfirm(c echo.Context) error {
 	var req resetPasswordConfirmReq
 	if err := c.Bind(&req); err != nil {
@@ -2439,7 +2448,7 @@ func (h *Controller) resetPasswordConfirm(c echo.Context) error {
 // @Success      200
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
-// @Router       /v1/auth/password/change [post]
+// @Router       /api/v1/auth/password/change [post]
 func (h *Controller) changePassword(c echo.Context) error {
 	ctx := c.Request().Context()
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
@@ -2489,7 +2498,7 @@ func (h *Controller) changePassword(c echo.Context) error {
 // @Success      202
 // @Failure      400  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/magic/send [post]
+// @Router       /api/v1/auth/magic/send [post]
 func (h *Controller) sendMagic(c echo.Context) error {
 	var req magicSendReq
 	if err := c.Bind(&req); err != nil {
@@ -2525,8 +2534,8 @@ func (h *Controller) sendMagic(c echo.Context) error {
 // @Failure      400    {object}  map[string]string
 // @Failure      401    {object}  map[string]string
 // @Failure      429    {object}  map[string]string
-// @Router       /v1/auth/magic/verify [get]
-// @Router       /v1/auth/magic/verify [post]
+// @Router       /api/v1/auth/magic/verify [get]
+// @Router       /api/v1/auth/magic/verify [post]
 func (h *Controller) verifyMagic(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	// accept ?token=... or JSON body
@@ -2584,7 +2593,7 @@ var allowedSSOOrganizationPortalIntents = map[string]struct{}{
 // @Param        organization_id  query     string  false  "Organization identifier"
 // @Success      302
 // @Failure      400  {object}  map[string]string
-// @Router       /v1/auth/sso/{provider}/start [get]
+// @Router       /api/v1/auth/sso/{provider}/start [get]
 func (h *Controller) ssoStart(c echo.Context) error {
 	p := c.Param("provider")
 	if _, ok := allowedProviders[p]; !ok {
@@ -2623,7 +2632,7 @@ func (h *Controller) ssoStart(c echo.Context) error {
 // @Success      200  {object}  authExchangeResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
-// @Router       /v1/auth/sso/{provider}/callback [get]
+// @Router       /api/v1/auth/sso/{provider}/callback [get]
 func (h *Controller) ssoCallback(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	p := c.Param("provider")
@@ -2643,7 +2652,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 // @Tags         auth.sso
 // @Security     BearerAuth
 // @Param        provider  path   string  true  "SSO provider (workos)"
-// @Param        organization_id  query   string  true  "Organization identifier"
+// @Param        organization_id  query   string  false  "Organization identifier (required when provider=workos)"
 // @Param        tenant_id  query   string  true  "Tenant ID (UUID)"
 // @Param        intent  query   string  false  "Intent (sso, dsync, audit_logs, log_streams, domain_verification, certificate_renewal, user_management)"
 // @Success      200  {object}  domain.PortalLink
@@ -2651,7 +2660,7 @@ func (h *Controller) ssoCallback(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/sso/{provider}/portal-link [get]
+// @Router       /api/v1/auth/sso/{provider}/portal-link [get]
 func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 	p := c.Param("provider")
 	ua := c.Request().UserAgent()
@@ -2723,7 +2732,7 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 // @Produce      json
 // @Success      200  {object}  mfaTOTPStartResp
 // @Failure      401  {object}  map[string]string
-// @Router       /v1/auth/mfa/totp/start [post]
+// @Router       /api/v1/auth/mfa/totp/start [post]
 func (h *Controller) totpStart(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2759,7 +2768,7 @@ func (h *Controller) totpStart(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/mfa/totp/activate [post]
+// @Router       /api/v1/auth/mfa/totp/activate [post]
 func (h *Controller) totpActivate(c echo.Context) error {
 	var req mfaTOTPActivateReq
 	if err := c.Bind(&req); err != nil {
@@ -2798,7 +2807,7 @@ func (h *Controller) totpActivate(c echo.Context) error {
 // @Success      204
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/mfa/totp/disable [post]
+// @Router       /api/v1/auth/mfa/totp/disable [post]
 func (h *Controller) totpDisable(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2836,7 +2845,7 @@ func (h *Controller) totpDisable(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/mfa/backup/generate [post]
+// @Router       /api/v1/auth/mfa/backup/generate [post]
 func (h *Controller) backupGenerate(c echo.Context) error {
 	var req mfaBackupGenerateReq
 	_ = c.Bind(&req) // optional body
@@ -2881,7 +2890,7 @@ func (h *Controller) backupGenerate(c echo.Context) error {
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/mfa/backup/consume [post]
+// @Router       /api/v1/auth/mfa/backup/consume [post]
 func (h *Controller) backupConsume(c echo.Context) error {
 	var req mfaBackupConsumeReq
 	if err := c.Bind(&req); err != nil {
@@ -2922,7 +2931,7 @@ func (h *Controller) backupConsume(c echo.Context) error {
 // @Success      200  {object}  mfaBackupCountResp
 // @Failure      401  {object}  map[string]string
 // @Failure      429  {object}  map[string]string
-// @Router       /v1/auth/mfa/backup/count [get]
+// @Router       /api/v1/auth/mfa/backup/count [get]
 func (h *Controller) backupCount(c echo.Context) error {
 	tok := bearerToken(c)
 	if tok == "" {
@@ -2961,7 +2970,7 @@ func (h *Controller) backupCount(c echo.Context) error {
 // @Failure      400   {object}  map[string]string
 // @Failure      401   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
-// @Router       /v1/auth/mfa/verify [post]
+// @Router       /api/v1/auth/mfa/verify [post]
 func (h *Controller) verifyMFA(c echo.Context) error {
 	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
 	var req mfaVerifyReq

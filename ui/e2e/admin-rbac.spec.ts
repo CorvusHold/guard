@@ -10,6 +10,22 @@ function cors(headers: Record<string, string> = {}) {
   }
 }
 
+async function mockAuthMe(page: import('@playwright/test').Page) {
+  await page.route('**/api/v1/auth/me', async (route) => {
+    if (await allowOptions(route, 'GET,OPTIONS')) return
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        email: 'admin@example.com',
+        first_name: 'Admin',
+        last_name: 'User',
+        roles: ['admin']
+      }),
+      headers: cors({ 'content-type': 'application/json' })
+    })
+  })
+}
+
 async function allowOptions(route: any, allow: string) {
   const req = route.request()
   if (req.method() === 'OPTIONS') {
@@ -26,6 +42,15 @@ async function allowOptions(route: any, allow: string) {
 
 test.describe('Admin RBAC', () => {
   test.beforeEach(async ({ page, context }) => {
+    await page.addInitScript((apiBase: string) => {
+      localStorage.setItem(
+        'guard_runtime',
+        JSON.stringify({ guard_base_url: apiBase, source: 'e2e', auth_mode: 'bearer' })
+      )
+      localStorage.setItem('guard_ui:guard_access_token', 'e2e-access-token')
+      localStorage.setItem('guard_ui:guard_refresh_token', 'e2e-refresh-token')
+    }, UI_BASE)
+
     page.on('console', (msg) => {
       const loc = msg.location()
       console.log(
@@ -39,11 +64,11 @@ test.describe('Admin RBAC', () => {
     )
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
@@ -51,9 +76,11 @@ test.describe('Admin RBAC', () => {
   test('roles CRUD flow', async ({ page, browserName }, _testInfo) => {
     const TENANT = 'tenant_rbac'
 
+    await mockAuthMe(page)
+
     // List roles (initial empty)
     await page.route(
-      '**/v1/auth/admin/rbac/roles?tenant_id=*',
+      '**/api/v1/auth/admin/rbac/roles?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -66,7 +93,7 @@ test.describe('Admin RBAC', () => {
 
     // Create role
     const createdId = 'role_1'
-    await page.route('**/v1/auth/admin/rbac/roles', async (route) => {
+    await page.route('**/api/v1/auth/admin/rbac/roles', async (route) => {
       if (await allowOptions(route, 'POST,OPTIONS')) return
       if (route.request().method() === 'POST') {
         const body = JSON.parse(route.request().postData() || '{}')
@@ -79,7 +106,7 @@ test.describe('Admin RBAC', () => {
         }
         // After create, next list will include this role
         page.route(
-          '**/v1/auth/admin/rbac/roles?tenant_id=*',
+          '**/api/v1/auth/admin/rbac/roles?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -113,14 +140,14 @@ test.describe('Admin RBAC', () => {
     })
 
     // Update role
-    await page.route('**/v1/auth/admin/rbac/roles/*', async (route) => {
+    await page.route('**/api/v1/auth/admin/rbac/roles/*', async (route) => {
       const req = route.request()
       if (await allowOptions(route, 'PATCH,DELETE,OPTIONS')) return
       const _url = new URL(req.url())
       if (req.method() === 'PATCH') {
         const body = JSON.parse(req.postData() || '{}')
         page.route(
-          '**/v1/auth/admin/rbac/roles?tenant_id=*',
+          '**/api/v1/auth/admin/rbac/roles?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -153,7 +180,7 @@ test.describe('Admin RBAC', () => {
       if (req.method() === 'DELETE') {
         // Return empty list after delete
         page.route(
-          '**/v1/auth/admin/rbac/roles?tenant_id=*',
+          '**/api/v1/auth/admin/rbac/roles?tenant_id=*',
           async (route2) => {
             if (await allowOptions(route2, 'GET,OPTIONS')) return
             return route2.fulfill({
@@ -173,6 +200,9 @@ test.describe('Admin RBAC', () => {
       { waitUntil: 'domcontentloaded' }
     )
     await expect(page).toHaveURL(/\/+admin(\?|$)/)
+
+    await page.waitForSelector('[data-testid="tab-rbac"]', { timeout: 10000 })
+    await page.getByTestId('tab-rbac').click()
     await page.getByTestId('admin-tenant-input').fill(TENANT)
     await page.getByTestId('rbac-roles-refresh').click()
     await expect(page.getByTestId('rbac-roles-empty')).toBeVisible()
@@ -212,9 +242,11 @@ test.describe('Admin RBAC', () => {
   test('role permissions grant and revoke', async ({ page }) => {
     const TENANT = 'tenant_rbac'
 
+    await mockAuthMe(page)
+
     // List roles for selection
     await page.route(
-      '**/v1/auth/admin/rbac/roles?tenant_id=*',
+      '**/api/v1/auth/admin/rbac/roles?tenant_id=*',
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -229,7 +261,7 @@ test.describe('Admin RBAC', () => {
 
     // Grant
     await page.route(
-      '**/v1/auth/admin/rbac/roles/role_1/permissions',
+      '**/api/v1/auth/admin/rbac/roles/role_1/permissions',
       async (route) => {
         if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return
         const req = route.request()
@@ -255,6 +287,9 @@ test.describe('Admin RBAC', () => {
       { waitUntil: 'domcontentloaded' }
     )
     await expect(page).toHaveURL(/\/+admin(\?|$)/)
+
+    await page.waitForSelector('[data-testid="tab-rbac"]', { timeout: 10000 })
+    await page.getByTestId('tab-rbac').click()
     await page.getByTestId('admin-tenant-input').fill(TENANT)
 
     // Load roles for permissions panel
@@ -273,9 +308,11 @@ test.describe('Admin RBAC', () => {
     const TENANT = 'tenant_rbac'
     const USER = 'user_123'
 
+    await mockAuthMe(page)
+
     // List user roles (initial empty)
     await page.route(
-      `**/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
+      `**/api/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
       async (route) => {
         if (await allowOptions(route, 'GET,OPTIONS')) return
         return route.fulfill({
@@ -288,7 +325,7 @@ test.describe('Admin RBAC', () => {
 
     // Add user role
     await page.route(
-      `**/v1/auth/admin/rbac/users/${USER}/roles`,
+      `**/api/v1/auth/admin/rbac/users/${USER}/roles`,
       async (route) => {
         if (await allowOptions(route, 'POST,DELETE,OPTIONS')) return
         const req = route.request()
@@ -296,7 +333,7 @@ test.describe('Admin RBAC', () => {
           const body = JSON.parse(req.postData() || '{}')
           // After add, list returns [role_1]
           page.route(
-            `**/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
+            `**/api/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
             async (route2) => {
               if (await allowOptions(route2, 'GET,OPTIONS')) return
               return route2.fulfill({
@@ -311,7 +348,7 @@ test.describe('Admin RBAC', () => {
         if (req.method() === 'DELETE') {
           // After remove, list returns []
           page.route(
-            `**/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
+            `**/api/v1/auth/admin/rbac/users/${USER}/roles?tenant_id=*`,
             async (route2) => {
               if (await allowOptions(route2, 'GET,OPTIONS')) return
               return route2.fulfill({
@@ -332,6 +369,9 @@ test.describe('Admin RBAC', () => {
       { waitUntil: 'domcontentloaded' }
     )
     await expect(page).toHaveURL(/\/+admin(\?|$)/)
+
+    await page.waitForSelector('[data-testid="tab-rbac"]', { timeout: 10000 })
+    await page.getByTestId('tab-rbac').click()
     await page.getByTestId('admin-tenant-input').fill(TENANT)
 
     // List roles
@@ -354,8 +394,10 @@ test.describe('Admin RBAC', () => {
   })
 
   test('permissions viewer lists permissions', async ({ page }) => {
+    await mockAuthMe(page)
+
     // Mock the permissions endpoint
-    await page.route('**/v1/auth/admin/rbac/permissions', async (route) => {
+    await page.route('**/api/v1/auth/admin/rbac/permissions', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -387,6 +429,9 @@ test.describe('Admin RBAC', () => {
       { waitUntil: 'domcontentloaded' }
     )
     await expect(page).toHaveURL(/\/+admin(\?|$)/)
+
+    await page.waitForSelector('[data-testid="tab-rbac"]', { timeout: 10000 })
+    await page.getByTestId('tab-rbac').click()
 
     // Trigger load
     await page.getByTestId('rbac-permissions-refresh').click()

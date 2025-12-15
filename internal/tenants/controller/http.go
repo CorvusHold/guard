@@ -22,11 +22,16 @@ func New(svc domain.Service) *Controller {
 }
 
 func (h *Controller) Register(e *echo.Echo) {
-	e.POST("/tenants", h.createTenant)
-	e.GET("/tenants/:id", h.getTenantByID)
-	e.GET("/tenants/by-name/:name", h.getTenantByName)
-	e.PATCH("/tenants/:id/deactivate", h.deactivateTenant)
-	e.GET("/tenants", h.listTenants)
+	g := e.Group("/api/v1")
+	h.RegisterV1(g)
+}
+
+func (h *Controller) RegisterV1(g *echo.Group) {
+	g.POST("/tenants", h.createTenant)
+	g.GET("/tenants/:id", h.getTenantByID)
+	g.GET("/tenants/by-name/:name", h.getTenantByName)
+	g.PATCH("/tenants/:id/deactivate", h.deactivateTenant)
+	g.GET("/tenants", h.listTenants)
 }
 
 type createTenantReq struct {
@@ -64,7 +69,7 @@ func toTimeString(t pgtype.Timestamptz) string {
 // @Param        body  body  createTenantReq  true  "name"
 // @Success      201   {object}  tenantResp
 // @Failure      400   {object}  map[string]string
-// @Router       /tenants [post]
+// @Router       /api/v1/tenants [post]
 func (h *Controller) createTenant(c echo.Context) error {
 	var req createTenantReq
 	if err := c.Bind(&req); err != nil {
@@ -95,7 +100,7 @@ func (h *Controller) createTenant(c echo.Context) error {
 // @Success      200  {object}  tenantResp
 // @Failure      400  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /tenants/{id} [get]
+// @Router       /api/v1/tenants/{id} [get]
 func (h *Controller) getTenantByID(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -124,7 +129,7 @@ func (h *Controller) getTenantByID(c echo.Context) error {
 // @Success      200  {object}  tenantResp
 // @Failure      400  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /tenants/by-name/{name} [get]
+// @Router       /api/v1/tenants/by-name/{name} [get]
 func (h *Controller) getTenantByName(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -150,7 +155,7 @@ func (h *Controller) getTenantByName(c echo.Context) error {
 // @Param        id   path   string  true  "Tenant ID (UUID)"
 // @Success      204
 // @Failure      400  {object}  map[string]string
-// @Router       /tenants/{id}/deactivate [patch]
+// @Router       /api/v1/tenants/{id}/deactivate [patch]
 func (h *Controller) deactivateTenant(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -189,7 +194,7 @@ type listResponse struct {
 // @Param        page_size  query   int     false  "Page size"
 // @Success      200  {object}  listResponse
 // @Failure      400  {object}  map[string]string
-// @Router       /tenants [get]
+// @Router       /api/v1/tenants [get]
 func (h *Controller) listTenants(c echo.Context) error {
 	// Allow both query binding and manual fallback to avoid validation dependence
 	q := listQuery{Active: -1}

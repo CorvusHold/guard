@@ -3,7 +3,6 @@ package guard
 import (
 	"context"
 	"errors"
-	"net/http"
 )
 
 // EmailDiscoveryResult contains the result of email discovery for progressive login.
@@ -22,11 +21,11 @@ type TenantSummary struct {
 
 // PasswordSignup registers a new user with email/password and returns tokens on success (201 Created).
 // It persists tokens into the configured TokenStore.
-func (c *GuardClient) PasswordSignup(ctx context.Context, req ControllerSignupReq) (*ControllerTokensResp, error) {
+func (c *GuardClient) PasswordSignup(ctx context.Context, req ControllerSignupReq) (*ControllerAuthExchangeResp, error) {
 	if req.TenantId == "" {
 		req.TenantId = c.tenantID
 	}
-	resp, err := c.inner.PostV1AuthPasswordSignupWithResponse(ctx, req)
+	resp, err := c.inner.PostApiV1AuthPasswordSignupWithResponse(ctx, nil, req)
 	if err != nil {
 		return nil, err
 	}
@@ -34,30 +33,14 @@ func (c *GuardClient) PasswordSignup(ctx context.Context, req ControllerSignupRe
 		_ = c.persistTokens(ctx, resp.JSON201)
 		return resp.JSON201, nil
 	}
-	if resp.JSON200 != nil {
-		// Some servers may return 200 instead of 201
-		_ = c.persistTokens(ctx, resp.JSON200)
-		return resp.JSON200, nil
-	}
 	return nil, errors.New(resp.Status())
 }
 
 // EmailDiscover performs email discovery for progressive login flows.
 // It determines if an email exists and which tenant it belongs to.
 func (c *GuardClient) EmailDiscover(ctx context.Context, email string, tenantID *string) (*EmailDiscoveryResult, error) {
-	tid := ""
-	if tenantID != nil {
-		tid = *tenantID
-	} else if c.tenantID != "" {
-		tid = c.tenantID
-	}
-
-	req := ControllerEmailDiscoverReq{Email: email}
-	if tid != "" {
-		req.TenantId = &tid
-	}
-
-	resp, err := c.inner.PostV1AuthEmailDiscoverWithResponse(ctx, req)
+	params := &GetApiV1AuthLoginOptionsParams{Email: &email, TenantId: tenantID}
+	resp, err := c.inner.GetApiV1AuthLoginOptionsWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +53,11 @@ func (c *GuardClient) EmailDiscover(ctx context.Context, email string, tenantID 
 		HasTenant: false,
 	}
 
-	if resp.JSON200.Found != nil {
-		result.Found = *resp.JSON200.Found
+	if resp.JSON200.UserExists != nil {
+		result.Found = *resp.JSON200.UserExists
 	}
-	if resp.JSON200.HasTenant != nil {
-		result.HasTenant = *resp.JSON200.HasTenant
-	}
-	if resp.JSON200.TenantId != nil {
+	if resp.JSON200.TenantId != nil && *resp.JSON200.TenantId != "" {
+		result.HasTenant = true
 		result.TenantID = resp.JSON200.TenantId
 	}
 	if resp.JSON200.TenantName != nil {
@@ -89,8 +70,8 @@ func (c *GuardClient) EmailDiscover(ctx context.Context, email string, tenantID 
 // DiscoverTenants returns a list of tenants that a user with the given email belongs to.
 // This is used for multi-tenant login selection flows.
 func (c *GuardClient) DiscoverTenants(ctx context.Context, email string) ([]TenantSummary, error) {
-	params := &GetV1AuthTenantsParams{Email: email}
-	resp, err := c.inner.GetV1AuthTenantsWithResponse(ctx, params)
+	params := &GetApiV1TenantsParams{Q: &email}
+	resp, err := c.inner.GetApiV1TenantsWithResponse(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +80,11 @@ func (c *GuardClient) DiscoverTenants(ctx context.Context, email string) ([]Tena
 	}
 
 	var tenants []TenantSummary
-	if resp.JSON200.Tenants != nil {
-		for _, t := range *resp.JSON200.Tenants {
-			summary := TenantSummary{
-				ID: t.Id,
+	if resp.JSON200.Items != nil {
+		for _, t := range *resp.JSON200.Items {
+			summary := TenantSummary{}
+			if t.Id != nil {
+				summary.ID = *t.Id
 			}
 			if t.Name != nil {
 				summary.Name = *t.Name

@@ -83,8 +83,9 @@ func TestHTTP_SSO_PortalLink_NativeProvider_ReturnsInternalPortalURL(t *testing.
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -123,7 +124,7 @@ func TestHTTP_SSO_PortalLink_NativeProvider_ReturnsInternalPortalURL(t *testing.
 		t.Fatalf("create SSO provider: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sso/"+slug+"/portal-link?tenant_id="+tenantID.String()+"&intent=sso", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/"+slug+"/portal-link?tenant_id="+tenantID.String()+"&intent=sso", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)

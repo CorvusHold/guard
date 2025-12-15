@@ -1,6 +1,6 @@
 {
   "name": "@corvushold/guard-sdk",
-  "version": "0.1.0-beta.0",
+  "version": "2.0.0",
   "description": "Guard CAS TypeScript SDK for Node.js, browsers, and React Native (beta)",
   "license": "Apache-2.0",
   "author": {

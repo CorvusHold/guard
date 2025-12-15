@@ -67,8 +67,9 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -98,8 +99,9 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"password":  password,
 	}
 	tsb, _ := json.Marshal(tsBody)
-	tsreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(tsb))
+	tsreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(tsb))
 	tsreq.Header.Set("Content-Type", "application/json")
+	tsreq.Header.Set("X-Auth-Mode", "bearer")
 	tsrec := httptest.NewRecorder()
 	e.ServeHTTP(tsrec, tsreq)
 	if tsrec.Code != http.StatusCreated {
@@ -111,7 +113,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 	}
 
 	// 1) List permissions (admin)
-	reqPerms := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/permissions", nil)
+	reqPerms := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/permissions", nil)
 	reqPerms.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	recPerms := httptest.NewRecorder()
 	e.ServeHTTP(recPerms, reqPerms)
@@ -137,7 +139,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"description": "QA Assign Role",
 	}
 	cb, _ := json.Marshal(createBody)
-	creq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/roles", bytes.NewReader(cb))
+	creq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/roles", bytes.NewReader(cb))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	crec := httptest.NewRecorder()
@@ -154,7 +156,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 	roleID := roleItem.ID
 
 	// 3) List roles should include created role
-	lreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/roles?tenant_id="+tenantID.String(), nil)
+	lreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/roles?tenant_id="+tenantID.String(), nil)
 	lreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
@@ -169,7 +171,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"description": "updated",
 	}
 	ub, _ := json.Marshal(updBody)
-	ureq := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/rbac/roles/"+roleID.String(), bytes.NewReader(ub))
+	ureq := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/rbac/roles/"+roleID.String(), bytes.NewReader(ub))
 	ureq.Header.Set("Content-Type", "application/json")
 	ureq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	urec := httptest.NewRecorder()
@@ -184,7 +186,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"scope_type":     "tenant",
 	}
 	pb, _ := json.Marshal(permBody)
-	preq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/roles/"+roleID.String()+"/permissions", bytes.NewReader(pb))
+	preq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/roles/"+roleID.String()+"/permissions", bytes.NewReader(pb))
 	preq.Header.Set("Content-Type", "application/json")
 	preq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	prec := httptest.NewRecorder()
@@ -199,7 +201,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		"role_id":   roleID.String(),
 	}
 	ab, _ := json.Marshal(assignBody)
-	aReq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(ab))
+	aReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/roles", bytes.NewReader(ab))
 	aReq.Header.Set("Content-Type", "application/json")
 	aReq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	aRec := httptest.NewRecorder()
@@ -209,7 +211,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 	}
 
 	// 7) Resolve user permissions should include users:read
-	rreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/permissions/resolve?tenant_id="+tenantID.String(), nil)
+	rreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/permissions/resolve?tenant_id="+tenantID.String(), nil)
 	rreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)
@@ -237,7 +239,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 
 	// 8) Remove role permission and re-check resolution
 	db, _ := json.Marshal(permBody)
-	dreq := httptest.NewRequest(http.MethodDelete, "/v1/auth/admin/rbac/roles/"+roleID.String()+"/permissions", bytes.NewReader(db))
+	dreq := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/rbac/roles/"+roleID.String()+"/permissions", bytes.NewReader(db))
 	dreq.Header.Set("Content-Type", "application/json")
 	dreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	drec := httptest.NewRecorder()
@@ -246,7 +248,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 		t.Fatalf("delete role permission: expected 204, got %d: %s", drec.Code, drec.Body.String())
 	}
 
-	rreq2 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/permissions/resolve?tenant_id="+tenantID.String(), nil)
+	rreq2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/users/"+aiTarget.UserID.String()+"/permissions/resolve?tenant_id="+tenantID.String(), nil)
 	rreq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rrec2 := httptest.NewRecorder()
 	e.ServeHTTP(rrec2, rreq2)
@@ -268,7 +270,7 @@ func TestHTTP_RBAC_Admin_Integration(t *testing.T) {
 	}
 
 	// 9) Delete role
-	dreq2 := httptest.NewRequest(http.MethodDelete, "/v1/auth/admin/rbac/roles/"+roleID.String()+"?tenant_id="+tenantID.String(), nil)
+	dreq2 := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/rbac/roles/"+roleID.String()+"?tenant_id="+tenantID.String(), nil)
 	dreq2.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	drec2 := httptest.NewRecorder()
 	e.ServeHTTP(drec2, dreq2)

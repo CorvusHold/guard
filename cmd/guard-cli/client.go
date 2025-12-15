@@ -115,7 +115,7 @@ func (c *GuardClient) handleResponse(resp *http.Response, target interface{}) er
 
 // Tenant management methods
 func (c *GuardClient) ListTenants() error {
-	resp, err := c.makeRequest("GET", "/tenants", nil)
+	resp, err := c.makeRequest("GET", "/api/v1/tenants", nil)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (c *GuardClient) CreateTenant(name string) error {
 		"name": name,
 	}
 
-	resp, err := c.makeRequest("POST", "/tenants", payload)
+	resp, err := c.makeRequest("POST", "/api/v1/tenants", payload)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func (c *GuardClient) CreateTenant(name string) error {
 }
 
 func (c *GuardClient) GetTenant(tenantID string) error {
-	resp, err := c.makeRequest("GET", "/tenants/"+tenantID, nil)
+	resp, err := c.makeRequest("GET", "/api/v1/tenants/"+tenantID, nil)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (c *GuardClient) GetTenant(tenantID string) error {
 }
 
 func (c *GuardClient) DeleteTenant(tenantID string) error {
-	resp, err := c.makeRequest("DELETE", "/tenants/"+tenantID, nil)
+	resp, err := c.makeRequest("DELETE", "/api/v1/tenants/"+tenantID, nil)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (c *GuardClient) DeleteTenant(tenantID string) error {
 
 // User management methods
 func (c *GuardClient) ListUsers() error {
-	resp, err := c.makeRequest("GET", "/v1/admin/users", nil)
+	resp, err := c.makeRequest("GET", "/api/v1/auth/admin/users", nil)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (c *GuardClient) CreateUser(email, password, firstName, lastName string, en
 		"last_name":  lastName,
 	}
 
-	resp, err := c.makeRequest("POST", "/v1/auth/password/signup", payload)
+	resp, err := c.makeRequest("POST", "/api/v1/auth/password/signup", payload)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (c *GuardClient) enableUserMFA(userID string) error {
 		"user_id": userID,
 	}
 
-	resp, err := c.makeRequest("POST", "/v1/admin/users/"+userID+"/mfa/enable", payload)
+	resp, err := c.makeRequest("POST", "/api/v1/auth/admin/users/"+userID+"/mfa/enable", payload)
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func (c *GuardClient) enableUserMFA(userID string) error {
 }
 
 func (c *GuardClient) GetUser(userID string) error {
-	resp, err := c.makeRequest("GET", "/v1/admin/users/"+userID, nil)
+	resp, err := c.makeRequest("GET", "/api/v1/auth/admin/users/"+userID, nil)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (c *GuardClient) GetUser(userID string) error {
 }
 
 func (c *GuardClient) DeleteUser(userID string) error {
-	resp, err := c.makeRequest("DELETE", "/v1/admin/users/"+userID, nil)
+	resp, err := c.makeRequest("DELETE", "/api/v1/auth/admin/users/"+userID, nil)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (c *GuardClient) DeleteUser(userID string) error {
 
 // Settings management methods
 func (c *GuardClient) GetSettings() error {
-	resp, err := c.makeRequest("GET", "/v1/tenants/"+c.Tenant+"/settings", nil)
+	resp, err := c.makeRequest("GET", "/api/v1/tenants/"+c.Tenant+"/settings", nil)
 	if err != nil {
 		return err
 	}
@@ -387,7 +387,7 @@ func (c *GuardClient) SetSetting(key, value string) error {
 		key: value,
 	}
 
-	resp, err := c.makeRequest("PUT", "/v1/tenants/"+c.Tenant+"/settings", payload)
+	resp, err := c.makeRequest("PUT", "/api/v1/tenants/"+c.Tenant+"/settings", payload)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@
     {
       "request": {
         "method": "POST",
-        "path": "/v1/auth/introspect",
+        "path": "/api/v1/auth/introspect",
         "headers": { "content-type": "application/json" },
         "body": { "token": "invalid" }
       },

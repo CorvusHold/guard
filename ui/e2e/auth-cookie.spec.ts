@@ -28,11 +28,11 @@ test.describe('Cookie auth mode: guard + logout', () => {
     page.on('crash', () => console.log('PAGE CRASH'))
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
@@ -40,8 +40,8 @@ test.describe('Cookie auth mode: guard + logout', () => {
   test('unauthenticated in cookie mode redirects /admin -> /', async ({
     page
   }) => {
-    // RequireAuth and/or AdminSettings will call /v1/auth/me in cookie mode
-    await page.route('**/v1/auth/me', async (route) => {
+    // RequireAuth and/or AdminSettings will call /api/v1/auth/me in cookie mode
+    await page.route('**/api/v1/auth/me', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -72,7 +72,7 @@ test.describe('Cookie auth mode: guard + logout', () => {
     page
   }, testInfo) => {
     // First me() should succeed to allow page to render
-    await page.route('**/v1/auth/me', async (route) => {
+    await page.route('**/api/v1/auth/me', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -93,7 +93,7 @@ test.describe('Cookie auth mode: guard + logout', () => {
 
     // Intercept logout to ensure it's called
     let logoutCalled = false
-    await page.route('**/v1/auth/logout', async (route) => {
+    await page.route('**/api/v1/auth/logout', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({

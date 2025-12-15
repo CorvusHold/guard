@@ -13,7 +13,7 @@ function cors(headers: Record<string, string> = {}) {
 
 // Mock authenticated admin user
 async function mockAuthMe(page: import('@playwright/test').Page) {
-  await page.route('**/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -40,9 +40,30 @@ async function mockAuthMe(page: import('@playwright/test').Page) {
   })
 }
 
+async function mockTenantSettings(page: import('@playwright/test').Page) {
+  await page.route(`**/api/v1/tenants/${TENANT_ID}/settings`, async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: cors({
+          'access-control-allow-methods': 'GET,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        })
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({}),
+      headers: cors({ 'content-type': 'application/json' })
+    })
+  })
+}
+
 // Mock SSO providers list
 async function mockSsoProviders(page: import('@playwright/test').Page) {
-  await page.route('**/v1/sso/providers**', async (route) => {
+  await page.route('**/api/v1/sso/providers**', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -80,7 +101,7 @@ async function mockSpInfo(page: import('@playwright/test').Page, options: {
   shouldFail?: boolean
   errorMessage?: string 
 } = {}) {
-  await page.route('**/v1/sso/sp-info**', async (route) => {
+  await page.route('**/api/v1/sso/sp-info**', async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -147,37 +168,99 @@ async function mockSpInfo(page: import('@playwright/test').Page, options: {
 }
 
 test.describe('SSO SP Info API Integration', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         console.log('PAGE ERROR:', msg.text())
       }
     })
+
+    try {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    } catch {
+      try {
+        await context.grantPermissions(['clipboard-write'])
+      } catch {
+        // ignore
+      }
+    }
+
+    await page.addInitScript(() => {
+      const w = window as any
+      w.__e2eClipboard = ''
+
+      const nav: any = navigator
+      if (!nav.clipboard) nav.clipboard = {}
+
+      if (typeof nav.clipboard.writeText !== 'function') {
+        nav.clipboard.writeText = async (text: string) => {
+          w.__e2eClipboard = text
+        }
+      }
+
+      if (typeof nav.clipboard.readText !== 'function') {
+        nav.clipboard.readText = async () => w.__e2eClipboard
+      }
+    })
+
+    await page.route('**/api/v1/auth/refresh', async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({
+          status: 204,
+          headers: cors({
+            'access-control-allow-methods': 'POST,OPTIONS',
+            'access-control-allow-headers':
+              'content-type,authorization,accept,x-guard-client'
+          })
+        })
+      }
+      return route.fulfill({
+        status: 401,
+        body: JSON.stringify({ message: 'unauthorized' }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
   })
+
+  async function seedBearer(page: import('@playwright/test').Page) {
+    await page.addInitScript((tenantId: string) => {
+      localStorage.setItem(
+        'guard_runtime',
+        JSON.stringify({
+          guard_base_url: 'http://localhost:8080',
+          source: 'direct',
+          auth_mode: 'bearer'
+        })
+      )
+      localStorage.setItem('guard_ui:guard_access_token', 'test-token-123')
+      localStorage.setItem('guard_ui:guard_refresh_token', 'test-refresh-123')
+      localStorage.setItem('guard_ui:tenant_id', tenantId)
+      localStorage.setItem('tenant_id', tenantId)
+      localStorage.setItem('tenant_name', 'Test Organization')
+    }, TENANT_ID)
+  }
 
   test('displays V2 tenant-scoped SP URLs when creating SAML provider', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     await mockSpInfo(page)
 
-    // Set runtime config and auth token
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    // Navigate to admin settings
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    // Navigate to admin settings with tenant_id
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
+    await page.getByTestId('admin-load-settings').click()
 
-    // Click on SSO Providers tab
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
+    const ssoTab = page.getByTestId('tab-sso')
     await expect(ssoTab).toBeVisible({ timeout: 10000 })
     await ssoTab.click()
 
     // Click Create Provider button
-    const createBtn = page.getByRole('button', { name: /create provider/i })
+    const createBtn = page.getByTestId('sso-create')
     await expect(createBtn).toBeVisible({ timeout: 5000 })
     await createBtn.click()
 
@@ -217,23 +300,20 @@ test.describe('SSO SP Info API Integration', () => {
 
   test('copy buttons work for SP URLs', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     await mockSpInfo(page)
 
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
+    await page.getByTestId('admin-load-settings').click()
 
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
-    await ssoTab.click()
+    await page.getByTestId('tab-sso').click()
 
-    const createBtn = page.getByRole('button', { name: /create provider/i })
-    await createBtn.click()
+    await page.getByTestId('sso-create').click()
 
     await page.fill('input[id="name"]', 'Test SAML')
     await page.fill('input[id="slug"]', 'test-saml')
@@ -259,26 +339,23 @@ test.describe('SSO SP Info API Integration', () => {
 
   test('shows error when SP info fetch fails', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     await mockSpInfo(page, { 
       shouldFail: true, 
       errorMessage: 'base URL is not configured' 
     })
 
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
+    await page.getByTestId('admin-load-settings').click()
 
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
-    await ssoTab.click()
+    await page.getByTestId('tab-sso').click()
 
-    const createBtn = page.getByRole('button', { name: /create provider/i })
-    await createBtn.click()
+    await page.getByTestId('sso-create').click()
 
     await page.fill('input[id="name"]', 'Test SAML')
     await page.fill('input[id="slug"]', 'test-saml')
@@ -294,23 +371,20 @@ test.describe('SSO SP Info API Integration', () => {
 
   test('checklist items can be toggled and shows ready state', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     await mockSpInfo(page)
 
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
+    await page.getByTestId('admin-load-settings').click()
 
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
-    await ssoTab.click()
+    await page.getByTestId('tab-sso').click()
 
-    const createBtn = page.getByRole('button', { name: /create provider/i })
-    await createBtn.click()
+    await page.getByTestId('sso-create').click()
 
     await page.fill('input[id="name"]', 'Test SAML')
     await page.fill('input[id="slug"]', 'test-saml')
@@ -340,10 +414,11 @@ test.describe('SSO SP Info API Integration', () => {
 
   test('shows loading state while fetching SP info', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     
     // Delay the SP info response
-    await page.route('**/v1/sso/sp-info**', async (route) => {
+    await page.route('**/api/v1/sso/sp-info**', async (route) => {
       const req = route.request()
       if (req.method() === 'OPTIONS') {
         return route.fulfill({
@@ -377,20 +452,14 @@ test.describe('SSO SP Info API Integration', () => {
       })
     })
 
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
-
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
-    await ssoTab.click()
-
-    const createBtn = page.getByRole('button', { name: /create provider/i })
-    await createBtn.click()
+    await page.getByTestId('admin-load-settings').click()
+    await page.getByTestId('tab-sso').click()
+    await page.getByTestId('sso-create').click()
 
     await page.fill('input[id="name"]', 'Test SAML')
     await page.fill('input[id="slug"]', 'test-saml')
@@ -408,23 +477,20 @@ test.describe('SSO SP Info API Integration', () => {
 
   test('SP URLs update when slug changes', async ({ page }) => {
     await mockAuthMe(page)
+    await mockTenantSettings(page)
     await mockSsoProviders(page)
     await mockSpInfo(page)
 
-    await page.goto(UI_BASE + '/?guard_base_url=http://localhost:8080')
-    await page.evaluate(() => {
-      localStorage.setItem('guard_access_token', 'test-token-123')
-    })
+    await seedBearer(page)
+
+    await page.goto(UI_BASE + '/admin/settings')
     await page.waitForLoadState('networkidle')
 
-    await page.goto(UI_BASE + '/admin/settings?tenant_id=' + TENANT_ID)
-    await page.waitForLoadState('networkidle')
+    await page.getByTestId('admin-load-settings').click()
 
-    const ssoTab = page.getByRole('tab', { name: /sso providers/i })
-    await ssoTab.click()
+    await page.getByTestId('tab-sso').click()
 
-    const createBtn = page.getByRole('button', { name: /create provider/i })
-    await createBtn.click()
+    await page.getByTestId('sso-create').click()
 
     await page.fill('input[id="name"]', 'Test SAML')
     await page.fill('input[id="slug"]', 'okta')

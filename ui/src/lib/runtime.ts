@@ -61,11 +61,26 @@ export function ensureRuntimeConfigFromQuery(): void {
   try {
     const { pathname, hash } = window.location
     const currentParams = new URLSearchParams(window.location.search)
-    const source = currentParams.get('source')
-    let newUrl = pathname
-    if (source) {
-      newUrl += `?source=${encodeURIComponent(source)}`
+    const kept = new URLSearchParams()
+    const src = currentParams.get('source')
+    if (src) kept.set('source', src)
+
+    if (pathname.startsWith('/auth/callback')) {
+      const provider = currentParams.get('provider')
+      const code = currentParams.get('code')
+      const state = currentParams.get('state')
+      const email = currentParams.get('email')
+      const tenantId = currentParams.get('tenant_id')
+      if (provider) kept.set('provider', provider)
+      if (code) kept.set('code', code)
+      if (state) kept.set('state', state)
+      if (email) kept.set('email', email)
+      if (tenantId) kept.set('tenant_id', tenantId)
     }
+
+    let newUrl = pathname
+    const qs = kept.toString()
+    if (qs) newUrl += `?${qs}`
     newUrl += hash || ''
     window.history.replaceState({}, '', newUrl)
   } catch (_) {

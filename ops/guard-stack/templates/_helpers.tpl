@@ -162,16 +162,16 @@ Database port
 {{- end }}
 
 {{/*
-Valkey/Redis address
-*/}}
+ Valkey/Redis address
+ */}}
 {{- define "guard-stack.valkeyAddr" -}}
-{{- if .Values.externalValkey.addr }}
-{{- .Values.externalValkey.addr }}
-{{- else if .Values.valkey.enabled }}
-{{- printf "%s-valkey-master:6379" (include "guard-stack.fullname" .) }}
-{{- else }}
-{{- fail "externalValkey.addr must be set or valkey.enabled must be true" }}
-{{- end }}
+  {{- if .Values.externalValkey.addr }}
+  {{- .Values.externalValkey.addr }}
+  {{- else if .Values.valkey.enabled }}
+  {{- printf "%s-valkey-primary:6379" .Release.Name }}
+  {{- else }}
+  {{- fail "externalValkey.addr must be set or valkey.enabled must be true" }}
+  {{- end }}
 {{- end }}
 
 {{/*

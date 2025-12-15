@@ -47,7 +47,7 @@ func TestHTTP_RBAC_Admin_Unauthorized(t *testing.T) {
 	c.Register(e)
 
 	// No Authorization header
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/permissions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/permissions", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -55,7 +55,7 @@ func TestHTTP_RBAC_Admin_Unauthorized(t *testing.T) {
 	}
 
 	// Malformed Authorization header
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/permissions", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/permissions", nil)
 	req2.Header.Set("Authorization", "Bearer invalid-token")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
@@ -108,8 +108,9 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 		"password":  password,
 	}
 	bb, _ := json.Marshal(body)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(bb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(bb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -124,7 +125,7 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 	}
 
 	// Try listing roles as non-admin
-	lreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/roles?tenant_id="+tenantID.String(), nil)
+	lreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/roles?tenant_id="+tenantID.String(), nil)
 	lreq.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
@@ -173,8 +174,9 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	// Create admin user
 	sBody := map[string]string{"tenant_id": tenantID.String(), "email": adminEmail, "password": password}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -197,7 +199,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	// Invalid UUID in path: update role
 	upd := map[string]string{"tenant_id": tenantID.String(), "name": "x", "description": "y"}
 	ub, _ := json.Marshal(upd)
-	ureq := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/rbac/roles/not-a-uuid", bytes.NewReader(ub))
+	ureq := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/rbac/roles/not-a-uuid", bytes.NewReader(ub))
 	ureq.Header.Set("Content-Type", "application/json")
 	ureq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	urec := httptest.NewRecorder()
@@ -209,7 +211,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	// Invalid tenant_id UUID in body: create role
 	cr := map[string]string{"tenant_id": "bad-uuid", "name": "qa", "description": "d"}
 	cb, _ := json.Marshal(cr)
-	creq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/roles", bytes.NewReader(cb))
+	creq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/roles", bytes.NewReader(cb))
 	creq.Header.Set("Content-Type", "application/json")
 	creq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	crec := httptest.NewRecorder()
@@ -219,7 +221,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	}
 
 	// Invalid JSON: upsert role permission
-	preq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/roles/"+uuid.NewString()+"/permissions", bytes.NewBufferString("{bad json"))
+	preq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/roles/"+uuid.NewString()+"/permissions", bytes.NewBufferString("{bad json"))
 	preq.Header.Set("Content-Type", "application/json")
 	preq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	prec := httptest.NewRecorder()
@@ -231,7 +233,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	// Invalid user UUID in path: assign role
 	assign := map[string]string{"tenant_id": tenantID.String(), "role_id": uuid.NewString()}
 	ab, _ := json.Marshal(assign)
-	aReq := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/rbac/users/not-a-uuid/roles", bytes.NewReader(ab))
+	aReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/users/not-a-uuid/roles", bytes.NewReader(ab))
 	aReq.Header.Set("Content-Type", "application/json")
 	aReq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	aRec := httptest.NewRecorder()
@@ -241,7 +243,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	}
 
 	// Invalid tenant_id in resolve query
-	rreq := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/rbac/users/"+aiAdmin.UserID.String()+"/permissions/resolve?tenant_id=bad-uuid", nil)
+	rreq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/rbac/users/"+aiAdmin.UserID.String()+"/permissions/resolve?tenant_id=bad-uuid", nil)
 	rreq.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	rrec := httptest.NewRecorder()
 	e.ServeHTTP(rrec, rreq)

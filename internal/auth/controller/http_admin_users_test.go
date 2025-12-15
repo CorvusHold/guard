@@ -66,8 +66,9 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -97,8 +98,9 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 		"password":  password,
 	}
 	ub, _ := json.Marshal(uBody)
-	ureq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(ub))
+	ureq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(ub))
 	ureq.Header.Set("Content-Type", "application/json")
+	ureq.Header.Set("X-Auth-Mode", "bearer")
 	urec := httptest.NewRecorder()
 	e.ServeHTTP(urec, ureq)
 	if urec.Code != http.StatusCreated {
@@ -115,7 +117,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 
 	// --- adminListUsers ---
 	// 401 missing token
-	req401 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
+	req401 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
 	rec401 := httptest.NewRecorder()
 	e.ServeHTTP(rec401, req401)
 	if rec401.Code != http.StatusUnauthorized {
@@ -123,7 +125,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 403 non-admin token
-	req403 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
+	req403 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
 	req403.Header.Set("Authorization", "Bearer "+userToks.AccessToken)
 	rec403 := httptest.NewRecorder()
 	e.ServeHTTP(rec403, req403)
@@ -132,7 +134,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 400 missing tenant_id
-	req400 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/users", nil)
+	req400 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/users", nil)
 	req400.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	rec400 := httptest.NewRecorder()
 	e.ServeHTTP(rec400, req400)
@@ -141,7 +143,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 200 success
-	req200 := httptest.NewRequest(http.MethodGet, "/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
+	req200 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/admin/users?tenant_id="+tenantID.String(), nil)
 	req200.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	rec200 := httptest.NewRecorder()
 	e.ServeHTTP(rec200, req200)
@@ -159,7 +161,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	// --- adminUpdateNames ---
 	// 401
 	nb := []byte(`{"first_name":"Alice","last_name":"User"}`)
-	reqUN401 := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
+	reqUN401 := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
 	reqUN401.Header.Set("Content-Type", "application/json")
 	recUN401 := httptest.NewRecorder()
 	e.ServeHTTP(recUN401, reqUN401)
@@ -168,7 +170,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 403
-	reqUN403 := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
+	reqUN403 := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
 	reqUN403.Header.Set("Content-Type", "application/json")
 	reqUN403.Header.Set("Authorization", "Bearer "+userToks.AccessToken)
 	recUN403 := httptest.NewRecorder()
@@ -178,7 +180,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 400 invalid user id
-	reqUN400 := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/users/not-a-uuid", bytes.NewReader(nb))
+	reqUN400 := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/users/not-a-uuid", bytes.NewReader(nb))
 	reqUN400.Header.Set("Content-Type", "application/json")
 	reqUN400.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	recUN400 := httptest.NewRecorder()
@@ -189,7 +191,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 
 	// 400 invalid JSON
 	badBody := []byte("not-json")
-	reqUNBad := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(badBody))
+	reqUNBad := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(badBody))
 	reqUNBad.Header.Set("Content-Type", "application/json")
 	reqUNBad.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	recUNBad := httptest.NewRecorder()
@@ -199,7 +201,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// 204 success
-	reqUN204 := httptest.NewRequest(http.MethodPatch, "/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
+	reqUN204 := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/admin/users/"+aiUser.UserID.String(), bytes.NewReader(nb))
 	reqUN204.Header.Set("Content-Type", "application/json")
 	reqUN204.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	recUN204 := httptest.NewRecorder()
@@ -217,7 +219,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 
 	// --- adminBlockUser / adminUnblockUser ---
 	// block
-	reqBlock := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiUser.UserID.String()+"/block", nil)
+	reqBlock := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiUser.UserID.String()+"/block", nil)
 	reqBlock.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	recBlock := httptest.NewRecorder()
 	e.ServeHTTP(recBlock, reqBlock)
@@ -230,7 +232,7 @@ func TestHTTP_Admin_Users_List_Update_BlockUnblock(t *testing.T) {
 	}
 
 	// unblock
-	reqUnblock := httptest.NewRequest(http.MethodPost, "/v1/auth/admin/users/"+aiUser.UserID.String()+"/unblock", nil)
+	reqUnblock := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/users/"+aiUser.UserID.String()+"/unblock", nil)
 	reqUnblock.Header.Set("Authorization", "Bearer "+adminToks.AccessToken)
 	recUnblock := httptest.NewRecorder()
 	e.ServeHTTP(recUnblock, reqUnblock)

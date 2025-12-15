@@ -1,19 +1,189 @@
 import { test, expect } from '@playwright/test'
 
 // Test constants
+const UI_BASE = 'http://localhost:4173'
 const TEST_EMAIL = 'test@example.com'
 const TEST_PASSWORD = 'Password123!'
 const VALID_USER_EMAIL = 'admin@example.com'
 
+async function installUniversalLoginMocks(page: import('@playwright/test').Page) {
+  await page.route('**/api/v1/auth/refresh', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        }
+      })
+    }
+    return route.fulfill({
+      status: 401,
+      body: JSON.stringify({ message: 'unauthorized' }),
+      headers: {
+        'access-control-allow-origin': '*',
+        'content-type': 'application/json'
+      }
+    })
+  })
+
+  await page.route('**/api/v1/auth/me', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        }
+      })
+    }
+    const auth = req.headers()['authorization'] || ''
+    if (auth.toLowerCase().startsWith('bearer ')) {
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          id: 'user-1',
+          email: VALID_USER_EMAIL,
+          first_name: 'Admin',
+          last_name: 'User',
+          roles: ['admin']
+        }),
+        headers: {
+          'access-control-allow-origin': '*',
+          'content-type': 'application/json'
+        }
+      })
+    }
+    return route.fulfill({
+      status: 401,
+      body: JSON.stringify({ message: 'unauthorized' }),
+      headers: {
+        'access-control-allow-origin': '*',
+        'content-type': 'application/json'
+      }
+    })
+  })
+
+  await page.route('**/api/v1/auth/login-options*', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        }
+      })
+    }
+
+    const u = new URL(req.url())
+    const email = (u.searchParams.get('email') || '').toLowerCase()
+
+    if (email.endsWith('@sso-enabled-domain.com')) {
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          tenant_id: 'tenant-1',
+          tenant_name: 'SSO Org',
+          user_exists: true,
+          password_enabled: true,
+          domain_matched_sso: {
+            name: 'WorkOS',
+            slug: 'workos',
+            login_url: 'http://localhost:8080/auth/sso/t/tenant-1/workos/login'
+          },
+          sso_required: false,
+          sso_providers: []
+        }),
+        headers: {
+          'access-control-allow-origin': '*',
+          'content-type': 'application/json'
+        }
+      })
+    }
+
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        tenant_id: 'tenant-1',
+        tenant_name: 'Test Organization',
+        user_exists: true,
+        password_enabled: true,
+        domain_matched_sso: null,
+        sso_required: false,
+        sso_providers: []
+      }),
+      headers: {
+        'access-control-allow-origin': '*',
+        'content-type': 'application/json'
+      }
+    })
+  })
+
+  await page.route('**/api/v1/auth/password/login*', async (route) => {
+    const req = route.request()
+    if (req.method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST,OPTIONS',
+          'access-control-allow-headers':
+            'content-type,authorization,accept,x-guard-client'
+        }
+      })
+    }
+    let password = ''
+    try {
+      const raw = req.postData() || '{}'
+      const body = JSON.parse(raw)
+      password = String(body?.password || '')
+    } catch {
+      password = ''
+    }
+    if (password !== TEST_PASSWORD) {
+      return route.fulfill({
+        status: 401,
+        body: JSON.stringify({ error: 'Invalid credentials' }),
+        headers: {
+          'access-control-allow-origin': '*',
+          'content-type': 'application/json'
+        }
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        access_token: 'mock-access',
+        refresh_token: 'mock-refresh'
+      }),
+      headers: {
+        'access-control-allow-origin': '*',
+        'content-type': 'application/json'
+      }
+    })
+  })
+}
+
 test.describe('UniversalLogin Component', () => {
   test.beforeEach(async ({ page }) => {
+    await installUniversalLoginMocks(page)
+
     // Navigate to the app and configure if needed
     await page.goto('/')
     
     // Check if we need to configure the app first
     const configInput = page.getByTestId('base-url-input')
     if (await configInput.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await configInput.fill('http://localhost:8080')
+      await configInput.fill(UI_BASE)
       await page.getByTestId('save-config').click()
       await expect(page.getByTestId('configured-base-url')).toBeVisible()
     }
@@ -33,7 +203,7 @@ test.describe('UniversalLogin Component', () => {
       // Should show error or stay on email step (not proceed to password)
       // Wait for either error to appear or confirm we're still on email step
       await expect(
-        page.getByTestId('login-error').or(page.getByTestId('email-input'))
+        page.getByTestId('login-error').or(page.getByTestId('email-input')).first()
       ).toBeVisible({ timeout: 3000 })
       
       // Either shows error or stays on email step
@@ -49,7 +219,10 @@ test.describe('UniversalLogin Component', () => {
       
       // Should either show options or password step
       await expect(
-        page.getByTestId('password-input').or(page.getByTestId('password-option-button'))
+        page
+          .getByTestId('password-input')
+          .or(page.getByTestId('password-option-button'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
     })
 
@@ -127,6 +300,7 @@ test.describe('UniversalLogin Component', () => {
         page.getByTestId('mfa-code-input')
           .or(page.getByTestId('login-error'))
           .or(page.getByTestId('user-email'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
       
       // Check what happened
@@ -151,6 +325,7 @@ test.describe('UniversalLogin Component', () => {
         page.getByTestId('sso-recommended-button')
           .or(page.getByTestId('password-input'))
           .or(page.getByTestId('password-option-button'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
     })
 
@@ -204,20 +379,26 @@ test.describe('UniversalLogin Component', () => {
         page.getByTestId('password-input')
           .or(page.getByTestId('login-error'))
           .or(page.getByTestId('password-option-button'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
     })
 
     test('should handle network errors', async ({ page, context }) => {
-      // Simulate offline mode
-      await context.setOffline(true)
-      
+      // Override the default mock to simulate a network failure deterministically.
+      await page.unroute('**/api/v1/auth/login-options*')
+      await page.route('**/api/v1/auth/login-options*', async (route) => {
+        await route.abort('failed')
+      })
+
       await page.getByTestId('email-input').fill(TEST_EMAIL)
       await page.getByTestId('continue-button').click()
-      
-      // Should show error
+
       await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 })
-      
-      await context.setOffline(false)
+      await expect(page.getByTestId('login-error')).toContainText(
+        /failed to fetch|network|failed to check login options|load failed/i
+      )
+
+      void context
     })
   })
 
@@ -234,6 +415,7 @@ test.describe('UniversalLogin Component', () => {
         page.getByTestId('password-input')
           .or(page.getByTestId('password-option-button'))
           .or(page.getByTestId('login-error'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
     })
 
@@ -247,6 +429,7 @@ test.describe('UniversalLogin Component', () => {
         page.getByTestId('password-input')
           .or(page.getByTestId('password-option-button'))
           .or(page.getByTestId('login-error'))
+          .first()
       ).toBeVisible({ timeout: 5000 })
     })
 
@@ -271,12 +454,13 @@ test.describe('UniversalLogin Component', () => {
 
 test.describe('Login Flow Integration', () => {
   test('complete password login flow', async ({ page }) => {
+    await installUniversalLoginMocks(page)
     await page.goto('/')
     
     // Configure if needed
     const configInput = page.getByTestId('base-url-input')
     if (await configInput.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await configInput.fill('http://localhost:8080')
+      await configInput.fill(UI_BASE)
       await page.getByTestId('save-config').click()
     }
     

@@ -99,7 +99,7 @@ func (s *SSO) startWorkOS(ctx context.Context, in domain.SSOStartInput) (string,
 		if err != nil {
 			return "", err
 		}
-		cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
+		cb.Path = "/api/v1/auth/sso/" + in.Provider + "/callback"
 		redirectURI = cb.String()
 	}
 
@@ -256,7 +256,7 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		if err != nil {
 			return domain.AccessTokens{}, err
 		}
-		cb.Path = "/v1/auth/sso/" + in.Provider + "/callback"
+		cb.Path = "/api/v1/auth/sso/" + in.Provider + "/callback"
 		redirectURI = cb.String()
 	}
 

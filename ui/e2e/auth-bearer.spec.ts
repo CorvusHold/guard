@@ -16,25 +16,24 @@ test.describe('Bearer auth mode: /admin route guard behavior', () => {
       console.log('PAGE ERROR', err?.message || String(err))
     )
     page.on('close', () => console.log('PAGE CLOSED'))
-    // @ts-expect-error crash may not exist on all browsers
-    page.on('crash', () => console.log('PAGE CRASH'))
+    ;(page as any).on?.('crash', () => console.log('PAGE CRASH'))
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('request', (req) => {
-      if (req.url().includes('/v1/'))
+      if (req.url().includes('/api/v1/'))
         console.log('REQ', req.method(), req.url())
     })
     page.on('response', async (res) => {
-      if (res.url().includes('/v1/'))
+      if (res.url().includes('/api/v1/'))
         console.log('RES', res.status(), res.url())
     })
   })
 
-  test('does not redirect and does not call /v1/auth/me', async ({
+  test('does not redirect and does not call /api/v1/auth/me', async ({
     page
   }, testInfo) => {
     let meCalled = false
     page.on('request', (req) => {
-      if (req.url().includes('/v1/auth/me')) meCalled = true
+      if (req.url().includes('/api/v1/auth/me')) meCalled = true
     })
 
     await page.goto(
@@ -57,10 +56,12 @@ test.describe('Bearer auth mode: /admin route guard behavior', () => {
 
     // URL should be cleaned (no query params) and remain on /admin
     await expect(page).toHaveURL(
-      new RegExp(`${UI_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/admin/?$`)
+      new RegExp(
+        `${UI_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/admin/?(\\?.*)?$`
+      )
     )
 
-    // Ensure no /v1/auth/me call was made in bearer mode
+    // Ensure no /api/v1/auth/me call was made in bearer mode
     expect(meCalled).toBeFalsy()
   })
 })

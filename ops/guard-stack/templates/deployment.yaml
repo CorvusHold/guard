@@ -35,6 +35,35 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ['sh', '-c']
+          args:
+            - >
+              set -eu ;
+              host="{{ printf "%s-valkey-primary" .Release.Name }}" ;
+              port="6379" ;
+              max_attempts="30" ;
+              attempt="1" ;
+              echo "Waiting for Valkey at ${host}:${port}..." ;
+              while [ "$attempt" -le "$max_attempts" ]; do
+                if nc -w 2 "$host" "$port" >/dev/null 2>&1 ; then
+                  echo "Valkey is ready!" ;
+                  exit 0 ;
+                fi ;
+                echo "Valkey is not ready yet (attempt ${attempt}/${max_attempts})..." ;
+                attempt=$((attempt+1)) ;
+                sleep 2 ;
+              done ;
+              echo "Valkey is still not reachable after ${max_attempts} attempts; failing initContainer." ;
+              exit 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
       containers:
         - name: api
           {{- with .Values.api.securityContext }}

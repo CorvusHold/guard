@@ -65,8 +65,9 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 		"password":  password,
 	}
 	sb, _ := json.Marshal(sBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/signup", bytes.NewReader(sb))
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
+	sreq.Header.Set("X-Auth-Mode", "bearer")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
 	if srec.Code != http.StatusCreated {
@@ -80,8 +81,9 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 		"password":  password,
 	}
 	lb, _ := json.Marshal(lBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/v1/auth/password/login", bytes.NewReader(lb))
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
+	lreq.Header.Set("X-Auth-Mode", "bearer")
 	lreq.Header.Set("User-Agent", "itest-agent")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)
@@ -95,7 +97,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 
 	// --- sessionsList ---
 	// 401 missing token
-	req401 := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
+	req401 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sessions", nil)
 	rec401 := httptest.NewRecorder()
 	e.ServeHTTP(rec401, req401)
 	if rec401.Code != http.StatusUnauthorized {
@@ -103,7 +105,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 	}
 
 	// 200 success
-	req200 := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
+	req200 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sessions", nil)
 	req200.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rec200 := httptest.NewRecorder()
 	e.ServeHTTP(rec200, req200)
@@ -129,7 +131,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 
 	// --- sessionRevoke ---
 	// 401 missing token
-	r401 := httptest.NewRequest(http.MethodPost, "/v1/auth/sessions/"+sid.String()+"/revoke", nil)
+	r401 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/sessions/"+sid.String()+"/revoke", nil)
 	rrec401 := httptest.NewRecorder()
 	e.ServeHTTP(rrec401, r401)
 	if rrec401.Code != http.StatusUnauthorized {
@@ -137,7 +139,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 	}
 
 	// 400 invalid id
-	r400 := httptest.NewRequest(http.MethodPost, "/v1/auth/sessions/not-a-uuid/revoke", nil)
+	r400 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/sessions/not-a-uuid/revoke", nil)
 	r400.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rrec400 := httptest.NewRecorder()
 	e.ServeHTTP(rrec400, r400)
@@ -146,7 +148,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 	}
 
 	// 204 success
-	r200 := httptest.NewRequest(http.MethodPost, "/v1/auth/sessions/"+sid.String()+"/revoke", nil)
+	r200 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/sessions/"+sid.String()+"/revoke", nil)
 	r200.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	rrec200 := httptest.NewRecorder()
 	e.ServeHTTP(rrec200, r200)
@@ -155,7 +157,7 @@ func TestHTTP_Sessions_List_And_Revoke(t *testing.T) {
 	}
 
 	// verify via list that session is revoked
-	reqList2 := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
+	reqList2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sessions", nil)
 	reqList2.Header.Set("Authorization", "Bearer "+toks.AccessToken)
 	recList2 := httptest.NewRecorder()
 	e.ServeHTTP(recList2, reqList2)

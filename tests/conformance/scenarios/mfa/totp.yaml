@@ -1,0 +1,102 @@
+name: "MFA TOTP Tests"
+description: "Test Time-based One-Time Password enrollment and verification"
+scenarios:
+  - id: "mfa_totp_start"
+    name: "TOTP Enrollment Start"
+    description: "Initiate TOTP enrollment for user"
+    method: "POST"
+    endpoint: "/api/v1/auth/mfa/totp/start"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "secret"
+          type: "string"
+          required: true
+        - name: "qr_code_url"
+          type: "string"
+          required: true
+    sdk_method: "MFATOTPStart"
+
+  - id: "mfa_totp_activate"
+    name: "TOTP Activation"
+    description: "Activate TOTP with valid code"
+    method: "POST"
+    endpoint: "/api/v1/auth/mfa/totp/activate"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      code: "123456"
+    expected_response:
+      status: 200
+      fields:
+        - name: "backup_codes"
+          type: "array"
+          required: true
+    sdk_method: "MFATOTPActivate"
+
+  - id: "mfa_totp_activate_invalid_code"
+    name: "TOTP Activation with Invalid Code"
+    description: "Attempt to activate with incorrect code"
+    method: "POST"
+    endpoint: "/api/v1/auth/mfa/totp/activate"
+    headers:
+      authorization: "Bearer {access_token}"
+    request:
+      code: "000000"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "MFATOTPActivate"
+    expected_error: true
+
+  - id: "mfa_totp_disable"
+    name: "TOTP Disable"
+    description: "Disable TOTP for user"
+    method: "POST"
+    endpoint: "/api/v1/auth/mfa/totp/disable"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+    sdk_method: "MFATOTPDisable"
+
+  - id: "mfa_totp_disable_not_enabled"
+    name: "Disable TOTP When Not Enabled"
+    description: "Attempt to disable TOTP that isn't active"
+    method: "POST"
+    endpoint: "/api/v1/auth/mfa/totp/disable"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 400
+      fields:
+        - name: "error"
+          type: "string"
+    sdk_method: "MFATOTPDisable"
+    expected_error: true
+
+  - id: "mfa_backup_codes_view"
+    name: "View Backup Codes"
+    description: "Retrieve backup codes for MFA account recovery"
+    method: "GET"
+    endpoint: "/api/v1/auth/mfa/backup-codes"
+    headers:
+      authorization: "Bearer {access_token}"
+    expected_response:
+      status: 200
+      fields:
+        - name: "backup_codes"
+          type: "array"
+          required: true
+          items:
+            - name: "code"
+              type: "string"
+              required: true
+            - name: "used"
+              type: "boolean"
+              required: true
+    sdk_method: "GetMFABackupCodes"

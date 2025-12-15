@@ -111,7 +111,7 @@ ingress:
   hosts:
     - host: auth.yourdomain.com
       paths:
-        - path: /v1
+        - path: /api/v1
           pathType: Prefix
           service: api
         - path: /healthz

@@ -172,11 +172,11 @@ We will build native SSO capabilities using established Go libraries while maint
 │                         Guard API (Echo)                         │
 ├─────────────────────────────────────────────────────────────────┤
 │  HTTP Controllers                                                │
-│  • /v1/auth/sso/{provider}/start     (OAuth start)              │
-│  • /v1/auth/sso/{provider}/callback  (OAuth callback)           │
-│  • /v1/tenants/{id}/sso-providers    (CRUD API)                 │
-│  • /v1/auth/sso/saml/metadata        (SAML SP metadata)         │
-│  • /v1/auth/sso/saml/acs             (SAML assertion consumer)  │
+│  • /api/v1/auth/sso/{provider}/start     (OAuth start)              │
+│  • /api/v1/auth/sso/{provider}/callback  (OAuth callback)           │
+│  • /api/v1/tenants/{id}/sso-providers    (CRUD API)                 │
+│  • /api/v1/auth/sso/saml/metadata        (SAML SP metadata)         │
+│  • /api/v1/auth/sso/saml/acs             (SAML assertion consumer)  │
 ├─────────────────────────────────────────────────────────────────┤
 │  Service Layer                                                   │
 │  • SSOService: Orchestrates authentication flows                │
@@ -1942,13 +1942,13 @@ func New(svc *service.Service) *Controller {
 // Register mounts SSO routes
 func (c *Controller) Register(e *echo.Echo) {
     // Public SSO endpoints
-    ssoGroup := e.Group("/v1/auth/sso")
+    ssoGroup := e.Group("/api/v1/auth/sso")
     ssoGroup.GET("/:provider/start", c.start)
     ssoGroup.GET("/:provider/callback", c.callback)
     ssoGroup.POST("/:provider/callback", c.callback) // For SAML POST binding
 
     // Admin endpoints (JWT required)
-    adminGroup := e.Group("/v1/tenants/:tenant_id/sso-providers", authmw.NewJWT())
+    adminGroup := e.Group("/api/v1/tenants/:tenant_id/sso-providers", authmw.NewJWT())
     adminGroup.POST("", c.createProvider)
     adminGroup.GET("", c.listProviders)
     adminGroup.GET("/:id", c.getProvider)
@@ -1962,7 +1962,7 @@ func (c *Controller) Register(e *echo.Echo) {
 // @Param tenant_id query string true "Tenant ID"
 // @Param redirect_uri query string false "Redirect URI"
 // @Success 302
-// @Router /v1/auth/sso/{provider}/start [get]
+// @Router /api/v1/auth/sso/{provider}/start [get]
 func (c *Controller) start(ctx echo.Context) error {
     providerSlug := ctx.Param("provider")
     tenantIDStr := ctx.QueryParam("tenant_id")
@@ -1996,7 +1996,7 @@ func (c *Controller) start(ctx echo.Context) error {
 // @Param state query string true "State"
 // @Param SAMLResponse formData string false "SAML response"
 // @Success 200 {object} map[string]interface{}
-// @Router /v1/auth/sso/{provider}/callback [get]
+// @Router /api/v1/auth/sso/{provider}/callback [get]
 func (c *Controller) callback(ctx echo.Context) error {
     providerSlug := ctx.Param("provider")
 
@@ -2375,7 +2375,7 @@ func TestSSOService_StartOIDC(t *testing.T) {
   "slug": "okta",
   "provider_type": "saml",
   "entity_id": "https://guard.example.com/saml/metadata",
-  "acs_url": "https://guard.example.com/v1/auth/sso/saml/acs",
+  "acs_url": "https://guard.example.com/api/v1/auth/sso/saml/acs",
   "idp_metadata_url": "https://example.okta.com/app/YOUR_APP_ID/sso/saml/metadata",
   "want_assertions_signed": true,
   "domains": ["example.com"],
@@ -2396,7 +2396,7 @@ func TestSSOService_StartOIDC(t *testing.T) {
 ### Migration Script
 
 ```go
-// POST /v1/tenants/{tenant_id}/sso-providers/migrate-from-workos
+// POST /api/v1/tenants/{tenant_id}/sso-providers/migrate-from-workos
 func (s *Service) MigrateFromWorkOS(ctx context.Context, tenantID uuid.UUID) error {
     // 1. Fetch current WorkOS settings
     workosClientID, _ := s.settingsRepo.Get(ctx, tenantID, "sso.workos.client_id")
@@ -2959,7 +2959,7 @@ func (c *Controller) updateUser(ctx echo.Context) error {
 
 ```yaml
 # Directory Management
-POST   /v1/tenants/{tenant_id}/scim-directories
+POST   /api/v1/tenants/{tenant_id}/scim-directories
   Request:
     name: string (required)
     directory_type: enum [azure_ad, okta, google, onelogin, generic]
@@ -2974,7 +2974,7 @@ POST   /v1/tenants/{tenant_id}/scim-directories
     endpoint_url: string (SCIM endpoint URL)
     ...
 
-GET    /v1/tenants/{tenant_id}/scim-directories
+GET    /api/v1/tenants/{tenant_id}/scim-directories
   Response:
     directories: [
       {
@@ -2989,12 +2989,12 @@ GET    /v1/tenants/{tenant_id}/scim-directories
       }
     ]
 
-GET    /v1/tenants/{tenant_id}/scim-directories/{id}
-PUT    /v1/tenants/{tenant_id}/scim-directories/{id}
-DELETE /v1/tenants/{tenant_id}/scim-directories/{id}
+GET    /api/v1/tenants/{tenant_id}/scim-directories/{id}
+PUT    /api/v1/tenants/{tenant_id}/scim-directories/{id}
+DELETE /api/v1/tenants/{tenant_id}/scim-directories/{id}
 
 # Sync Status & Events
-GET    /v1/tenants/{tenant_id}/scim-directories/{id}/events
+GET    /api/v1/tenants/{tenant_id}/scim-directories/{id}/events
   Query params:
     event_type: string (optional filter)
     start_date: timestamp
@@ -3015,13 +3015,13 @@ GET    /v1/tenants/{tenant_id}/scim-directories/{id}/events
     ]
     total: integer
 
-POST   /v1/tenants/{tenant_id}/scim-directories/{id}/sync
+POST   /api/v1/tenants/{tenant_id}/scim-directories/{id}/sync
   Description: Trigger manual sync
   Response:
     sync_id: uuid
     status: "initiated"
 
-GET    /v1/tenants/{tenant_id}/scim-directories/{id}/test
+GET    /api/v1/tenants/{tenant_id}/scim-directories/{id}/test
   Description: Test connection to IdP
   Response:
     status: enum [success, failed]
@@ -3087,7 +3087,7 @@ GET    /v1/tenants/{tenant_id}/scim-directories/{id}/test
   "slug": "azure-ad-saml",
   "provider_type": "saml",
   "entity_id": "https://guard.yourdomain.com/saml/metadata",
-  "acs_url": "https://guard.yourdomain.com/v1/auth/sso/saml/acs",
+  "acs_url": "https://guard.yourdomain.com/api/v1/auth/sso/saml/acs",
   "idp_metadata_url": "https://login.microsoftonline.com/{tenant_id}/federationmetadata/2007-06/federationmetadata.xml",
   "want_assertions_signed": true,
   "sign_requests": true,
@@ -3253,7 +3253,7 @@ Configuration:
    - Supported account types: "Accounts in this organizational directory only"
    - Redirect URI:
      - Platform: Web
-     - URL: https://dev.guard.yourdomain.com/v1/auth/sso/azure-ad/callback
+     - URL: https://dev.guard.yourdomain.com/api/v1/auth/sso/azure-ad/callback
 3. Click "Register"
 
 4. Note the following (save these):
@@ -3319,7 +3319,7 @@ Configuration:
    - Choose "SAML"
    - Click "Edit" on Basic SAML Configuration:
      - Identifier (Entity ID): https://dev.guard.yourdomain.com/saml/metadata
-     - Reply URL (ACS): https://dev.guard.yourdomain.com/v1/auth/sso/saml/acs
+     - Reply URL (ACS): https://dev.guard.yourdomain.com/api/v1/auth/sso/saml/acs
      - Sign on URL: https://dev.guard.yourdomain.com
      - Click "Save"
 
@@ -3347,7 +3347,7 @@ Configuration:
   "slug": "azure-ad-saml",
   "provider_type": "saml",
   "entity_id": "https://dev.guard.yourdomain.com/saml/metadata",
-  "acs_url": "https://dev.guard.yourdomain.com/v1/auth/sso/saml/acs",
+  "acs_url": "https://dev.guard.yourdomain.com/api/v1/auth/sso/saml/acs",
   "idp_metadata_xml": "<paste contents of azure-ad-metadata.xml>",
   "want_assertions_signed": true,
   "enabled": true,
@@ -3397,7 +3397,7 @@ Configuration:
 **Generate Guard SCIM Bearer Token**:
 ```bash
 # Via Guard API
-curl -X POST https://dev.guard.yourdomain.com/v1/tenants/{tenant_id}/scim-directories \
+curl -X POST https://dev.guard.yourdomain.com/api/v1/tenants/{tenant_id}/scim-directories \
   -H "Authorization: Bearer {guard_admin_token}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3767,8 +3767,8 @@ az ad user show --id test@guard-dev.onmicrosoft.com
 Fix:
 1. Azure Portal → App registrations → Guard Development → Authentication
 2. Verify redirect URI exactly matches:
-   - OIDC: https://dev.guard.yourdomain.com/v1/auth/sso/azure-ad/callback
-   - SAML: https://dev.guard.yourdomain.com/v1/auth/sso/saml/acs
+   - OIDC: https://dev.guard.yourdomain.com/api/v1/auth/sso/azure-ad/callback
+   - SAML: https://dev.guard.yourdomain.com/api/v1/auth/sso/saml/acs
 3. No trailing slash
 4. HTTPS required (unless localhost)
 5. Click "Save"

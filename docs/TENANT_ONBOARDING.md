@@ -76,7 +76,7 @@ TENANT_RESPONSE=$(curl -X POST http://localhost:8080/tenants \
 TENANT_ID=$(echo $TENANT_RESPONSE | jq -r '.id')
 
 # 2. Create admin user
-curl -X POST http://localhost:8080/v1/auth/signup \
+curl -X POST http://localhost:8080/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d "{
     \"tenant_id\": \"$TENANT_ID\",
@@ -119,7 +119,7 @@ go run ./cmd/seed tenant --name "acme-corp"
 ### Step 2: Create Initial Admin User
 
 ```bash
-curl -X POST http://localhost:8080/v1/auth/signup \
+curl -X POST http://localhost:8080/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -142,7 +142,7 @@ curl -X POST http://localhost:8080/v1/auth/signup \
 
 ```bash
 # Login to get admin token
-ADMIN_TOKEN=$(curl -X POST http://localhost:8080/v1/auth/password/login \
+ADMIN_TOKEN=$(curl -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -151,13 +151,13 @@ ADMIN_TOKEN=$(curl -X POST http://localhost:8080/v1/auth/password/login \
   }' | jq -r '.access_token')
 
 # Get user ID from introspection
-USER_ID=$(curl -X POST http://localhost:8080/v1/auth/introspect \
+USER_ID=$(curl -X POST http://localhost:8080/api/v1/auth/introspect \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"token": "'$ADMIN_TOKEN'"}' | jq -r '.user_id')
 
 # Grant admin role
-curl -X POST http://localhost:8080/v1/auth/admin/rbac/users/roles \
+curl -X POST http://localhost:8080/api/v1/auth/admin/rbac/users/roles \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -171,7 +171,7 @@ curl -X POST http://localhost:8080/v1/auth/admin/rbac/users/roles \
 
 #### Basic Configuration
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -183,7 +183,7 @@ curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-44665544000
 
 #### Email Configuration
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -211,7 +211,7 @@ go run ./cmd/seed sso-workos \
 
 #### Dev SSO Configuration
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -603,7 +603,7 @@ PATCH /tenants/{id}/deactivate
 
 #### Get Tenant Settings
 ```http
-GET /v1/tenants/{id}/settings
+GET /api/v1/tenants/{id}/settings
 Authorization: Bearer {admin_token}
 ```
 
@@ -626,7 +626,7 @@ Authorization: Bearer {admin_token}
 
 #### Update Tenant Settings
 ```http
-PUT /v1/tenants/{id}/settings
+PUT /api/v1/tenants/{id}/settings
 Authorization: Bearer {admin_token}
 Content-Type: application/json
 
@@ -680,7 +680,7 @@ Content-Type: application/json
 
 #### User Signup
 ```http
-POST /v1/auth/signup
+POST /api/v1/auth/signup
 Content-Type: application/json
 
 {
@@ -733,7 +733,7 @@ Content-Type: application/json
 
 #### Password Login
 ```http
-POST /v1/auth/password/login
+POST /api/v1/auth/password/login
 Content-Type: application/json
 
 {
@@ -764,7 +764,7 @@ Content-Type: application/json
 
 #### MFA Verification
 ```http
-POST /v1/auth/mfa/verify
+POST /api/v1/auth/mfa/verify
 Content-Type: application/json
 
 {
@@ -788,7 +788,7 @@ Content-Type: application/json
 
 #### List Users (Admin)
 ```http
-GET /v1/auth/admin/users?tenant_id={uuid}&page=1&page_size=20
+GET /api/v1/auth/admin/users?tenant_id={uuid}&page=1&page_size=20
 Authorization: Bearer {admin_token}
 ```
 
@@ -819,7 +819,7 @@ Authorization: Bearer {admin_token}
 
 #### Assign User Role
 ```http
-POST /v1/auth/admin/rbac/users/roles
+POST /api/v1/auth/admin/rbac/users/roles
 Authorization: Bearer {admin_token}
 Content-Type: application/json
 
@@ -895,7 +895,7 @@ Content-Type: application/json
 
 #### Method 1: Self-Registration (Signup)
 ```bash
-curl -X POST http://localhost:8080/v1/auth/signup \
+curl -X POST http://localhost:8080/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -928,7 +928,7 @@ go run ./cmd/seed user \
 #### Custom Roles
 ```bash
 # Create custom role
-curl -X POST http://localhost:8080/v1/auth/admin/rbac/roles \
+curl -X POST http://localhost:8080/api/v1/auth/admin/rbac/roles \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -938,7 +938,7 @@ curl -X POST http://localhost:8080/v1/auth/admin/rbac/roles \
   }'
 
 # Assign role to user
-curl -X POST http://localhost:8080/v1/auth/admin/rbac/users/roles \
+curl -X POST http://localhost:8080/api/v1/auth/admin/rbac/users/roles \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -985,7 +985,7 @@ go run ./cmd/seed user \
 3. **Test SSO Flow**
    ```bash
    # Start SSO flow
-   curl -i "http://localhost:8080/v1/auth/sso/google/start?tenant_id=550e8400-e29b-41d4-a716-446655440000"
+   curl -i "http://localhost:8080/api/v1/auth/sso/google/start?tenant_id=550e8400-e29b-41d4-a716-446655440000"
    
    # Follow redirect to WorkOS, complete authentication
    # User will be redirected back to callback URL with tokens
@@ -996,7 +996,7 @@ go run ./cmd/seed user \
 For development and testing:
 
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1021,7 +1021,7 @@ Corvus Guard enforces strong password requirements by default:
 Configure rate limits per tenant:
 
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1035,7 +1035,7 @@ curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-44665544000
 ### CORS Configuration
 
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1058,7 +1058,7 @@ curl http://localhost:8080/tenants/by-name/acme-corp
 **Error:** `email already exists`
 **Solution:** Email addresses must be unique within a tenant. Use a different email or check existing users:
 ```bash
-curl http://localhost:8080/v1/auth/admin/users?tenant_id=550e8400-e29b-41d4-a716-446655440000 \
+curl http://localhost:8080/api/v1/auth/admin/users?tenant_id=550e8400-e29b-41d4-a716-446655440000 \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -1066,7 +1066,7 @@ curl http://localhost:8080/v1/auth/admin/users?tenant_id=550e8400-e29b-41d4-a716
 **Error:** `redirect URL not allowed`
 **Solution:** Ensure the redirect URL is in the allowlist:
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1078,7 +1078,7 @@ curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-44665544000
 **Error:** `429 Too Many Requests`
 **Solution:** Wait for the rate limit window to reset or adjust limits:
 ```bash
-curl -X PUT http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl -X PUT http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1096,13 +1096,13 @@ curl http://localhost:8080/tenants/550e8400-e29b-41d4-a716-446655440000
 
 #### Verify Settings
 ```bash
-curl http://localhost:8080/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
+curl http://localhost:8080/api/v1/tenants/550e8400-e29b-41d4-a716-446655440000/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 #### Test Authentication
 ```bash
-curl -X POST http://localhost:8080/v1/auth/password/login \
+curl -X POST http://localhost:8080/api/v1/auth/password/login \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "550e8400-e29b-41d4-a716-446655440000",

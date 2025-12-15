@@ -29,12 +29,28 @@ export function AuthProvider({
 
   const isCookieMode = cfg?.auth_mode === 'cookie'
 
+  const hasBearerAccessToken = (): boolean => {
+    if (isCookieMode) return true
+    try {
+      return !!localStorage.getItem('guard_ui:guard_access_token')
+    } catch {
+      return false
+    }
+  }
+
   const refresh = async (): Promise<any | null> => {
     if (!cfg) {
       setUser(null)
       setStatus('unauthenticated')
       return null
     }
+
+    if (!isCookieMode && !hasBearerAccessToken()) {
+      setUser(null)
+      setStatus('unauthenticated')
+      return null
+    }
+
     const wasAuthenticated = status === 'authenticated'
     setStatus('loading')
     try {
@@ -113,6 +129,10 @@ export function RequireAuth({
         Checking session...
       </div>
     )
-  if (status === 'unauthenticated') return null
+  if (status === 'unauthenticated') {
+    // Only gate UI in cookie mode; bearer mode can still render (useful for configuring tokens/base URL)
+    if (isCookieMode) return null
+    return children as React.JSX.Element
+  }
   return children as React.JSX.Element
 }
