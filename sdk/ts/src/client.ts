@@ -757,7 +757,7 @@ export class GuardClient {
     
     // Use V2 tenant-scoped URL format
     const res = await this.http.requestRaw(
-      `/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/login${qs}`,
+      `/api/v1/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/login${qs}`,
       { method: 'GET', redirect: 'manual' }
     );
     const loc = res.headers.get('location');
@@ -802,7 +802,7 @@ export class GuardClient {
     
     const qs = this.buildQuery({ code: params.code, state: params.state });
     const res = await this.request<TokensResp>(
-      `/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/callback${qs}`,
+      `/api/v1/auth/sso/t/${encodeURIComponent(tenant)}/${encodeURIComponent(providerSlug)}/callback${qs}`,
       { method: 'GET' }
     );
     if (res.meta.status === 200) this.persistTokensFrom(res.data);
