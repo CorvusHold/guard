@@ -17,7 +17,8 @@ export default defineConfig({
     // Use production build + preview to avoid Vite HMR reloads interfering with tests (esp. WebKit)
     command: 'pnpm build && pnpm serve',
     url: 'http://localhost:4173',
-    reuseExistingServer: false,
+    // CI workflow starts a preview server before running Playwright; reuse it to avoid port collisions.
+    reuseExistingServer: true,
     stdout: 'pipe',
     stderr: 'pipe',
     timeout: 240_000
