@@ -22,7 +22,7 @@ The Admin Settings UI allows tenant administrators to configure critical securit
 - Path prefixes are supported
 
 **Examples**:
-```
+```bash
 http://localhost:3001,https://app.packitoo.com
 http://localhost:3001/api/guard,https://app.example.com/callback
 ```
@@ -44,7 +44,7 @@ http://localhost:3001/api/guard,https://app.example.com/callback
 - No trailing slashes
 
 **Examples**:
-```
+```bash
 https://app.packitoo.com,http://localhost:3000,http://localhost:3001
 https://app.example.com,https://staging.example.com
 ```

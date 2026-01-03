@@ -1,12 +1,9 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TenantCreationPanel from './TenantCreationPanel'
 import TenantListPanel from './TenantListPanel'
-import { useTenant } from '@/lib/tenant'
 
 export default function TenantManagementPanel() {
-  const { tenantId } = useTenant()
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list')
 
   const handleTenantCreated = (tenantId: string, tenantName: string) => {

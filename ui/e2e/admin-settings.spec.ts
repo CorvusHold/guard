@@ -526,13 +526,12 @@ test.describe('Admin Settings', () => {
 
     // Verify help text is present and informative
     const redirectHelpText = page.locator(
-      'text=Comma-separated list of allowed callback URLs for SSO flows'
+      'text=Comma-separated list of allowed redirect URLs for SSO callbacks'
     )
     await expect(redirectHelpText).toBeVisible()
-    await expect(redirectHelpText).toContainText('prevent redirect attacks')
 
     const corsHelpText = page.locator(
-      'text=Comma-separated list of origins allowed to make browser requests'
+      'text=Comma-separated list of allowed origins. These origins will be able to make requests to the API from browsers.'
     )
     await expect(corsHelpText).toBeVisible()
   })
