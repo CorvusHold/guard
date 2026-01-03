@@ -51,8 +51,6 @@ test.describe('Admin Settings', () => {
       console.log('PAGE ERROR', err?.message || String(err))
     })
     page.on('close', () => console.log('PAGE CLOSED'))
-    // @ts-expect-error crash may not exist on all browsers
-    page.on('crash', () => console.log('PAGE CRASH'))
     context.on('close', () => console.log('CONTEXT CLOSED'))
     page.on('framenavigated', (fr) => console.log('NAVIGATED', fr.url()))
     // Keep network logs lightweight; do not intercept
@@ -311,6 +309,234 @@ test.describe('Admin Settings', () => {
     )
   })
 
+  test('update SSO redirect allowlist and CORS origins', async ({
+    page,
+    browserName
+  }) => {
+    if (browserName === 'webkit') test.slow()
+    const TENANT = 'tenant_xyz'
+
+    // Mock GET settings with initial values
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({
+          status: 204,
+          headers: cors({
+            'access-control-allow-methods': 'GET,OPTIONS',
+            'access-control-allow-headers':
+              'content-type,authorization,accept,x-guard-client'
+          })
+        })
+      }
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          sso_provider: 'dev',
+          workos_client_id: '',
+          sso_state_ttl: '10m',
+          sso_redirect_allowlist: 'http://localhost:3000',
+          app_cors_allowed_origins: 'http://localhost:3000'
+        }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
+
+    // Mock PUT settings to capture the update
+    let capturedBody: any = null
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({
+          status: 204,
+          headers: cors({
+            'access-control-allow-methods': 'PUT,OPTIONS',
+            'access-control-allow-headers':
+              'content-type,authorization,accept,x-guard-client'
+          })
+        })
+      }
+      if (req.method() === 'PUT') {
+        capturedBody = JSON.parse(req.postData() || '{}')
+        return route.fulfill({
+          status: 204,
+          headers: cors()
+        })
+      }
+      return route.fallback()
+    })
+
+    await mockAuthMe(page)
+
+    await page.goto(
+      `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}`,
+      { waitUntil: 'domcontentloaded' }
+    )
+    await page.getByTestId('admin-tenant-input').fill(TENANT)
+    await page.getByTestId('admin-load-settings').click()
+
+    // Wait for form to load
+    await expect(page.getByTestId('admin-save-settings')).toBeEnabled({
+      timeout: 10000
+    })
+
+    // Verify initial values loaded
+    await expect(page.getByTestId('admin-sso-redirect-allowlist')).toHaveValue(
+      'http://localhost:3000'
+    )
+    await expect(page.getByTestId('admin-cors-allowed-origins')).toHaveValue(
+      'http://localhost:3000'
+    )
+
+    // Update both fields
+    await page
+      .getByTestId('admin-sso-redirect-allowlist')
+      .fill('http://localhost:3001,https://app.packitoo.com')
+    await page
+      .getByTestId('admin-cors-allowed-origins')
+      .fill('http://localhost:3001,https://app.packitoo.com,http://localhost:3000')
+
+    // Save changes
+    await page.getByTestId('admin-save-settings').click()
+
+    // Verify success message
+    await expect(page.getByTestId('admin-message')).toHaveText(
+      /Settings saved/i,
+      { timeout: 10000 }
+    )
+
+    // Verify the correct data was sent to the API
+    expect(capturedBody).toBeTruthy()
+    expect(capturedBody.sso_redirect_allowlist).toBe(
+      'http://localhost:3001,https://app.packitoo.com'
+    )
+    expect(capturedBody.app_cors_allowed_origins).toBe(
+      'http://localhost:3001,https://app.packitoo.com,http://localhost:3000'
+    )
+  })
+
+  test('empty redirect allowlist and CORS can be saved', async ({
+    page,
+    browserName
+  }) => {
+    if (browserName === 'webkit') test.slow()
+    const TENANT = 'tenant_empty'
+
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({
+          status: 204,
+          headers: cors({
+            'access-control-allow-methods': 'GET,PUT,OPTIONS',
+            'access-control-allow-headers':
+              'content-type,authorization,accept,x-guard-client'
+          })
+        })
+      }
+      if (req.method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            sso_provider: 'dev',
+            workos_client_id: '',
+            sso_state_ttl: '10m',
+            sso_redirect_allowlist: 'http://localhost:3001',
+            app_cors_allowed_origins: 'http://localhost:3001'
+          }),
+          headers: cors({ 'content-type': 'application/json' })
+        })
+      }
+      if (req.method() === 'PUT') {
+        return route.fulfill({
+          status: 204,
+          headers: cors()
+        })
+      }
+      return route.fallback()
+    })
+
+    await mockAuthMe(page)
+
+    await page.goto(
+      `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}`,
+      { waitUntil: 'domcontentloaded' }
+    )
+    await page.getByTestId('admin-tenant-input').fill(TENANT)
+    await page.getByTestId('admin-load-settings').click()
+
+    await expect(page.getByTestId('admin-save-settings')).toBeEnabled({
+      timeout: 10000
+    })
+
+    // Clear both fields
+    await page.getByTestId('admin-sso-redirect-allowlist').fill('')
+    await page.getByTestId('admin-cors-allowed-origins').fill('')
+
+    // Should still be able to save
+    await page.getByTestId('admin-save-settings').click()
+
+    await expect(page.getByTestId('admin-message')).toHaveText(
+      /Settings saved/i,
+      { timeout: 10000 }
+    )
+  })
+
+  test('help text explains redirect allowlist and CORS purposes', async ({
+    page
+  }) => {
+    const TENANT = 'tenant_help'
+
+    await page.route(`**/api/v1/tenants/${TENANT}/settings`, async (route) => {
+      const req = route.request()
+      if (req.method() === 'OPTIONS') {
+        return route.fulfill({
+          status: 204,
+          headers: cors({
+            'access-control-allow-methods': 'GET,OPTIONS',
+            'access-control-allow-headers':
+              'content-type,authorization,accept,x-guard-client'
+          })
+        })
+      }
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          sso_provider: 'dev',
+          sso_state_ttl: '10m',
+          sso_redirect_allowlist: '',
+          app_cors_allowed_origins: ''
+        }),
+        headers: cors({ 'content-type': 'application/json' })
+      })
+    })
+
+    await mockAuthMe(page)
+
+    await page.goto(
+      `${UI_BASE}/admin?guard-base-url=${encodeURIComponent(UI_BASE)}`,
+      { waitUntil: 'domcontentloaded' }
+    )
+    await page.getByTestId('admin-tenant-input').fill(TENANT)
+    await page.getByTestId('admin-load-settings').click()
+
+    await expect(page.getByTestId('admin-save-settings')).toBeEnabled({
+      timeout: 10000
+    })
+
+    // Verify help text is present and informative
+    const redirectHelpText = page.locator(
+      'text=Comma-separated list of allowed callback URLs for SSO flows'
+    )
+    await expect(redirectHelpText).toBeVisible()
+    await expect(redirectHelpText).toContainText('prevent redirect attacks')
+
+    const corsHelpText = page.locator(
+      'text=Comma-separated list of origins allowed to make browser requests'
+    )
+    await expect(corsHelpText).toBeVisible()
+  })
+
   test('portal link missing org shows client error', async ({ page }) => {
     const TENANT = 'tenant_abc'
 
@@ -332,7 +558,9 @@ test.describe('Admin Settings', () => {
         body: JSON.stringify({
           sso_provider: 'workos',
           workos_client_id: 'client_123',
-          sso_state_ttl: '10m'
+          sso_state_ttl: '10m',
+          sso_redirect_allowlist: '',
+          app_cors_allowed_origins: ''
         }),
         headers: cors({ 'content-type': 'application/json' })
       })

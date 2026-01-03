@@ -23,6 +23,14 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
+
+			// If no Authorization header, fall back to cookie-based session token
+			if auth == "" {
+				if cookie, err := c.Cookie("guard_access_token"); err == nil && cookie != nil && cookie.Value != "" {
+					auth = "Bearer " + cookie.Value
+				}
+			}
+
 			if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 			}
