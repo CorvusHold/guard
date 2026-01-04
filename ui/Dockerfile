@@ -1,5 +1,10 @@
 # Build stage
-FROM node:22-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -11,9 +16,10 @@ COPY sdk/ts ./sdk/ts
 
 WORKDIR /app/ui
 
-# Install dependencies
+# Install dependencies with architecture-aware settings
 RUN npm install -g pnpm@10 \
-    && pnpm install --frozen-lockfile
+    && pnpm config set engine-strict false \
+    && pnpm install --frozen-lockfile --no-optional
 
 # Copy UI source and build
 COPY ui .

@@ -1,9 +1,11 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 ARG VERSION=dev
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
 
 WORKDIR /app
 
