@@ -4299,6 +4299,12 @@ const docTemplate = `{
                 "tenant_name": {
                     "type": "string"
                 },
+                "tenants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.TenantInfo"
+                    }
+                },
                 "user_exists": {
                     "type": "boolean"
                 }
@@ -4351,6 +4357,13 @@ const docTemplate = `{
                 "tenant_name": {
                     "type": "string"
                 },
+                "tenants": {
+                    "description": "If email is present in multiple tenants, list them so the UI can prompt the user.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.TenantInfo"
+                    }
+                },
                 "user_exists": {
                     "description": "If true, user exists and can use password login",
                     "type": "boolean"
@@ -4392,6 +4405,17 @@ const docTemplate = `{
                 },
                 "provider": {
                     "description": "\"google\", \"github\", \"microsoft\", etc.",
+                    "type": "string"
+                }
+            }
+        },
+        "controller.TenantInfo": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }

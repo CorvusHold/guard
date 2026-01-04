@@ -21,6 +21,10 @@ definitions:
         type: string
       tenant_name:
         type: string
+      tenants:
+        items:
+          $ref: '#/definitions/controller.TenantInfo'
+        type: array
       user_exists:
         type: boolean
     type: object
@@ -58,6 +62,12 @@ definitions:
         type: string
       tenant_name:
         type: string
+      tenants:
+        description: If email is present in multiple tenants, list them so the UI
+          can prompt the user.
+        items:
+          $ref: '#/definitions/controller.TenantInfo'
+        type: array
       user_exists:
         description: If true, user exists and can use password login
         type: boolean
@@ -86,6 +96,13 @@ definitions:
         type: string
       provider:
         description: '"google", "github", "microsoft", etc.'
+        type: string
+    type: object
+  controller.TenantInfo:
+    properties:
+      id:
+        type: string
+      name:
         type: string
     type: object
   controller.adminUpdateNamesReq:
