@@ -483,7 +483,7 @@ func (h *SSOController) handleSSOInitiateLegacy(c echo.Context) error {
 }
 
 // handleSSOCallbackLegacy redirects legacy SSO callback to V2 format.
-// GET/POST /auth/sso/:slug/callback?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/callback
+// GET/POST /api/v1/auth/sso/:slug/callback?tenant_id=xxx -> /api/v1/auth/sso/t/:tenant_id/:slug/callback
 func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
 	slug := c.Param("slug")
 	tenantIDStr := c.QueryParam("tenant_id")
