@@ -140,14 +140,13 @@ func setupTestEnvironment(t *testing.T) *TestEnv {
 
 // mockOIDCServer creates a complete mock OIDC provider
 type mockOIDCServer struct {
-	server      *httptest.Server
-	privateKey  *rsa.PrivateKey
-	publicKey   *rsa.PublicKey
-	issuer      string
-	clientID    string
-	redirectURI string
-	mu          sync.Mutex
-	codeNonce   map[string]string
+	server     *httptest.Server
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
+	issuer     string
+	clientID   string
+	mu         sync.Mutex
+	codeNonce  map[string]string
 }
 
 func newMockOIDCServer(t *testing.T) *mockOIDCServer {
@@ -160,11 +159,10 @@ func newMockOIDCServer(t *testing.T) *mockOIDCServer {
 	}
 
 	mock := &mockOIDCServer{
-		privateKey:  privateKey,
-		publicKey:   &privateKey.PublicKey,
-		clientID:    "test-client-id",
-		redirectURI: "http://localhost:8080/auth/sso/test-oidc/callback",
-		codeNonce:   make(map[string]string),
+		privateKey: privateKey,
+		publicKey:  &privateKey.PublicKey,
+		clientID:   "test-client-id",
+		codeNonce:  make(map[string]string),
 	}
 
 	mux := http.NewServeMux()
@@ -369,8 +367,8 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 
 	t.Logf("Created provider: %s", providerConfig.ID)
 
-	// 3. Initiate SSO flow (GET /auth/sso/t/:tenant_id/test-oidc/login)
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/login?redirect_url=https://app.example.com/dashboard", env.tenantID)
+	// 3. Initiate SSO flow (GET /api/v1/auth/sso/t/:tenant_id/test-oidc/login)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/login?redirect_url=https://app.example.com/dashboard", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -429,10 +427,9 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 
 	t.Logf("Authorization code: %s", code)
 
-	// 6. Call SSO callback endpoint with code and state
-	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=%s&state=%s",
-		env.tenantID, code, stateToken)
-	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
+	// 6. Call SSO callback endpoint using the actual callback URL from mock IdP
+	// This validates that the service uses the correct versioned format
+	callbackReq := httptest.NewRequest(http.MethodGet, parsedCallback.RequestURI(), nil)
 	callbackRec := httptest.NewRecorder()
 
 	env.echo.ServeHTTP(callbackRec, callbackReq)
@@ -550,10 +547,38 @@ func TestSSOFlow_InvalidState(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	// Try callback with invalid state using tenant-scoped callback URL
-	callbackURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=test-code&state=invalid-state",
-		env.tenantID)
-	req := httptest.NewRequest(http.MethodGet, callbackURL, nil)
+	// Initiate SSO flow to get the actual callback URL format
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/login", env.tenantID)
+	initReq := httptest.NewRequest(http.MethodGet, initiateURL, nil)
+	initRec := httptest.NewRecorder()
+	env.echo.ServeHTTP(initRec, initRec)
+
+	if initRec.Code != http.StatusFound {
+		t.Fatalf("expected 302 from initiation, got %d: %s", initRec.Code, initRec.Body.String())
+	}
+
+	authURL := initRec.Header().Get("Location")
+	parsedAuthURL, _ := url.Parse(authURL)
+
+	// Call mock IdP authorize to get the callback URL with state
+	mockAuthReq := httptest.NewRequest(http.MethodGet, authURL, nil)
+	mockAuthRec := httptest.NewRecorder()
+	mockIdP.server.Config.Handler.ServeHTTP(mockAuthRec, mockAuthReq)
+
+	if mockAuthRec.Code != http.StatusFound {
+		t.Fatalf("expected 302 from mock IdP, got %d", mockAuthRec.Code)
+	}
+
+	callbackURL := mockAuthRec.Header().Get("Location")
+	parsedCallback, _ := url.Parse(callbackURL)
+
+	// Replace the state with an invalid one
+	q := parsedCallback.Query()
+	q.Set("state", "invalid-state")
+	parsedCallback.RawQuery = q.Encode()
+
+	// Try callback with invalid state using the actual callback URL format
+	req := httptest.NewRequest(http.MethodGet, parsedCallback.RequestURI(), nil)
 	rec := httptest.NewRecorder()
 
 	env.echo.ServeHTTP(rec, req)
@@ -606,7 +631,7 @@ func TestSSOFlow_DisabledProvider(t *testing.T) {
 	}
 
 	// Try to initiate SSO with disabled provider using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/disabled-oidc/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/disabled-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -660,7 +685,7 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	}
 
 	// Initiate flow using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/no-signup-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -683,10 +708,10 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	parsedCallback, _ := url.Parse(callbackURL)
 	code := parsedCallback.Query().Get("code")
 
-	// Try callback (should fail since user doesn't exist and signup is disabled)
-	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/callback?code=%s&state=%s",
-		env.tenantID, code, stateToken)
-	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
+	// Try callback using the actual callback URL from mock IdP
+	// This validates that the service uses the correct versioned format
+	// (should fail since user doesn't exist and signup is disabled)
+	callbackReq := httptest.NewRequest(http.MethodGet, parsedCallback.RequestURI(), nil)
 	callbackRec := httptest.NewRecorder()
 
 	env.echo.ServeHTTP(callbackRec, callbackReq)
@@ -736,7 +761,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 		TrustEmailVerified:   true,
 		Domains:              []string{"example.com"},
 		EntityID:             "https://guard.example.com/saml",
-		ACSUrl:               "http://localhost:8080/auth/sso/test-saml/callback",
+		ACSUrl:               fmt.Sprintf("/api/v1/auth/sso/t/%s/test-saml/callback", env.tenantID),
 		IdPMetadataXML:       minimalIdPMetadata, // Required for SAML provider validation
 		IdPEntityID:          "https://idp.example.com",
 		IdPSSOUrl:            "https://idp.example.com/sso",
@@ -749,7 +774,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 	}
 
 	// Test SAML metadata endpoint using tenant-scoped URL
-	metadataURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/metadata", env.tenantID)
+	metadataURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-saml/metadata", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, metadataURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -773,7 +798,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 	t.Log("✓ SAML metadata endpoint works")
 
 	// Test initiation using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-saml/login", env.tenantID)
 	initReq := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	initRec := httptest.NewRecorder()
 

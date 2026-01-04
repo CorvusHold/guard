@@ -642,7 +642,7 @@ type SPInfo struct {
 
 // GetSPInfo computes the Service Provider URLs for a given tenant and provider slug.
 // These URLs are needed by admins to configure their Identity Provider (IdP).
-// The URLs use the V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+// The URLs use the V2 tenant-scoped format: /api/v1/auth/sso/t/{tenant_id}/{slug}/*
 // This ensures globally unique URLs even when multiple tenants use the same provider slug.
 func (s *SSOService) GetSPInfo(tenantID uuid.UUID, slug string) (*SPInfo, error) {
 	if s.baseURL == "" {
@@ -661,13 +661,13 @@ func (s *SSOService) GetSPInfo(tenantID uuid.UUID, slug string) (*SPInfo, error)
 
 	tenantIDStr := tenantID.String()
 
-	// V2 tenant-scoped URL format: /auth/sso/t/{tenant_id}/{slug}/*
+	// V2 tenant-scoped URL format: /api/v1/auth/sso/t/{tenant_id}/{slug}/*
 	return &SPInfo{
-		EntityID:    fmt.Sprintf("%s/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
-		ACSURL:      fmt.Sprintf("%s/auth/sso/t/%s/%s/callback", s.baseURL, tenantIDStr, slug),
-		SLOURL:      fmt.Sprintf("%s/auth/sso/t/%s/%s/logout", s.baseURL, tenantIDStr, slug),
-		MetadataURL: fmt.Sprintf("%s/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
-		LoginURL:    fmt.Sprintf("%s/auth/sso/t/%s/%s/login", s.baseURL, tenantIDStr, slug),
+		EntityID:    fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
+		ACSURL:      fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/callback", s.baseURL, tenantIDStr, slug),
+		SLOURL:      fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/logout", s.baseURL, tenantIDStr, slug),
+		MetadataURL: fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/metadata", s.baseURL, tenantIDStr, slug),
+		LoginURL:    fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/login", s.baseURL, tenantIDStr, slug),
 		BaseURL:     s.baseURL,
 		TenantID:    tenantIDStr,
 	}, nil

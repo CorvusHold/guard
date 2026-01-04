@@ -354,7 +354,7 @@ export interface SsoTestProviderResp {
 }
 
 // SP Info response - computed Service Provider URLs for SAML configuration
-// URLs use V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+// URLs use V2 tenant-scoped format: /api/v1/auth/sso/t/{tenant_id}/{slug}/*
 export interface SsoSPInfoResp {
   /** SP Entity ID / Issuer URL (also called "Identifier" in some IdPs) */
   entity_id: string;
@@ -734,7 +734,7 @@ export class GuardClient {
 
   /**
    * Start SSO flow with a provider slug.
-   * Uses V2 tenant-scoped URLs: /auth/sso/t/{tenant_id}/{slug}/login
+   * Uses V2 tenant-scoped URLs: /api/v1/auth/sso/t/{tenant_id}/{slug}/login
    * 
    * @param providerSlug - The provider slug (e.g., 'okta', 'azure-ad', 'google-saml')
    * @param params - Optional parameters for the SSO flow
@@ -792,7 +792,7 @@ export class GuardClient {
 
   /**
    * Handle SSO callback and exchange code for tokens.
-   * Uses V2 tenant-scoped URLs: /auth/sso/t/{tenant_id}/{slug}/callback
+   * Uses V2 tenant-scoped URLs: /api/v1/auth/sso/t/{tenant_id}/{slug}/callback
    * 
    * @param providerSlug - The provider slug used in startSso
    * @param params - Callback parameters (code, state from IdP redirect)
@@ -999,7 +999,7 @@ export class GuardClient {
   /**
    * Get computed Service Provider (SP) URLs for SAML configuration.
    * These URLs are needed by admins to configure their Identity Provider (IdP).
-   * URLs use V2 tenant-scoped format: /auth/sso/t/{tenant_id}/{slug}/*
+   * URLs use V2 tenant-scoped format: /api/v1/auth/sso/t/{tenant_id}/{slug}/*
    * 
    * @param slug - The provider slug (e.g. 'okta', 'azure-ad')
    * @param tenantId - Optional tenant ID (uses client's default if not provided)
@@ -1008,8 +1008,8 @@ export class GuardClient {
    * @example
    * ```ts
    * const spInfo = await client.ssoGetSPInfo('okta');
-   * console.log(spInfo.data.entity_id);  // https://api.example.com/auth/sso/t/{tenant_id}/okta/metadata
-   * console.log(spInfo.data.acs_url);    // https://api.example.com/auth/sso/t/{tenant_id}/okta/callback
+   * console.log(spInfo.data.entity_id);  // https://api.example.com/api/v1/auth/sso/t/{tenant_id}/okta/metadata
+   * console.log(spInfo.data.acs_url);    // https://api.example.com/api/v1/auth/sso/t/{tenant_id}/okta/callback
    * console.log(spInfo.data.tenant_id);  // The tenant UUID used in the URLs
    * ```
    */
