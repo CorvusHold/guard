@@ -4987,6 +4987,7 @@ export interface components {
             suggestions?: string[];
             tenant_id?: string;
             tenant_name?: string;
+            tenants?: components["schemas"]["controller.TenantInfo"][];
             user_exists?: boolean;
         };
         "controller.LoginOptionsResponse": {
@@ -5007,6 +5008,8 @@ export interface components {
             /** @description Tenant information (if discovered) */
             tenant_id?: string;
             tenant_name?: string;
+            /** @description If email is present in multiple tenants, list them so the UI can prompt the user. */
+            tenants?: components["schemas"]["controller.TenantInfo"][];
             /** @description If true, user exists and can use password login */
             user_exists?: boolean;
         };
@@ -5024,6 +5027,10 @@ export interface components {
             name?: string;
             /** @description "google", "github", "microsoft", etc. */
             provider?: string;
+        };
+        "controller.TenantInfo": {
+            id?: string;
+            name?: string;
         };
         "controller.adminUpdateNamesReq": {
             first_name?: string;
