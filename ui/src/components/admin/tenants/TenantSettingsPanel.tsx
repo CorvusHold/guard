@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { AlertCircle, Save, RefreshCw, Eye, EyeOff, Copy } from 'lucide-react'
+import { AlertCircle, Save, RefreshCw, Eye, EyeOff, Copy, Search } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { getClient } from '@/lib/sdk'
 import { useToast } from '@/lib/toast'
@@ -64,9 +64,10 @@ interface TenantSettingsPanelProps {
   tenantId: string
   tenantName: string
   onSettingsUpdated?: () => void
+  hideSsoTab?: boolean
 }
 
-export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUpdated }: TenantSettingsPanelProps) {
+export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUpdated, hideSsoTab }: TenantSettingsPanelProps) {
   const { user } = useAuth()
   const { show: showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -76,6 +77,7 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
   const [originalSettings, setOriginalSettings] = useState<TenantSettings>({})
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({})
   const [hasChanges, setHasChanges] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     loadSettings()
@@ -154,6 +156,29 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
     showToast({ description: `${label} copied to clipboard`, variant: 'success' })
+  }
+
+  // Search filter helper
+  const matchesSearch = (text: string) => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return text.toLowerCase().includes(query)
+  }
+
+  // Check if any setting in a category matches search
+  const categoryHasMatch = (category: string) => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    
+    const categoryKeywords: Record<string, string[]> = {
+      security: ['auth', 'token', 'ttl', 'jwt', 'rate', 'limit', 'login', 'signup', 'mfa', 'magic', 'issuer', 'audience'],
+      cors: ['cors', 'origin', 'cross', 'browser'],
+      sso: ['sso', 'workos', 'oauth', 'redirect', 'state', 'connection', 'organization', 'saml', 'oidc'],
+      email: ['email', 'smtp', 'brevo', 'mail', 'sender'],
+      advanced: ['url', 'base', 'public', 'api']
+    }
+    
+    return categoryKeywords[category]?.some(keyword => keyword.includes(query)) || false
   }
 
   const renderSecretInput = (
@@ -254,11 +279,29 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
         </div>
       )}
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          data-testid="settings-search"
+          type="text"
+          placeholder="Search settings (e.g., 'cors', 'rate limit', 'workos')..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <Tabs defaultValue="security" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        {searchQuery && (
+          <div className="mb-4 p-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-md">
+            Filtering settings matching: <strong>{searchQuery}</strong>
+          </div>
+        )}
+        <TabsList className={`grid w-full ${hideSsoTab ? 'grid-cols-4' : 'grid-cols-5'}`}>
           <TabsTrigger value="security" data-testid="settings-tab-security">Security</TabsTrigger>
           <TabsTrigger value="cors" data-testid="settings-tab-cors">CORS</TabsTrigger>
-          <TabsTrigger value="sso" data-testid="settings-tab-sso">SSO</TabsTrigger>
+          {!hideSsoTab && <TabsTrigger value="sso" data-testid="settings-tab-sso">SSO</TabsTrigger>}
           <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -527,107 +570,109 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
           </Card>
         </TabsContent>
 
-        <TabsContent value="sso" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>SSO Configuration</CardTitle>
-              <CardDescription>Configure Single Sign-On settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sso_provider">SSO Provider</Label>
-                <Select
-                  value={settings.sso_provider || 'none'}
-                  onValueChange={(value) => updateSetting('sso_provider', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="dev">Development</SelectItem>
-                    <SelectItem value="workos">WorkOS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {settings.sso_provider && settings.sso_provider !== 'none' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="sso_state_ttl">OAuth State TTL</Label>
-                    <Select
-                      value={settings.sso_state_ttl || '10m'}
-                      onValueChange={(value) => updateSetting('sso_state_ttl', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5m">5 minutes</SelectItem>
-                        <SelectItem value="10m">10 minutes</SelectItem>
-                        <SelectItem value="15m">15 minutes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sso_redirect_allowlist">Redirect Allowlist</Label>
-                    <Textarea
-                      id="sso_redirect_allowlist"
-                      value={settings.sso_redirect_allowlist || ''}
-                      onChange={(e) => updateSetting('sso_redirect_allowlist', e.target.value)}
-                      placeholder="https://app.example.com/callback,https://admin.example.com/callback"
-                      rows={2}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Comma-separated list of allowed redirect URLs for SSO callbacks
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {settings.sso_provider === 'workos' && (
-                <div className="space-y-4 border-t pt-4">
-                  <h4 className="font-medium">WorkOS Configuration</h4>
-                  
-                  {renderSecretInput('sso_workos_client_id', 'Client ID', 'client_01234567890', true, 'workos-client-id')}
-                  {renderSecretInput('sso_workos_client_secret', 'Client Secret', 'wk_live_...', true, 'workos-client-secret')}
-                  {renderSecretInput('sso_workos_api_key', 'API Key', 'sk_live_...', false, 'workos-api-key')}
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="sso_workos_api_base_url">API Base URL</Label>
-                    <Input
-                      id="sso_workos_api_base_url"
-                      value={settings.sso_workos_api_base_url || ''}
-                      onChange={(e) => updateSetting('sso_workos_api_base_url', e.target.value)}
-                      placeholder="https://api.workos.com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sso_workos_default_connection_id">Default Connection ID</Label>
-                    <Input
-                      id="sso_workos_default_connection_id"
-                      value={settings.sso_workos_default_connection_id || ''}
-                      onChange={(e) => updateSetting('sso_workos_default_connection_id', e.target.value)}
-                      placeholder="conn_01234567890"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sso_workos_default_organization_id">Default Organization ID</Label>
-                    <Input
-                      id="sso_workos_default_organization_id"
-                      value={settings.sso_workos_default_organization_id || ''}
-                      onChange={(e) => updateSetting('sso_workos_default_organization_id', e.target.value)}
-                      placeholder="org_01234567890"
-                    />
-                  </div>
+        {!hideSsoTab && (
+          <TabsContent value="sso" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>SSO Configuration</CardTitle>
+                <CardDescription>Configure Single Sign-On settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sso_provider">SSO Provider</Label>
+                  <Select
+                    value={settings.sso_provider || 'none'}
+                    onValueChange={(value) => updateSetting('sso_provider', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="dev">Development</SelectItem>
+                      <SelectItem value="workos">WorkOS</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+
+                {settings.sso_provider && settings.sso_provider !== 'none' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="sso_state_ttl">OAuth State TTL</Label>
+                      <Select
+                        value={settings.sso_state_ttl || '10m'}
+                        onValueChange={(value) => updateSetting('sso_state_ttl', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5m">5 minutes</SelectItem>
+                          <SelectItem value="10m">10 minutes</SelectItem>
+                          <SelectItem value="15m">15 minutes</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sso_redirect_allowlist">Redirect Allowlist</Label>
+                      <Textarea
+                        id="sso_redirect_allowlist"
+                        value={settings.sso_redirect_allowlist || ''}
+                        onChange={(e) => updateSetting('sso_redirect_allowlist', e.target.value)}
+                        placeholder="https://app.example.com/callback,https://admin.example.com/callback"
+                        rows={2}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Comma-separated list of allowed redirect URLs for SSO callbacks
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {settings.sso_provider === 'workos' && (
+                  <div className="space-y-4 border-t pt-4">
+                    <h4 className="font-medium">WorkOS Configuration</h4>
+                    
+                    {renderSecretInput('sso_workos_client_id', 'Client ID', 'client_01234567890', true, 'workos-client-id')}
+                    {renderSecretInput('sso_workos_client_secret', 'Client Secret', 'wk_live_...', true, 'workos-client-secret')}
+                    {renderSecretInput('sso_workos_api_key', 'API Key', 'sk_live_...', false, 'workos-api-key')}
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="sso_workos_api_base_url">API Base URL</Label>
+                      <Input
+                        id="sso_workos_api_base_url"
+                        value={settings.sso_workos_api_base_url || ''}
+                        onChange={(e) => updateSetting('sso_workos_api_base_url', e.target.value)}
+                        placeholder="https://api.workos.com"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sso_workos_default_connection_id">Default Connection ID</Label>
+                      <Input
+                        id="sso_workos_default_connection_id"
+                        value={settings.sso_workos_default_connection_id || ''}
+                        onChange={(e) => updateSetting('sso_workos_default_connection_id', e.target.value)}
+                        placeholder="conn_01234567890"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sso_workos_default_organization_id">Default Organization ID</Label>
+                      <Input
+                        id="sso_workos_default_organization_id"
+                        value={settings.sso_workos_default_organization_id || ''}
+                        onChange={(e) => updateSetting('sso_workos_default_organization_id', e.target.value)}
+                        placeholder="org_01234567890"
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="email" className="space-y-6">
           <Card>

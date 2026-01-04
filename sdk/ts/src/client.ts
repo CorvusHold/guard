@@ -401,6 +401,11 @@ export class GuardClient {
     };
 
     const defaultHeaders = { ...(opts.defaultHeaders ?? {}) };
+    if (mode === 'cookie') {
+      // Avoid duplicating the access token: rely on cookies only in cookie mode
+      delete (defaultHeaders as Record<string, string | undefined>)['authorization'];
+      delete (defaultHeaders as Record<string, string | undefined>)['Authorization'];
+    }
     // Tenancy today is via body/query. Header will be added later when server adopts it.
 
     const clientHeader = `ts-sdk/${(pkg as any).version ?? '0.0.0'}`;

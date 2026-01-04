@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TenantCreationPanel from './TenantCreationPanel'
 import TenantListPanel from './TenantListPanel'
@@ -13,8 +12,8 @@ export default function TenantManagementPanel() {
   }
 
   const handleTenantSelected = (tenantId: string, tenantName: string) => {
-    // Could trigger navigation or other actions when tenant is selected
-    console.log('Tenant selected:', { tenantId, tenantName })
+    // selection is handled upstream via useTenant
+    setActiveTab('list')
   }
 
   return (

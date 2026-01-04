@@ -301,6 +301,22 @@ export default function SimpleProgressiveLoginForm({
               </div>
             )}
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="tenant-id">Tenant ID (optional)</Label>
+            <Input
+              id="tenant-id"
+              data-testid="tenant-id-input"
+              type="text"
+              value={tenantId || ''}
+              onChange={(e) => setTenantId(e.target.value)}
+              placeholder="tenant UUID (if you belong to multiple tenants)"
+              aria-label="Tenant ID"
+              disabled={emailDiscovering}
+            />
+            <div className="text-xs text-muted-foreground">
+              Provide to choose which tenant to sign into. Leave blank if you only have one.
+            </div>
+          </div>
           <Button
             type="submit"
             data-testid="continue-button"

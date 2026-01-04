@@ -50,8 +50,10 @@ export function ensureRuntimeConfigFromQuery(): void {
   const base = usp.get('guard-base-url')
   if (!base) return
   const source = usp.get('source') || 'redirect'
-  const rawMode = (usp.get('auth-mode') || '').toLowerCase()
-  const mode: 'bearer' | 'cookie' = rawMode === 'cookie' ? 'cookie' : 'bearer'
+  const rawMode =
+    (usp.get('auth-mode') || usp.get('auth_mode') || '').toLowerCase()
+  // Default to cookie auth unless explicitly overridden
+  const mode: 'bearer' | 'cookie' = rawMode === 'bearer' ? 'bearer' : 'cookie'
   try {
     setRuntimeConfig({ guard_base_url: base, source, auth_mode: mode })
   } catch (_) {
