@@ -20,7 +20,8 @@ WORKDIR /app/ui
 RUN apk add --no-cache python3 make g++ \
     && npm install -g pnpm@10 \
     && pnpm config set engine-strict false \
-    && pnpm install --frozen-lockfile --loglevel=verbose
+    && pnpm config set enable-pre-post-scripts true \
+    && pnpm install --frozen-lockfile
 
 # Platform-specific fixes for ARM64
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
@@ -31,7 +32,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Copy UI source and build
 COPY ui .
-RUN pnpm build --loglevel=verbose
+RUN pnpm build
 
 # Production stage
 FROM nginx:1.27-alpine
