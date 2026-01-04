@@ -194,7 +194,7 @@ func buildSSOLoginURL(baseURL, tenantID, slug string) string {
 	if baseURL == "" {
 		return ""
 	}
-	return baseURL + "/auth/sso/t/" + tenantID + "/" + slug + "/login"
+	return baseURL + "/api/v1/auth/sso/t/" + tenantID + "/" + slug + "/login"
 }
 
 // getSSOProviderLogo returns a local asset path based on provider name.

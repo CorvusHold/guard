@@ -369,8 +369,8 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 
 	t.Logf("Created provider: %s", providerConfig.ID)
 
-	// 3. Initiate SSO flow (GET /auth/sso/t/:tenant_id/test-oidc/login)
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/login?redirect_url=https://app.example.com/dashboard", env.tenantID)
+	// 3. Initiate SSO flow (GET /api/v1/auth/sso/t/:tenant_id/test-oidc/login)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/login?redirect_url=https://app.example.com/dashboard", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -430,7 +430,7 @@ func TestOIDCFlow_EndToEnd(t *testing.T) {
 	t.Logf("Authorization code: %s", code)
 
 	// 6. Call SSO callback endpoint with code and state
-	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=%s&state=%s",
+	callbackEndpoint := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/callback?code=%s&state=%s",
 		env.tenantID, code, stateToken)
 	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
 	callbackRec := httptest.NewRecorder()
@@ -551,7 +551,7 @@ func TestSSOFlow_InvalidState(t *testing.T) {
 	}
 
 	// Try callback with invalid state using tenant-scoped callback URL
-	callbackURL := fmt.Sprintf("/auth/sso/t/%s/test-oidc/callback?code=test-code&state=invalid-state",
+	callbackURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/callback?code=test-code&state=invalid-state",
 		env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, callbackURL, nil)
 	rec := httptest.NewRecorder()
@@ -606,7 +606,7 @@ func TestSSOFlow_DisabledProvider(t *testing.T) {
 	}
 
 	// Try to initiate SSO with disabled provider using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/disabled-oidc/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/disabled-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -660,7 +660,7 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	}
 
 	// Initiate flow using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/no-signup-oidc/login", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -684,7 +684,7 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	code := parsedCallback.Query().Get("code")
 
 	// Try callback (should fail since user doesn't exist and signup is disabled)
-	callbackEndpoint := fmt.Sprintf("/auth/sso/t/%s/no-signup-oidc/callback?code=%s&state=%s",
+	callbackEndpoint := fmt.Sprintf("/api/v1/auth/sso/t/%s/no-signup-oidc/callback?code=%s&state=%s",
 		env.tenantID, code, stateToken)
 	callbackReq := httptest.NewRequest(http.MethodGet, callbackEndpoint, nil)
 	callbackRec := httptest.NewRecorder()
@@ -749,7 +749,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 	}
 
 	// Test SAML metadata endpoint using tenant-scoped URL
-	metadataURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/metadata", env.tenantID)
+	metadataURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-saml/metadata", env.tenantID)
 	req := httptest.NewRequest(http.MethodGet, metadataURL, nil)
 	rec := httptest.NewRecorder()
 
@@ -773,7 +773,7 @@ func TestSAMLFlow_EndToEnd(t *testing.T) {
 	t.Log("✓ SAML metadata endpoint works")
 
 	// Test initiation using tenant-scoped URL
-	initiateURL := fmt.Sprintf("/auth/sso/t/%s/test-saml/login", env.tenantID)
+	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-saml/login", env.tenantID)
 	initReq := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	initRec := httptest.NewRecorder()
 

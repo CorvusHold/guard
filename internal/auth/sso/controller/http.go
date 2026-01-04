@@ -68,31 +68,31 @@ func (h *SSOController) Register(e *echo.Echo) {
 	}
 
 	// Public SSO endpoints (no authentication required)
-	// New tenant-scoped URLs: /auth/sso/t/:tenant_id/:slug/*
+	// New tenant-scoped URLs: /api/v1/auth/sso/t/:tenant_id/:slug/*
 	if rlInitiate != nil {
-		e.GET("/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2, rlInitiate)
-		e.GET("/auth/sso/:slug/login", h.handleSSOInitiateLegacy, rlInitiate) // Legacy redirect
+		e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2, rlInitiate)
+		e.GET("/api/v1/auth/sso/:slug/login", h.handleSSOInitiateLegacy, rlInitiate) // Legacy redirect
 	} else {
-		e.GET("/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2)
-		e.GET("/auth/sso/:slug/login", h.handleSSOInitiateLegacy)
+		e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/login", h.handleSSOInitiateV2)
+		e.GET("/api/v1/auth/sso/:slug/login", h.handleSSOInitiateLegacy)
 	}
 
 	if rlCallback != nil {
-		e.GET("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback)
-		e.POST("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback) // SAML POST binding
-		e.GET("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)           // Legacy redirect
-		e.POST("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)
+		e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback)
+		e.POST("/api/v1/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2, rlCallback) // SAML POST binding
+		e.GET("/api/v1/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)           // Legacy redirect
+		e.POST("/api/v1/auth/sso/:slug/callback", h.handleSSOCallbackLegacy, rlCallback)
 	} else {
-		e.GET("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
-		e.POST("/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
-		e.GET("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
-		e.POST("/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
+		e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
+		e.POST("/api/v1/auth/sso/t/:tenant_id/:slug/callback", h.handleSSOCallbackV2)
+		e.GET("/api/v1/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
+		e.POST("/api/v1/auth/sso/:slug/callback", h.handleSSOCallbackLegacy)
 	}
 
-	e.GET("/auth/sso/t/:tenant_id/:slug/metadata", h.handleSAMLMetadataV2)
-	e.GET("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout)
-	e.POST("/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout) // SAML SLO POST binding
-	e.GET("/auth/sso/:slug/metadata", h.handleSAMLMetadataLegacy)    // Legacy redirect
+	e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/metadata", h.handleSAMLMetadataV2)
+	e.GET("/api/v1/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout)
+	e.POST("/api/v1/auth/sso/t/:tenant_id/:slug/logout", h.handleSSOLogout) // SAML SLO POST binding
+	e.GET("/api/v1/auth/sso/:slug/metadata", h.handleSAMLMetadataLegacy)    // Legacy redirect
 }
 
 // RegisterV1 registers SSO JSON APIs under /api/v1/sso.
@@ -141,13 +141,13 @@ func (h *SSOController) RegisterV1(apiV1 *echo.Group) {
 
 // ============================================================================
 // V2 Tenant-Scoped SSO Endpoints
-// URL format: /auth/sso/t/:tenant_id/:slug/*
+// URL format: /api/v1/auth/sso/t/:tenant_id/:slug/*
 // These endpoints use tenant_id in the URL path instead of query params,
 // making them compatible with SAML POST binding and more reliable.
 // ============================================================================
 
 // handleSSOInitiateV2 initiates an SSO login flow using tenant-scoped URLs.
-// GET /auth/sso/t/:tenant_id/:slug/login?redirect_url=xxx
+// GET /api/v1/auth/sso/t/:tenant_id/:slug/login?redirect_url=xxx
 func (h *SSOController) handleSSOInitiateV2(c echo.Context) error {
 	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
@@ -263,7 +263,7 @@ func (h *SSOController) processCallback(ctx context.Context, req callbackRequest
 }
 
 // handleSSOCallbackV2 handles the SSO callback using tenant-scoped URLs.
-// GET/POST /auth/sso/t/:tenant_id/:slug/callback
+// GET/POST /api/v1/auth/sso/t/:tenant_id/:slug/callback
 func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
@@ -322,7 +322,7 @@ func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 }
 
 // handleSAMLMetadataV2 returns SAML SP metadata using tenant-scoped URLs.
-// GET /auth/sso/t/:tenant_id/:slug/metadata
+// GET /api/v1/auth/sso/t/:tenant_id/:slug/metadata
 func (h *SSOController) handleSAMLMetadataV2(c echo.Context) error {
 	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
@@ -353,7 +353,7 @@ func (h *SSOController) handleSAMLMetadataV2(c echo.Context) error {
 }
 
 // handleSSOLogout handles SSO logout (Single Logout).
-// GET/POST /auth/sso/t/:tenant_id/:slug/logout
+// GET/POST /api/v1/auth/sso/t/:tenant_id/:slug/logout
 func (h *SSOController) handleSSOLogout(c echo.Context) error {
 	tenantIDStr := c.Param("tenant_id")
 	slug := c.Param("slug")
@@ -449,7 +449,7 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 // ============================================================================
 
 // handleSSOInitiateLegacy redirects legacy SSO initiate to V2 format.
-// GET /auth/sso/:slug/login?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/login
+// GET /api/v1/auth/sso/:slug/login?tenant_id=xxx -> /api/v1/auth/sso/t/:tenant_id/:slug/login
 func (h *SSOController) handleSSOInitiateLegacy(c echo.Context) error {
 	slug := c.Param("slug")
 	tenantIDStr := c.QueryParam("tenant_id")
@@ -457,7 +457,7 @@ func (h *SSOController) handleSSOInitiateLegacy(c echo.Context) error {
 	if tenantIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":   "tenant_id is required",
-			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/login",
+			"message": "Please use the new URL format: /api/v1/auth/sso/t/{tenant_id}/{slug}/login",
 		})
 	}
 
@@ -472,7 +472,7 @@ func (h *SSOController) handleSSOInitiateLegacy(c echo.Context) error {
 		Msg("legacy SSO URL used, redirecting to V2 format")
 
 	// Build new URL with all query params except tenant_id
-	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/login", tenantIDStr, slug)
+	newURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/%s/login", tenantIDStr, slug)
 	query := c.QueryParams()
 	query.Del("tenant_id")
 	if len(query) > 0 {
@@ -494,7 +494,7 @@ func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
 	if tenantIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":   "tenant_id is required",
-			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/callback",
+			"message": "Please use the new URL format: /api/v1/auth/sso/t/{tenant_id}/{slug}/callback",
 		})
 	}
 
@@ -534,7 +534,7 @@ func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
 	}
 
 	// For GET requests, redirect
-	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/callback", tenantIDStr, slug)
+	newURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/%s/callback", tenantIDStr, slug)
 	query := c.QueryParams()
 	query.Del("tenant_id")
 	if len(query) > 0 {
@@ -545,7 +545,7 @@ func (h *SSOController) handleSSOCallbackLegacy(c echo.Context) error {
 }
 
 // handleSAMLMetadataLegacy redirects legacy metadata URL to V2 format.
-// GET /auth/sso/:slug/metadata?tenant_id=xxx -> /auth/sso/t/:tenant_id/:slug/metadata
+// GET /api/v1/auth/sso/:slug/metadata?tenant_id=xxx -> /api/v1/auth/sso/t/:tenant_id/:slug/metadata
 func (h *SSOController) handleSAMLMetadataLegacy(c echo.Context) error {
 	slug := c.Param("slug")
 	tenantIDStr := c.QueryParam("tenant_id")
@@ -553,7 +553,7 @@ func (h *SSOController) handleSAMLMetadataLegacy(c echo.Context) error {
 	if tenantIDStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":   "tenant_id is required",
-			"message": "Please use the new URL format: /auth/sso/t/{tenant_id}/{slug}/metadata",
+			"message": "Please use the new URL format: /api/v1/auth/sso/t/{tenant_id}/{slug}/metadata",
 		})
 	}
 
@@ -566,7 +566,7 @@ func (h *SSOController) handleSAMLMetadataLegacy(c echo.Context) error {
 		Str("tenant_id", tenantIDStr).
 		Msg("legacy SAML metadata URL used, redirecting to V2 format")
 
-	newURL := fmt.Sprintf("/auth/sso/t/%s/%s/metadata", tenantIDStr, slug)
+	newURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/%s/metadata", tenantIDStr, slug)
 	return c.Redirect(http.StatusPermanentRedirect, newURL)
 }
 
