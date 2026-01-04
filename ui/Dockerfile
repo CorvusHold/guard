@@ -17,13 +17,21 @@ COPY sdk/ts ./sdk/ts
 WORKDIR /app/ui
 
 # Install dependencies with architecture-aware settings
-RUN npm install -g pnpm@10 \
+RUN apk add --no-cache python3 make g++ \
+    && npm install -g pnpm@10 \
     && pnpm config set engine-strict false \
-    && pnpm install --frozen-lockfile --no-optional
+    && pnpm install --frozen-lockfile --log-level=verbose
+
+# Platform-specific fixes for ARM64
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        # Additional ARM64-specific configurations
+        export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+        export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; \
+    fi
 
 # Copy UI source and build
 COPY ui .
-RUN pnpm build
+RUN pnpm build --log-level=verbose
 
 # Production stage
 FROM nginx:1.27-alpine
