@@ -4358,7 +4358,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tenants": {
-                    "description": "If email is present in multiple tenants, list them so the UI can prompt the user.",
+                    "description": "If email is present in multiple tenants, list them so the UI can prompt the user.\nWhen multiple tenants are present, tenant_id/tenant_name will only be set when\nexactly one tenant is resolved; otherwise clients must let the user choose.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/controller.TenantInfo"
@@ -4411,12 +4411,20 @@ const docTemplate = `{
         },
         "controller.TenantInfo": {
             "type": "object",
+            "required": [
+                "id",
+                "name"
+            ],
             "properties": {
                 "id": {
-                    "type": "string"
+                    "description": "Tenant ID (UUID)",
+                    "type": "string",
+                    "example": "3efda476-f0b9-47a8-b96b-5a543b88da3e"
                 },
                 "name": {
-                    "type": "string"
+                    "description": "Tenant display name",
+                    "type": "string",
+                    "example": "Acme Corp"
                 }
             }
         },

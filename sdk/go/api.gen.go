@@ -109,12 +109,13 @@ type ControllerEmailDiscoveryRequest struct {
 
 // ControllerEmailDiscoveryResponse defines model for controller.EmailDiscoveryResponse.
 type ControllerEmailDiscoveryResponse struct {
-	Found       *bool     `json:"found,omitempty"`
-	HasTenant   *bool     `json:"has_tenant,omitempty"`
-	Suggestions *[]string `json:"suggestions,omitempty"`
-	TenantId    *string   `json:"tenant_id,omitempty"`
-	TenantName  *string   `json:"tenant_name,omitempty"`
-	UserExists  *bool     `json:"user_exists,omitempty"`
+	Found       *bool                   `json:"found,omitempty"`
+	HasTenant   *bool                   `json:"has_tenant,omitempty"`
+	Suggestions *[]string               `json:"suggestions,omitempty"`
+	TenantId    *string                 `json:"tenant_id,omitempty"`
+	TenantName  *string                 `json:"tenant_name,omitempty"`
+	Tenants     *[]ControllerTenantInfo `json:"tenants,omitempty"`
+	UserExists  *bool                   `json:"user_exists,omitempty"`
 }
 
 // ControllerLoginOptionsResponse defines model for controller.LoginOptionsResponse.
@@ -143,6 +144,11 @@ type ControllerLoginOptionsResponse struct {
 	TenantId   *string `json:"tenant_id,omitempty"`
 	TenantName *string `json:"tenant_name,omitempty"`
 
+	// Tenants If email is present in multiple tenants, list them so the UI can prompt the user.
+	// When multiple tenants are present, tenant_id/tenant_name will only be set when
+	// exactly one tenant is resolved; otherwise clients must let the user choose.
+	Tenants *[]ControllerTenantInfo `json:"tenants,omitempty"`
+
 	// UserExists If true, user exists and can use password login
 	UserExists *bool `json:"user_exists,omitempty"`
 }
@@ -166,6 +172,15 @@ type ControllerSocialProviderOption struct {
 
 	// Provider "google", "github", "microsoft", etc.
 	Provider *string `json:"provider,omitempty"`
+}
+
+// ControllerTenantInfo defines model for controller.TenantInfo.
+type ControllerTenantInfo struct {
+	// Id Tenant ID (UUID)
+	Id string `json:"id"`
+
+	// Name Tenant display name
+	Name string `json:"name"`
 }
 
 // ControllerAdminUpdateNamesReq defines model for controller.adminUpdateNamesReq.

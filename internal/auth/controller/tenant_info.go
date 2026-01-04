@@ -6,8 +6,10 @@ import (
 
 // TenantInfo represents basic tenant information for discovery/login options.
 type TenantInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	// Tenant ID (UUID)
+	ID string `json:"id" example:"3efda476-f0b9-47a8-b96b-5a543b88da3e" validate:"required"`
+	// Tenant display name
+	Name string `json:"name" example:"Acme Corp" validate:"required"`
 }
 
 // toTenantInfos converts domain tenant info into response DTOs.

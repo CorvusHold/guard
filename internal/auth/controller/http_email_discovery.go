@@ -12,7 +12,11 @@ type EmailDiscoveryRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
-// EmailDiscoveryResponse represents the response for email discovery
+// EmailDiscoveryResponse represents the response for email discovery.
+// When multiple tenants match the email, tenants will list them so the client
+// can prompt the user. tenant_id/tenant_name are populated only when exactly
+// one tenant is resolved; otherwise clients should rely on tenants[]. The
+// suggestions field is used for misspellings or alternate domains.
 type EmailDiscoveryResponse struct {
 	Found       bool         `json:"found"`
 	HasTenant   bool         `json:"has_tenant"`

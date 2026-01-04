@@ -52,6 +52,8 @@ type LoginOptionsResponse struct {
 	TenantName string `json:"tenant_name,omitempty"`
 
 	// If email is present in multiple tenants, list them so the UI can prompt the user.
+	// When multiple tenants are present, tenant_id/tenant_name will only be set when
+	// exactly one tenant is resolved; otherwise clients must let the user choose.
 	Tenants []TenantInfo `json:"tenants,omitempty"`
 
 	// If email domain matches an SSO provider's configured domains
@@ -111,9 +113,14 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 				// Only auto-select when exactly one tenant exists to avoid random choice.
 				if len(tenants) == 1 {
 					tenant := tenants[0]
-					tenantID, _ = uuid.Parse(tenant.ID)
-					response.TenantID = tenant.ID
-					response.TenantName = tenant.Name
+					var parseErr error
+					tenantID, parseErr = uuid.Parse(tenant.ID)
+					if parseErr != nil {
+						c.Logger().Warnf("invalid tenant ID %s: %v", tenant.ID, parseErr)
+					} else {
+						response.TenantID = tenant.ID
+						response.TenantName = tenant.Name
+					}
 				}
 			}
 		} else {

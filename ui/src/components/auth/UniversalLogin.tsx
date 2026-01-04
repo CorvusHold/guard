@@ -96,7 +96,7 @@ export default function UniversalLogin({
         setLoginOptions(res.data)
 
         // Resolve tenant selection
-        const tenants = (res.data as any).tenants as { id: string; name?: string }[] | undefined
+        const tenants = res.data.tenants
         let resolvedTenantId = res.data.tenant_id
         if (!resolvedTenantId && tenants?.length === 1) {
           resolvedTenantId = tenants[0].id
@@ -382,11 +382,11 @@ export default function UniversalLogin({
             )}
 
             {/* Tenant selection when multiple tenants are returned */}
-            {(loginOptions as any).tenants && (loginOptions as any).tenants.length > 0 && (
+            {loginOptions.tenants?.length ? (
               <div className="space-y-2">
                 <Label>Choose organization</Label>
                 <div className="space-y-2">
-                  {(loginOptions as any).tenants.map((t: { id: string; name?: string }) => (
+                  {loginOptions.tenants?.map((t) => (
                     <Button
                       key={t.id}
                       type="button"
@@ -416,7 +416,7 @@ export default function UniversalLogin({
                   Choose a different organization
                 </Button>
               </div>
-            )}
+            ) : null}
 
             {/* Domain-matched SSO (recommended) */}
             {loginOptions.domain_matched_sso && (
@@ -475,7 +475,7 @@ export default function UniversalLogin({
                   variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
                   className="w-full"
                   onClick={() => {
-                    if (!selectedTenantId && (loginOptions as any).tenants?.length > 1) {
+                    if (!selectedTenantId && loginOptions.tenants?.length > 1) {
                       setError('Please choose an organization to continue.')
                       return
                     }
