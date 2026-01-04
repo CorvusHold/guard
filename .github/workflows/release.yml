@@ -201,7 +201,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.preflight.outputs.is_prerelease == 'false' }}
 
       - name: Build and push (linux/amd64)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -214,7 +214,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push (linux/arm64)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -261,7 +261,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.preflight.outputs.is_prerelease == 'false' }}
 
       - name: Build and push UI image (linux/amd64)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./ui/Dockerfile
@@ -273,7 +273,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push UI image (linux/arm64)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./ui/Dockerfile
