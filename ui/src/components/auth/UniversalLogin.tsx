@@ -475,7 +475,8 @@ export default function UniversalLogin({
                   variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
                   className="w-full"
                   onClick={() => {
-                    if (!selectedTenantId && loginOptions.tenants?.length > 1) {
+                    const tenantCount = loginOptions?.tenants?.length ?? 0
+                    if (!selectedTenantId && tenantCount > 1) {
                       setError('Please choose an organization to continue.')
                       return
                     }
