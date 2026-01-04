@@ -51,6 +51,9 @@ type LoginOptionsResponse struct {
 	TenantID   string `json:"tenant_id,omitempty"`
 	TenantName string `json:"tenant_name,omitempty"`
 
+	// If email is present in multiple tenants, list them so the UI can prompt the user.
+	Tenants []TenantInfo `json:"tenants,omitempty"`
+
 	// If email domain matches an SSO provider's configured domains
 	DomainMatchedSSO *SSOProviderOption `json:"domain_matched_sso,omitempty"`
 }
@@ -102,12 +105,16 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		if tenantIDStr == "" {
 			tenants, discoverErr := h.svc.FindTenantsByUserEmail(c.Request().Context(), email)
 			if discoverErr == nil && len(tenants) > 0 {
-				// Use first tenant found
-				tenant := tenants[0]
-				tenantID, _ = uuid.Parse(tenant.ID)
-				response.TenantID = tenant.ID
-				response.TenantName = tenant.Name
+				response.Tenants = toTenantInfos(tenants)
 				response.UserExists = true
+
+				// Only auto-select when exactly one tenant exists to avoid random choice.
+				if len(tenants) == 1 {
+					tenant := tenants[0]
+					tenantID, _ = uuid.Parse(tenant.ID)
+					response.TenantID = tenant.ID
+					response.TenantName = tenant.Name
+				}
 			}
 		} else {
 			// Check if user exists in specified tenant

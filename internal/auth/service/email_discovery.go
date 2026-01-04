@@ -21,10 +21,13 @@ func (s *Service) FindTenantsByUserEmail(ctx context.Context, email string) ([]d
 	for _, identity := range identities {
 		tenantIDStr := identity.TenantID.String()
 		if _, exists := tenantMap[tenantIDStr]; !exists {
-			// For now, use tenant ID as name since we don't have tenant service integration
+			name := fmt.Sprintf("Tenant %s", tenantIDStr[:8])
+			if ten, getErr := s.repo.GetTenantByID(ctx, identity.TenantID); getErr == nil && ten.Name != "" {
+				name = ten.Name
+			}
 			tenantMap[tenantIDStr] = domain.TenantInfo{
 				ID:   tenantIDStr,
-				Name: fmt.Sprintf("Tenant %s", tenantIDStr[:8]),
+				Name: name,
 			}
 		}
 	}

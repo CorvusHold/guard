@@ -591,44 +591,43 @@ export default function TenantSettingsPanel({ tenantId, tenantName, onSettingsUp
                       <SelectItem value="none">None</SelectItem>
                       <SelectItem value="dev">Development</SelectItem>
                       <SelectItem value="workos">WorkOS</SelectItem>
+                      <SelectItem value="custom">Custom (SAML/OIDC)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {settings.sso_provider && settings.sso_provider !== 'none' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="sso_state_ttl">OAuth State TTL</Label>
-                      <Select
-                        value={settings.sso_state_ttl || '10m'}
-                        onValueChange={(value) => updateSetting('sso_state_ttl', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="5m">5 minutes</SelectItem>
-                          <SelectItem value="10m">10 minutes</SelectItem>
-                          <SelectItem value="15m">15 minutes</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="sso_redirect_allowlist">Redirect Allowlist</Label>
-                      <Textarea
-                        id="sso_redirect_allowlist"
-                        value={settings.sso_redirect_allowlist || ''}
-                        onChange={(e) => updateSetting('sso_redirect_allowlist', e.target.value)}
-                        placeholder="https://app.example.com/callback,https://admin.example.com/callback"
-                        rows={2}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Comma-separated list of allowed redirect URLs for SSO callbacks
-                      </p>
-                    </div>
-                  </>
+                  <div className="space-y-2">
+                    <Label htmlFor="sso_state_ttl">OAuth State TTL</Label>
+                    <Select
+                      value={settings.sso_state_ttl || '10m'}
+                      onValueChange={(value) => updateSetting('sso_state_ttl', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5m">5 minutes</SelectItem>
+                        <SelectItem value="10m">10 minutes</SelectItem>
+                        <SelectItem value="15m">15 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="sso_redirect_allowlist">Redirect Allowlist</Label>
+                  <Textarea
+                    id="sso_redirect_allowlist"
+                    value={settings.sso_redirect_allowlist || ''}
+                    onChange={(e) => updateSetting('sso_redirect_allowlist', e.target.value)}
+                    placeholder="https://app.example.com/callback,https://admin.example.com/callback"
+                    rows={2}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated list of allowed redirect URLs for SSO callbacks
+                  </p>
+                </div>
 
                 {settings.sso_provider === 'workos' && (
                   <div className="space-y-4 border-t pt-4">

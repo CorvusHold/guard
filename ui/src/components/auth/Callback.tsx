@@ -26,11 +26,6 @@ export default function SSOCallback() {
         setMessage('Missing provider or code in callback URL')
         return
       }
-      if (provider !== 'dev' && provider !== 'workos') {
-        setStatus('error')
-        setMessage(`Unsupported provider: ${provider}`)
-        return
-      }
       setStatus('loading')
       try {
         const client = getClient()
@@ -45,6 +40,7 @@ export default function SSOCallback() {
             // ignore
           }
         }
+        // Allow any provider slug; backend validates provider/tenant configuration.
         const res = await client.handleSsoCallback(provider as any, {
           tenant_id,
           code,

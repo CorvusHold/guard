@@ -14,18 +14,13 @@ type EmailDiscoveryRequest struct {
 
 // EmailDiscoveryResponse represents the response for email discovery
 type EmailDiscoveryResponse struct {
-	Found       bool     `json:"found"`
-	HasTenant   bool     `json:"has_tenant"`
-	TenantID    string   `json:"tenant_id,omitempty"`
-	TenantName  string   `json:"tenant_name,omitempty"`
-	UserExists  bool     `json:"user_exists"`
-	Suggestions []string `json:"suggestions,omitempty"`
-}
-
-// TenantInfo represents basic tenant information for discovery
-type TenantInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Found       bool         `json:"found"`
+	HasTenant   bool         `json:"has_tenant"`
+	TenantID    string       `json:"tenant_id,omitempty"`
+	TenantName  string       `json:"tenant_name,omitempty"`
+	UserExists  bool         `json:"user_exists"`
+	Suggestions []string     `json:"suggestions,omitempty"`
+	Tenants     []TenantInfo `json:"tenants,omitempty"`
 }
 
 // EmailDiscovery godoc
@@ -98,10 +93,10 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 				TenantID:   tenant.ID,
 				TenantName: tenant.Name,
 				UserExists: true,
+				Tenants:    toTenantInfos(tenants),
 			}
 		} else {
-			// Email found in multiple tenants - return first one with suggestions
-			tenant := tenants[0]
+			// Email found in multiple tenants - return the list and avoid forcing a default
 			var suggestions []string
 			for _, t := range tenants {
 				suggestions = append(suggestions, t.Name)
@@ -110,10 +105,9 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 			response = EmailDiscoveryResponse{
 				Found:       true,
 				HasTenant:   true,
-				TenantID:    tenant.ID,
-				TenantName:  tenant.Name,
 				UserExists:  true,
 				Suggestions: suggestions,
+				Tenants:     toTenantInfos(tenants),
 			}
 		}
 	}
