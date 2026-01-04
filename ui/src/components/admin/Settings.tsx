@@ -200,7 +200,7 @@ export default function AdminSettings() {
                 Enter a tenant ID above to manage settings.
               </div>
             ) : (
-              <TenantSettingsPanel tenantId={tenantId} tenantName="Current Tenant" hideSsoTab />
+              <TenantSettingsPanel tenantId={tenantId} tenantName="Current Tenant" />
             )}
           </div>
         )}

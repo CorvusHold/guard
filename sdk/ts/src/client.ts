@@ -260,6 +260,7 @@ export interface LoginOptionsResp {
   user_exists: boolean;
   tenant_id?: string;
   tenant_name?: string;
+  tenants?: Array<{ id: string; name?: string }>;
   domain_matched_sso?: SsoProviderOption;
 }
 

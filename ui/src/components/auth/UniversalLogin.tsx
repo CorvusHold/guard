@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2 } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2, X } from 'lucide-react'
 import { useToast } from '@/lib/toast'
 import { getClient } from '@/lib/sdk'
 import type { LoginOptionsResp, SsoProviderOption } from '@/lib/sdk'
@@ -52,12 +52,13 @@ export default function UniversalLogin({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loginOptions, setLoginOptions] = useState<LoginOptionsResp | null>(null)
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null)
   const [challengeToken, setChallengeToken] = useState<string | null>(null)
   const [challengeMethods, setChallengeMethods] = useState<string[]>([])
   const [challengeMethod, setChallengeMethod] = useState<'totp' | 'backup_code'>('totp')
   const [challengeCode, setChallengeCode] = useState('')
   const { show: showToast } = useToast()
-  const { tenantId, setTenantId } = useTenant()
+  const { tenantId, tenantName, setTenantId, setTenantName } = useTenant()
 
   // Hydrate tenant from URL if present
   useEffect(() => {
@@ -93,20 +94,32 @@ export default function UniversalLogin({
 
       if (res.meta.status >= 200 && res.meta.status < 300 && res.data) {
         setLoginOptions(res.data)
-        
+
+        // Resolve tenant selection
+        const tenants = res.data.tenants
+        let resolvedTenantId = res.data.tenant_id
+        if (!resolvedTenantId && tenants?.length === 1) {
+          resolvedTenantId = tenants[0].id
+        }
+        setSelectedTenantId(resolvedTenantId || null)
+
         // Update tenant context if discovered
-        if (res.data.tenant_id && !tenantId) {
-          setTenantId(res.data.tenant_id)
+        if (resolvedTenantId && !tenantId) {
+          setTenantId(resolvedTenantId)
+          const resolvedTenantName =
+            tenants?.find((t) => t.id === resolvedTenantId)?.name || res.data.tenant_name || resolvedTenantId
+          setTenantName(resolvedTenantName || '')
         }
 
         // Determine next step based on options
+        const hasMultipleTenants = (tenants?.length || 0) > 1 && !resolvedTenantId
         if (res.data.domain_matched_sso) {
           // Domain matches SSO - show SSO option prominently
           setStep('options')
-        } else if (res.data.user_exists && res.data.password_enabled) {
+        } else if (res.data.user_exists && res.data.password_enabled && !hasMultipleTenants) {
           // Existing user with password - go to password
           setStep('password')
-        } else if (res.data.sso_providers.length > 0) {
+        } else if (res.data.sso_providers.length > 0 || hasMultipleTenants) {
           // SSO available - show options
           setStep('options')
         } else if (res.data.password_enabled) {
@@ -241,8 +254,17 @@ export default function UniversalLogin({
     setPassword('')
     setError(null)
     setLoginOptions(null)
+    setSelectedTenantId(null)
     setChallengeToken(null)
     setChallengeCode('')
+  }
+
+  const clearTenantSelection = () => {
+    setSelectedTenantId(null)
+    setTenantId('')
+    setTenantName('')
+    setLoginOptions(null)
+    setError(null)
   }
 
   return (
@@ -285,6 +307,27 @@ export default function UniversalLogin({
                 />
               </div>
             </div>
+            {(tenantId || tenantName) && (
+              <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Organization selected</span>
+                    <span className="text-muted-foreground text-xs">
+                      {tenantName || tenantId}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearTenantSelection}
+                  className="text-muted-foreground hover:text-foreground"
+                  data-testid="clear-tenant-selection"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <Button
               type="submit"
               className="w-full"
@@ -337,6 +380,43 @@ export default function UniversalLogin({
                 <span>{loginOptions.tenant_name}</span>
               </div>
             )}
+
+            {/* Tenant selection when multiple tenants are returned */}
+            {loginOptions.tenants?.length ? (
+              <div className="space-y-2">
+                <Label>Choose organization</Label>
+                <div className="space-y-2">
+                  {loginOptions.tenants?.map((t) => (
+                    <Button
+                      key={t.id}
+                      type="button"
+                      variant={selectedTenantId === t.id ? 'default' : 'outline'}
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setSelectedTenantId(t.id)
+                        setTenantId(t.id)
+                        setError(null)
+                        setTenantName(t.name || t.id)
+                      }}
+                      data-testid={`tenant-option-${t.id}`}
+                    >
+                      <Building2 className="mr-2 h-4 w-4" />
+                      {t.name || t.id}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-start text-sm text-muted-foreground"
+                  onClick={clearTenantSelection}
+                  data-testid="tenant-clear-button"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Choose a different organization
+                </Button>
+              </div>
+            ) : null}
 
             {/* Domain-matched SSO (recommended) */}
             {loginOptions.domain_matched_sso && (
@@ -394,7 +474,14 @@ export default function UniversalLogin({
                   type="button"
                   variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
                   className="w-full"
-                  onClick={() => setStep('password')}
+                  onClick={() => {
+                    const tenantCount = loginOptions?.tenants?.length ?? 0
+                    if (!selectedTenantId && tenantCount > 1) {
+                      setError('Please choose an organization to continue.')
+                      return
+                    }
+                    setStep('password')
+                  }}
                   data-testid="password-option-button"
                 >
                   <Key className="mr-2 h-4 w-4" />
