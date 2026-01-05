@@ -29,6 +29,7 @@ import (
 	"github.com/crewjam/saml"
 
 	"github.com/corvusHold/guard/internal/auth/sso/domain"
+	"github.com/rs/zerolog"
 )
 
 // SAMLProvider implements the SSOProvider interface for SAML 2.0.
@@ -39,6 +40,7 @@ type SAMLProvider struct {
 	spCert         tls.Certificate
 	assertionIDs   map[string]time.Time // For replay attack prevention
 	assertionIDsMu sync.RWMutex         // Protects assertionIDs map
+	log            zerolog.Logger
 }
 
 const (
@@ -115,6 +117,11 @@ func NewSAMLProvider(ctx context.Context, config *domain.Config) (*SAMLProvider,
 	}, nil
 }
 
+// SetLogger sets the logger for SAML provider.
+func (p *SAMLProvider) SetLogger(log zerolog.Logger) {
+	p.log = log
+}
+
 // Type returns the provider type.
 func (p *SAMLProvider) Type() domain.ProviderType {
 	return domain.ProviderTypeSAML
@@ -140,6 +147,17 @@ func validateSAMLConfig(config *domain.Config) error {
 		return fmt.Errorf("either idp_metadata_url or idp_metadata_xml is required")
 	}
 	return nil
+}
+
+func getAudiencesString(assertion *saml.Assertion) string {
+	if len(assertion.Conditions.AudienceRestrictions) == 0 {
+		return "none"
+	}
+	audiences := make([]string, 0, len(assertion.Conditions.AudienceRestrictions))
+	for _, r := range assertion.Conditions.AudienceRestrictions {
+		audiences = append(audiences, r.Audience.Value)
+	}
+	return strings.Join(audiences, ", ")
 }
 
 // Start initiates the SAML authentication flow.
@@ -193,6 +211,12 @@ func (p *SAMLProvider) Start(ctx context.Context, opts domain.StartOptions) (*do
 		return nil, fmt.Errorf("failed to marshal AuthnRequest: %w", err)
 	}
 
+	p.log.Debug().
+		Str("provider_id", p.config.ID.String()).
+		Str("sso_url", redirectURL).
+		Str("relay_state", relayState).
+		Msg("SAML flow initiated - redirecting to IdP")
+
 	return &domain.StartResult{
 		AuthorizationURL: redirectURL,
 		State:            relayState,
@@ -215,6 +239,18 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 		return nil, fmt.Errorf("failed to decode SAMLResponse: %w", err)
 	}
 
+	p.log.Debug().
+		Str("provider_id", p.config.ID.String()).
+		Int("response_size", len(samlResponseXML)).
+		Msg("SAML response received from IdP")
+
+	if p.log.GetLevel() <= zerolog.DebugLevel {
+		p.log.Debug().
+			Str("provider_id", p.config.ID.String()).
+			Str("saml_response", string(samlResponseXML)).
+			Msg("Full SAML response XML (base64 decoded)")
+	}
+
 	// Let the crewjam/saml ServiceProvider handle XML parsing, signature
 	// verification, condition checks, and encrypted assertion handling.
 	// We still run our own additional condition checks and replay protection
@@ -234,7 +270,32 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 	}
 
 	if assertion == nil {
+		p.log.Warn().
+			Str("provider_id", p.config.ID.String()).
+			Msg("No assertion found in SAML response")
 		return nil, fmt.Errorf("no assertion found in SAML response")
+	}
+
+	p.log.Debug().
+		Str("provider_id", p.config.ID.String()).
+		Str("assertion_id", assertion.ID).
+		Str("subject", assertion.Subject.NameID.Value).
+		Time("not_before", assertion.Conditions.NotBefore).
+		Time("not_on_or_after", assertion.Conditions.NotOnOrAfter).
+		Msg("SAML assertion parsed successfully")
+
+	// Enforce configured signature requirements by inspecting the verified
+	// SAML Response XML. At this point ParseXMLResponse has already validated
+	// cryptographic signatures; this check only ensures that expected
+	// signature placement (response vs assertions) matches configuration.
+	if err := p.enforceSignaturePolicy(samlResponseXML); err != nil {
+		p.log.Debug().
+			Str("provider_id", p.config.ID.String()).
+			Bool("want_response_signed", p.config.WantResponseSigned).
+			Bool("want_assertions_signed", p.config.WantAssertionsSigned).
+			Err(err).
+			Msg("Signature policy enforcement failed")
+		return nil, err
 	}
 
 	// Enforce configured signature requirements by inspecting the verified
@@ -247,19 +308,42 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 
 	// Additional validation for assertion conditions specific to our requirements
 	if err := p.validateAssertionConditions(assertion); err != nil {
+		p.log.Error().
+			Str("provider_id", p.config.ID.String()).
+			Str("assertion_id", assertion.ID).
+			Err(err).
+			Msg("SAML assertion validation failed")
 		return nil, fmt.Errorf("assertion validation failed: %w", err)
 	}
 
 	// Check for replay attacks
 	if err := p.checkReplayAttack(assertion); err != nil {
+		p.log.Warn().
+			Str("provider_id", p.config.ID.String()).
+			Str("assertion_id", assertion.ID).
+			Err(err).
+			Msg("Replay attack detected")
 		return nil, fmt.Errorf("replay attack detected: %w", err)
 	}
 
 	// Extract user profile from assertion
 	profile, err := p.extractProfile(assertion)
 	if err != nil {
+		p.log.Error().
+			Str("provider_id", p.config.ID.String()).
+			Str("assertion_id", assertion.ID).
+			Err(err).
+			Msg("Failed to extract user profile from SAML assertion")
 		return nil, fmt.Errorf("failed to extract profile: %w", err)
 	}
+
+	p.log.Debug().
+		Str("provider_id", p.config.ID.String()).
+		Str("subject", profile.Subject).
+		Str("email", profile.Email).
+		Str("name", profile.Name).
+		Strs("groups", profile.Groups).
+		Msg("Extracted user profile from SAML assertion")
 
 	// Apply custom attribute mapping if configured
 	if len(p.config.AttributeMapping) > 0 {
@@ -376,19 +460,39 @@ func (p *SAMLProvider) enforceSignaturePolicy(responseXML []byte) error {
 func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) error {
 	now := time.Now()
 
-	// Check that assertion has conditions
+	p.log.Debug().
+		Str("provider_id", p.config.ID.String()).
+		Time("now", now).
+		Time("not_before", assertion.Conditions.NotBefore).
+		Time("not_on_or_after", assertion.Conditions.NotOnOrAfter).
+		Str("audiences", getAudiencesString(assertion)).
+		Msg("Validating SAML assertion conditions")
+
 	if assertion.Conditions == nil {
+		p.log.Warn().
+			Str("provider_id", p.config.ID.String()).
+			Msg("Assertion conditions missing - NotBefore not set")
 		return fmt.Errorf("assertion conditions missing")
 	}
 
 	// Check NotBefore condition
 	if !assertion.Conditions.NotBefore.IsZero() && assertion.Conditions.NotBefore.After(now) {
+		p.log.Warn().
+			Str("provider_id", p.config.ID.String()).
+			Time("not_before", assertion.Conditions.NotBefore).
+			Time("now", now).
+			Msg("Assertion not yet valid - NotBefore in future")
 		return fmt.Errorf("assertion not yet valid: NotBefore=%s, Now=%s",
 			assertion.Conditions.NotBefore, now)
 	}
 
 	// Check NotOnOrAfter condition
 	if !assertion.Conditions.NotOnOrAfter.IsZero() && assertion.Conditions.NotOnOrAfter.Before(now) {
+		p.log.Warn().
+			Str("provider_id", p.config.ID.String()).
+			Time("not_on_or_after", assertion.Conditions.NotOnOrAfter).
+			Time("now", now).
+			Msg("Assertion expired - NotOnOrAfter in past")
 		return fmt.Errorf("assertion expired: NotOnOrAfter=%s, Now=%s",
 			assertion.Conditions.NotOnOrAfter, now)
 	}
@@ -403,6 +507,11 @@ func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) er
 			}
 		}
 		if !audienceValid {
+			p.log.Error().
+				Str("provider_id", p.config.ID.String()).
+				Str("expected_audience", p.config.EntityID).
+				Str("audiences", getAudiencesString(assertion)).
+				Msg("Audience restriction failed")
 			return fmt.Errorf("audience restriction failed: expected %s", p.config.EntityID)
 		}
 	}
@@ -411,12 +520,25 @@ func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) er
 	if assertion.Subject != nil && assertion.Subject.SubjectConfirmations != nil && len(assertion.Subject.SubjectConfirmations) > 0 {
 		for _, confirmation := range assertion.Subject.SubjectConfirmations {
 			if confirmation.SubjectConfirmationData == nil {
+				p.log.Warn().
+					Str("provider_id", p.config.ID.String()).
+					Msg("Subject confirmation data missing")
 				return fmt.Errorf("subject confirmation data missing")
 			}
 			if !confirmation.SubjectConfirmationData.NotOnOrAfter.IsZero() && confirmation.SubjectConfirmationData.NotOnOrAfter.Before(now) {
+				p.log.Warn().
+					Str("provider_id", p.config.ID.String()).
+					Time("not_on_or_after", confirmation.SubjectConfirmationData.NotOnOrAfter).
+					Time("now", now).
+					Msg("Subject confirmation expired")
 				return fmt.Errorf("subject confirmation expired")
 			}
 			if confirmation.SubjectConfirmationData.Recipient != "" && confirmation.SubjectConfirmationData.Recipient != p.config.ACSUrl {
+				p.log.Error().
+					Str("provider_id", p.config.ID.String()).
+					Str("expected_recipient", p.config.ACSUrl).
+					Str("actual_recipient", confirmation.SubjectConfirmationData.Recipient).
+					Msg("Recipient mismatch in SAML response")
 				return fmt.Errorf("recipient mismatch: expected %s, got %s",
 					p.config.ACSUrl, confirmation.SubjectConfirmationData.Recipient)
 			}
