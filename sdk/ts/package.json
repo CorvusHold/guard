@@ -73,6 +73,6 @@
     "swagger2openapi": "^7.0.8",
     "tsup": "^8.2.4",
     "typescript": "^5.5.4",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.8"
   }
 }
