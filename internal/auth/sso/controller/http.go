@@ -300,17 +300,30 @@ func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": result.Error.Error()})
 	}
 
-	// If a redirect URL was provided during initiation, redirect with tokens in fragment
+	// If a redirect URL was provided during initiation, redirect with tokens
 	if result.RedirectURL != "" {
 		redirectURL, err := url.Parse(result.RedirectURL)
 		if err != nil {
 			h.log.Error().Err(err).Str("redirect_url", result.RedirectURL).Msg("invalid redirect URL")
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect URL"})
 		}
-		// Use fragment to avoid token leakage in server logs/referrer headers
-		redirectURL.Fragment = fmt.Sprintf("access_token=%s&refresh_token=%s",
-			url.QueryEscape(result.Tokens.AccessToken),
-			url.QueryEscape(result.Tokens.RefreshToken))
+
+		// Check if redirect URL prefers query params (has ?use_query=true)
+		// Otherwise use fragment (more secure - not sent to server logs)
+		useQuery := redirectURL.Query().Get("use_query") == "true"
+
+		if useQuery {
+			// Use query parameters (less secure but works with server-side routes)
+			q := redirectURL.Query()
+			q.Set("access_token", result.Tokens.AccessToken)
+			q.Set("refresh_token", result.Tokens.RefreshToken)
+			redirectURL.RawQuery = q.Encode()
+		} else {
+			// Use fragment to avoid token leakage in server logs/referrer headers
+			redirectURL.Fragment = fmt.Sprintf("access_token=%s&refresh_token=%s",
+				url.QueryEscape(result.Tokens.AccessToken),
+				url.QueryEscape(result.Tokens.RefreshToken))
+		}
 		return c.Redirect(http.StatusFound, redirectURL.String())
 	}
 
