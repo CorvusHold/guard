@@ -5635,6 +5635,9 @@ const docTemplate = `{
                 "jwks_uri": {
                     "type": "string"
                 },
+                "linking_policy": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },

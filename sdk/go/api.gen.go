@@ -685,6 +685,7 @@ type ControllerUpdateProviderRequest struct {
 	// Issuer OIDC/OAuth2 fields
 	Issuer                 *string   `json:"issuer,omitempty"`
 	JwksUri                *string   `json:"jwks_uri,omitempty"`
+	LinkingPolicy          *string   `json:"linking_policy,omitempty"`
 	Name                   *string   `json:"name,omitempty"`
 	ResponseMode           *string   `json:"response_mode,omitempty"`
 	ResponseType           *string   `json:"response_type,omitempty"`

@@ -18,6 +18,7 @@ import (
 	echolog "github.com/labstack/gommon/log"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 
 	"github.com/corvusHold/guard/internal/config"
 	"github.com/corvusHold/guard/internal/logger"
@@ -48,15 +49,79 @@ import (
 // @in              header
 // @name            Authorization
 
+// requestLogger creates a zerolog-based request logger middleware with detailed output
+func requestLogger(log zerolog.Logger) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			req := c.Request()
+			res := c.Response()
+			start := time.Now()
+
+			err := next(c)
+			if err != nil {
+				c.Error(err)
+			}
+
+			latency := time.Since(start)
+			status := res.Status
+
+			// Determine log level based on status code
+			var event *zerolog.Event
+			switch {
+			case status >= 500:
+				event = log.Error()
+			case status >= 400:
+				event = log.Warn()
+			default:
+				event = log.Info()
+			}
+
+			// Build detailed log entry
+			event.
+				Str("request_id", res.Header().Get(echo.HeaderXRequestID)).
+				Str("method", req.Method).
+				Str("path", req.URL.Path).
+				Str("query", req.URL.RawQuery).
+				Int("status", status).
+				Dur("latency", latency).
+				Str("remote_ip", c.RealIP()).
+				Str("user_agent", req.UserAgent()).
+				Str("origin", req.Header.Get(echo.HeaderOrigin)).
+				Int64("bytes_in", req.ContentLength).
+				Int64("bytes_out", res.Size)
+
+			// Add error if present
+			if err != nil {
+				event.Err(err)
+			}
+
+			// Add tenant_id if present in query
+			if tid := req.URL.Query().Get("tenant_id"); tid != "" {
+				event.Str("tenant_id", tid)
+			}
+
+			// Add auth header presence (not the value for security)
+			if req.Header.Get(echo.HeaderAuthorization) != "" {
+				event.Bool("has_auth", true)
+			}
+
+			event.Msg("request")
+
+			return nil
+		}
+	}
+}
+
 // dynamicTenantCORS configures CORS per request by checking:
 // 1) global env CORS_ALLOWED_ORIGINS
 // 2) per-tenant app.cors_allowed_origins (if tenant context is present)
-func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareFunc {
-	// normalize global origins
+func dynamicTenantCORS(cfg config.Config, s settdomain.Service, log zerolog.Logger) echo.MiddlewareFunc {
+	// normalize global origins (strip trailing slashes)
 	glob := make([]string, 0, len(cfg.CORSAllowedOrigins))
 	allowAny := false
 	for _, o := range cfg.CORSAllowedOrigins {
 		o = strings.TrimSpace(o)
+		o = strings.TrimSuffix(o, "/") // Remove trailing slash
 		if o == "" {
 			continue
 		}
@@ -66,6 +131,8 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 		glob = append(glob, o)
 	}
 
+	log.Info().Strs("allowed_origins", glob).Bool("allow_any", allowAny).Msg("CORS configuration loaded")
+
 	allowMethods := strings.Join([]string{
 		http.MethodGet,
 		http.MethodPost,
@@ -73,6 +140,7 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 		http.MethodPatch,
 		http.MethodDelete,
 		http.MethodOptions,
+		http.MethodHead,
 	}, ", ")
 	allowHeaders := strings.Join([]string{
 		echo.HeaderOrigin,
@@ -83,12 +151,23 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 		"X-Tenant-ID",
 		"X-Auth-Mode",
 		"X-Portal-Token",
+		"X-Request-ID",
+		"X-Requested-With",
+	}, ", ")
+	exposeHeaders := strings.Join([]string{
+		"X-Request-Id",
+		"X-RateLimit-Limit",
+		"X-RateLimit-Remaining",
+		"X-RateLimit-Reset",
 	}, ", ")
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
 			origin := req.Header.Get(echo.HeaderOrigin)
+			// Normalize origin (strip trailing slash)
+			origin = strings.TrimSuffix(strings.TrimSpace(origin), "/")
+
 			if origin == "" {
 				return next(c)
 			}
@@ -100,7 +179,9 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 				res.Set(echo.HeaderAccessControlAllowOrigin, origin)
 				res.Set(echo.HeaderAccessControlAllowMethods, allowMethods)
 				res.Set(echo.HeaderAccessControlAllowHeaders, allowHeaders)
+				res.Set(echo.HeaderAccessControlExposeHeaders, exposeHeaders)
 				res.Set(echo.HeaderAccessControlAllowCredentials, "true")
+				res.Set(echo.HeaderAccessControlMaxAge, "86400") // Cache preflight for 24h
 			}
 
 			// 1) Allow any/global match first
@@ -125,6 +206,14 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service) echo.MiddlewareF
 				if req.Method == http.MethodOptions {
 					return c.NoContent(http.StatusNoContent)
 				}
+			} else {
+				// Log CORS rejection for debugging
+				log.Warn().
+					Str("origin", origin).
+					Str("method", req.Method).
+					Str("path", req.URL.Path).
+					Strs("allowed_origins", glob).
+					Msg("CORS request rejected - origin not allowed")
 			}
 			return next(c)
 		}
@@ -324,11 +413,12 @@ func main() {
 	// Middlewares
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
-	e.Use(middleware.Logger())
+	// Custom zerolog-based request logger with more details
+	e.Use(requestLogger(log))
 	e.Use(httpmetrics.HTTPMiddleware())
 	e.Use(middleware.Secure())
 	// Dynamic, per-tenant CORS (augments global env allowlist)
-	e.Use(dynamicTenantCORS(cfg, settService))
+	e.Use(dynamicTenantCORS(cfg, settService, log))
 
 	// Validator
 	e.Validator = validation.New()

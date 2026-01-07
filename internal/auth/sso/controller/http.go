@@ -858,7 +858,7 @@ func (h *SSOController) handleGetProvider(c echo.Context) error {
 // @Router       /api/v1/sso/providers/{id} [put]
 func (h *SSOController) handleUpdateProvider(c echo.Context) error {
 	// Check authentication
-	_, tenantID, _, err := h.requireAdmin(c)
+	userID, tenantID, _, err := h.requireAdmin(c)
 	if err != nil {
 		return err
 	}
@@ -874,12 +874,24 @@ func (h *SSOController) handleUpdateProvider(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
+	// Parse linking policy if provided
+	var linkingPolicy *domain.LinkingPolicy
+	if req.LinkingPolicy != nil {
+		lp := domain.LinkingPolicy(strings.TrimSpace(*req.LinkingPolicy))
+		if !lp.IsValid() {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid linking_policy"})
+		}
+		linkingPolicy = &lp
+	}
+
 	// Build update request
 	updateReq := service.UpdateProviderRequest{
+		UpdatedBy:              userID,
 		Name:                   req.Name,
 		Enabled:                req.Enabled,
 		AllowSignup:            req.AllowSignup,
 		TrustEmailVerified:     req.TrustEmailVerified,
+		LinkingPolicy:          linkingPolicy,
 		Domains:                req.Domains,
 		AttributeMapping:       req.AttributeMapping,
 		Issuer:                 req.Issuer,

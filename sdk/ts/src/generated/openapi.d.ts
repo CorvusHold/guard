@@ -5415,6 +5415,7 @@ export interface components {
             /** @description OIDC/OAuth2 fields */
             issuer?: string;
             jwks_uri?: string;
+            linking_policy?: string;
             name?: string;
             response_mode?: string;
             response_type?: string;
