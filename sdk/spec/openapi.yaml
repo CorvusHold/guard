@@ -923,6 +923,11 @@ definitions:
       jwks_uri:
         type: string
       linking_policy:
+        description: Policy for linking SSO identities to existing accounts
+        enum:
+        - never
+        - verified_email
+        - always
         type: string
       name:
         type: string

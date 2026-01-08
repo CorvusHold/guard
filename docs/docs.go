@@ -5636,7 +5636,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "linking_policy": {
-                    "type": "string"
+                    "description": "Policy for linking SSO identities to existing accounts",
+                    "type": "string",
+                    "enum": [
+                        "never",
+                        "verified_email",
+                        "always"
+                    ]
                 },
                 "name": {
                     "type": "string"

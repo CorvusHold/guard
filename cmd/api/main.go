@@ -58,9 +58,6 @@ func requestLogger(log zerolog.Logger) echo.MiddlewareFunc {
 			start := time.Now()
 
 			err := next(c)
-			if err != nil {
-				c.Error(err)
-			}
 
 			latency := time.Since(start)
 			status := res.Status
@@ -107,10 +104,13 @@ func requestLogger(log zerolog.Logger) echo.MiddlewareFunc {
 
 			event.Msg("request")
 
-			return nil
+			return err
 		}
 	}
 }
+
+// corsPreflightMaxAge is the max-age for CORS preflight cache (24 hours)
+const corsPreflightMaxAge = "86400"
 
 // dynamicTenantCORS configures CORS per request by checking:
 // 1) global env CORS_ALLOWED_ORIGINS
@@ -181,7 +181,7 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service, log zerolog.Logg
 				res.Set(echo.HeaderAccessControlAllowHeaders, allowHeaders)
 				res.Set(echo.HeaderAccessControlExposeHeaders, exposeHeaders)
 				res.Set(echo.HeaderAccessControlAllowCredentials, "true")
-				res.Set(echo.HeaderAccessControlMaxAge, "86400") // Cache preflight for 24h
+				res.Set(echo.HeaderAccessControlMaxAge, corsPreflightMaxAge)
 			}
 
 			// 1) Allow any/global match first

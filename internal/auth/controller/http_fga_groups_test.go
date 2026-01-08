@@ -286,7 +286,7 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	// ============================================================
 	t.Run("Delete_NonExistent_Group", func(t *testing.T) {
 		nonExistentID := uuid.New()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/fga/groups/"+nonExistentID.String(), nil)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/fga/groups/"+nonExistentID.String()+"?tenant_id="+adminTokens.TenantID, nil)
 		req.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
 		rec := httptest.NewRecorder()
 

@@ -45,6 +45,13 @@ const (
 	Totp       ControllerMfaVerifyReqMethod = "totp"
 )
 
+// Defines values for ControllerUpdateProviderRequestLinkingPolicy.
+const (
+	Always        ControllerUpdateProviderRequestLinkingPolicy = "always"
+	Never         ControllerUpdateProviderRequestLinkingPolicy = "never"
+	VerifiedEmail ControllerUpdateProviderRequestLinkingPolicy = "verified_email"
+)
+
 // Defines values for DomainProviderType.
 const (
 	ProviderTypeDev    DomainProviderType = "dev"
@@ -683,24 +690,29 @@ type ControllerUpdateProviderRequest struct {
 	IdpSsoUrl      *string `json:"idp_sso_url,omitempty"`
 
 	// Issuer OIDC/OAuth2 fields
-	Issuer                 *string   `json:"issuer,omitempty"`
-	JwksUri                *string   `json:"jwks_uri,omitempty"`
-	LinkingPolicy          *string   `json:"linking_policy,omitempty"`
-	Name                   *string   `json:"name,omitempty"`
-	ResponseMode           *string   `json:"response_mode,omitempty"`
-	ResponseType           *string   `json:"response_type,omitempty"`
-	Scopes                 *[]string `json:"scopes,omitempty"`
-	SignRequests           *bool     `json:"sign_requests,omitempty"`
-	SloUrl                 *string   `json:"slo_url,omitempty"`
-	SpCertificate          *string   `json:"sp_certificate,omitempty"`
-	SpCertificateExpiresAt *string   `json:"sp_certificate_expires_at,omitempty"`
-	SpPrivateKey           *string   `json:"sp_private_key,omitempty"`
-	TokenEndpoint          *string   `json:"token_endpoint,omitempty"`
-	TrustEmailVerified     *bool     `json:"trust_email_verified,omitempty"`
-	UserinfoEndpoint       *string   `json:"userinfo_endpoint,omitempty"`
-	WantAssertionsSigned   *bool     `json:"want_assertions_signed,omitempty"`
-	WantResponseSigned     *bool     `json:"want_response_signed,omitempty"`
+	Issuer  *string `json:"issuer,omitempty"`
+	JwksUri *string `json:"jwks_uri,omitempty"`
+
+	// LinkingPolicy Policy for linking SSO identities to existing accounts
+	LinkingPolicy          *ControllerUpdateProviderRequestLinkingPolicy `json:"linking_policy,omitempty"`
+	Name                   *string                                       `json:"name,omitempty"`
+	ResponseMode           *string                                       `json:"response_mode,omitempty"`
+	ResponseType           *string                                       `json:"response_type,omitempty"`
+	Scopes                 *[]string                                     `json:"scopes,omitempty"`
+	SignRequests           *bool                                         `json:"sign_requests,omitempty"`
+	SloUrl                 *string                                       `json:"slo_url,omitempty"`
+	SpCertificate          *string                                       `json:"sp_certificate,omitempty"`
+	SpCertificateExpiresAt *string                                       `json:"sp_certificate_expires_at,omitempty"`
+	SpPrivateKey           *string                                       `json:"sp_private_key,omitempty"`
+	TokenEndpoint          *string                                       `json:"token_endpoint,omitempty"`
+	TrustEmailVerified     *bool                                         `json:"trust_email_verified,omitempty"`
+	UserinfoEndpoint       *string                                       `json:"userinfo_endpoint,omitempty"`
+	WantAssertionsSigned   *bool                                         `json:"want_assertions_signed,omitempty"`
+	WantResponseSigned     *bool                                         `json:"want_response_signed,omitempty"`
 }
+
+// ControllerUpdateProviderRequestLinkingPolicy Policy for linking SSO identities to existing accounts
+type ControllerUpdateProviderRequestLinkingPolicy string
 
 // DomainIntrospection defines model for domain.Introspection.
 type DomainIntrospection struct {

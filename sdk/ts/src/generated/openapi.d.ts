@@ -5415,7 +5415,11 @@ export interface components {
             /** @description OIDC/OAuth2 fields */
             issuer?: string;
             jwks_uri?: string;
-            linking_policy?: string;
+            /**
+             * @description Policy for linking SSO identities to existing accounts
+             * @enum {string}
+             */
+            linking_policy?: "never" | "verified_email" | "always";
             name?: string;
             response_mode?: string;
             response_type?: string;

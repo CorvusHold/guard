@@ -315,6 +315,7 @@ func (h *SSOController) handleSSOCallbackV2(c echo.Context) error {
 		if useQuery {
 			// Use query parameters (less secure but works with server-side routes)
 			q := redirectURL.Query()
+			q.Del("use_query") // Remove the flag from final URL
 			q.Set("access_token", result.Tokens.AccessToken)
 			q.Set("refresh_token", result.Tokens.RefreshToken)
 			redirectURL.RawQuery = q.Encode()

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"sync"
 )
 
@@ -408,13 +409,17 @@ func (c *GuardClient) SSOStart(ctx context.Context, provider string, opts *SSOSt
 	// Build redirect URL with use_query flag if requested
 	redirectURL := opts.RedirectURL
 	if redirectURL != nil && *redirectURL != "" && opts.UseQueryParams {
-		// Append use_query=true to the redirect URL
-		separator := "?"
-		if bytes.Contains([]byte(*redirectURL), []byte("?")) {
-			separator = "&"
+		// Parse the URL to properly detect existing query params (not fragment)
+		parsed, err := url.Parse(*redirectURL)
+		if err == nil {
+			if parsed.RawQuery == "" {
+				parsed.RawQuery = "use_query=true"
+			} else {
+				parsed.RawQuery += "&use_query=true"
+			}
+			modified := parsed.String()
+			redirectURL = &modified
 		}
-		modified := *redirectURL + separator + "use_query=true"
-		redirectURL = &modified
 	}
 
 	params := &GetApiV1AuthSsoProviderStartParams{

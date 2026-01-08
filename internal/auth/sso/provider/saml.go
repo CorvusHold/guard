@@ -150,12 +150,20 @@ func validateSAMLConfig(config *domain.Config) error {
 }
 
 func getAudiencesString(assertion *saml.Assertion) string {
+	if assertion == nil || assertion.Conditions == nil {
+		return "none"
+	}
 	if len(assertion.Conditions.AudienceRestrictions) == 0 {
 		return "none"
 	}
 	audiences := make([]string, 0, len(assertion.Conditions.AudienceRestrictions))
 	for _, r := range assertion.Conditions.AudienceRestrictions {
-		audiences = append(audiences, r.Audience.Value)
+		if r.Audience.Value != "" {
+			audiences = append(audiences, r.Audience.Value)
+		}
+	}
+	if len(audiences) == 0 {
+		return "none"
 	}
 	return strings.Join(audiences, ", ")
 }

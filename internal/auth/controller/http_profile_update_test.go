@@ -56,7 +56,7 @@ func TestProfileUpdate_Flow(t *testing.T) {
 	c.Register(e)
 
 	// Create user via signup
-	email := "profile-update-test@example.com"
+	email := "profile-update-test-" + tenantID.String()[:8] + "@example.com"
 	password := "TestPass123!"
 
 	signupBody := map[string]string{
@@ -126,6 +126,7 @@ func TestProfileUpdate_Flow(t *testing.T) {
 		err := json.Unmarshal(meRec.Body.Bytes(), &profile)
 		require.NoError(t, err)
 		assert.Equal(t, "UpdatedFirst", profile["first_name"])
+		assert.Equal(t, "Name", profile["last_name"], "last_name should be preserved")
 	})
 
 	// ============================================================
@@ -155,6 +156,7 @@ func TestProfileUpdate_Flow(t *testing.T) {
 		err := json.Unmarshal(meRec.Body.Bytes(), &profile)
 		require.NoError(t, err)
 		assert.Equal(t, "UpdatedLast", profile["last_name"])
+		assert.Equal(t, "UpdatedFirst", profile["first_name"], "first_name should be preserved")
 	})
 
 	// ============================================================

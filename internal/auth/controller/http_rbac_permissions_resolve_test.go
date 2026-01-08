@@ -45,7 +45,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err, "config.Load failed")
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -142,8 +143,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		}
 		err := json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		// Initially should have no grants or minimal grants
-		t.Logf("Initial grants: %v", resp.Grants)
+		// User with no roles should have no grants
+		assert.Empty(t, resp.Grants, "User with no roles should have no grants")
 	})
 
 	// ============================================================
@@ -194,7 +195,16 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		e.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
-		t.Logf("Permissions after role assignment: %s", rec.Body.String())
+
+		// Verify permissions changed after role assignment
+		var resp struct {
+			Grants []interface{} `json:"grants"`
+		}
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		// After role assignment, user should have grants (role was assigned)
+		// The editor role may not have permissions yet, but the response structure should be valid
+		t.Logf("Permissions after role assignment: grants=%d", len(resp.Grants))
 	})
 
 	// ============================================================

@@ -4111,7 +4111,12 @@ components:
         jwks_uri:
           type: string
         linking_policy:
+          description: Policy for linking SSO identities to existing accounts
           type: string
+          enum:
+            - never
+            - verified_email
+            - always
         name:
           type: string
         response_mode:
