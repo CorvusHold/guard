@@ -1073,11 +1073,12 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 }
 
 type signupReq struct {
-	TenantID  string `json:"tenant_id" validate:"required,uuid4"`
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+	Email       string `json:"email" validate:"required,email"`
+	Password    string `json:"password" validate:"required,min=8"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	AssignAdmin bool   `json:"assign_admin,omitempty"` // If true, assigns admin role to the new user (for tenant bootstrap)
 }
 
 type loginReq struct {
@@ -1383,6 +1384,20 @@ func (h *Controller) signup(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+
+	// Auto-assign admin role if requested (for tenant bootstrap)
+	if req.AssignAdmin {
+		// Get or create admin role for this tenant
+		adminRole, err := h.svc.GetOrCreateAdminRole(c.Request().Context(), tenID)
+		if err == nil && adminRole.ID != uuid.Nil {
+			// Parse user ID from the access token to assign the role
+			claims, parseErr := h.svc.ParseAccessToken(c.Request().Context(), tok.AccessToken)
+			if parseErr == nil && claims.UserID != uuid.Nil {
+				_ = h.svc.AddUserRole(c.Request().Context(), claims.UserID, tenID, adminRole.ID)
+			}
+		}
+	}
+
 	return respondWithTokens(c, h.cfg, authMode, http.StatusCreated, tok.AccessToken, tok.RefreshToken)
 }
 

@@ -37,7 +37,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-rl-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -126,7 +126,7 @@ func TestHTTP_RateLimit_Magic_Send(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-magic-send-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-magic-send-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestHTTP_RateLimit_MFA_Verify(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-mfa-verify-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-mfa-verify-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -246,7 +246,7 @@ func TestHTTP_RateLimit_SSO_Start(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-sso-start-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-sso-start-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -299,7 +299,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideLimit(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-override-limit-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-override-limit-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestHTTP_RateLimit_Login_TenantOverrideWindow(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-override-window-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-override-window-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -461,7 +461,7 @@ func TestHTTP_RateLimit_MFA_Verify_11th429_ShortWindow(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-rl-mfa-verify-11th429-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-rl-mfa-verify-11th429-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	// small delay to ensure tenant visibility in settings reads (mirrors other tests)

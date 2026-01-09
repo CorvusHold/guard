@@ -38,7 +38,7 @@ func TestEmailDiscovery_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "email-discovery-test-"+tenantID.String()[:8])
+	err = tr.Create(ctx, tenantID, "email-discovery-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
 
 	// Setup services
@@ -171,7 +171,7 @@ func TestLoginOptions_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "login-options-test-"+tenantID.String()[:8])
+	err = tr.Create(ctx, tenantID, "login-options-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
 
 	// Setup services

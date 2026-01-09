@@ -14,7 +14,9 @@ type mockRepo struct {
 	total int64
 }
 
-func (m *mockRepo) Create(ctx context.Context, id uuid.UUID, name string) error { return nil }
+func (m *mockRepo) Create(ctx context.Context, id uuid.UUID, name string, parentTenantID *uuid.UUID) error {
+	return nil
+}
 func (m *mockRepo) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) {
 	return db.Tenant{}, nil
 }
@@ -24,6 +26,15 @@ func (m *mockRepo) GetByName(ctx context.Context, name string) (db.Tenant, error
 func (m *mockRepo) Deactivate(ctx context.Context, id uuid.UUID) error { return nil }
 func (m *mockRepo) List(ctx context.Context, query string, active int, limit, offset int32) ([]db.Tenant, int64, error) {
 	return m.items, m.total, nil
+}
+func (m *mockRepo) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
+	return nil, nil
+}
+func (m *mockRepo) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {
+	return nil, nil
+}
+func (m *mockRepo) UpdateParent(ctx context.Context, id uuid.UUID, parentID *uuid.UUID) error {
+	return nil
 }
 
 func TestServiceList_DefaultsAndPagination(t *testing.T) {

@@ -358,7 +358,7 @@ func newCookieModeTestFixture(t *testing.T) *cookieModeTestFixture {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-cookie-mode-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	// allow tenant replication to complete

@@ -44,7 +44,7 @@ func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-replay-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-replay-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -143,7 +143,7 @@ func TestHTTP_SSO_WorkOS_StateExpiry_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-expiry-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-expiry-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -221,7 +221,7 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
 	// tenant + settings
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingstate-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingstate-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -275,7 +275,7 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState_WithSyntacticJWTCode_401(t *testi
 	// tenant + settings
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingstate-jwt-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingstate-jwt-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -332,7 +332,7 @@ func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingcode-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-missingcode-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -402,7 +402,7 @@ func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-tokenfail-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-tokenfail-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -490,7 +490,7 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-sso-workos-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -707,7 +707,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_Unauthorized_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-401-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-401-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -781,7 +781,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-500-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-500-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -855,7 +855,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-tperr-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-tperr-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -929,7 +929,7 @@ func TestHTTP_SSO_WorkOS_Callback_InvalidState_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-badstate-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-badstate-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -983,7 +983,7 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-noemail-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-noemail-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -1069,7 +1069,7 @@ func TestHTTP_SSO_WorkOS_Start_UsesTenantDefaultsWhenMissing(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-def-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-def-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -1123,7 +1123,7 @@ func TestHTTP_SSO_WorkOS_Start_ExplicitParamsOverrideDefaults(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-override-"+tenantID.String())
+	_ = tr.Create(ctx, tenantID, "http-sso-workos-override-"+tenantID.String(), nil)
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)

@@ -45,7 +45,7 @@ func TestHTTP_SSO_WorkOS_LogoutRevokesRefreshToken(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-sso-workos-logout-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-sso-workos-logout-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

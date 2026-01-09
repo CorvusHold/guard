@@ -5,9 +5,11 @@ import TenantListPanel from './TenantListPanel'
 
 export default function TenantManagementPanel() {
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const handleTenantCreated = (tenantId: string, tenantName: string) => {
-    // Switch to list tab after successful creation
+    // Trigger refresh and switch to list tab after successful creation
+    setRefreshTrigger(prev => prev + 1)
     setActiveTab('list')
   }
 
@@ -34,7 +36,7 @@ export default function TenantManagementPanel() {
         </TabsList>
         
         <TabsContent value="list" className="space-y-4">
-          <TenantListPanel onTenantSelected={handleTenantSelected} />
+          <TenantListPanel onTenantSelected={handleTenantSelected} refreshTrigger={refreshTrigger} />
         </TabsContent>
         
         <TabsContent value="create" className="space-y-4">

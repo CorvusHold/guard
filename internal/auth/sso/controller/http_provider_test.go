@@ -80,7 +80,7 @@ func setupProviderTestEnv(t *testing.T) *ProviderTestEnv {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	tenantName := "sso-provider-test-" + tenantID.String()[:8]
-	err = tr.Create(ctx, tenantID, tenantName)
+	err = tr.Create(ctx, tenantID, tenantName, nil)
 	require.NoError(t, err, "failed to create tenant")
 
 	// Load config
@@ -804,7 +804,7 @@ func TestProviderCrossTenant_Isolation(t *testing.T) {
 	// Create a second tenant
 	tr := trepo.New(env.pool)
 	tenant2ID := uuid.New()
-	err = tr.Create(ctx, tenant2ID, "tenant-2-"+tenant2ID.String()[:8])
+	err = tr.Create(ctx, tenant2ID, "tenant-2-"+tenant2ID.String(), nil[:8])
 	require.NoError(t, err)
 
 	// ============================================================

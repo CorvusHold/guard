@@ -43,7 +43,7 @@ func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-authz-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -297,11 +297,11 @@ func TestHTTP_Authorize_ObjectScopeAndCrossTenant(t *testing.T) {
 	// tenants A and B
 	tr := trepo.New(pool)
 	tenantA := uuid.New()
-	if err := tr.Create(ctx, tenantA, "http-authz-obj-"+tenantA.String()); err != nil {
+	if err := tr.Create(ctx, tenantA, "http-authz-obj-"+tenantA.String(), nil); err != nil {
 		t.Fatalf("create tenantA: %v", err)
 	}
 	tenantB := uuid.New()
-	if err := tr.Create(ctx, tenantB, "http-authz-obj-"+tenantB.String()); err != nil {
+	if err := tr.Create(ctx, tenantB, "http-authz-obj-"+tenantB.String(), nil); err != nil {
 		t.Fatalf("create tenantB: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -519,7 +519,7 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-password-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -713,7 +713,7 @@ func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-authz-group-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-authz-group-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -940,7 +940,7 @@ func TestHTTP_Authorize_WildcardObjectType(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-authz-wildcard-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-authz-wildcard-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -1060,7 +1060,7 @@ func TestHTTP_Authorize_Negative_InvalidInputs(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-authz-neg-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-authz-neg-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -1155,7 +1155,7 @@ func TestHTTP_Authorize_CombinedGrants(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "http-authz-combined-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "http-authz-combined-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -1289,7 +1289,7 @@ func TestHTTP_Magic_SendAndVerify(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-magic-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

@@ -36,7 +36,7 @@ func TestHTTP_Admin_UpdateRoles(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-admin-roles-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

@@ -175,6 +175,19 @@ type Service interface {
 	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
 	// Authorization decision
 	Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
+
+	// GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
+	GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) (Role, error)
+	// ParseAccessToken parses an access token and returns the claims.
+	ParseAccessToken(ctx context.Context, token string) (AccessTokenClaims, error)
+}
+
+// AccessTokenClaims represents the claims in an access token.
+type AccessTokenClaims struct {
+	UserID   uuid.UUID
+	TenantID uuid.UUID
+	Email    string
+	Roles    []string
 }
 
 // Magic-link inputs

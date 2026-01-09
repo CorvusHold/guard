@@ -80,7 +80,7 @@ func TestHTTP_RBAC_Admin_Forbidden_NonAdmin(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-rbac-nonadmin-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)
@@ -150,7 +150,7 @@ func TestHTTP_RBAC_Admin_ValidationErrors(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-rbac-validate-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

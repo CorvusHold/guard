@@ -38,7 +38,7 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "rbac-resolve-test-"+tenantID.String()[:8])
+	err = tr.Create(ctx, tenantID, "rbac-resolve-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
 
 	// Setup services

@@ -26,18 +26,24 @@ type ListResult struct {
 
 // Repository abstracts persistence for tenants.
 type Repository interface {
-	Create(ctx context.Context, id uuid.UUID, name string) error
+	Create(ctx context.Context, id uuid.UUID, name string, parentTenantID *uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error)
 	GetByName(ctx context.Context, name string) (db.Tenant, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, query string, active int, limit, offset int32) ([]db.Tenant, int64, error)
+	ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error)
+	GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error)
+	UpdateParent(ctx context.Context, id uuid.UUID, parentID *uuid.UUID) error
 }
 
 // Service encapsulates business logic for tenants.
 type Service interface {
-	Create(ctx context.Context, name string) (db.Tenant, error)
+	Create(ctx context.Context, name string, parentTenantID *uuid.UUID) (db.Tenant, error)
 	GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error)
 	GetByName(ctx context.Context, name string) (db.Tenant, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, opts ListOptions) (ListResult, error)
+	ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error)
+	GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error)
+	IsAncestorOf(ctx context.Context, ancestorID, descendantID uuid.UUID) (bool, error)
 }

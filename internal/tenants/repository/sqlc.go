@@ -24,8 +24,19 @@ func toPgUUID(u uuid.UUID) pgtype.UUID {
 	return id
 }
 
-func (r *SQLCRepository) Create(ctx context.Context, id uuid.UUID, name string) error {
-	return r.q.CreateTenant(ctx, db.CreateTenantParams{ID: toPgUUID(id), Name: name})
+func toPgUUIDPtr(u *uuid.UUID) pgtype.UUID {
+	if u == nil {
+		return pgtype.UUID{Valid: false}
+	}
+	return toPgUUID(*u)
+}
+
+func (r *SQLCRepository) Create(ctx context.Context, id uuid.UUID, name string, parentTenantID *uuid.UUID) error {
+	return r.q.CreateTenant(ctx, db.CreateTenantParams{
+		ID:             toPgUUID(id),
+		Name:           name,
+		ParentTenantID: toPgUUIDPtr(parentTenantID),
+	})
 }
 
 func (r *SQLCRepository) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) {
@@ -58,4 +69,34 @@ func (r *SQLCRepository) List(ctx context.Context, query string, active int, lim
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+func (r *SQLCRepository) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
+	return r.q.ListChildTenants(ctx, toPgUUID(parentID))
+}
+
+func (r *SQLCRepository) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {
+	rows, err := r.q.GetTenantAncestors(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.Tenant, len(rows))
+	for i, row := range rows {
+		out[i] = db.Tenant{
+			ID:             row.ID,
+			Name:           row.Name,
+			IsActive:       row.IsActive,
+			CreatedAt:      row.CreatedAt,
+			UpdatedAt:      row.UpdatedAt,
+			ParentTenantID: row.ParentTenantID,
+		}
+	}
+	return out, nil
+}
+
+func (r *SQLCRepository) UpdateParent(ctx context.Context, id uuid.UUID, parentID *uuid.UUID) error {
+	return r.q.UpdateTenantParent(ctx, db.UpdateTenantParentParams{
+		ID:             toPgUUID(id),
+		ParentTenantID: toPgUUIDPtr(parentID),
+	})
 }

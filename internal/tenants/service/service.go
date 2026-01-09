@@ -18,7 +18,7 @@ func New(repo domain.Repository) domain.Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, name string) (db.Tenant, error) {
+func (s *service) Create(ctx context.Context, name string, parentTenantID *uuid.UUID) (db.Tenant, error) {
 	if name == "" {
 		return db.Tenant{}, errors.New("tenant name is required")
 	}
@@ -29,11 +29,39 @@ func (s *service) Create(ctx context.Context, name string) (db.Tenant, error) {
 		return db.Tenant{}, err
 	}
 
+	// Validate parent tenant exists if specified
+	if parentTenantID != nil {
+		if _, err := s.repo.GetByID(ctx, *parentTenantID); err != nil {
+			return db.Tenant{}, errors.New("parent tenant not found")
+		}
+	}
+
 	id := uuid.New()
-	if err := s.repo.Create(ctx, id, name); err != nil {
+	if err := s.repo.Create(ctx, id, name, parentTenantID); err != nil {
 		return db.Tenant{}, err
 	}
 	return s.repo.GetByID(ctx, id)
+}
+
+func (s *service) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
+	return s.repo.ListChildTenants(ctx, parentID)
+}
+
+func (s *service) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {
+	return s.repo.GetTenantAncestors(ctx, tenantID)
+}
+
+func (s *service) IsAncestorOf(ctx context.Context, ancestorID, descendantID uuid.UUID) (bool, error) {
+	ancestors, err := s.repo.GetTenantAncestors(ctx, descendantID)
+	if err != nil {
+		return false, err
+	}
+	for _, a := range ancestors {
+		if a.ID.Valid && uuid.UUID(a.ID.Bytes) == ancestorID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *service) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) {
