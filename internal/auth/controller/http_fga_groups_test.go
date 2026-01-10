@@ -38,14 +38,15 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "fga-groups-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "fga-groups-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -126,7 +127,9 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		assert.NotEmpty(t, resp["id"])
 		assert.Equal(t, "engineering", resp["name"])
 
-		groupID = resp["id"].(string)
+		id, ok := resp["id"].(string)
+		require.True(t, ok, "expected id to be a string")
+		groupID = id
 		t.Logf("Created group ID: %s", groupID)
 	})
 
@@ -286,7 +289,7 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	// ============================================================
 	t.Run("Delete_NonExistent_Group", func(t *testing.T) {
 		nonExistentID := uuid.New()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/fga/groups/"+nonExistentID.String()+"?tenant_id="+adminTokens.TenantID, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/fga/groups/"+nonExistentID.String()+"?tenant_id="+tenantID.String(), nil)
 		req.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
 		rec := httptest.NewRecorder()
 

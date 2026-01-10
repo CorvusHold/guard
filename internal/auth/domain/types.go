@@ -178,7 +178,13 @@ type Service interface {
 
 	// GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
 	GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) (Role, error)
-	// ParseAccessToken parses an access token and returns the claims.
+	// ParseAccessToken parses and validates an access token, returning the claims.
+	// It validates the JWT signature using the tenant-specific signing key (resolved from
+	// the token's tenant claim), verifies standard claims (exp, iss, aud), and returns
+	// an error if the signature is invalid or the token is expired.
+	// The returned AccessTokenClaims includes UserID, TenantID, Email, and Roles populated
+	// directly from the JWT claims (not from a database lookup). Email and Roles are read
+	// from the "email" and "roles" claim keys respectively.
 	ParseAccessToken(ctx context.Context, token string) (AccessTokenClaims, error)
 }
 

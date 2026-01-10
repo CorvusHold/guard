@@ -38,14 +38,15 @@ func TestRefreshToken_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "refresh-token-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "refresh-token-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -185,14 +186,15 @@ func TestLogout_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "logout-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "logout-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)

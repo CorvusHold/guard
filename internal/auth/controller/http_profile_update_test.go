@@ -40,12 +40,18 @@ func TestProfileUpdate_Flow(t *testing.T) {
 	tenantID := uuid.New()
 	err = tr.Create(ctx, tenantID, "profile-update-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		// Cleanup tenant and cascade delete associated users
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE tenant_id = $1`, tenantID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantID)
+	})
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)

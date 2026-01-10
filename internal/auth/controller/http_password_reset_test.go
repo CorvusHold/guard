@@ -41,6 +41,12 @@ func TestPasswordReset_Flow(t *testing.T) {
 	tenantID := uuid.New()
 	err = tr.Create(ctx, tenantID, "password-reset-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		// Clean up test data in reverse order of creation
+		_, _ = pool.Exec(context.Background(), `DELETE FROM password_reset_tokens WHERE tenant_id = $1`, tenantID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE tenant_id = $1`, tenantID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantID)
+	})
 
 	// Setup services
 	repo := authrepo.New(pool)
@@ -246,15 +252,16 @@ func TestPasswordReset_Flow(t *testing.T) {
 		})
 		require.NoError(t, err, "RequestPasswordReset should succeed")
 
-		// Query the database directly to get the token hash
+		// Query the database directly to verify the token exists
 		// (In production, the token would be sent via email)
-		var tokenHash string
+		var tokenExists bool
 		err = pool.QueryRow(ctx,
-			`SELECT token_hash FROM password_reset_tokens 
+			`SELECT EXISTS(SELECT 1 FROM password_reset_tokens 
 			 WHERE tenant_id = $1 AND email = $2 AND consumed_at IS NULL 
-			 ORDER BY created_at DESC LIMIT 1`,
-			tenantID, email).Scan(&tokenHash)
+			 ORDER BY created_at DESC LIMIT 1)`,
+			tenantID, email).Scan(&tokenExists)
 		require.NoError(t, err, "Should find password reset token in database")
+		require.True(t, tokenExists, "Password reset token should exist")
 
 		// We can't reverse the hash, but we can test the confirm endpoint
 		// with an invalid token to verify the endpoint works, then test

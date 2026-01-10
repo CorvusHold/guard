@@ -38,14 +38,15 @@ func TestEmailDiscovery_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "email-discovery-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "email-discovery-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -111,17 +112,13 @@ func TestEmailDiscovery_Flow(t *testing.T) {
 
 		e.ServeHTTP(rec, req)
 
-		// Endpoint may return 200 with found=false or 500 if service errors
-		assert.True(t, rec.Code == http.StatusOK || rec.Code == http.StatusInternalServerError,
-			"Discover non-existing email should return 200 or 500, got %d", rec.Code)
+		assert.Equal(t, http.StatusOK, rec.Code, "Discover non-existing email should return 200: %s", rec.Body.String())
 
-		if rec.Code == http.StatusOK {
-			var resp map[string]interface{}
-			err := json.Unmarshal(rec.Body.Bytes(), &resp)
-			require.NoError(t, err)
-			assert.Equal(t, false, resp["found"])
-			assert.Equal(t, false, resp["user_exists"])
-		}
+		var resp map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, false, resp["found"])
+		assert.Equal(t, false, resp["user_exists"])
 	})
 
 	// ============================================================
@@ -171,14 +168,15 @@ func TestLoginOptions_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "login-options-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "login-options-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)

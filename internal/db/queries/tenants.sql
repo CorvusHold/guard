@@ -53,6 +53,7 @@ WITH RECURSIVE ancestors AS (
   SELECT t2.id, t2.name, t2.is_active, t2.created_at, t2.updated_at, t2.parent_tenant_id, a.depth + 1
   FROM tenants t2
   INNER JOIN ancestors a ON t2.id = a.parent_tenant_id
+  WHERE a.depth < 100
 )
 SELECT ancestors.id, ancestors.name, ancestors.is_active, ancestors.created_at, ancestors.updated_at, ancestors.parent_tenant_id
 FROM ancestors

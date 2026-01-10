@@ -92,9 +92,9 @@ func requestLogger(log zerolog.Logger) echo.MiddlewareFunc {
 				event.Err(err)
 			}
 
-			// Add tenant_id if present in query
-			if tid := req.URL.Query().Get("tenant_id"); tid != "" {
-				event.Str("tenant_id", tid)
+			// Add tenant_id if present (query or route params)
+			if tid := resolveTenantID(c); tid != nil {
+				event.Str("tenant_id", tid.String())
 			}
 
 			// Add auth header presence (not the value for security)
@@ -155,7 +155,7 @@ func dynamicTenantCORS(cfg config.Config, s settdomain.Service, log zerolog.Logg
 		"X-Requested-With",
 	}, ", ")
 	exposeHeaders := strings.Join([]string{
-		"X-Request-Id",
+		"X-Request-ID",
 		"X-RateLimit-Limit",
 		"X-RateLimit-Remaining",
 		"X-RateLimit-Reset",

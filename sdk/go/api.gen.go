@@ -277,7 +277,8 @@ type ControllerCreateProviderRequest struct {
 
 // ControllerCreateTenantReq defines model for controller.createTenantReq.
 type ControllerCreateTenantReq struct {
-	Name string `json:"name"`
+	Name           string  `json:"name"`
+	ParentTenantId *string `json:"parent_tenant_id,omitempty"`
 }
 
 // ControllerFgaAuthorizeReq defines model for controller.fgaAuthorizeReq.
@@ -635,11 +636,13 @@ type ControllerSettingsResponse struct {
 
 // ControllerSignupReq defines model for controller.signupReq.
 type ControllerSignupReq struct {
-	Email     string  `json:"email"`
-	FirstName *string `json:"first_name,omitempty"`
-	LastName  *string `json:"last_name,omitempty"`
-	Password  string  `json:"password"`
-	TenantId  string  `json:"tenant_id"`
+	// AssignAdmin If true, assigns admin role to the new user (for tenant bootstrap)
+	AssignAdmin *bool   `json:"assign_admin,omitempty"`
+	Email       string  `json:"email"`
+	FirstName   *string `json:"first_name,omitempty"`
+	LastName    *string `json:"last_name,omitempty"`
+	Password    string  `json:"password"`
+	TenantId    string  `json:"tenant_id"`
 }
 
 // ControllerSpInfoResponse defines model for controller.spInfoResponse.
@@ -655,11 +658,12 @@ type ControllerSpInfoResponse struct {
 
 // ControllerTenantResp defines model for controller.tenantResp.
 type ControllerTenantResp struct {
-	CreatedAt *string `json:"created_at,omitempty"`
-	Id        *string `json:"id,omitempty"`
-	IsActive  *bool   `json:"is_active,omitempty"`
-	Name      *string `json:"name,omitempty"`
-	UpdatedAt *string `json:"updated_at,omitempty"`
+	CreatedAt      *string `json:"created_at,omitempty"`
+	Id             *string `json:"id,omitempty"`
+	IsActive       *bool   `json:"is_active,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	ParentTenantId *string `json:"parent_tenant_id,omitempty"`
+	UpdatedAt      *string `json:"updated_at,omitempty"`
 }
 
 // ControllerUpdateProfileReq defines model for controller.updateProfileReq.
@@ -1402,6 +1406,9 @@ type ClientInterface interface {
 
 	// GetApiV1TenantsId request
 	GetApiV1TenantsId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiV1TenantsIdChildren request
+	GetApiV1TenantsIdChildren(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PatchApiV1TenantsIdDeactivate request
 	PatchApiV1TenantsIdDeactivate(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2653,6 +2660,18 @@ func (c *Client) GetApiV1TenantsByNameName(ctx context.Context, name string, req
 
 func (c *Client) GetApiV1TenantsId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiV1TenantsIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetApiV1TenantsIdChildren(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiV1TenantsIdChildrenRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -5811,6 +5830,40 @@ func NewGetApiV1TenantsIdRequest(server string, id string) (*http.Request, error
 	return req, nil
 }
 
+// NewGetApiV1TenantsIdChildrenRequest generates requests for GetApiV1TenantsIdChildren
+func NewGetApiV1TenantsIdChildrenRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/tenants/%s/children", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPatchApiV1TenantsIdDeactivateRequest generates requests for PatchApiV1TenantsIdDeactivate
 func NewPatchApiV1TenantsIdDeactivateRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -6244,6 +6297,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiV1TenantsIdWithResponse request
 	GetApiV1TenantsIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1TenantsIdResponse, error)
+
+	// GetApiV1TenantsIdChildrenWithResponse request
+	GetApiV1TenantsIdChildrenWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1TenantsIdChildrenResponse, error)
 
 	// PatchApiV1TenantsIdDeactivateWithResponse request
 	PatchApiV1TenantsIdDeactivateWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*PatchApiV1TenantsIdDeactivateResponse, error)
@@ -7833,6 +7889,29 @@ func (r GetApiV1TenantsIdResponse) StatusCode() int {
 	return 0
 }
 
+type GetApiV1TenantsIdChildrenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]ControllerTenantResp
+	JSON400      *map[string]string
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiV1TenantsIdChildrenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiV1TenantsIdChildrenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PatchApiV1TenantsIdDeactivateResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8799,6 +8878,15 @@ func (c *ClientWithResponses) GetApiV1TenantsIdWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseGetApiV1TenantsIdResponse(rsp)
+}
+
+// GetApiV1TenantsIdChildrenWithResponse request returning *GetApiV1TenantsIdChildrenResponse
+func (c *ClientWithResponses) GetApiV1TenantsIdChildrenWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetApiV1TenantsIdChildrenResponse, error) {
+	rsp, err := c.GetApiV1TenantsIdChildren(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiV1TenantsIdChildrenResponse(rsp)
 }
 
 // PatchApiV1TenantsIdDeactivateWithResponse request returning *PatchApiV1TenantsIdDeactivateResponse
@@ -11083,6 +11171,39 @@ func ParseGetApiV1TenantsIdResponse(rsp *http.Response) (*GetApiV1TenantsIdRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetApiV1TenantsIdChildrenResponse parses an HTTP response from a GetApiV1TenantsIdChildrenWithResponse call
+func ParseGetApiV1TenantsIdChildrenResponse(rsp *http.Response) (*GetApiV1TenantsIdChildrenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiV1TenantsIdChildrenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []ControllerTenantResp
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	}
 

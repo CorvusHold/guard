@@ -38,7 +38,7 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "token-revoke-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "token-revoke-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 
 	// Setup services

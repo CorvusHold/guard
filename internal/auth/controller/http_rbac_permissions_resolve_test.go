@@ -24,6 +24,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type fakeEmail struct{}
+
+func (f *fakeEmail) Send(to, subject, body string) error {
+	return nil
+}
+
+type noopValidator struct{}
+
+func (n noopValidator) Validate(i interface{}) error {
+	return nil
+}
+
 // TestRBACPermissionsResolve_Flow tests the RBAC permissions resolution endpoint
 func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
@@ -40,6 +52,11 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	tenantID := uuid.New()
 	err = tr.Create(ctx, tenantID, "rbac-resolve-test-"+tenantID.String(), nil[:8])
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		// Clean up test tenant and associated data
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE tenant_id = $1`, tenantID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantID)
+	})
 
 	// Setup services
 	repo := authrepo.New(pool)
@@ -65,7 +82,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	sb, _ := json.Marshal(signupBody)
+	sb, err := json.Marshal(signupBody)
+	require.NoError(t, err)
 	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
@@ -91,7 +109,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	lb, _ := json.Marshal(loginBody)
+	lb, err := json.Marshal(loginBody)
+	require.NoError(t, err)
 	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
 	lrec := httptest.NewRecorder()
@@ -109,7 +128,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		"email":     targetEmail,
 		"password":  targetPassword,
 	}
-	tsb, _ := json.Marshal(targetSignup)
+	tsb, err := json.Marshal(targetSignup)
+	require.NoError(t, err)
 	tsreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(tsb))
 	tsreq.Header.Set("Content-Type", "application/json")
 	tsrec := httptest.NewRecorder()
@@ -157,7 +177,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 			"name":        "editor",
 			"description": "Editor role",
 		}
-		crb, _ := json.Marshal(createRoleBody)
+		crb, err := json.Marshal(createRoleBody)
+		require.NoError(t, err)
 		crReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/roles", bytes.NewReader(crb))
 		crReq.Header.Set("Content-Type", "application/json")
 		crReq.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
@@ -178,7 +199,8 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 			"tenant_id": tenantID.String(),
 			"role_id":   roleID,
 		}
-		ab, _ := json.Marshal(assignBody)
+		ab, err := json.Marshal(assignBody)
+		require.NoError(t, err)
 		aReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/rbac/users/"+targetUserID.String()+"/roles", bytes.NewReader(ab))
 		aReq.Header.Set("Content-Type", "application/json")
 		aReq.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)

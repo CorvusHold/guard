@@ -4089,6 +4089,47 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/tenants/{id}/children": {
+            "get": {
+                "description": "Lists all child tenants of a parent tenant",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "List child tenants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Parent Tenant ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/controller.tenantResp"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tenants/{id}/deactivate": {
             "patch": {
                 "description": "Deactivates a tenant by ID",
@@ -4661,6 +4702,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "name": {
+                    "type": "string"
+                },
+                "parent_tenant_id": {
                     "type": "string"
                 }
             }
@@ -5492,6 +5536,10 @@ const docTemplate = `{
                 "tenant_id"
             ],
             "properties": {
+                "assign_admin": {
+                    "description": "If true, assigns admin role to the new user (for tenant bootstrap)",
+                    "type": "boolean"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -5549,6 +5597,9 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "parent_tenant_id": {
                     "type": "string"
                 },
                 "updated_at": {

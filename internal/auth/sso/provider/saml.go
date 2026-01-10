@@ -252,13 +252,6 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 		Int("response_size", len(samlResponseXML)).
 		Msg("SAML response received from IdP")
 
-	if p.log.GetLevel() <= zerolog.DebugLevel {
-		p.log.Debug().
-			Str("provider_id", p.config.ID.String()).
-			Str("saml_response", string(samlResponseXML)).
-			Msg("Full SAML response XML (base64 decoded)")
-	}
-
 	// Let the crewjam/saml ServiceProvider handle XML parsing, signature
 	// verification, condition checks, and encrypted assertion handling.
 	// We still run our own additional condition checks and replay protection
@@ -284,12 +277,21 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 		return nil, fmt.Errorf("no assertion found in SAML response")
 	}
 
+	sub := ""
+	if assertion.Subject != nil && assertion.Subject.NameID != nil {
+		sub = assertion.Subject.NameID.Value
+	}
+	var condNotBefore, condNotOnOrAfter time.Time
+	if assertion.Conditions != nil {
+		condNotBefore = assertion.Conditions.NotBefore
+		condNotOnOrAfter = assertion.Conditions.NotOnOrAfter
+	}
 	p.log.Debug().
 		Str("provider_id", p.config.ID.String()).
 		Str("assertion_id", assertion.ID).
-		Str("subject", assertion.Subject.NameID.Value).
-		Time("not_before", assertion.Conditions.NotBefore).
-		Time("not_on_or_after", assertion.Conditions.NotOnOrAfter).
+		Str("subject", sub).
+		Time("not_before", condNotBefore).
+		Time("not_on_or_after", condNotOnOrAfter).
 		Msg("SAML assertion parsed successfully")
 
 	// Enforce configured signature requirements by inspecting the verified
@@ -303,14 +305,6 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 			Bool("want_assertions_signed", p.config.WantAssertionsSigned).
 			Err(err).
 			Msg("Signature policy enforcement failed")
-		return nil, err
-	}
-
-	// Enforce configured signature requirements by inspecting the verified
-	// SAML Response XML. At this point ParseXMLResponse has already validated
-	// the cryptographic signatures; this check only ensures the expected
-	// signature placement (response vs assertions) matches configuration.
-	if err := p.enforceSignaturePolicy(samlResponseXML); err != nil {
 		return nil, err
 	}
 
@@ -468,11 +462,16 @@ func (p *SAMLProvider) enforceSignaturePolicy(responseXML []byte) error {
 func (p *SAMLProvider) validateAssertionConditions(assertion *saml.Assertion) error {
 	now := time.Now()
 
+	var condNotBefore, condNotOnOrAfter time.Time
+	if assertion.Conditions != nil {
+		condNotBefore = assertion.Conditions.NotBefore
+		condNotOnOrAfter = assertion.Conditions.NotOnOrAfter
+	}
 	p.log.Debug().
 		Str("provider_id", p.config.ID.String()).
 		Time("now", now).
-		Time("not_before", assertion.Conditions.NotBefore).
-		Time("not_on_or_after", assertion.Conditions.NotOnOrAfter).
+		Time("not_before", condNotBefore).
+		Time("not_on_or_after", condNotOnOrAfter).
 		Str("audiences", getAudiencesString(assertion)).
 		Msg("Validating SAML assertion conditions")
 

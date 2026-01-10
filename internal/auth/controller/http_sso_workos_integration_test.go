@@ -44,7 +44,10 @@ func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	_ = tr.Create(ctx, tenantID, "http-sso-workos-replay-"+tenantID.String(), nil)
+	err = tr.Create(ctx, tenantID, "http-sso-workos-replay-"+tenantID.String(), nil)
+	if err != nil {
+		t.Fatalf("tenant create: %v", err)
+	}
 	time.Sleep(25 * time.Millisecond)
 	sr := srepo.New(pool)
 	_ = sr.Upsert(ctx, "sso.provider", &tenantID, "workos", false)
@@ -64,9 +67,9 @@ func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
 		return nil
 	}))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get valid state
 	qs := url.Values{}
@@ -101,7 +104,7 @@ func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
 	cbQS.Set("code", "code1")
 	cbQS.Set("state", state)
 	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req1.Header.Set("X-Auth-Mode", "bearer")
+	req1.Header.Set("X-Auth-Mode", "bearer")
 	rec1 := httptest.NewRecorder()
 	e.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -112,7 +115,7 @@ func TestHTTP_SSO_WorkOS_StateReplay_401(t *testing.T) {
 
 	// Second callback with same state must fail (state consumed)
 	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req2.Header.Set("X-Auth-Mode", "bearer")
+	req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusUnauthorized {
@@ -161,9 +164,9 @@ func TestHTTP_SSO_WorkOS_StateExpiry_401(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -189,7 +192,7 @@ func TestHTTP_SSO_WorkOS_StateExpiry_401(t *testing.T) {
 	cbQS.Set("code", "code-any")
 	cbQS.Set("state", state)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -237,13 +240,13 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Missing state entirely
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code=abc", nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -292,16 +295,16 @@ func TestHTTP_SSO_WorkOS_Callback_MissingState_WithSyntacticJWTCode_401(t *testi
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Syntactically valid JWT (three base64url segments) but with no state parameter.
 	// Previously, any syntactically valid JWT would have been treated as a dev code
 	// and skipped state validation; this test asserts that WorkOS flows still enforce state.
 	jwtCode := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIifQ.abc"
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code="+jwtCode, nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -349,9 +352,9 @@ func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Call start to create a valid state in Redis
 	qs := url.Values{}
@@ -371,7 +374,7 @@ func TestHTTP_SSO_WorkOS_Callback_MissingCode_WithValidState(t *testing.T) {
 
 	// Callback without code but with valid state
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?state="+state, nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -419,9 +422,9 @@ func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -451,7 +454,7 @@ func TestHTTP_SSO_WorkOS_Callback_TokenExchangeFailure(t *testing.T) {
 	cbQS.Set("code", "bad_code")
 	cbQS.Set("state", state)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -526,9 +529,9 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 	e := echo.New()
 	e.Validator = noopValidatorWorkOS{}
 	c := New(auth, magic, sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start: expect redirect to WorkOS authorize
 	qs := url.Values{}
@@ -605,7 +608,7 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 	cbQS.Set("code", "code_test_abc")
 	cbQS.Set("state", state)
 	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req2.Header.Set("X-Auth-Mode", "bearer")
+	req2.Header.Set("X-Auth-Mode", "bearer")
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
@@ -724,9 +727,9 @@ func TestHTTP_SSO_WorkOS_TokenExchange_Unauthorized_401(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -750,7 +753,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_Unauthorized_401(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code=x&state="+state, nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -798,9 +801,9 @@ func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -824,7 +827,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_ServerError_401(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code=x&state="+state, nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -872,9 +875,9 @@ func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -898,7 +901,7 @@ func TestHTTP_SSO_WorkOS_TokenExchange_TransportError_401(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code=x&state="+state, nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -946,13 +949,13 @@ func TestHTTP_SSO_WorkOS_Callback_InvalidState_401(t *testing.T) {
 	sso := svc.NewSSO(repo, cfg, settings)
 	sso.SetPublisher(publisherFunc(func(ctx context.Context, e evdomain.Event) error { events = append(events, e); return nil }))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Random state (not present in Redis)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?code=x&state="+strings.Repeat("a", 16), nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -1003,9 +1006,9 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
 		return nil
 	}))
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start to get state
 	qs := url.Values{}
@@ -1038,7 +1041,7 @@ func TestHTTP_SSO_WorkOS_ProfileMissingEmail_401(t *testing.T) {
 	cbQS.Set("code", "code_test_abc")
 	cbQS.Set("state", state)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sso/google/callback?"+cbQS.Encode(), nil)
- req.Header.Set("X-Auth-Mode", "bearer")
+	req.Header.Set("X-Auth-Mode", "bearer")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -1086,9 +1089,9 @@ func TestHTTP_SSO_WorkOS_Start_UsesTenantDefaultsWhenMissing(t *testing.T) {
 	e.Validator = noopValidatorWorkOS{}
 	sso := svc.NewSSO(repo, cfg, settings)
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start without explicit connection_id or organization_id
 	qs := url.Values{}
@@ -1140,9 +1143,9 @@ func TestHTTP_SSO_WorkOS_Start_ExplicitParamsOverrideDefaults(t *testing.T) {
 	e.Validator = noopValidatorWorkOS{}
 	sso := svc.NewSSO(repo, cfg, settings)
 	c := New(svc.New(repo, cfg, settings), svc.NewMagic(repo, cfg, settings, nil), sso)
- api := e.Group("/api")
- apiV1 := api.Group("/v1")
- c.RegisterV1(apiV1)
+	api := e.Group("/api")
+	apiV1 := api.Group("/v1")
+	c.RegisterV1(apiV1)
 
 	// Start with explicit connection_id and organization_id
 	qs := url.Values{}

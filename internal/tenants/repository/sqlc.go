@@ -82,14 +82,7 @@ func (r *SQLCRepository) GetTenantAncestors(ctx context.Context, tenantID uuid.U
 	}
 	out := make([]db.Tenant, len(rows))
 	for i, row := range rows {
-		out[i] = db.Tenant{
-			ID:             row.ID,
-			Name:           row.Name,
-			IsActive:       row.IsActive,
-			CreatedAt:      row.CreatedAt,
-			UpdatedAt:      row.UpdatedAt,
-			ParentTenantID: row.ParentTenantID,
-		}
+		out[i] = db.Tenant(row)
 	}
 	return out, nil
 }

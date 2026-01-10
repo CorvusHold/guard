@@ -37,6 +37,18 @@ func (s *service) Create(ctx context.Context, name string, parentTenantID *uuid.
 	}
 
 	id := uuid.New()
+
+	// Prevent circular parent references: check if parent is a descendant of this new tenant
+	if parentTenantID != nil {
+		isDescendant, err := s.IsAncestorOf(ctx, *parentTenantID, id)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return db.Tenant{}, err
+		}
+		if isDescendant {
+			return db.Tenant{}, errors.New("cannot set parent to a descendant tenant")
+		}
+	}
+
 	if err := s.repo.Create(ctx, id, name, parentTenantID); err != nil {
 		return db.Tenant{}, err
 	}

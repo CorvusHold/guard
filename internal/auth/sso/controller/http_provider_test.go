@@ -804,7 +804,7 @@ func TestProviderCrossTenant_Isolation(t *testing.T) {
 	// Create a second tenant
 	tr := trepo.New(env.pool)
 	tenant2ID := uuid.New()
-	err = tr.Create(ctx, tenant2ID, "tenant-2-"+tenant2ID.String(), nil[:8])
+	err = tr.Create(ctx, tenant2ID, "tenant-2-"+tenant2ID.String(), nil)
 	require.NoError(t, err)
 
 	// ============================================================
