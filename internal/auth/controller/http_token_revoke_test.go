@@ -24,6 +24,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// loginAndGetTokens performs password login and returns fresh tokens
+func loginAndGetTokens(t *testing.T, e *echo.Echo, tenantID uuid.UUID, email, password string) struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+} {
+	t.Helper()
+	loginBody := map[string]string{
+		"tenant_id": tenantID.String(),
+		"email":     email,
+		"password":  password,
+	}
+	lb, _ := json.Marshal(loginBody)
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
+	lreq.Header.Set("Content-Type", "application/json")
+	lrec := httptest.NewRecorder()
+	e.ServeHTTP(lrec, lreq)
+	require.Equal(t, http.StatusOK, lrec.Code)
+
+	var tokens struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	err := json.Unmarshal(lrec.Body.Bytes(), &tokens)
+	require.NoError(t, err)
+	return tokens
+}
+
 // TestTokenRevoke_Flow tests the token revocation workflow
 func TestTokenRevoke_Flow(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
@@ -116,25 +143,13 @@ func TestTokenRevoke_Flow(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, "Refresh with revoked token should fail")
 	})
 
-	// Get new tokens for subsequent tests
-	loginBody := map[string]string{
-		"tenant_id": tenantID.String(),
-		"email":     email,
-		"password":  password,
-	}
-	lb, _ := json.Marshal(loginBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
-	lreq.Header.Set("Content-Type", "application/json")
-	lrec := httptest.NewRecorder()
-	e.ServeHTTP(lrec, lreq)
-	require.Equal(t, http.StatusOK, lrec.Code)
-	err = json.Unmarshal(lrec.Body.Bytes(), &tokens)
-	require.NoError(t, err)
-
 	// ============================================================
 	// Test 3: Revoke with missing token - validation behavior
 	// ============================================================
 	t.Run("Revoke_Missing_Token", func(t *testing.T) {
+		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
+		_ = newTokens // Use tokens to prevent unused var
+
 		revokeBody := map[string]string{
 			"token_type": "refresh",
 		}
@@ -153,8 +168,10 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 4: Revoke with missing token_type fails
 	// ============================================================
 	t.Run("Revoke_Missing_Token_Type", func(t *testing.T) {
+		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
+
 		revokeBody := map[string]string{
-			"token": tokens.RefreshToken,
+			"token": newTokens.RefreshToken,
 		}
 		body, _ := json.Marshal(revokeBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader(body))
@@ -170,6 +187,8 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 5: Revoke with invalid JSON fails
 	// ============================================================
 	t.Run("Revoke_Invalid_JSON", func(t *testing.T) {
+		_ = loginAndGetTokens(t, e, tenantID, email, password)
+
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader([]byte("invalid json")))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -183,9 +202,11 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 6: Revoke already revoked token (idempotent)
 	// ============================================================
 	t.Run("Revoke_Already_Revoked_Token", func(t *testing.T) {
+		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
+
 		// First revoke
 		revokeBody := map[string]string{
-			"token":      tokens.RefreshToken,
+			"token":      newTokens.RefreshToken,
 			"token_type": "refresh",
 		}
 		body, _ := json.Marshal(revokeBody)

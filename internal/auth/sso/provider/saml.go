@@ -290,7 +290,7 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 	p.log.Debug().
 		Str("provider_id", p.config.ID.String()).
 		Str("assertion_id", assertion.ID).
-		Str("subject", sub).
+		Bool("has_subject", sub != "").
 		Time("not_before", condNotBefore).
 		Time("not_on_or_after", condNotOnOrAfter).
 		Msg("SAML assertion parsed successfully")

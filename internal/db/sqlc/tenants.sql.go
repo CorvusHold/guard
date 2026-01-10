@@ -75,14 +75,35 @@ func (q *Queries) DeactivateTenant(ctx context.Context, id pgtype.UUID) error {
 
 const getTenantAncestors = `-- name: GetTenantAncestors :many
 WITH RECURSIVE ancestors AS (
-  SELECT t.id, t.name, t.is_active, t.created_at, t.updated_at, t.parent_tenant_id, 0 AS depth
+  -- Start with the given tenant
+  SELECT
+    t.id,
+    t.name,
+    t.is_active,
+    t.created_at,
+    t.updated_at,
+    t.parent_tenant_id,
+    0 AS depth,
+    ARRAY[t.id] AS path
   FROM tenants t
   WHERE t.id = $1
+
   UNION ALL
-  SELECT t2.id, t2.name, t2.is_active, t2.created_at, t2.updated_at, t2.parent_tenant_id, a.depth + 1
+
+  -- Recursively join to parent tenants
+  SELECT
+    t2.id,
+    t2.name,
+    t2.is_active,
+    t2.created_at,
+    t2.updated_at,
+    t2.parent_tenant_id,
+    a.depth + 1,
+    a.path || t2.id
   FROM tenants t2
   INNER JOIN ancestors a ON t2.id = a.parent_tenant_id
   WHERE a.depth < 100
+    AND NOT t2.id = ANY(a.path)
 )
 SELECT ancestors.id, ancestors.name, ancestors.is_active, ancestors.created_at, ancestors.updated_at, ancestors.parent_tenant_id
 FROM ancestors
@@ -99,6 +120,10 @@ type GetTenantAncestorsRow struct {
 	ParentTenantID pgtype.UUID        `json:"parent_tenant_id"`
 }
 
+// Cycle Policy:
+// - Cycles are prevented at the database level via trigger (check_tenant_hierarchy_cycle)
+// - This query includes explicit cycle detection (path tracking) as defense-in-depth
+// - Depth limit (100) provides secondary safeguard against infinite recursion
 func (q *Queries) GetTenantAncestors(ctx context.Context, id pgtype.UUID) ([]GetTenantAncestorsRow, error) {
 	rows, err := q.db.Query(ctx, getTenantAncestors, id)
 	if err != nil {

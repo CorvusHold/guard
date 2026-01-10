@@ -307,8 +307,8 @@ func TestFGAGroups_CRUD(t *testing.T) {
 
 		e.ServeHTTP(rec, req)
 
-		// Should return 204 (idempotent) or 400
-		assert.True(t, rec.Code == http.StatusNoContent || rec.Code == http.StatusBadRequest,
-			"Delete non-existent group should return 204 or 400, got %d", rec.Code)
+		// Should return 204 No Content (idempotent DELETE)
+		assert.Equal(t, http.StatusNoContent, rec.Code,
+			"Delete non-existent group must return 204 No Content (idempotent)")
 	})
 }

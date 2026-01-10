@@ -24,12 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeEmail struct{}
-
-func (f *fakeEmail) Send(to, subject, body string) error {
-	return nil
-}
-
 type noopValidator struct{}
 
 func (n noopValidator) Validate(i interface{}) error {
@@ -209,7 +203,7 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		var roleResp struct {
 			ID string `json:"id"`
 		}
-		err := json.Unmarshal(crRec.Body.Bytes(), &roleResp)
+		err = json.Unmarshal(crRec.Body.Bytes(), &roleResp)
 		require.NoError(t, err)
 		roleID := roleResp.ID
 

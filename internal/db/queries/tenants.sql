@@ -51,15 +51,40 @@ FROM tenants
 WHERE parent_tenant_id = $1;
 
 -- name: GetTenantAncestors :many
+-- Cycle Policy:
+-- - Cycles are prevented at the database level via trigger (check_tenant_hierarchy_cycle)
+-- - This query includes explicit cycle detection (path tracking) as defense-in-depth
+-- - Depth limit (100) provides secondary safeguard against infinite recursion
 WITH RECURSIVE ancestors AS (
-  SELECT t.id, t.name, t.is_active, t.created_at, t.updated_at, t.parent_tenant_id, 0 AS depth
+  -- Start with the given tenant
+  SELECT
+    t.id,
+    t.name,
+    t.is_active,
+    t.created_at,
+    t.updated_at,
+    t.parent_tenant_id,
+    0 AS depth,
+    ARRAY[t.id] AS path
   FROM tenants t
   WHERE t.id = $1
+
   UNION ALL
-  SELECT t2.id, t2.name, t2.is_active, t2.created_at, t2.updated_at, t2.parent_tenant_id, a.depth + 1
+
+  -- Recursively join to parent tenants
+  SELECT
+    t2.id,
+    t2.name,
+    t2.is_active,
+    t2.created_at,
+    t2.updated_at,
+    t2.parent_tenant_id,
+    a.depth + 1,
+    a.path || t2.id
   FROM tenants t2
   INNER JOIN ancestors a ON t2.id = a.parent_tenant_id
   WHERE a.depth < 100
+    AND NOT t2.id = ANY(a.path)
 )
 SELECT ancestors.id, ancestors.name, ancestors.is_active, ancestors.created_at, ancestors.updated_at, ancestors.parent_tenant_id
 FROM ancestors
