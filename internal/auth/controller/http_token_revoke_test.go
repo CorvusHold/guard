@@ -145,9 +145,8 @@ func TestTokenRevoke_Flow(t *testing.T) {
 
 		e.ServeHTTP(rec, req)
 
-		// Endpoint may return 400 (validation) or 204 (idempotent) depending on implementation
-		assert.True(t, rec.Code == http.StatusBadRequest || rec.Code == http.StatusNoContent,
-			"Revoke without token should return 400 or 204, got %d", rec.Code)
+		// Missing required field should return 400
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "Revoke without token should return 400")
 	})
 
 	// ============================================================
@@ -196,14 +195,13 @@ func TestTokenRevoke_Flow(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
-		// Second revoke (should still succeed or return appropriate error)
+		// Second revoke should return 400 (already revoked)
 		req2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader(body))
 		req2.Header.Set("Content-Type", "application/json")
 		rec2 := httptest.NewRecorder()
 		e.ServeHTTP(rec2, req2)
 
-		// Either 204 (idempotent) or 400 (already revoked) is acceptable
-		assert.True(t, rec2.Code == http.StatusNoContent || rec2.Code == http.StatusBadRequest,
-			"Revoke already revoked token should return 204 or 400, got %d", rec2.Code)
+		// Double revoke should return 400 for deterministic contract
+		assert.Equal(t, http.StatusBadRequest, rec2.Code, "Revoke already revoked token should return 400")
 	})
 }

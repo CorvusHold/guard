@@ -3013,7 +3013,7 @@ paths:
                   type: string
   "/api/v1/tenants/{id}/children":
     get:
-      description: Lists all child tenants of a parent tenant
+      description: Lists child tenants of a parent tenant with pagination
       tags:
         - tenants
       summary: List child tenants
@@ -3024,15 +3024,23 @@ paths:
           required: true
           schema:
             type: string
+        - description: Page number
+          name: page
+          in: query
+          schema:
+            type: integer
+        - description: Page size (max 100)
+          name: page_size
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/controller.tenantResp"
+                $ref: "#/components/schemas/controller.listResponse"
         "400":
           description: Bad Request
           content:

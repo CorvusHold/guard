@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
@@ -31,9 +32,18 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctxTimeout, os.Getenv("DATABASE_URL"))
 	require.NoError(t, err)
 	defer pool.Close()
+
+	// Verify DB connectivity
+	conn, err := pool.Acquire(ctxTimeout)
+	require.NoError(t, err)
+	err = conn.Conn().Ping(ctxTimeout)
+	require.NoError(t, err)
+	conn.Release()
 
 	// Create tenant
 	tr := trepo.New(pool)
@@ -65,8 +75,9 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	sb, _ := json.Marshal(signupBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
+	sb, err := json.Marshal(signupBody)
+	require.NoError(t, err)
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup?token=json", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
@@ -91,8 +102,9 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	lb, _ := json.Marshal(loginBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
+	lb, err := json.Marshal(loginBody)
+	require.NoError(t, err)
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?token=json", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)

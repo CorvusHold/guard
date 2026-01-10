@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countChildTenants = `-- name: CountChildTenants :one
+SELECT COUNT(*)
+FROM tenants
+WHERE parent_tenant_id = $1
+`
+
+func (q *Queries) CountChildTenants(ctx context.Context, parentTenantID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countChildTenants, parentTenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTenants = `-- name: CountTenants :one
 SELECT COUNT(*)
 FROM tenants
@@ -69,6 +82,7 @@ WITH RECURSIVE ancestors AS (
   SELECT t2.id, t2.name, t2.is_active, t2.created_at, t2.updated_at, t2.parent_tenant_id, a.depth + 1
   FROM tenants t2
   INNER JOIN ancestors a ON t2.id = a.parent_tenant_id
+  WHERE a.depth < 100
 )
 SELECT ancestors.id, ancestors.name, ancestors.is_active, ancestors.created_at, ancestors.updated_at, ancestors.parent_tenant_id
 FROM ancestors
@@ -157,10 +171,17 @@ SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
 FROM tenants
 WHERE parent_tenant_id = $1
 ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListChildTenants(ctx context.Context, parentTenantID pgtype.UUID) ([]Tenant, error) {
-	rows, err := q.db.Query(ctx, listChildTenants, parentTenantID)
+type ListChildTenantsParams struct {
+	ParentTenantID pgtype.UUID `json:"parent_tenant_id"`
+	Limit          int32       `json:"limit"`
+	Offset         int32       `json:"offset"`
+}
+
+func (q *Queries) ListChildTenants(ctx context.Context, arg ListChildTenantsParams) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listChildTenants, arg.ParentTenantID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

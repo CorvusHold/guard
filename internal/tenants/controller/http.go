@@ -263,11 +263,13 @@ func (h *Controller) listTenants(c echo.Context) error {
 
 // List Child Tenants godoc
 // @Summary      List child tenants
-// @Description  Lists all child tenants of a parent tenant
+// @Description  Lists child tenants of a parent tenant with pagination
 // @Tags         tenants
 // @Produce      json
-// @Param        id   path   string  true  "Parent Tenant ID (UUID)"
-// @Success      200  {object}  []tenantResp
+// @Param        id         path   string  true   "Parent Tenant ID (UUID)"
+// @Param        page       query  int     false  "Page number"
+// @Param        page_size  query  int     false  "Page size (max 100)"
+// @Success      200  {object}  listResponse
 // @Failure      400  {object}  map[string]string
 // @Router       /api/v1/tenants/{id}/children [get]
 func (h *Controller) listChildTenants(c echo.Context) error {
@@ -276,12 +278,31 @@ func (h *Controller) listChildTenants(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	children, err := h.svc.ListChildTenants(c.Request().Context(), id)
+
+	q := listQuery{}
+	if err := c.Bind(&q); err != nil {
+		// fallback manual parse
+		if p := c.QueryParam("page"); p != "" {
+			if v, err := strconv.Atoi(p); err == nil {
+				q.Page = v
+			}
+		}
+		if ps := c.QueryParam("page_size"); ps != "" {
+			if v, err := strconv.Atoi(ps); err == nil {
+				q.PageSize = v
+			}
+		}
+	}
+
+	res, err := h.svc.ListChildTenants(c.Request().Context(), id, domain.ListOptions{
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	})
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	items := make([]tenantResp, 0, len(children))
-	for _, ten := range children {
+	items := make([]tenantResp, 0, len(res.Items))
+	for _, ten := range res.Items {
 		items = append(items, tenantResp{
 			ID:             toUUIDString(ten.ID),
 			Name:           ten.Name,
@@ -291,5 +312,11 @@ func (h *Controller) listChildTenants(c echo.Context) error {
 			UpdatedAt:      toTimeString(ten.UpdatedAt),
 		})
 	}
-	return c.JSON(http.StatusOK, items)
+	return c.JSON(http.StatusOK, listResponse{
+		Items:      items,
+		Total:      res.Total,
+		Page:       res.Page,
+		PageSize:   res.PageSize,
+		TotalPages: res.TotalPages,
+	})
 }

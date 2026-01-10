@@ -40,6 +40,10 @@ func TestPasswordChange_Flow(t *testing.T) {
 	tenantID := uuid.New()
 	err = tr.Create(ctx, tenantID, "password-change-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
+	defer func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE tenant_id = $1`, tenantID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantID)
+	}()
 
 	// Setup services
 	repo := authrepo.New(pool)
@@ -56,8 +60,8 @@ func TestPasswordChange_Flow(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	// Create user via signup
-	email := "password-change-test@example.com"
+	// Create user via signup with unique email
+	email := "password-change-test-" + tenantID.String()[:8] + "@example.com"
 	originalPassword := "OriginalPass123!"
 	newPassword := "NewSecurePass456!"
 

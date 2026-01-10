@@ -71,8 +71,20 @@ func (r *SQLCRepository) List(ctx context.Context, query string, active int, lim
 	return items, total, nil
 }
 
-func (r *SQLCRepository) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
-	return r.q.ListChildTenants(ctx, toPgUUID(parentID))
+func (r *SQLCRepository) ListChildTenants(ctx context.Context, parentID uuid.UUID, limit, offset int32) ([]db.Tenant, int64, error) {
+	items, err := r.q.ListChildTenants(ctx, db.ListChildTenantsParams{
+		ParentTenantID: toPgUUID(parentID),
+		Limit:          limit,
+		Offset:         offset,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := r.q.CountChildTenants(ctx, toPgUUID(parentID))
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *SQLCRepository) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {

@@ -66,6 +66,8 @@ func setupProviderTestEnv(t *testing.T) *ProviderTestEnv {
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
+	// Generate unique test ID for Redis key isolation
+	testID := uuid.New().String()[:8]
 	redisClient := goredis.NewClient(&goredis.Options{
 		Addr: redisAddr,
 		DB:   15, // Use separate DB for tests
@@ -145,7 +147,13 @@ func setupProviderTestEnv(t *testing.T) *ProviderTestEnv {
 		adminUserID:   aiAdmin.UserID,
 		adminToken:    loginResp.AccessToken,
 		cleanup: func() {
-			redisClient.FlushDB(ctx)
+			// Clean up only keys with test-specific prefix using SCAN+DEL
+			cleanupCtx := context.Background()
+			keyPattern := "sso:state:" + testID + ":*"
+			iter := redisClient.Scan(cleanupCtx, 0, keyPattern, 100).Iterator()
+			for iter.Next(cleanupCtx) {
+				_ = redisClient.Del(cleanupCtx, iter.Val()).Err()
+			}
 			redisClient.Close()
 			pool.Close()
 		},

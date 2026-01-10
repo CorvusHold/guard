@@ -4088,7 +4088,7 @@
         },
         "/api/v1/tenants/{id}/children": {
             "get": {
-                "description": "Lists all child tenants of a parent tenant",
+                "description": "Lists child tenants of a parent tenant with pagination",
                 "produces": [
                     "application/json"
                 ],
@@ -4103,16 +4103,25 @@
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (max 100)",
+                        "name": "page_size",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/controller.tenantResp"
-                            }
+                            "$ref": "#/definitions/controller.listResponse"
                         }
                     },
                     "400": {

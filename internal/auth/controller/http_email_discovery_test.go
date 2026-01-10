@@ -151,6 +151,16 @@ func TestEmailDiscovery_Flow(t *testing.T) {
 
 		// Should return OK with discovery results
 		assert.Equal(t, http.StatusOK, rec.Code, "Discovery without tenant should work: %s", rec.Body.String())
+
+		var resp map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, true, resp["found"], "User should be found")
+		assert.Equal(t, true, resp["user_exists"], "User should exist")
+		assert.Equal(t, false, resp["has_tenant"], "Cross-tenant request should have has_tenant=false")
+		tenants, ok := resp["tenants"].([]interface{})
+		require.True(t, ok, "Expected tenants array")
+		assert.Greater(t, len(tenants), 0, "Tenants array should be non-empty")
 	})
 }
 

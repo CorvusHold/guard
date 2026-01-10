@@ -65,8 +65,9 @@ func TestFGAACLTuples_CRUD(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	sb, _ := json.Marshal(signupBody)
-	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup", bytes.NewReader(sb))
+	sb, err := json.Marshal(signupBody)
+	require.NoError(t, err)
+	sreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/signup?token=json", bytes.NewReader(sb))
 	sreq.Header.Set("Content-Type", "application/json")
 	srec := httptest.NewRecorder()
 	e.ServeHTTP(srec, sreq)
@@ -91,8 +92,9 @@ func TestFGAACLTuples_CRUD(t *testing.T) {
 		"email":     adminEmail,
 		"password":  adminPassword,
 	}
-	lb, _ := json.Marshal(loginBody)
-	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login", bytes.NewReader(lb))
+	lb, err := json.Marshal(loginBody)
+	require.NoError(t, err)
+	lreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?token=json", bytes.NewReader(lb))
 	lreq.Header.Set("Content-Type", "application/json")
 	lrec := httptest.NewRecorder()
 	e.ServeHTTP(lrec, lreq)

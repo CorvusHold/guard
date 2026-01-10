@@ -114,6 +114,7 @@ func NewSAMLProvider(ctx context.Context, config *domain.Config) (*SAMLProvider,
 		idpMetadata:  idpMetadata,
 		spCert:       spCert,
 		assertionIDs: make(map[string]time.Time),
+		log:          zerolog.Nop(),
 	}, nil
 }
 
@@ -221,8 +222,8 @@ func (p *SAMLProvider) Start(ctx context.Context, opts domain.StartOptions) (*do
 
 	p.log.Debug().
 		Str("provider_id", p.config.ID.String()).
-		Str("sso_url", redirectURL).
-		Str("relay_state", relayState).
+		Bool("has_relay_state", relayState != "").
+		Bool("has_redirect_url", redirectURL != "").
 		Msg("SAML flow initiated - redirecting to IdP")
 
 	return &domain.StartResult{
@@ -341,10 +342,10 @@ func (p *SAMLProvider) Callback(ctx context.Context, req domain.CallbackRequest)
 
 	p.log.Debug().
 		Str("provider_id", p.config.ID.String()).
-		Str("subject", profile.Subject).
-		Str("email", profile.Email).
-		Str("name", profile.Name).
-		Strs("groups", profile.Groups).
+		Bool("has_subject", profile.Subject != "").
+		Bool("has_email", profile.Email != "").
+		Bool("has_name", profile.Name != "").
+		Int("groups_count", len(profile.Groups)).
 		Msg("Extracted user profile from SAML assertion")
 
 	// Apply custom attribute mapping if configured

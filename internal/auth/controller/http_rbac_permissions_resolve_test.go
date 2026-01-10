@@ -50,12 +50,31 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "rbac-resolve-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "rbac-resolve-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		// Clean up test tenant and associated data
-		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE tenant_id = $1`, tenantID)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantID)
+		// Clean up test tenant and associated data (delete dependent tables first)
+		cleanupCtx := context.Background()
+		_, err := pool.Exec(cleanupCtx, `DELETE FROM user_roles WHERE tenant_id = $1`, tenantID)
+		if err != nil {
+			t.Logf("Cleanup: failed to delete user_roles: %v", err)
+		}
+		_, err = pool.Exec(cleanupCtx, `DELETE FROM role_permissions WHERE tenant_id = $1`, tenantID)
+		if err != nil {
+			t.Logf("Cleanup: failed to delete role_permissions: %v", err)
+		}
+		_, err = pool.Exec(cleanupCtx, `DELETE FROM roles WHERE tenant_id = $1`, tenantID)
+		if err != nil {
+			t.Logf("Cleanup: failed to delete roles: %v", err)
+		}
+		_, err = pool.Exec(cleanupCtx, `DELETE FROM users WHERE tenant_id = $1`, tenantID)
+		if err != nil {
+			t.Logf("Cleanup: failed to delete users: %v", err)
+		}
+		_, err = pool.Exec(cleanupCtx, `DELETE FROM tenants WHERE id = $1`, tenantID)
+		if err != nil {
+			t.Logf("Cleanup: failed to delete tenant: %v", err)
+		}
 	})
 
 	// Setup services

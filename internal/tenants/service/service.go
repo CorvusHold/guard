@@ -55,8 +55,31 @@ func (s *service) Create(ctx context.Context, name string, parentTenantID *uuid.
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *service) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
-	return s.repo.ListChildTenants(ctx, parentID)
+func (s *service) ListChildTenants(ctx context.Context, parentID uuid.UUID, opts domain.ListOptions) (domain.ListResult, error) {
+	if opts.PageSize <= 0 || opts.PageSize > 100 {
+		opts.PageSize = 20
+	}
+	if opts.Page <= 0 {
+		opts.Page = 1
+	}
+	limit := int32(opts.PageSize)
+	offset := int32((opts.Page - 1) * opts.PageSize)
+
+	items, total, err := s.repo.ListChildTenants(ctx, parentID, limit, offset)
+	if err != nil {
+		return domain.ListResult{}, err
+	}
+	totalPages := int(total) / opts.PageSize
+	if int(total)%opts.PageSize != 0 {
+		totalPages++
+	}
+	return domain.ListResult{
+		Items:      items,
+		Total:      total,
+		Page:       opts.Page,
+		PageSize:   opts.PageSize,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *service) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {

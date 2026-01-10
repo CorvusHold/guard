@@ -27,8 +27,8 @@ func (m *mockRepo) Deactivate(ctx context.Context, id uuid.UUID) error { return 
 func (m *mockRepo) List(ctx context.Context, query string, active int, limit, offset int32) ([]db.Tenant, int64, error) {
 	return m.items, m.total, nil
 }
-func (m *mockRepo) ListChildTenants(ctx context.Context, parentID uuid.UUID) ([]db.Tenant, error) {
-	return nil, nil
+func (m *mockRepo) ListChildTenants(ctx context.Context, parentID uuid.UUID, limit, offset int32) ([]db.Tenant, int64, error) {
+	return nil, 0, nil
 }
 func (m *mockRepo) GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error) {
 	return nil, nil

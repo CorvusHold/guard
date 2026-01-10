@@ -42,7 +42,13 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1::text || '%')
 SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
 FROM tenants
 WHERE parent_tenant_id = $1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountChildTenants :one
+SELECT COUNT(*)
+FROM tenants
+WHERE parent_tenant_id = $1;
 
 -- name: GetTenantAncestors :many
 WITH RECURSIVE ancestors AS (
