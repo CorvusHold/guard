@@ -5,7 +5,7 @@ package controller
 import (
 	"context"
 
-	edomain "github.com/corvusHold/guard/internal/auth/email/domain"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	"github.com/google/uuid"
 )
 

@@ -1,3 +1,5 @@
+//go:build integration
+
 package controller
 
 import (
@@ -16,7 +18,6 @@ import (
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
-	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
@@ -25,8 +26,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 )
-
-type fakeEmail struct{ lastBody string }
 
 func TestHTTP_Authorize_AllowAndDeny(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
@@ -680,13 +679,6 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 		t.Fatalf("expected auth.token.refresh.success event")
 	}
 }
-
-func (f *fakeEmail) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body string) error {
-	f.lastBody = body
-	return nil
-}
-
-var _ edomain.Sender = (*fakeEmail)(nil)
 
 type tokensResponse struct {
 	AccessToken  string `json:"access_token"`

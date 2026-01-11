@@ -31,17 +31,16 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		t.Skip("skipping integration test: DATABASE_URL not set")
 	}
 
-	ctx := context.Background()
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctxTimeout, os.Getenv("DATABASE_URL"))
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 	require.NoError(t, err)
 	defer pool.Close()
 
 	// Verify DB connectivity
-	conn, err := pool.Acquire(ctxTimeout)
+	conn, err := pool.Acquire(ctx)
 	require.NoError(t, err)
-	err = conn.Conn().Ping(ctxTimeout)
+	err = conn.Conn().Ping(ctx)
 	require.NoError(t, err)
 	conn.Release()
 
@@ -63,11 +62,11 @@ func TestFGAGroups_CRUD(t *testing.T) {
 
 	e := echo.New()
 	e.Validator = noopValidator{}
-	c := New(auth, magic, sso)
+	c := NewWithConfig(auth, magic, sso, cfg)
 	c.Register(e)
 
 	// Create admin user
-	adminEmail := "fga-groups-admin@example.com"
+	adminEmail := "fga-groups-admin-" + tenantID.String() + "@example.com"
 	adminPassword := "AdminPass123!"
 
 	signupBody := map[string]string{
@@ -88,6 +87,7 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	}
 	err = json.Unmarshal(srec.Body.Bytes(), &adminTokens)
 	require.NoError(t, err)
+	require.NotEmpty(t, adminTokens.AccessToken, "signup should return non-empty access token")
 
 	// Get admin user ID and grant admin role
 	adminIntr, err := auth.Introspect(ctx, adminTokens.AccessToken)
@@ -111,6 +111,7 @@ func TestFGAGroups_CRUD(t *testing.T) {
 	require.Equal(t, http.StatusOK, lrec.Code)
 	err = json.Unmarshal(lrec.Body.Bytes(), &adminTokens)
 	require.NoError(t, err)
+	require.NotEmpty(t, adminTokens.AccessToken, "login should return non-empty access token")
 
 	var groupID string
 
@@ -123,7 +124,8 @@ func TestFGAGroups_CRUD(t *testing.T) {
 			"name":        "engineering",
 			"description": "Engineering team",
 		}
-		body, _ := json.Marshal(createBody)
+		body, err := json.Marshal(createBody)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/fga/groups", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
@@ -133,15 +135,15 @@ func TestFGAGroups_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rec.Code, "Create group should succeed: %s", rec.Body.String())
 
-		var resp map[string]interface{}
-		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		var resp struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.NotEmpty(t, resp["id"])
-		assert.Equal(t, "engineering", resp["name"])
-
-		id, ok := resp["id"].(string)
-		require.True(t, ok, "expected id to be a string")
-		groupID = id
+		assert.NotEmpty(t, resp.ID)
+		assert.Equal(t, "engineering", resp.Name)
+		groupID = resp.ID
 		t.Logf("Created group ID: %s", groupID)
 	})
 
@@ -189,7 +191,8 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		addBody := map[string]string{
 			"user_id": adminUserID.String(),
 		}
-		body, _ := json.Marshal(addBody)
+		body, err := json.Marshal(addBody)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/fga/groups/"+groupID+"/members", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
@@ -209,7 +212,8 @@ func TestFGAGroups_CRUD(t *testing.T) {
 		removeBody := map[string]string{
 			"user_id": adminUserID.String(),
 		}
-		body, _ := json.Marshal(removeBody)
+		body, err := json.Marshal(removeBody)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/admin/fga/groups/"+groupID+"/members", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+adminTokens.AccessToken)
@@ -271,7 +275,8 @@ func TestFGAGroups_CRUD(t *testing.T) {
 			"name":        "unauthorized",
 			"description": "Should fail",
 		}
-		body, _ := json.Marshal(createBody)
+		body, err := json.Marshal(createBody)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/admin/fga/groups", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		// No Authorization header

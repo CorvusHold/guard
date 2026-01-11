@@ -24,12 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type noopValidator struct{}
-
-func (n noopValidator) Validate(i interface{}) error {
-	return nil
-}
-
 // TestRBACPermissionsResolve_Flow tests the RBAC permissions resolution endpoint
 func TestRBACPermissionsResolve_Flow(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
@@ -83,7 +77,7 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 
 	e := echo.New()
 	e.Validator = noopValidator{}
-	c := New(auth, magic, sso)
+	c := NewWithConfig(auth, magic, sso, cfg)
 	c.Register(e)
 
 	// Create admin user
@@ -240,6 +234,7 @@ func TestRBACPermissionsResolve_Flow(t *testing.T) {
 		// After role assignment, user should have grants (role was assigned)
 		// The editor role may not have permissions yet, but the response structure should be valid
 		t.Logf("Permissions after role assignment: grants=%d", len(resp.Grants))
+		assert.NotNil(t, resp.Grants, "Grants should not be nil")
 	})
 
 	// ============================================================
