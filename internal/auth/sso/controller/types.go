@@ -56,6 +56,7 @@ type updateProviderRequest struct {
 	Enabled            *bool               `json:"enabled,omitempty"`
 	AllowSignup        *bool               `json:"allow_signup,omitempty"`
 	TrustEmailVerified *bool               `json:"trust_email_verified,omitempty"`
+	LinkingPolicy      *string             `json:"linking_policy,omitempty" enums:"never,verified_email,always"` // Policy for linking SSO identities to existing accounts
 	Domains            []string            `json:"domains,omitempty"`
 	AttributeMapping   map[string][]string `json:"attribute_mapping,omitempty"`
 

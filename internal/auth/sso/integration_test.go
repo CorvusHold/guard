@@ -84,7 +84,7 @@ func setupTestEnvironment(t *testing.T) *TestEnv {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	tenantName := "sso-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, tenantName); err != nil {
+	if err := tr.Create(ctx, tenantID, tenantName, nil); err != nil {
 		pool.Close()
 		redisClient.Close()
 		t.Fatalf("failed to create tenant: %v", err)

@@ -29,21 +29,24 @@ func (h *Controller) Register(e *echo.Echo) {
 func (h *Controller) RegisterV1(g *echo.Group) {
 	g.POST("/tenants", h.createTenant)
 	g.GET("/tenants/:id", h.getTenantByID)
+	g.GET("/tenants/:id/children", h.listChildTenants)
 	g.GET("/tenants/by-name/:name", h.getTenantByName)
 	g.PATCH("/tenants/:id/deactivate", h.deactivateTenant)
 	g.GET("/tenants", h.listTenants)
 }
 
 type createTenantReq struct {
-	Name string `json:"name" validate:"required"`
+	Name           string  `json:"name" validate:"required"`
+	ParentTenantID *string `json:"parent_tenant_id,omitempty"`
 }
 
 type tenantResp struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	IsActive  bool   `json:"is_active"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	IsActive       bool   `json:"is_active"`
+	ParentTenantID string `json:"parent_tenant_id,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
 }
 
 func toUUIDString(u pgtype.UUID) string {
@@ -78,16 +81,25 @@ func (h *Controller) createTenant(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	ten, err := h.svc.Create(c.Request().Context(), req.Name)
+	var parentID *uuid.UUID
+	if req.ParentTenantID != nil && *req.ParentTenantID != "" {
+		pid, err := uuid.Parse(*req.ParentTenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid parent_tenant_id"})
+		}
+		parentID = &pid
+	}
+	ten, err := h.svc.Create(c.Request().Context(), req.Name, parentID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusCreated, tenantResp{
-		ID:        toUUIDString(ten.ID),
-		Name:      ten.Name,
-		IsActive:  ten.IsActive,
-		CreatedAt: toTimeString(ten.CreatedAt),
-		UpdatedAt: toTimeString(ten.UpdatedAt),
+		ID:             toUUIDString(ten.ID),
+		Name:           ten.Name,
+		IsActive:       ten.IsActive,
+		ParentTenantID: toUUIDString(ten.ParentTenantID),
+		CreatedAt:      toTimeString(ten.CreatedAt),
+		UpdatedAt:      toTimeString(ten.UpdatedAt),
 	})
 }
 
@@ -112,11 +124,12 @@ func (h *Controller) getTenantByID(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 	return c.JSON(http.StatusOK, tenantResp{
-		ID:        toUUIDString(ten.ID),
-		Name:      ten.Name,
-		IsActive:  ten.IsActive,
-		CreatedAt: toTimeString(ten.CreatedAt),
-		UpdatedAt: toTimeString(ten.UpdatedAt),
+		ID:             toUUIDString(ten.ID),
+		Name:           ten.Name,
+		IsActive:       ten.IsActive,
+		ParentTenantID: toUUIDString(ten.ParentTenantID),
+		CreatedAt:      toTimeString(ten.CreatedAt),
+		UpdatedAt:      toTimeString(ten.UpdatedAt),
 	})
 }
 
@@ -140,11 +153,12 @@ func (h *Controller) getTenantByName(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 	return c.JSON(http.StatusOK, tenantResp{
-		ID:        toUUIDString(ten.ID),
-		Name:      ten.Name,
-		IsActive:  ten.IsActive,
-		CreatedAt: toTimeString(ten.CreatedAt),
-		UpdatedAt: toTimeString(ten.UpdatedAt),
+		ID:             toUUIDString(ten.ID),
+		Name:           ten.Name,
+		IsActive:       ten.IsActive,
+		ParentTenantID: toUUIDString(ten.ParentTenantID),
+		CreatedAt:      toTimeString(ten.CreatedAt),
+		UpdatedAt:      toTimeString(ten.UpdatedAt),
 	})
 }
 
@@ -230,11 +244,72 @@ func (h *Controller) listTenants(c echo.Context) error {
 	items := make([]tenantResp, 0, len(res.Items))
 	for _, ten := range res.Items {
 		items = append(items, tenantResp{
-			ID:        toUUIDString(ten.ID),
-			Name:      ten.Name,
-			IsActive:  ten.IsActive,
-			CreatedAt: toTimeString(ten.CreatedAt),
-			UpdatedAt: toTimeString(ten.UpdatedAt),
+			ID:             toUUIDString(ten.ID),
+			Name:           ten.Name,
+			IsActive:       ten.IsActive,
+			ParentTenantID: toUUIDString(ten.ParentTenantID),
+			CreatedAt:      toTimeString(ten.CreatedAt),
+			UpdatedAt:      toTimeString(ten.UpdatedAt),
+		})
+	}
+	return c.JSON(http.StatusOK, listResponse{
+		Items:      items,
+		Total:      res.Total,
+		Page:       res.Page,
+		PageSize:   res.PageSize,
+		TotalPages: res.TotalPages,
+	})
+}
+
+// List Child Tenants godoc
+// @Summary      List child tenants
+// @Description  Lists child tenants of a parent tenant with pagination
+// @Tags         tenants
+// @Produce      json
+// @Param        id         path   string  true   "Parent Tenant ID (UUID)"
+// @Param        page       query  int     false  "Page number"
+// @Param        page_size  query  int     false  "Page size (max 100)"
+// @Success      200  {object}  listResponse
+// @Failure      400  {object}  map[string]string
+// @Router       /api/v1/tenants/{id}/children [get]
+func (h *Controller) listChildTenants(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
+
+	q := listQuery{}
+	if err := c.Bind(&q); err != nil {
+		// fallback manual parse
+		if p := c.QueryParam("page"); p != "" {
+			if v, err := strconv.Atoi(p); err == nil {
+				q.Page = v
+			}
+		}
+		if ps := c.QueryParam("page_size"); ps != "" {
+			if v, err := strconv.Atoi(ps); err == nil {
+				q.PageSize = v
+			}
+		}
+	}
+
+	res, err := h.svc.ListChildTenants(c.Request().Context(), id, domain.ListOptions{
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	})
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	items := make([]tenantResp, 0, len(res.Items))
+	for _, ten := range res.Items {
+		items = append(items, tenantResp{
+			ID:             toUUIDString(ten.ID),
+			Name:           ten.Name,
+			IsActive:       ten.IsActive,
+			ParentTenantID: toUUIDString(ten.ParentTenantID),
+			CreatedAt:      toTimeString(ten.CreatedAt),
+			UpdatedAt:      toTimeString(ten.UpdatedAt),
 		})
 	}
 	return c.JSON(http.StatusOK, listResponse{

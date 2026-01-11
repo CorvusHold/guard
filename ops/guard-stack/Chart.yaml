@@ -6,7 +6,7 @@ description: |
 
 type: application
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.11.0"
 
 home: https://github.com/corvusHold/guard
 icon: https://github.com/corvusHold/guard/blob/main/assets/brand/mascot.svg

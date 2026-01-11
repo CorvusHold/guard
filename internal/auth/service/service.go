@@ -1277,3 +1277,49 @@ func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeIn
 func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
 	return s.repo.UpdateUserNames(ctx, userID, strings.TrimSpace(firstName), strings.TrimSpace(lastName))
 }
+
+// GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
+func (s *Service) GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) (domain.Role, error) {
+	// Try to get existing admin role
+	role, err := s.repo.GetRoleByName(ctx, tenantID, "admin")
+	if err == nil {
+		return role, nil
+	}
+	// Create admin role if it doesn't exist
+	return s.repo.CreateRole(ctx, uuid.New(), tenantID, "admin", "Administrator role with full access")
+}
+
+// ParseAccessToken parses an access token and returns the claims.
+func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		return []byte(s.cfg.JWTSigningKey), nil
+	})
+	if err != nil || !token.Valid {
+		return domain.AccessTokenClaims{}, errors.New("invalid token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return domain.AccessTokenClaims{}, errors.New("invalid claims")
+	}
+	userIDStr, _ := claims["sub"].(string)
+	tenantIDStr, _ := claims["tenant_id"].(string)
+	email, _ := claims["email"].(string)
+	rolesRaw, _ := claims["roles"].([]interface{})
+
+	userID, _ := uuid.Parse(userIDStr)
+	tenantID, _ := uuid.Parse(tenantIDStr)
+
+	var roles []string
+	for _, r := range rolesRaw {
+		if rs, ok := r.(string); ok {
+			roles = append(roles, rs)
+		}
+	}
+
+	return domain.AccessTokenClaims{
+		UserID:   userID,
+		TenantID: tenantID,
+		Email:    email,
+		Roles:    roles,
+	}, nil
+}

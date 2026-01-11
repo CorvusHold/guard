@@ -74,7 +74,7 @@ jobs:
           VERSION=v${{ needs.preflight.outputs.version }}
           echo "Triggering proxy.golang.org indexing for $VERSION..."
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://proxy.golang.org/github.com/corvus!hold/guard/sdk/go/@v/${VERSION}.info"\)
+            "https://proxy.golang.org/github.com/!corvus!hold/guard/sdk/go/@v/${VERSION}.info")
           if [[ "$HTTP_STATUS" == "200" ]]; then
             echo "Module version $VERSION is now available on proxy.golang.org"
           else

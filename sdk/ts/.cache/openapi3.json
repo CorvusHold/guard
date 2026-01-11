@@ -4836,6 +4836,54 @@
         }
       }
     },
+    "/api/v1/tenants/{id}/children": {
+      "get": {
+        "description": "Lists all child tenants of a parent tenant",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "List child tenants",
+        "parameters": [
+          {
+            "description": "Parent Tenant ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/controller.tenantResp"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tenants/{id}/deactivate": {
       "patch": {
         "description": "Deactivates a tenant by ID",
@@ -5508,6 +5556,9 @@
         ],
         "properties": {
           "name": {
+            "type": "string"
+          },
+          "parent_tenant_id": {
             "type": "string"
           }
         }
@@ -6339,6 +6390,10 @@
           "tenant_id"
         ],
         "properties": {
+          "assign_admin": {
+            "description": "If true, assigns admin role to the new user (for tenant bootstrap)",
+            "type": "boolean"
+          },
           "email": {
             "type": "string"
           },
@@ -6396,6 +6451,9 @@
             "type": "boolean"
           },
           "name": {
+            "type": "string"
+          },
+          "parent_tenant_id": {
             "type": "string"
           },
           "updated_at": {
@@ -6481,6 +6539,15 @@
           },
           "jwks_uri": {
             "type": "string"
+          },
+          "linking_policy": {
+            "description": "Policy for linking SSO identities to existing accounts",
+            "type": "string",
+            "enum": [
+              "never",
+              "verified_email",
+              "always"
+            ]
           },
           "name": {
             "type": "string"

@@ -4764,6 +4764,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List child tenants
+         * @description Lists all child tenants of a parent tenant
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Parent Tenant ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.tenantResp"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{id}/deactivate": {
         parameters: {
             query?: never;
@@ -5116,6 +5169,7 @@ export interface components {
         };
         "controller.createTenantReq": {
             name: string;
+            parent_tenant_id?: string;
         };
         "controller.fgaAuthorizeReq": {
             object_id?: string;
@@ -5366,6 +5420,8 @@ export interface components {
             workos_default_organization_id?: string;
         };
         "controller.signupReq": {
+            /** @description If true, assigns admin role to the new user (for tenant bootstrap) */
+            assign_admin?: boolean;
             email: string;
             first_name?: string;
             last_name?: string;
@@ -5386,6 +5442,7 @@ export interface components {
             id?: string;
             is_active?: boolean;
             name?: string;
+            parent_tenant_id?: string;
             updated_at?: string;
         };
         "controller.updateProfileReq": {
@@ -5415,6 +5472,11 @@ export interface components {
             /** @description OIDC/OAuth2 fields */
             issuer?: string;
             jwks_uri?: string;
+            /**
+             * @description Policy for linking SSO identities to existing accounts
+             * @enum {string}
+             */
+            linking_policy?: "never" | "verified_email" | "always";
             name?: string;
             response_mode?: string;
             response_type?: string;

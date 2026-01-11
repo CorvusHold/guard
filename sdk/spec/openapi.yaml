@@ -268,6 +268,8 @@ definitions:
     properties:
       name:
         type: string
+      parent_tenant_id:
+        type: string
     required:
     - name
     type: object
@@ -823,6 +825,9 @@ definitions:
     type: object
   controller.signupReq:
     properties:
+      assign_admin:
+        description: If true, assigns admin role to the new user (for tenant bootstrap)
+        type: boolean
       email:
         type: string
       first_name:
@@ -865,6 +870,8 @@ definitions:
       is_active:
         type: boolean
       name:
+        type: string
+      parent_tenant_id:
         type: string
       updated_at:
         type: string
@@ -921,6 +928,13 @@ definitions:
         description: OIDC/OAuth2 fields
         type: string
       jwks_uri:
+        type: string
+      linking_policy:
+        description: Policy for linking SSO identities to existing accounts
+        enum:
+        - never
+        - verified_email
+        - always
         type: string
       name:
         type: string
@@ -3665,6 +3679,39 @@ paths:
               type: string
             type: object
       summary: Get tenant by ID
+      tags:
+      - tenants
+  /api/v1/tenants/{id}/children:
+    get:
+      description: Lists child tenants of a parent tenant with pagination
+      parameters:
+      - description: Parent Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Page size (max 100)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.listResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List child tenants
       tags:
       - tenants
   /api/v1/tenants/{id}/deactivate:

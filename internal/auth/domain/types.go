@@ -175,6 +175,25 @@ type Service interface {
 	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) error
 	// Authorization decision
 	Authorize(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionKey string, objectType string, objectID *string) (allowed bool, reason string, err error)
+
+	// GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
+	GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) (Role, error)
+	// ParseAccessToken parses and validates an access token, returning the claims.
+	// It validates the JWT signature using the tenant-specific signing key (resolved from
+	// the token's tenant claim), verifies standard claims (exp, iss, aud), and returns
+	// an error if the signature is invalid or the token is expired.
+	// The returned AccessTokenClaims includes UserID, TenantID, Email, and Roles populated
+	// directly from the JWT claims (not from a database lookup). Email and Roles are read
+	// from the "email" and "roles" claim keys respectively.
+	ParseAccessToken(ctx context.Context, token string) (AccessTokenClaims, error)
+}
+
+// AccessTokenClaims represents the claims in an access token.
+type AccessTokenClaims struct {
+	UserID   uuid.UUID
+	TenantID uuid.UUID
+	Email    string
+	Roles    []string
 }
 
 // Magic-link inputs

@@ -13,6 +13,7 @@ interface Tenant {
   id: string
   name: string
   is_active: boolean
+  parent_tenant_id?: string
   created_at: string
   updated_at: string
 }
@@ -27,11 +28,18 @@ interface TenantListResponse {
 
 interface TenantListPanelProps {
   onTenantSelected?: (tenantId: string, tenantName: string) => void
+  refreshTrigger?: number
 }
 
-export default function TenantListPanel({ onTenantSelected }: TenantListPanelProps) {
+// Helper to get tenant name by ID from the list
+const getTenantNameById = (tenants: Tenant[], id: string): string => {
+  const tenant = tenants.find(t => t.id === id)
+  return tenant?.name || id
+}
+
+export default function TenantListPanel({ onTenantSelected, refreshTrigger }: TenantListPanelProps) {
   const { user } = useAuth()
-  const { tenantId: currentTenantId, setTenantId } = useTenant()
+  const { tenantId: currentTenantId, tenantName: currentTenantName, setTenant } = useTenant()
   const { show: showToast } = useToast()
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,7 +79,7 @@ export default function TenantListPanel({ onTenantSelected }: TenantListPanelPro
 
   useEffect(() => {
     fetchTenants(searchQuery, page)
-  }, [user?.accessToken, page])
+  }, [user?.accessToken, page, refreshTrigger])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,7 +88,7 @@ export default function TenantListPanel({ onTenantSelected }: TenantListPanelPro
   }
 
   const handleTenantSelect = (tenant: Tenant) => {
-    setTenantId(tenant.id)
+    setTenant(tenant.id, tenant.name)
     onTenantSelected?.(tenant.id, tenant.name)
     showToast({ description: `Switched to tenant: ${tenant.name}`, variant: 'success' })
   }
@@ -124,7 +132,7 @@ export default function TenantListPanel({ onTenantSelected }: TenantListPanelPro
         {currentTenantId && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm font-medium text-blue-900">
-              Current Tenant: {currentTenantId}
+              Current Tenant: {currentTenantName || currentTenantId}
             </p>
           </div>
         )}
@@ -171,6 +179,11 @@ export default function TenantListPanel({ onTenantSelected }: TenantListPanelPro
                     <p className="text-sm text-muted-foreground mt-1">
                       ID: {tenant.id}
                     </p>
+                    {tenant.parent_tenant_id && (
+                      <p className="text-xs text-muted-foreground">
+                        Parent: {getTenantNameById(tenants, tenant.parent_tenant_id)}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Created: {formatDate(tenant.created_at)}
                     </p>
