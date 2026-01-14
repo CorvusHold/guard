@@ -52,7 +52,7 @@ func TestHTTP_SSO_PortalLink_NativeProvider_ReturnsInternalPortalURL(t *testing.
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-sso-portal-link-native-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

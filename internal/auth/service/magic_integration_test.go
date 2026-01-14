@@ -52,7 +52,7 @@ func TestMagic_Flow_Integration(t *testing.T) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "magic-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	// small delay for consistency in CI

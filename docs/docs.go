@@ -4089,6 +4089,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/tenants/{id}/children": {
+            "get": {
+                "description": "Lists child tenants of a parent tenant with pagination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "summary": "List child tenants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Parent Tenant ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (max 100)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.listResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tenants/{id}/deactivate": {
             "patch": {
                 "description": "Deactivates a tenant by ID",
@@ -4661,6 +4711,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "name": {
+                    "type": "string"
+                },
+                "parent_tenant_id": {
                     "type": "string"
                 }
             }
@@ -5492,6 +5545,10 @@ const docTemplate = `{
                 "tenant_id"
             ],
             "properties": {
+                "assign_admin": {
+                    "description": "If true, assigns admin role to the new user (for tenant bootstrap)",
+                    "type": "boolean"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -5549,6 +5606,9 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "parent_tenant_id": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -5634,6 +5694,15 @@ const docTemplate = `{
                 },
                 "jwks_uri": {
                     "type": "string"
+                },
+                "linking_policy": {
+                    "description": "Policy for linking SSO identities to existing accounts",
+                    "type": "string",
+                    "enum": [
+                        "never",
+                        "verified_email",
+                        "always"
+                    ]
                 },
                 "name": {
                     "type": "string"

@@ -1,6 +1,6 @@
 {
-  "count": 71,
-  "generatedAt": "2026-01-04T18:15:22.317Z",
+  "count": 72,
+  "generatedAt": "2026-01-14T04:39:46.690Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -1141,6 +1141,33 @@
         "status": "200"
       },
       "summary": "Get tenant by ID",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_tenants_by_id_children",
+      "path": "/api/v1/tenants/{id}/children",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.listResponse"
+        },
+        "status": "200"
+      },
+      "summary": "List child tenants",
       "tags": [
         "tenants"
       ]

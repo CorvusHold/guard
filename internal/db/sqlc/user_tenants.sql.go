@@ -71,15 +71,23 @@ JOIN tenants t ON t.id = ut.tenant_id
 WHERE ut.user_id = $1
 `
 
-func (q *Queries) ListUserTenants(ctx context.Context, userID pgtype.UUID) ([]Tenant, error) {
+type ListUserTenantsRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	IsActive  bool               `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListUserTenants(ctx context.Context, userID pgtype.UUID) ([]ListUserTenantsRow, error) {
 	rows, err := q.db.Query(ctx, listUserTenants, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Tenant
+	var items []ListUserTenantsRow
 	for rows.Next() {
-		var i Tenant
+		var i ListUserTenantsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,

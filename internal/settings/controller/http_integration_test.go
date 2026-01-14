@@ -42,7 +42,7 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-get-mask-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-get-mask-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestSettings_GET_RateLimit_429(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-get-rl-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-get-rl-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestSettings_GET_RequiresAuth_401(t *testing.T) {
 	// tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-auth-401-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-auth-401-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	// settings deps
@@ -203,11 +203,11 @@ func TestSettings_TenantMismatch_403(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantA := uuid.New()
-	if err := tr.Create(ctx, tenantA, "settings-tenant-a-"+tenantA.String()); err != nil {
+	if err := tr.Create(ctx, tenantA, "settings-tenant-a-"+tenantA.String(), nil); err != nil {
 		t.Fatalf("tenant a: %v", err)
 	}
 	tenantB := uuid.New()
-	if err := tr.Create(ctx, tenantB, "settings-tenant-b-"+tenantB.String()); err != nil {
+	if err := tr.Create(ctx, tenantB, "settings-tenant-b-"+tenantB.String(), nil); err != nil {
 		t.Fatalf("tenant b: %v", err)
 	}
 
@@ -244,7 +244,7 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-rbac-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-rbac-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -287,7 +287,7 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-validate-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-validate-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -342,7 +342,7 @@ func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-audit-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-audit-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 
@@ -403,7 +403,7 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	if err := tr.Create(ctx, tenantID, "settings-rl-"+tenantID.String()); err != nil {
+	if err := tr.Create(ctx, tenantID, "settings-rl-"+tenantID.String(), nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 

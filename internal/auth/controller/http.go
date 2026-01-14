@@ -1073,11 +1073,12 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 }
 
 type signupReq struct {
-	TenantID  string `json:"tenant_id" validate:"required,uuid4"`
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
+	Email       string `json:"email" validate:"required,email"`
+	Password    string `json:"password" validate:"required,min=8"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	AssignAdmin bool   `json:"assign_admin,omitempty"` // If true, assigns admin role to the new user (for tenant bootstrap)
 }
 
 type loginReq struct {
@@ -1383,6 +1384,37 @@ func (h *Controller) signup(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+
+	// Auto-assign admin role if requested (for tenant bootstrap)
+	if req.AssignAdmin {
+		// Get or create admin role for this tenant
+		adminRole, err := h.svc.GetOrCreateAdminRole(c.Request().Context(), tenID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to get admin role"})
+		}
+		if adminRole.ID == uuid.Nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "invalid admin role"})
+		}
+		// Parse user ID from the access token to assign the role
+		claims, parseErr := h.svc.ParseAccessToken(c.Request().Context(), tok.AccessToken)
+		if parseErr != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to parse token"})
+		}
+		if claims.UserID == uuid.Nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "invalid user ID in token"})
+		}
+		// Attempt the grant and return error if it fails
+		if err := h.svc.AddUserRole(c.Request().Context(), claims.UserID, tenID, adminRole.ID); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to assign admin role"})
+		}
+		// Synchronize denormalized user.Roles field after successful grant
+		if err := h.svc.UpdateUserRoles(c.Request().Context(), claims.UserID, []string{"admin"}); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to sync user roles"})
+		}
+		// Note: The admin role will be reflected in the JWT on next token refresh or login.
+		// The current token remains valid but won't include the admin role until refreshed.
+	}
+
 	return respondWithTokens(c, h.cfg, authMode, http.StatusCreated, tok.AccessToken, tok.RefreshToken)
 }
 

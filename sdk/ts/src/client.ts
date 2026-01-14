@@ -738,12 +738,25 @@ export class GuardClient {
    * 
    * @param providerSlug - The provider slug (e.g., 'okta', 'azure-ad', 'google-saml')
    * @param params - Optional parameters for the SSO flow
+   * @param params.useQueryParams - **SECURITY WARNING**: When true, tokens are returned as URL query parameters
+   *   instead of fragments. Query parameters are sent to servers and logged, potentially exposing tokens.
+   *   Only use this for server-side callback routes that cannot access URL fragments.
+   *   Default: false (uses secure URL fragments that aren't sent to servers or logged)
    * @returns The redirect URL to send the user to for authentication
    * 
    * @example
    * ```ts
-   * const result = await client.startSso('okta', { redirect_url: 'https://myapp.com/callback' });
+   * // Recommended: Client-side callback (tokens in URL fragment - more secure)
+   * const result = await client.startSso('okta', { 
+   *   redirect_url: 'https://myapp.com/callback' 
+   * });
    * window.location.href = result.data.redirect_url;
+   * 
+   * // Less secure: Server-side callback (tokens in query params - visible in logs)
+   * const result = await client.startSso('okta', { 
+   *   redirect_url: 'https://myapp.com/api/callback',
+   *   useQueryParams: true  // ⚠️ Tokens will be in server logs
+   * });
    * ```
    */
   async startSso(providerSlug: SsoProvider, params: {
@@ -751,12 +764,38 @@ export class GuardClient {
     redirect_url?: string;
     login_hint?: string;
     force_authn?: boolean;
+    /**
+     * **SECURITY WARNING**: When true, tokens are returned as URL query parameters instead of fragments.
+     * 
+     * - Query parameters are sent to servers and appear in access logs, referrer headers, and browser history
+     * - URL fragments are NOT sent to servers and provide better security
+     * 
+     * Only set this to `true` if you have a server-side callback route that cannot access URL fragments.
+     * For client-side callbacks, leave this as `false` (default) to use the more secure fragment-based approach.
+     * 
+     * @default false
+     */
+    useQueryParams?: boolean;
   } = {}): Promise<ResponseWrapper<{ redirect_url: string }>> {
     const tenant = params.tenant_id ?? this.tenantId;
     if (!tenant) throw new Error('tenant_id is required for SSO; set via params or client constructor');
     
+    // Build redirect URL with use_query flag if requested
+    let redirectUrl = params.redirect_url;
+    if (redirectUrl && params.useQueryParams) {
+      try {
+        const url = new URL(redirectUrl);
+        url.searchParams.set('use_query', 'true');
+        redirectUrl = url.toString();
+      } catch {
+        // If redirect_url is not a valid URL, append query param manually
+        const separator = redirectUrl.includes('?') ? '&' : '?';
+        redirectUrl = `${redirectUrl}${separator}use_query=true`;
+      }
+    }
+    
     const qs = this.buildQuery({
-      redirect_url: params.redirect_url,
+      redirect_url: redirectUrl,
       login_hint: params.login_hint,
       force_authn: params.force_authn,
     });

@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countChildTenants = `-- name: CountChildTenants :one
+SELECT COUNT(*)
+FROM tenants
+WHERE parent_tenant_id = $1
+`
+
+func (q *Queries) CountChildTenants(ctx context.Context, parentTenantID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countChildTenants, parentTenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTenants = `-- name: CountTenants :one
 SELECT COUNT(*)
 FROM tenants
@@ -35,17 +48,18 @@ func (q *Queries) CountTenants(ctx context.Context, arg CountTenantsParams) (int
 }
 
 const createTenant = `-- name: CreateTenant :exec
-INSERT INTO tenants (id, name)
-VALUES ($1, $2)
+INSERT INTO tenants (id, name, parent_tenant_id)
+VALUES ($1, $2, $3)
 `
 
 type CreateTenantParams struct {
-	ID   pgtype.UUID `json:"id"`
-	Name string      `json:"name"`
+	ID             pgtype.UUID `json:"id"`
+	Name           string      `json:"name"`
+	ParentTenantID pgtype.UUID `json:"parent_tenant_id"`
 }
 
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) error {
-	_, err := q.db.Exec(ctx, createTenant, arg.ID, arg.Name)
+	_, err := q.db.Exec(ctx, createTenant, arg.ID, arg.Name, arg.ParentTenantID)
 	return err
 }
 
@@ -59,8 +73,86 @@ func (q *Queries) DeactivateTenant(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getTenantAncestors = `-- name: GetTenantAncestors :many
+WITH RECURSIVE ancestors AS (
+  -- Start with the given tenant
+  SELECT
+    t.id,
+    t.name,
+    t.is_active,
+    t.created_at,
+    t.updated_at,
+    t.parent_tenant_id,
+    0 AS depth,
+    ARRAY[t.id] AS path
+  FROM tenants t
+  WHERE t.id = $1
+
+  UNION ALL
+
+  -- Recursively join to parent tenants
+  SELECT
+    t2.id,
+    t2.name,
+    t2.is_active,
+    t2.created_at,
+    t2.updated_at,
+    t2.parent_tenant_id,
+    a.depth + 1,
+    a.path || t2.id
+  FROM tenants t2
+  INNER JOIN ancestors a ON t2.id = a.parent_tenant_id
+  WHERE a.depth < 100
+    AND NOT t2.id = ANY(a.path)
+)
+SELECT ancestors.id, ancestors.name, ancestors.is_active, ancestors.created_at, ancestors.updated_at, ancestors.parent_tenant_id
+FROM ancestors
+WHERE ancestors.depth > 0
+ORDER BY ancestors.depth ASC
+`
+
+type GetTenantAncestorsRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	Name           string             `json:"name"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ParentTenantID pgtype.UUID        `json:"parent_tenant_id"`
+}
+
+// Cycle Policy:
+// - Cycles are prevented at the database level via trigger (check_tenant_hierarchy_cycle)
+// - This query includes explicit cycle detection (path tracking) as defense-in-depth
+// - Depth limit (100) provides secondary safeguard against infinite recursion
+func (q *Queries) GetTenantAncestors(ctx context.Context, id pgtype.UUID) ([]GetTenantAncestorsRow, error) {
+	rows, err := q.db.Query(ctx, getTenantAncestors, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTenantAncestorsRow
+	for rows.Next() {
+		var i GetTenantAncestorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentTenantID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, name, is_active, created_at, updated_at
+SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
 FROM tenants
 WHERE id = $1
 `
@@ -74,12 +166,13 @@ func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, er
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTenantID,
 	)
 	return i, err
 }
 
 const getTenantByName = `-- name: GetTenantByName :one
-SELECT id, name, is_active, created_at, updated_at
+SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
 FROM tenants
 WHERE name = $1
 `
@@ -93,12 +186,54 @@ func (q *Queries) GetTenantByName(ctx context.Context, name string) (Tenant, err
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTenantID,
 	)
 	return i, err
 }
 
+const listChildTenants = `-- name: ListChildTenants :many
+SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
+FROM tenants
+WHERE parent_tenant_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListChildTenantsParams struct {
+	ParentTenantID pgtype.UUID `json:"parent_tenant_id"`
+	Limit          int32       `json:"limit"`
+	Offset         int32       `json:"offset"`
+}
+
+func (q *Queries) ListChildTenants(ctx context.Context, arg ListChildTenantsParams) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listChildTenants, arg.ParentTenantID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tenant
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentTenantID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenants = `-- name: ListTenants :many
-SELECT id, name, is_active, created_at, updated_at
+SELECT id, name, is_active, created_at, updated_at, parent_tenant_id
 FROM tenants
 WHERE ($1::text = '' OR name ILIKE '%' || $1::text || '%')
   AND (
@@ -137,6 +272,7 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ParentTenantID,
 		); err != nil {
 			return nil, err
 		}
@@ -146,4 +282,19 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTenantParent = `-- name: UpdateTenantParent :exec
+UPDATE tenants SET parent_tenant_id = $2, updated_at = now()
+WHERE id = $1
+`
+
+type UpdateTenantParentParams struct {
+	ID             pgtype.UUID `json:"id"`
+	ParentTenantID pgtype.UUID `json:"parent_tenant_id"`
+}
+
+func (q *Queries) UpdateTenantParent(ctx context.Context, arg UpdateTenantParentParams) error {
+	_, err := q.db.Exec(ctx, updateTenantParent, arg.ID, arg.ParentTenantID)
+	return err
 }

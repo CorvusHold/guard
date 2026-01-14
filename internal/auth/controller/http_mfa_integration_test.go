@@ -40,7 +40,7 @@ func setupAuthApp(t *testing.T) (*echo.Echo, uuid.UUID, tokensResponse) {
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
 	name := "http-mfa-itest-" + tenantID.String()
-	if err := tr.Create(ctx, tenantID, name); err != nil {
+	if err := tr.Create(ctx, tenantID, name, nil); err != nil {
 		t.Fatalf("create tenant: %v", err)
 	}
 	time.Sleep(25 * time.Millisecond)

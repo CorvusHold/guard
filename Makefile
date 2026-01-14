@@ -85,6 +85,21 @@ test-integration: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./...'
 	make compose-down-test
 
+# Run SSO provider integration tests against dockerized test stack
+test-sso-provider: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./internal/auth/sso/controller/...'
+	make compose-down-test
+
+# Run auth controller integration tests (password, profile, token, admin, discovery, FGA)
+test-auth-controller: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./internal/auth/controller/...'
+	make compose-down-test
+
+# Run all API integration tests (auth controller + SSO provider)
+test-api-all: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
+	bash -lc 'set -a; if [ -f .env.test ]; then source .env.test; else source .env.test.example; fi; set +a; go test -tags=integration -v ./internal/auth/controller/... ./internal/auth/sso/controller/...'
+	make compose-down-test
+
 lint:
 	go vet ./...
 
@@ -147,6 +162,8 @@ swagger:
 	bash -lc 'cp docs/swagger.yaml sdk/spec/openapi.yaml'
 	# Convert Swagger 2.0 -> OpenAPI 3.0 for Go SDK (requires: npx swagger2openapi)
 	bash -lc 'cd sdk/ts && npx swagger2openapi ../spec/openapi.json -o ../spec/openapi.v3.yaml --yaml' || echo "Note: Install swagger2openapi for Go SDK generation"
+	bash -lc 'cd sdk/ts && npm run gen:openapi'
+	bash -lc 'node sdk/spec/scripts/generate-operations.mjs --write'
 
 # Regenerate all SDK types from OpenAPI spec (run after swagger)
 sdk-gen: swagger

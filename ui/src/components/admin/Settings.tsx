@@ -20,7 +20,7 @@ import SsoProvidersPanel from './sso/SsoProvidersPanel'
 
 export default function AdminSettings() {
   const { user } = useAuth()
-  const { tenantId, setTenantId } = useTenant()
+  const { tenantId, tenantName, setTenantId } = useTenant()
   const [activeTab, setActiveTab] = useState<
     'settings' | 'users' | 'account' | 'fga' | 'rbac' | 'tenants' | 'sso'
   >('settings')

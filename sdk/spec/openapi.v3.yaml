@@ -3011,6 +3011,44 @@ paths:
                 type: object
                 additionalProperties:
                   type: string
+  "/api/v1/tenants/{id}/children":
+    get:
+      description: Lists child tenants of a parent tenant with pagination
+      tags:
+        - tenants
+      summary: List child tenants
+      parameters:
+        - description: Parent Tenant ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Page number
+          name: page
+          in: query
+          schema:
+            type: integer
+        - description: Page size (max 100)
+          name: page_size
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.listResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   "/api/v1/tenants/{id}/deactivate":
     patch:
       description: Deactivates a tenant by ID
@@ -3456,6 +3494,8 @@ components:
         - name
       properties:
         name:
+          type: string
+        parent_tenant_id:
           type: string
     controller.fgaAuthorizeReq:
       type: object
@@ -4015,6 +4055,9 @@ components:
         - password
         - tenant_id
       properties:
+        assign_admin:
+          description: If true, assigns admin role to the new user (for tenant bootstrap)
+          type: boolean
         email:
           type: string
         first_name:
@@ -4053,6 +4096,8 @@ components:
         is_active:
           type: boolean
         name:
+          type: string
+        parent_tenant_id:
           type: string
         updated_at:
           type: string
@@ -4110,6 +4155,13 @@ components:
           type: string
         jwks_uri:
           type: string
+        linking_policy:
+          description: Policy for linking SSO identities to existing accounts
+          type: string
+          enum:
+            - never
+            - verified_email
+            - always
         name:
           type: string
         response_mode:

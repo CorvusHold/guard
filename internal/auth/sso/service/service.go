@@ -861,10 +861,12 @@ func (s *SSOService) DeleteProvider(ctx context.Context, tenantID, providerID uu
 // UpdateProviderRequest contains the request parameters for updating a provider.
 // All fields except ID and TenantID are optional. Nil values mean "don't update".
 type UpdateProviderRequest struct {
+	UpdatedBy              uuid.UUID // Required: user ID performing the update
 	Name                   *string
 	Enabled                *bool
 	AllowSignup            *bool
 	TrustEmailVerified     *bool
+	LinkingPolicy          *domain.LinkingPolicy
 	Domains                []string
 	AttributeMapping       map[string][]string
 	Issuer                 *string
@@ -917,6 +919,9 @@ func (s *SSOService) UpdateProvider(ctx context.Context, tenantID, providerID uu
 	}
 	if req.TrustEmailVerified != nil {
 		updated.TrustEmailVerified = *req.TrustEmailVerified
+	}
+	if req.LinkingPolicy != nil && req.LinkingPolicy.IsValid() {
+		updated.LinkingPolicy = *req.LinkingPolicy
 	}
 	if req.Domains != nil {
 		updated.Domains = req.Domains
@@ -1007,14 +1012,25 @@ func (s *SSOService) UpdateProvider(ctx context.Context, tenantID, providerID uu
 		updated.ForceAuthn = *req.ForceAuthn
 	}
 
-	// Validate updated configuration by initializing provider
-	provider, err := s.initializeProvider(ctx, &updated)
-	if err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
+	// Only re-validate if endpoint-related fields were changed
+	// This avoids unnecessary network calls for simple field updates (name, enabled, etc.)
+	needsRevalidation := req.Issuer != nil || req.AuthorizationEndpoint != nil ||
+		req.TokenEndpoint != nil || req.UserinfoEndpoint != nil || req.JWKSUri != nil ||
+		req.ClientID != nil || req.ClientSecret != nil ||
+		req.IdPMetadataURL != nil || req.IdPMetadataXML != nil ||
+		req.IdPEntityID != nil || req.IdPSSOUrl != nil || req.IdPSLOUrl != nil ||
+		req.IdPCertificate != nil || req.SPCertificate != nil || req.SPPrivateKey != nil
 
-	if err := provider.ValidateConfig(); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	if needsRevalidation {
+		// Validate updated configuration by initializing provider
+		provider, err := s.initializeProvider(ctx, &updated)
+		if err != nil {
+			return nil, fmt.Errorf("invalid configuration: %w", err)
+		}
+
+		if err := provider.ValidateConfig(); err != nil {
+			return nil, fmt.Errorf("configuration validation failed: %w", err)
+		}
 	}
 
 	// Update in database (using the same CreateProvider params structure)
@@ -1060,6 +1076,9 @@ func (s *SSOService) UpdateProvider(ctx context.Context, tenantID, providerID uu
 		WantResponseSigned:     toPgBool(updated.WantResponseSigned),
 		SignRequests:           toPgBool(updated.SignRequests),
 		ForceAuthn:             toPgBool(updated.ForceAuthn),
+		AllowIdpInitiated:      toPgBool(updated.AllowIdpInitiated),
+		LinkingPolicy:          toPgText(string(updated.LinkingPolicy)),
+		UpdatedBy:              toPgUUID(req.UpdatedBy),
 	}
 
 	err = s.queries.UpdateSSOProvider(ctx, updateParams)

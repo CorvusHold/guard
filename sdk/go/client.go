@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"sync"
 )
 
@@ -274,7 +275,7 @@ func (c *GuardClient) SSOPortalLink(ctx context.Context, provider, organizationI
 	if tenID == "" {
 		return "", errors.New("tenant ID not configured; use WithTenantID or pass tenant_id via params")
 	}
-	params := &GetApiV1AuthSsoProviderPortalLinkParams{OrganizationId: organizationID, TenantId: tenID, Intent: intent}
+	params := &GetApiV1AuthSsoProviderPortalLinkParams{OrganizationId: &organizationID, TenantId: tenID, Intent: intent}
 	resp, err := c.inner.GetApiV1AuthSsoProviderPortalLinkWithResponse(ctx, provider, params)
 	if err != nil {
 		return "", err
@@ -356,18 +357,78 @@ func (c *GuardClient) SSOPortalProvider(ctx context.Context, token string) (*SSO
 	return &provider, nil
 }
 
+// SSOStartOptions contains optional parameters for initiating SSO flows.
+type SSOStartOptions struct {
+	// RedirectURL is the URL to redirect to after SSO authentication completes.
+	RedirectURL *string
+
+	// ConnectionID is the provider connection identifier (for WorkOS multi-connection scenarios).
+	ConnectionID *string
+
+	// OrganizationID is the organization identifier (for WorkOS organization-specific flows).
+	OrganizationID *string
+
+	// UseQueryParams controls how tokens are returned in the callback redirect.
+	//
+	// SECURITY WARNING: When true, tokens are returned as URL query parameters instead of fragments.
+	// - Query parameters are sent to servers and appear in access logs, referrer headers, and browser history
+	// - URL fragments are NOT sent to servers and provide better security
+	//
+	// Only set this to true if you have a server-side callback route that cannot access URL fragments.
+	// For client-side callbacks, leave this as false (default) to use the more secure fragment-based approach.
+	//
+	// Default: false (uses secure URL fragments)
+	UseQueryParams bool
+}
+
 // SSOStart initiates an SSO flow and returns the provider authorization URL to redirect the user to.
-// It uses the client's tenant ID if params.TenantId is empty.
-func (c *GuardClient) SSOStart(ctx context.Context, provider string, params *GetApiV1AuthSsoProviderStartParams) (string, error) {
-	if params == nil {
-		return "", errors.New("params required")
+// It uses the client's tenant ID if not provided in options.
+//
+// Example (recommended - client-side callback with fragments):
+//
+//	url, err := client.SSOStart(ctx, "okta", &SSOStartOptions{
+//	    RedirectURL: ptr("https://myapp.com/callback"),
+//	})
+//
+// Example (less secure - server-side callback with query params):
+//
+//	url, err := client.SSOStart(ctx, "okta", &SSOStartOptions{
+//	    RedirectURL: ptr("https://myapp.com/api/callback"),
+//	    UseQueryParams: true,  // ⚠️ Tokens will be in server logs
+//	})
+func (c *GuardClient) SSOStart(ctx context.Context, provider string, opts *SSOStartOptions) (string, error) {
+	if opts == nil {
+		opts = &SSOStartOptions{}
 	}
-	if params.TenantId == "" {
-		params.TenantId = c.tenantID
+
+	tenantID := c.tenantID
+	if tenantID == "" {
+		return "", errors.New("tenant ID not configured; use WithTenantID")
 	}
-	if params.TenantId == "" {
-		return "", errors.New("tenant ID not configured; set params.TenantId or use WithTenantID")
+
+	// Build redirect URL with use_query flag if requested
+	redirectURL := opts.RedirectURL
+	if redirectURL != nil && *redirectURL != "" && opts.UseQueryParams {
+		// Parse the URL to properly detect existing query params (not fragment)
+		parsed, err := url.Parse(*redirectURL)
+		if err == nil {
+			if parsed.RawQuery == "" {
+				parsed.RawQuery = "use_query=true"
+			} else {
+				parsed.RawQuery += "&use_query=true"
+			}
+			modified := parsed.String()
+			redirectURL = &modified
+		}
 	}
+
+	params := &GetApiV1AuthSsoProviderStartParams{
+		TenantId:       tenantID,
+		RedirectUrl:    redirectURL,
+		ConnectionId:   opts.ConnectionID,
+		OrganizationId: opts.OrganizationID,
+	}
+
 	resp, err := c.inner.GetApiV1AuthSsoProviderStartWithResponse(ctx, provider, params)
 	if err != nil {
 		return "", err

@@ -28,7 +28,7 @@ func TestRepository_List_Integration(t *testing.T) {
 	suffix := uuid.New().String()
 	name := "itest-" + suffix
 	id := uuid.New()
-	if err := repo.Create(ctx, id, name); err != nil {
+	if err := repo.Create(ctx, id, name, nil); err != nil {
 		t.Fatalf("Create tenant failed: %v", err)
 	}
 	// Give DB a brief moment in case of transaction lag in CI

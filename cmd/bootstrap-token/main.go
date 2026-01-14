@@ -92,7 +92,7 @@ func provisionPrincipal(ctx context.Context, pool *pgxpool.Pool, prefix, email, 
 
 	tenants := tensvc.New(tenrepo.New(pool))
 	name := fmt.Sprintf("%s-%d", sanitizePrefix(prefix), time.Now().Unix())
-	tenant, err := tenants.Create(ctx, name)
+	tenant, err := tenants.Create(ctx, name, nil)
 	if err != nil {
 		return bootstrapResult{}, err
 	}
