@@ -162,6 +162,8 @@ swagger:
 	bash -lc 'cp docs/swagger.yaml sdk/spec/openapi.yaml'
 	# Convert Swagger 2.0 -> OpenAPI 3.0 for Go SDK (requires: npx swagger2openapi)
 	bash -lc 'cd sdk/ts && npx swagger2openapi ../spec/openapi.json -o ../spec/openapi.v3.yaml --yaml' || echo "Note: Install swagger2openapi for Go SDK generation"
+	bash -lc 'cd sdk/ts && npm run gen:openapi'
+	bash -lc 'node sdk/spec/scripts/generate-operations.mjs --write'
 
 # Regenerate all SDK types from OpenAPI spec (run after swagger)
 sdk-gen: swagger

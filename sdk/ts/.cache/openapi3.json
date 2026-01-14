@@ -4838,7 +4838,7 @@
     },
     "/api/v1/tenants/{id}/children": {
       "get": {
-        "description": "Lists all child tenants of a parent tenant",
+        "description": "Lists child tenants of a parent tenant with pagination",
         "tags": [
           "tenants"
         ],
@@ -4852,6 +4852,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Page number",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size (max 100)",
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -4860,10 +4876,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/controller.tenantResp"
-                  }
+                  "$ref": "#/components/schemas/controller.listResponse"
                 }
               }
             }

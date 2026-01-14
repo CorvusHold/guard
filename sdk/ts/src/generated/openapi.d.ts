@@ -4773,11 +4773,16 @@ export interface paths {
         };
         /**
          * List child tenants
-         * @description Lists all child tenants of a parent tenant
+         * @description Lists child tenants of a parent tenant with pagination
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Page number */
+                    page?: number;
+                    /** @description Page size (max 100) */
+                    page_size?: number;
+                };
                 header?: never;
                 path: {
                     /** @description Parent Tenant ID (UUID) */
@@ -4793,7 +4798,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["controller.tenantResp"][];
+                        "application/json": components["schemas"]["controller.listResponse"];
                     };
                 };
                 /** @description Bad Request */
