@@ -48,6 +48,8 @@ type updateProviderRequest struct {
 func (h *Handler) updateProvider(c echo.Context) error {
 ```
 
+Run `make swagger` to regenerate all spec files and `make sdk-gen` to regenerate the SDK.
+
 ### Key Locations for Swagger Annotations
 - **SSO Controller**: `internal/auth/sso/controller/http.go`, `types.go`
 - **Auth Controller**: `internal/auth/controller/http.go`
