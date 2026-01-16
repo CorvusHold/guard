@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { CreateSsoProviderReq } from '@/lib/sdk'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export interface SsoProviderSamlFieldsProps {
   form: Partial<CreateSsoProviderReq>
@@ -19,9 +20,60 @@ export default function SsoProviderSamlFields({
 }: SsoProviderSamlFieldsProps) {
   const [configMode, setConfigMode] = useState<'url' | 'xml' | 'manual'>('url')
 
+  const CopyableValue = useCallback(
+    ({ label, value, description, optional }: { label: string; value?: string; description?: string; optional?: boolean }) => {
+      const [copied, setCopied] = useState(false)
+
+      const handleCopy = useCallback(async () => {
+        if (!value) return
+        try {
+          await navigator.clipboard.writeText(value)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+        } catch (err) {
+          console.error('Failed to copy:', err)
+        }
+      }, [value])
+
+      return (
+        <div className="space-y-1.5" data-testid={`sp-field-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-foreground">
+              {label}
+              {optional && <span className="text-muted-foreground ml-1">(Optional)</span>}
+            </label>
+          </div>
+          {description && <p className="text-xs text-muted-foreground">{description}</p>}
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono break-all">{value || 'Generated after save'}</code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!value}
+              onClick={handleCopy}
+              className="shrink-0"
+              data-testid={`copy-${label.toLowerCase().replace(/\s+/g, '-')}`}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </Button>
+          </div>
+        </div>
+      )
+    },
+    []
+  )
+
   return (
     <div className="space-y-4">
-      <h4 className="text-sm font-medium">SAML Configuration</h4>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-medium">SAML Configuration</h4>
+        {!isEditing && (
+          <span className="text-[11px] text-muted-foreground">
+            SP URLs live in the checklist above once slug is set
+          </span>
+        )}
+      </div>
 
       {/* IdP Metadata Method */}
       <div className="space-y-2">
@@ -146,50 +198,38 @@ export default function SsoProviderSamlFields({
         </div>
       )}
 
-      {/* Service Provider Configuration */}
-      <div className="space-y-4 pt-4 border-t">
-        <h5 className="text-sm font-medium">Service Provider Configuration</h5>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="entity_id">SP Entity ID</Label>
-            <Input
-              id="entity_id"
-              value={form.entity_id || ''}
-              onChange={e => updateForm('entity_id', e.target.value)}
-              placeholder="https://your-domain.com/auth/sso/{slug}/metadata"
-            />
-            <p className="text-xs text-muted-foreground">
-              Auto-generated if left empty
-            </p>
+      {/* Service Provider Configuration - hide in create mode */}
+      {isEditing && (
+        <div className="space-y-4 pt-4 border-t">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h5 className="text-sm font-medium">Service Provider Configuration</h5>
+              <p className="text-xs text-muted-foreground">
+                These URLs are generated from the slug & tenant. Copy them into your IdP; editing is not required.
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="acs_url">Assertion Consumer Service URL</Label>
-            <Input
-              id="acs_url"
-              type="url"
-              value={form.acs_url || ''}
-              onChange={e => updateForm('acs_url', e.target.value)}
-              placeholder="https://your-domain.com/auth/sso/{slug}/callback"
+          <div className="space-y-3">
+            <CopyableValue
+              label="SP Entity ID"
+              value={form.entity_id}
+              description="Also called Identifier or Audience URI"
             />
-            <p className="text-xs text-muted-foreground">
-              Auto-generated if left empty
-            </p>
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="slo_url">Single Logout URL (Optional)</Label>
-            <Input
-              id="slo_url"
-              type="url"
-              value={form.slo_url || ''}
-              onChange={e => updateForm('slo_url', e.target.value)}
-              placeholder="https://your-domain.com/auth/sso/{slug}/logout"
+            <CopyableValue
+              label="ACS URL"
+              value={form.acs_url}
+              description="Assertion Consumer Service URL (Reply URL)"
+            />
+            <CopyableValue
+              label="SLO URL"
+              value={form.slo_url}
+              description="Single Logout URL"
+              optional
             />
           </div>
         </div>
-      </div>
+      )}
 
       {/* Security Options */}
       <div className="space-y-3 pt-4 border-t">
