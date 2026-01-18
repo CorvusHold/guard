@@ -43,3 +43,6 @@ dist
 # Helm chart dependencies (downloaded on helm dep update)
 ops/guard-stack/charts/*.tgz
 ops/guard-stack/Chart.lock
+
+api
+controller.test

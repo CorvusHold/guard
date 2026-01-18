@@ -119,6 +119,155 @@ func main() {
 }
 ```
 
+## Backend API Protection
+
+The SDK includes middleware for securing Go/Echo backend APIs with Guard authentication and authorization.
+
+### Quick Start
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+
+    guard "github.com/corvushold/guard/sdk/go"
+    "github.com/corvushold/guard/sdk/go/middleware"
+    "github.com/labstack/echo/v4"
+)
+
+func main() {
+    // Initialize Guard client
+    guardClient, _ := guard.NewClient("https://guard.example.com")
+
+    e := echo.New()
+
+    // Public route
+    e.GET("/health", func(c echo.Context) error {
+        return c.String(http.StatusOK, "ok")
+    })
+
+    // Protected routes
+    api := e.Group("/api")
+    api.Use(middleware.RequireAuth(guardClient))
+    api.GET("/profile", func(c echo.Context) error {
+        userID, _ := middleware.GetUserID(c)
+        return c.String(http.StatusOK, "Hello "+userID)
+    })
+
+    // Admin-only routes
+    admin := e.Group("/api/admin")
+    admin.Use(middleware.RequireAuth(guardClient))
+    admin.Use(middleware.RequireAdmin(guardClient))
+    admin.GET("/users", listUsersHandler)
+
+    e.Start(":3000")
+}
+```
+
+### Middleware Features
+
+- **Token Validation**: Validates Guard access tokens via Introspect API
+- **Context Injection**: Automatically extracts user, tenant, email, roles
+- **RBAC Enforcement**: Role-based access control with RequireRole()
+- **Permission Checks**: Fine-grained permission checks with RequirePermission()
+- **Tenant Isolation**: Validates X-Tenant-ID header matches token
+- **Bearer & Cookie Auth**: Supports both authentication modes
+
+### Common Patterns
+
+**Protect all routes under a path:**
+```go
+api := e.Group("/api")
+api.Use(middleware.RequireAuth(guardClient))
+api.GET("/profile", profileHandler)
+api.POST("/documents", createDocumentHandler)
+```
+
+**Admin-only routes:**
+```go
+admin := e.Group("/api/admin")
+admin.Use(middleware.RequireAuth(guardClient))
+admin.Use(middleware.RequireAdmin(guardClient))
+admin.GET("/users", listUsersHandler)
+```
+
+**Extract user context:**
+```go
+func profileHandler(c echo.Context) error {
+    userID, _ := middleware.GetUserID(c)
+    email, _ := middleware.GetEmail(c)
+    roles, _ := middleware.GetRoles(c)
+    // Use in business logic
+    return c.JSON(200, map[string]any{
+        "user_id": userID,
+        "email": email,
+        "roles": roles,
+    })
+}
+```
+
+**Permission-based access:**
+```go
+documents := e.Group("/api/documents")
+documents.Use(middleware.RequireAuth(guardClient))
+documents.POST("",
+    middleware.RequirePermission(guardClient, "documents:create"),
+    createDocumentHandler)
+documents.DELETE("/:id",
+    middleware.RequirePermission(guardClient, "documents:delete"),
+    deleteDocumentHandler)
+```
+
+### Full Example
+
+See [examples/backend-auth](examples/backend-auth/) for a complete working example with:
+- Authentication middleware setup
+- Public, protected, and admin routes
+- Permission-based authorization
+- Comprehensive README with testing instructions
+
+Run the example:
+```bash
+cd examples/backend-auth
+go run main.go
+```
+
+### Middleware Reference
+
+**RequireAuth(client)** - Validates token and injects user context
+```go
+api.Use(middleware.RequireAuth(guardClient))
+```
+
+**RequireRole(client, roles...)** - Enforces role requirements
+```go
+admin.Use(middleware.RequireRole(guardClient, "admin"))
+protected.Use(middleware.RequireRole(guardClient, "admin", "editor"))
+```
+
+**RequireAdmin(client)** - Convenience wrapper for admin role
+```go
+admin.Use(middleware.RequireAdmin(guardClient))
+```
+
+**RequirePermission(client, permission)** - Checks specific permission
+```go
+documents.POST("", middleware.RequirePermission(guardClient, "documents:create"), handler)
+```
+
+**Context Helpers**
+```go
+userID, err := middleware.GetUserID(c)
+tenantID, err := middleware.GetTenantID(c)
+email, err := middleware.GetEmail(c)
+roles, err := middleware.GetRoles(c)
+introspection, err := middleware.GetIntrospection(c)
+```
+
+For more details, see [middleware package documentation](sdk/go/middleware/doc.go).
+
 ## Usage Examples
 
 ### Authentication
@@ -341,6 +490,7 @@ func boolPtr(b bool) *bool {
 
 ## Files
 
+**Core SDK**
 - [client.go](client.go) - Core client, token management, cookie mode
 - [client_auth.go](client_auth.go) - Authentication features
 - [client_tenant.go](client_tenant.go) - Tenant management
@@ -349,6 +499,17 @@ func boolPtr(b bool) *bool {
 - [client_fga.go](client_fga.go) - Fine-grained authorization
 - [client_sso.go](client_sso.go) - SSO provider management
 - [client_test.go](client_test.go) - Unit tests
+
+**Backend Middleware**
+- [middleware/echo.go](middleware/echo.go) - Echo authentication middleware
+- [middleware/helpers.go](middleware/helpers.go) - Context extraction helpers
+- [middleware/rbac.go](middleware/rbac.go) - RBAC authorization middleware
+- [middleware/doc.go](middleware/doc.go) - Middleware package documentation
+- [middleware/echo_test.go](middleware/echo_test.go) - Middleware unit tests
+- [middleware/rbac_test.go](middleware/rbac_test.go) - RBAC middleware tests
+
+**Examples**
+- [examples/backend-auth/](examples/backend-auth/) - Complete backend API example
 
 ## Testing
 

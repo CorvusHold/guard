@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	guard "github.com/CorvusHold/guard/sdk/go"
+	guard "github.com/corvusHold/guard/sdk/go"
 )
 
 // TestPasswordSignup tests the PasswordSignup method
