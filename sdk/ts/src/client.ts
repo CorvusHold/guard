@@ -390,6 +390,7 @@ export class GuardClient {
       const headers = new Headers(init.headers || {});
       if (mode === 'bearer') {
         // Attach Authorization if present
+        headers.set('X-Auth-Mode', 'bearer');
         const token = await Promise.resolve(this.storage.getAccessToken());
         if (token && !headers.has('authorization')) {
           headers.set('authorization', `Bearer ${token}`);
