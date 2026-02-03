@@ -114,6 +114,68 @@ definitions:
     - id
     - name
     type: object
+  controller.acceptInvitationReq:
+    properties:
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      token:
+        type: string
+    required:
+    - password
+    - token
+    type: object
+  controller.adminCreateUserReq:
+    properties:
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      send_welcome:
+        type: boolean
+      tenant_id:
+        type: string
+    required:
+    - email
+    - password
+    - tenant_id
+    type: object
+  controller.adminCreateUserResp:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      first_name:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
   controller.adminUpdateNamesReq:
     properties:
       first_name:
@@ -402,6 +464,61 @@ definitions:
   controller.introspectReq:
     properties:
       token:
+        type: string
+    type: object
+  controller.invitationResp:
+    properties:
+      accepted_at:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  controller.invitationsListResp:
+    properties:
+      invitations:
+        items:
+          $ref: '#/definitions/controller.invitationResp'
+        type: array
+    type: object
+  controller.inviteUserReq:
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - email
+    - tenant_id
+    type: object
+  controller.inviteUserResp:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      invite_url:
+        type: string
+      role:
+        type: string
+      status:
         type: string
     type: object
   controller.listResponse:
@@ -1338,6 +1455,179 @@ paths:
       summary: Add user to group (admin-only)
       tags:
       - auth.admin
+  /api/v1/auth/admin/invitations:
+    get:
+      description: Returns all invitations for the specified tenant.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      - description: Filter by status (pending, accepted, expired, revoked)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.invitationsListResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List invitations for a tenant (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates an invitation for a user to join a tenant. Sends an invitation
+        email with a link to accept.
+      parameters:
+      - description: Invitation details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.inviteUserReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.inviteUserResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Invite a user to join a tenant (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/invitations/{id}:
+    delete:
+      description: Permanently deletes an invitation.
+      parameters:
+      - description: Invitation ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete an invitation (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/invitations/{id}/revoke:
+    post:
+      description: Revokes a pending invitation so it can no longer be accepted.
+      parameters:
+      - description: Invitation ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Revoke an invitation (admin-only)
+      tags:
+      - auth.admin
   /api/v1/auth/admin/rbac/permissions:
     get:
       description: Returns all known permissions.
@@ -1834,6 +2124,54 @@ paths:
       summary: List users for a tenant (admin-only)
       tags:
       - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account directly in a tenant without going through
+        the invitation flow.
+      parameters:
+      - description: User details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.adminCreateUserReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.adminCreateUserResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a user directly in a tenant (admin-only)
+      tags:
+      - auth.admin
   /api/v1/auth/admin/users/{id}:
     patch:
       consumes:
@@ -2212,6 +2550,67 @@ paths:
       summary: Introspect access token
       tags:
       - auth.introspect
+  /api/v1/auth/invitations:
+    get:
+      description: Returns invitation details for a given token. Used to display invitation
+        info before accepting.
+      parameters:
+      - description: Invitation token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.invitationResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get invitation details by token
+      tags:
+      - auth.invitation
+  /api/v1/auth/invitations/accept:
+    post:
+      consumes:
+      - application/json
+      description: Accepts an invitation using the token and creates a new user account.
+        Returns access tokens.
+      parameters:
+      - description: Invitation acceptance details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.acceptInvitationReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.authExchangeResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Accept an invitation and create account
+      tags:
+      - auth.invitation
   /api/v1/auth/login-options:
     get:
       consumes:

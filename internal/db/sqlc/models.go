@@ -80,6 +80,20 @@ type GroupMember struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type Invitation struct {
+	ID         pgtype.UUID        `json:"id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	Email      string             `json:"email"`
+	TokenHash  string             `json:"token_hash"`
+	Role       pgtype.Text        `json:"role"`
+	InvitedBy  pgtype.UUID        `json:"invited_by"`
+	Status     string             `json:"status"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	AcceptedAt pgtype.Timestamptz `json:"accepted_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type MagicLink struct {
 	ID          pgtype.UUID        `json:"id"`
 	UserID      pgtype.UUID        `json:"user_id"`

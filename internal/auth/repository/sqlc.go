@@ -939,3 +939,114 @@ func (r *SQLCRepository) RevokeUserSessions(ctx context.Context, userID, tenantI
 func (r *SQLCRepository) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
 	return r.q.RevokeRefreshTokenByHash(ctx, tokenHash)
 }
+
+// --- Invitations ---
+
+func mapInvitation(i db.Invitation) domain.Invitation {
+	var tenantID *uuid.UUID
+	if i.TenantID.Valid {
+		t := toUUID(i.TenantID)
+		tenantID = &t
+	}
+	var invitedBy *uuid.UUID
+	if i.InvitedBy.Valid {
+		u := toUUID(i.InvitedBy)
+		invitedBy = &u
+	}
+	var acceptedAt *time.Time
+	if i.AcceptedAt.Valid {
+		t := i.AcceptedAt.Time
+		acceptedAt = &t
+	}
+	return domain.Invitation{
+		ID:         toUUID(i.ID),
+		TenantID:   tenantID,
+		Email:      i.Email,
+		TokenHash:  i.TokenHash,
+		Role:       i.Role.String,
+		InvitedBy:  invitedBy,
+		Status:     i.Status,
+		ExpiresAt:  i.ExpiresAt.Time,
+		AcceptedAt: acceptedAt,
+		CreatedAt:  i.CreatedAt.Time,
+		UpdatedAt:  i.UpdatedAt.Time,
+	}
+}
+
+func (r *SQLCRepository) CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy uuid.UUID, expiresAt time.Time) (domain.Invitation, error) {
+	var pgTenantID pgtype.UUID
+	if tenantID != nil {
+		pgTenantID = toPgUUID(*tenantID)
+	}
+	inv, err := r.q.CreateInvitation(ctx, db.CreateInvitationParams{
+		ID:        toPgUUID(id),
+		TenantID:  pgTenantID,
+		Email:     email,
+		TokenHash: tokenHash,
+		Role:      pgtype.Text{String: role, Valid: role != ""},
+		InvitedBy: toPgUUID(invitedBy),
+		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+	})
+	if err != nil {
+		return domain.Invitation{}, err
+	}
+	return mapInvitation(inv), nil
+}
+
+func (r *SQLCRepository) GetInvitationByHash(ctx context.Context, tokenHash string) (domain.Invitation, error) {
+	inv, err := r.q.GetInvitationByHash(ctx, tokenHash)
+	if err != nil {
+		return domain.Invitation{}, err
+	}
+	return mapInvitation(inv), nil
+}
+
+func (r *SQLCRepository) GetInvitationByID(ctx context.Context, id uuid.UUID) (domain.Invitation, error) {
+	inv, err := r.q.GetInvitationByID(ctx, toPgUUID(id))
+	if err != nil {
+		return domain.Invitation{}, err
+	}
+	return mapInvitation(inv), nil
+}
+
+func (r *SQLCRepository) ListInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Invitation, error) {
+	rows, err := r.q.ListInvitationsByTenant(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	invitations := make([]domain.Invitation, len(rows))
+	for i, row := range rows {
+		invitations[i] = mapInvitation(row)
+	}
+	return invitations, nil
+}
+
+func (r *SQLCRepository) ListPendingInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Invitation, error) {
+	rows, err := r.q.ListPendingInvitationsByTenant(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	invitations := make([]domain.Invitation, len(rows))
+	for i, row := range rows {
+		invitations[i] = mapInvitation(row)
+	}
+	return invitations, nil
+}
+
+func (r *SQLCRepository) AcceptInvitation(ctx context.Context, tokenHash string) error {
+	return r.q.AcceptInvitation(ctx, tokenHash)
+}
+
+func (r *SQLCRepository) RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
+	return r.q.RevokeInvitation(ctx, db.RevokeInvitationParams{
+		ID:       toPgUUID(id),
+		TenantID: toPgUUID(tenantID),
+	})
+}
+
+func (r *SQLCRepository) DeleteInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
+	return r.q.DeleteInvitation(ctx, db.DeleteInvitationParams{
+		ID:       toPgUUID(id),
+		TenantID: toPgUUID(tenantID),
+	})
+}

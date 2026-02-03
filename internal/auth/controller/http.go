@@ -1026,6 +1026,7 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/revoke", h.revoke, rlToken)
 
 	// Admin: user management
+	g.POST("/admin/users", h.adminCreateUser, rlToken)
 	g.POST("/admin/users/:id/roles", h.adminUpdateRoles, rlToken)
 	g.GET("/admin/users", h.adminListUsers, rlToken)
 	g.PATCH("/admin/users/:id", h.adminUpdateNames, rlToken)
@@ -1033,6 +1034,16 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
 	g.POST("/admin/users/:id/verify-email", h.adminVerifyEmail, rlToken)
 	g.POST("/admin/users/:id/unverify-email", h.adminUnverifyEmail, rlToken)
+
+	// Admin: Invitations
+	g.POST("/admin/invitations", h.inviteUser, rlToken)
+	g.GET("/admin/invitations", h.listInvitations, rlToken)
+	g.POST("/admin/invitations/:id/revoke", h.revokeInvitation, rlToken)
+	g.DELETE("/admin/invitations/:id", h.deleteInvitation, rlToken)
+
+	// Public: Invitation acceptance (no auth required)
+	g.GET("/invitations", h.getInvitation, rlSignup)
+	g.POST("/invitations/accept", h.acceptInvitation, rlSignup)
 	// Admin: RBAC v2
 	g.GET("/admin/rbac/permissions", h.rbacListPermissions, rlToken)
 	g.GET("/admin/rbac/roles", h.rbacListRoles, rlToken)

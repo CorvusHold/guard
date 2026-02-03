@@ -161,6 +161,58 @@ export interface SessionsListResp {
   sessions: SessionItem[];
 }
 
+// Invitation DTOs
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+
+export interface Invitation {
+  id: string;
+  tenant_id: string;
+  email: string;
+  role?: string;
+  status: InvitationStatus;
+  expires_at: string;
+  created_at: string;
+  accepted_at?: string;
+  revoked_at?: string;
+}
+
+export interface InvitationsListResp {
+  invitations: Invitation[];
+}
+
+export interface InviteUserReq {
+  tenant_id?: string;
+  email: string;
+  role?: string;
+}
+
+export interface InviteUserResp {
+  invitation_id: string;
+  invite_url: string;
+}
+
+export interface AcceptInvitationReq {
+  token: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface AdminCreateUserReq {
+  tenant_id?: string;
+  email: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+  roles?: string[];
+  email_verified?: boolean;
+}
+
+export interface AdminCreateUserResp {
+  user_id: string;
+  email: string;
+}
+
 export interface TenantSettingsResponse {
   sso_provider: string;
   workos_client_id: string;
@@ -692,6 +744,63 @@ export class GuardClient {
   // Admin: Unverify user email (set email_verified=false)
   async unverifyUserEmail(id: string): Promise<ResponseWrapper<unknown>> {
     return this.request<unknown>(`/api/v1/auth/admin/users/${encodeURIComponent(id)}/unverify-email`, { method: 'POST' });
+  }
+
+  // ==============================
+  // Invitations (Admin-only endpoints)
+  // ==============================
+
+  // Admin: List invitations for a tenant
+  async listInvitations(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<InvitationsListResp>> {
+    const tenant = params.tenant_id ?? this.tenantId;
+    const qs = this.buildQuery({ tenant_id: tenant });
+    return this.request<InvitationsListResp>(`/api/v1/auth/admin/invitations${qs}`, { method: 'GET' });
+  }
+
+  // Admin: Create invitation
+  async createInvitation(body: InviteUserReq): Promise<ResponseWrapper<InviteUserResp>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    const payload = { ...body, tenant_id: tenant };
+    return this.request<InviteUserResp>('/api/v1/auth/admin/invitations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // Admin: Revoke invitation
+  async revokeInvitation(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/api/v1/auth/admin/invitations/${encodeURIComponent(id)}/revoke`, { method: 'POST' });
+  }
+
+  // Admin: Delete invitation
+  async deleteInvitation(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/api/v1/auth/admin/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  // Public: Get invitation by token (for accept flow)
+  async getInvitation(params: { token: string }): Promise<ResponseWrapper<Invitation>> {
+    const qs = this.buildQuery({ token: params.token });
+    return this.request<Invitation>(`/api/v1/auth/invitations${qs}`, { method: 'GET' });
+  }
+
+  // Public: Accept invitation
+  async acceptInvitation(body: AcceptInvitationReq): Promise<ResponseWrapper<TokensResp>> {
+    const res = await this.request<TokensResp>('/api/v1/auth/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (res.meta.status === 200 || res.meta.status === 201) this.persistTokensFrom(res.data);
+    return res;
+  }
+
+  // Admin: Create user directly
+  async adminCreateUser(body: AdminCreateUserReq): Promise<ResponseWrapper<AdminCreateUserResp>> {
+    const tenant = body.tenant_id ?? this.tenantId;
+    const payload = { ...body, tenant_id: tenant };
+    return this.request<AdminCreateUserResp>('/api/v1/auth/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // Sessions: List sessions. When includeAll=false, filter to active (non-revoked, not expired) client-side to match example app UX.

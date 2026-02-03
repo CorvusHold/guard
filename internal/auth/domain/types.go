@@ -186,6 +186,27 @@ type Service interface {
 	// directly from the JWT claims (not from a database lookup). Email and Roles are read
 	// from the "email" and "roles" claim keys respectively.
 	ParseAccessToken(ctx context.Context, token string) (AccessTokenClaims, error)
+
+	// --- Invitations ---
+	// InviteUser creates an invitation for a user to join a tenant.
+	// Returns the invitation and the raw token (for sending via email).
+	InviteUser(ctx context.Context, in InviteUserInput) (Invitation, string, error)
+	// GetInvitationByToken retrieves an invitation by its raw token.
+	GetInvitationByToken(ctx context.Context, token string) (Invitation, error)
+	// ListInvitations returns all invitations for a tenant.
+	ListInvitations(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
+	// ListPendingInvitations returns only pending (non-expired) invitations for a tenant.
+	ListPendingInvitations(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
+	// AcceptInvitation accepts an invitation and creates the user account.
+	AcceptInvitation(ctx context.Context, in AcceptInvitationInput) (AccessTokens, error)
+	// RevokeInvitation revokes a pending invitation.
+	RevokeInvitation(ctx context.Context, invitationID, tenantID uuid.UUID) error
+	// DeleteInvitation deletes an invitation.
+	DeleteInvitation(ctx context.Context, invitationID, tenantID uuid.UUID) error
+
+	// --- Admin User Creation ---
+	// AdminCreateUser creates a user directly in a tenant (admin operation).
+	AdminCreateUser(ctx context.Context, in AdminCreateUserInput) (User, error)
 }
 
 // AccessTokenClaims represents the claims in an access token.
@@ -363,6 +384,16 @@ type Repository interface {
 	// ACL tuples
 	CreateACLTuple(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string, createdBy *uuid.UUID) (ACLTuple, error)
 	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
+
+	// --- Invitations ---
+	CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy uuid.UUID, expiresAt time.Time) (Invitation, error)
+	GetInvitationByHash(ctx context.Context, tokenHash string) (Invitation, error)
+	GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitation, error)
+	ListInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
+	ListPendingInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
+	AcceptInvitation(ctx context.Context, tokenHash string) error
+	RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
+	DeleteInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
 }
 
 type AuthIdentity struct {
@@ -581,4 +612,47 @@ type ResolvedPermissions struct {
 type TenantInfo struct {
 	ID   string
 	Name string
+}
+
+// Invitation represents a user invitation to join a tenant or create a new tenant
+type Invitation struct {
+	ID         uuid.UUID
+	TenantID   *uuid.UUID // nil if inviting to create a new tenant
+	Email      string
+	TokenHash  string
+	Role       string // Optional role to assign upon acceptance
+	InvitedBy  *uuid.UUID
+	Status     string // "pending", "accepted", "expired", "revoked"
+	ExpiresAt  time.Time
+	AcceptedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// InviteUserInput is the input for creating an invitation
+type InviteUserInput struct {
+	TenantID  *uuid.UUID // nil to invite user to create a new tenant
+	Email     string
+	Role      string // Optional role to assign upon acceptance
+	InvitedBy uuid.UUID
+}
+
+// AcceptInvitationInput is the input for accepting an invitation
+type AcceptInvitationInput struct {
+	Token     string
+	Password  string
+	FirstName string
+	LastName  string
+}
+
+// AdminCreateUserInput is the input for admin creating a user directly
+type AdminCreateUserInput struct {
+	TenantID      uuid.UUID
+	Email         string
+	Password      string
+	FirstName     string
+	LastName      string
+	Roles         []string
+	EmailVerified bool
+	SendWelcome   bool // If true, send welcome email to user
 }
