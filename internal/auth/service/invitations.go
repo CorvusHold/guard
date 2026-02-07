@@ -41,7 +41,7 @@ func (s *Service) InviteUser(ctx context.Context, in domain.InviteUserInput) (do
 	expiresAt := time.Now().Add(ttl)
 
 	invID := uuid.New()
-	inv, err := s.repo.CreateInvitation(ctx, invID, in.TenantID, in.Email, tokenHash, in.Role, in.InvitedBy, expiresAt)
+	inv, err := s.repo.CreateInvitation(ctx, invID, in.TenantID, in.Email, tokenHash, in.Role, &in.InvitedBy, expiresAt)
 	if err != nil {
 		return domain.Invitation{}, "", err
 	}
@@ -115,7 +115,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, in domain.AcceptInvitati
 		return domain.AccessTokens{}, errors.New("invitation does not have a tenant")
 	}
 
-	// Create the user
+	// All mutations must happen inside a transaction to prevent partial failures
 	userID := uuid.New()
 	authID := uuid.New()
 
@@ -125,42 +125,22 @@ func (s *Service) AcceptInvitation(ctx context.Context, in domain.AcceptInvitati
 		roles = []string{inv.Role}
 	}
 
-	if err := s.repo.CreateUser(ctx, userID, in.FirstName, in.LastName, roles); err != nil {
-		return domain.AccessTokens{}, err
-	}
-
-	// Hash password
+	// Hash password before starting the transaction
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
 
-	// Create auth identity
-	if err := s.repo.CreateAuthIdentity(ctx, authID, userID, *inv.TenantID, inv.Email, string(hash)); err != nil {
-		return domain.AccessTokens{}, err
-	}
-
-	// Add user to tenant
-	if err := s.repo.AddUserToTenant(ctx, userID, *inv.TenantID); err != nil {
-		return domain.AccessTokens{}, err
-	}
-
-	// Mark invitation as accepted
+	// Compute token hash for acceptance
 	h := sha256.Sum256([]byte(in.Token))
 	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
-	if err := s.repo.AcceptInvitation(ctx, tokenHash); err != nil {
+
+	// Execute all DB mutations in a transaction
+	if err := s.acceptInvitationTx(ctx, userID, authID, inv, in, roles, string(hash), tokenHash); err != nil {
 		return domain.AccessTokens{}, err
 	}
 
-	// If a role was specified, assign it via RBAC
-	if inv.Role != "" {
-		role, err := s.repo.GetRoleByName(ctx, *inv.TenantID, inv.Role)
-		if err == nil && role.ID != uuid.Nil {
-			_ = s.repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID)
-		}
-	}
-
-	// Publish audit event
+	// Publish audit event only after successful commit
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.invitation.accepted",
 		TenantID: *inv.TenantID,
@@ -172,8 +152,69 @@ func (s *Service) AcceptInvitation(ctx context.Context, in domain.AcceptInvitati
 		Time: time.Now(),
 	})
 
-	// Issue tokens
+	// Issue tokens only after successful commit
 	return s.issueTokens(ctx, userID, *inv.TenantID, "", "", nil, "invitation", nil)
+}
+
+// acceptInvitationTx executes all AcceptInvitation DB mutations inside a single transaction.
+// If the repo supports BeginTx (i.e. *repository.SQLCRepository), it uses a real DB transaction.
+// Otherwise, it falls back to sequential calls (for test fakes).
+func (s *Service) acceptInvitationTx(ctx context.Context, userID, authID uuid.UUID, inv domain.Invitation, in domain.AcceptInvitationInput, roles []string, passwordHash, tokenHash string) error {
+	type txStarter interface {
+		BeginTx(ctx context.Context) (interface {
+			Rollback(context.Context) error
+			Commit(context.Context) error
+		}, domain.Repository, error)
+	}
+
+	// Try to use a real transaction if the repo supports it
+	if txRepo, ok := s.repo.(txStarter); ok {
+		tx, repo, err := txRepo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if err := s.runAcceptInvitationOps(ctx, repo, userID, authID, inv, in, roles, passwordHash, tokenHash); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
+	// Fallback: no transaction support (test fakes)
+	return s.runAcceptInvitationOps(ctx, s.repo, userID, authID, inv, in, roles, passwordHash, tokenHash)
+}
+
+// runAcceptInvitationOps performs the actual DB operations for accepting an invitation.
+func (s *Service) runAcceptInvitationOps(ctx context.Context, repo domain.Repository, userID, authID uuid.UUID, inv domain.Invitation, in domain.AcceptInvitationInput, roles []string, passwordHash, tokenHash string) error {
+	if err := repo.CreateUser(ctx, userID, in.FirstName, in.LastName, roles); err != nil {
+		return err
+	}
+	if err := repo.CreateAuthIdentity(ctx, authID, userID, *inv.TenantID, inv.Email, passwordHash); err != nil {
+		return err
+	}
+	if err := repo.AddUserToTenant(ctx, userID, *inv.TenantID); err != nil {
+		return err
+	}
+
+	// Mark invitation as accepted; returns the ID to confirm a row was updated
+	acceptedID, err := repo.AcceptInvitation(ctx, tokenHash)
+	if err != nil {
+		return err
+	}
+	if acceptedID == uuid.Nil {
+		return errors.New("invitation could not be accepted (already used or expired)")
+	}
+
+	// If a role was specified, assign it via RBAC
+	if inv.Role != "" {
+		role, err := repo.GetRoleByName(ctx, *inv.TenantID, inv.Role)
+		if err == nil && role.ID != uuid.Nil {
+			_ = repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID)
+		}
+	}
+
+	return nil
 }
 
 // RevokeInvitation revokes a pending invitation.

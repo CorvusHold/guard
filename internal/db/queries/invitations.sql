@@ -24,15 +24,16 @@ SELECT * FROM invitations
 WHERE tenant_id = $1
 ORDER BY created_at DESC;
 
--- name: AcceptInvitation :exec
+-- name: AcceptInvitation :one
 UPDATE invitations 
 SET status = 'accepted', accepted_at = now(), updated_at = now()
-WHERE token_hash = $1 AND status = 'pending' AND expires_at > now();
+WHERE token_hash = $1 AND status = 'pending' AND expires_at > now()
+RETURNING id;
 
 -- name: RevokeInvitation :exec
 UPDATE invitations 
 SET status = 'revoked', updated_at = now()
-WHERE id = $1 AND tenant_id = $2;
+WHERE id = $1 AND tenant_id = $2 AND status = 'pending';
 
 -- name: ExpireOldInvitations :exec
 UPDATE invitations 

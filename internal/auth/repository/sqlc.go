@@ -973,7 +973,7 @@ func mapInvitation(i db.Invitation) domain.Invitation {
 	}
 }
 
-func (r *SQLCRepository) CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy uuid.UUID, expiresAt time.Time) (domain.Invitation, error) {
+func (r *SQLCRepository) CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy *uuid.UUID, expiresAt time.Time) (domain.Invitation, error) {
 	var pgTenantID pgtype.UUID
 	if tenantID != nil {
 		pgTenantID = toPgUUID(*tenantID)
@@ -984,7 +984,7 @@ func (r *SQLCRepository) CreateInvitation(ctx context.Context, id uuid.UUID, ten
 		Email:     email,
 		TokenHash: tokenHash,
 		Role:      pgtype.Text{String: role, Valid: role != ""},
-		InvitedBy: toPgUUID(invitedBy),
+		InvitedBy: toPgUUIDNullable(invitedBy),
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
@@ -1033,8 +1033,24 @@ func (r *SQLCRepository) ListPendingInvitationsByTenant(ctx context.Context, ten
 	return invitations, nil
 }
 
-func (r *SQLCRepository) AcceptInvitation(ctx context.Context, tokenHash string) error {
-	return r.q.AcceptInvitation(ctx, tokenHash)
+func (r *SQLCRepository) AcceptInvitation(ctx context.Context, tokenHash string) (uuid.UUID, error) {
+	pgID, err := r.q.AcceptInvitation(ctx, tokenHash)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if !pgID.Valid {
+		return uuid.Nil, errors.New("no pending invitation found")
+	}
+	return toUUID(pgID), nil
+}
+
+// BeginTx starts a database transaction and returns a new SQLCRepository scoped to that transaction.
+func (r *SQLCRepository) BeginTx(ctx context.Context) (pgx.Tx, *SQLCRepository, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, &SQLCRepository{q: r.q.WithTx(tx), pool: r.pool}, nil
 }
 
 func (r *SQLCRepository) RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {

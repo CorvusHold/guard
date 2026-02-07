@@ -2,11 +2,13 @@ package controller
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog/log"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/platform/validation"
@@ -21,20 +23,20 @@ type inviteUserReq struct {
 }
 
 type inviteUserResp struct {
-	ID        uuid.UUID  `json:"id"`
-	Email     string     `json:"email"`
-	Role      string     `json:"role,omitempty"`
-	Status    string     `json:"status"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	CreatedAt time.Time  `json:"created_at"`
-	InviteURL string     `json:"invite_url,omitempty"`
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role,omitempty"`
+	Status    string    `json:"status"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	InviteURL string    `json:"invite_url,omitempty"`
 }
 
 type acceptInvitationReq struct {
-	Token     string `json:"token" validate:"required"`
-	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	Token     string `json:"token" validate:"required"`                        // Invitation token from the invite URL
+	Password  string `json:"password" validate:"required,min=8" minLength:"8"` // Password for the new account (min 8 chars)
+	FirstName string `json:"first_name"`                                       // Optional first name
+	LastName  string `json:"last_name"`                                        // Optional last name
 }
 
 type invitationResp struct {
@@ -53,25 +55,26 @@ type invitationsListResp struct {
 }
 
 type adminCreateUserReq struct {
-	TenantID      string   `json:"tenant_id" validate:"required,uuid4"`
-	Email         string   `json:"email" validate:"required,email"`
-	Password      string   `json:"password" validate:"required,min=8"`
-	FirstName     string   `json:"first_name"`
-	LastName      string   `json:"last_name"`
-	Roles         []string `json:"roles,omitempty"`
-	EmailVerified bool     `json:"email_verified,omitempty"`
-	SendWelcome   bool     `json:"send_welcome,omitempty"`
+	TenantID      string   `json:"tenant_id" validate:"required,uuid4"`              // Tenant ID (UUID)
+	Email         string   `json:"email" validate:"required,email"`                  // User email address
+	Password      string   `json:"password" validate:"required,min=8" minLength:"8"` // Password (min 8 chars)
+	FirstName     string   `json:"first_name"`                                       // Optional first name
+	LastName      string   `json:"last_name"`                                        // Optional last name
+	Roles         []string `json:"roles,omitempty"`                                  // Optional roles to assign
+	EmailVerified bool     `json:"email_verified,omitempty"`                         // Mark email as verified
+	SendWelcome   bool     `json:"send_welcome,omitempty"`                           // Send welcome email to user
 }
 
 type adminCreateUserResp struct {
-	ID            uuid.UUID  `json:"id"`
-	Email         string     `json:"email"`
-	FirstName     string     `json:"first_name"`
-	LastName      string     `json:"last_name"`
-	Roles         []string   `json:"roles"`
-	EmailVerified bool       `json:"email_verified"`
-	IsActive      bool       `json:"is_active"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID            uuid.UUID `json:"id"`             // User ID
+	Email         string    `json:"email"`          // User email
+	FirstName     string    `json:"first_name"`     // First name
+	LastName      string    `json:"last_name"`      // Last name
+	Roles         []string  `json:"roles"`          // Assigned roles
+	TenantID      string    `json:"tenant_id"`      // Tenant ID
+	EmailVerified bool      `json:"email_verified"` // Whether email is verified
+	IsActive      bool      `json:"is_active"`      // Whether user is active
+	CreatedAt     time.Time `json:"created_at"`     // Creation timestamp
 }
 
 // --- Invitation Handlers ---
@@ -146,9 +149,7 @@ func (h *Controller) inviteUser(c echo.Context) error {
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
 	}
-	inviteURL := baseURL + "/accept-invitation?token=" + rawToken
-
-	// TODO: Send invitation email here using email service
+	inviteURL := baseURL + "/accept-invitation?token=" + url.QueryEscape(rawToken)
 
 	return c.JSON(http.StatusCreated, inviteUserResp{
 		ID:        inv.ID,
@@ -212,10 +213,23 @@ func (h *Controller) listInvitations(c echo.Context) error {
 
 	status := c.QueryParam("status")
 	var invitations []domain.Invitation
-	if status == "pending" {
-		invitations, err = h.svc.ListPendingInvitations(c.Request().Context(), tenantID)
-	} else {
+	switch status {
+	case "":
 		invitations, err = h.svc.ListInvitations(c.Request().Context(), tenantID)
+	case "pending":
+		invitations, err = h.svc.ListPendingInvitations(c.Request().Context(), tenantID)
+	case "accepted", "expired", "revoked":
+		var all []domain.Invitation
+		all, err = h.svc.ListInvitations(c.Request().Context(), tenantID)
+		if err == nil {
+			for _, inv := range all {
+				if inv.Status == status {
+					invitations = append(invitations, inv)
+				}
+			}
+		}
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported status filter; use pending, accepted, expired, or revoked"})
 	}
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -243,6 +257,7 @@ func (h *Controller) listInvitations(c echo.Context) error {
 // @Description  Revokes a pending invitation so it can no longer be accepted.
 // @Tags         auth.admin
 // @Security     BearerAuth
+// @Accept       json
 // @Produce      json
 // @Param        id  path  string  true  "Invitation ID (UUID)"
 // @Success      200  {object}  map[string]string
@@ -464,7 +479,9 @@ func (h *Controller) adminCreateUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	// TODO: If SendWelcome is true, send welcome email
+	if req.SendWelcome {
+		log.Warn().Str("email", req.Email).Msg("SendWelcome requested but email service is not yet integrated")
+	}
 
 	return c.JSON(http.StatusCreated, adminCreateUserResp{
 		ID:            user.ID,
@@ -472,6 +489,7 @@ func (h *Controller) adminCreateUser(c echo.Context) error {
 		FirstName:     user.FirstName,
 		LastName:      user.LastName,
 		Roles:         user.Roles,
+		TenantID:      req.TenantID,
 		EmailVerified: user.EmailVerified,
 		IsActive:      user.IsActive,
 		CreatedAt:     user.CreatedAt,

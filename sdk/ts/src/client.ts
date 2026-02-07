@@ -166,14 +166,14 @@ export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 
 export interface Invitation {
   id: string;
-  tenant_id: string;
+  tenant_id: string | null;
   email: string;
   role?: string;
   status: InvitationStatus;
   expires_at: string;
   created_at: string;
-  accepted_at?: string;
-  revoked_at?: string;
+  accepted_at: string | null;
+  revoked_at?: string | null;
 }
 
 export interface InvitationsListResp {
@@ -187,8 +187,13 @@ export interface InviteUserReq {
 }
 
 export interface InviteUserResp {
-  invitation_id: string;
-  invite_url: string;
+  id: string;
+  email: string;
+  role?: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  invite_url?: string;
 }
 
 export interface AcceptInvitationReq {
@@ -206,11 +211,19 @@ export interface AdminCreateUserReq {
   last_name?: string;
   roles?: string[];
   email_verified?: boolean;
+  send_welcome?: boolean;
 }
 
 export interface AdminCreateUserResp {
-  user_id: string;
+  id: string;
   email: string;
+  first_name: string;
+  last_name: string;
+  roles: string[];
+  tenant_id: string;
+  email_verified: boolean;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface TenantSettingsResponse {
@@ -751,9 +764,9 @@ export class GuardClient {
   // ==============================
 
   // Admin: List invitations for a tenant
-  async listInvitations(params: { tenant_id?: string } = {}): Promise<ResponseWrapper<InvitationsListResp>> {
+  async listInvitations(params: { tenant_id?: string; status?: string } = {}): Promise<ResponseWrapper<InvitationsListResp>> {
     const tenant = params.tenant_id ?? this.tenantId;
-    const qs = this.buildQuery({ tenant_id: tenant });
+    const qs = this.buildQuery({ tenant_id: tenant, status: params.status });
     return this.request<InvitationsListResp>(`/api/v1/auth/admin/invitations${qs}`, { method: 'GET' });
   }
 

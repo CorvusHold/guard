@@ -216,7 +216,7 @@ func (f *fakeRepo) ListEnabledSSOProviders(ctx context.Context, tenantID uuid.UU
 }
 
 // --- Invitations ---
-func (f *fakeRepo) CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy uuid.UUID, expiresAt time.Time) (domain.Invitation, error) {
+func (f *fakeRepo) CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy *uuid.UUID, expiresAt time.Time) (domain.Invitation, error) {
 	return domain.Invitation{ID: id, Email: email}, nil
 }
 func (f *fakeRepo) GetInvitationByHash(ctx context.Context, tokenHash string) (domain.Invitation, error) {
@@ -231,8 +231,8 @@ func (f *fakeRepo) ListInvitationsByTenant(ctx context.Context, tenantID uuid.UU
 func (f *fakeRepo) ListPendingInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Invitation, error) {
 	return []domain.Invitation{}, nil
 }
-func (f *fakeRepo) AcceptInvitation(ctx context.Context, tokenHash string) error {
-	return nil
+func (f *fakeRepo) AcceptInvitation(ctx context.Context, tokenHash string) (uuid.UUID, error) {
+	return uuid.New(), nil
 }
 func (f *fakeRepo) RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
 	return nil

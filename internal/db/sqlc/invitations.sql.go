@@ -11,15 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const acceptInvitation = `-- name: AcceptInvitation :exec
+const acceptInvitation = `-- name: AcceptInvitation :one
 UPDATE invitations 
 SET status = 'accepted', accepted_at = now(), updated_at = now()
 WHERE token_hash = $1 AND status = 'pending' AND expires_at > now()
+RETURNING id
 `
 
-func (q *Queries) AcceptInvitation(ctx context.Context, tokenHash string) error {
-	_, err := q.db.Exec(ctx, acceptInvitation, tokenHash)
-	return err
+func (q *Queries) AcceptInvitation(ctx context.Context, tokenHash string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, acceptInvitation, tokenHash)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createInvitation = `-- name: CreateInvitation :one
@@ -245,7 +248,7 @@ func (q *Queries) ListPendingInvitationsByTenant(ctx context.Context, tenantID p
 const revokeInvitation = `-- name: RevokeInvitation :exec
 UPDATE invitations 
 SET status = 'revoked', updated_at = now()
-WHERE id = $1 AND tenant_id = $2
+WHERE id = $1 AND tenant_id = $2 AND status = 'pending'
 `
 
 type RevokeInvitationParams struct {

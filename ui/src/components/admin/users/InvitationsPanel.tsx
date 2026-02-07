@@ -377,7 +377,7 @@ export default function InvitationsPanel({
             </p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+            <Button variant="outline" onClick={() => setShowCreateModal(false)} data-testid="create-invitation-cancel">
               Cancel
             </Button>
             <Button
@@ -421,7 +421,7 @@ export default function InvitationsPanel({
             This link will expire in 7 days.
           </p>
           <div className="flex justify-end">
-            <Button onClick={() => setInviteUrl(null)}>Done</Button>
+            <Button onClick={() => setInviteUrl(null)} data-testid="invite-url-done">Done</Button>
           </div>
         </div>
       </Modal>

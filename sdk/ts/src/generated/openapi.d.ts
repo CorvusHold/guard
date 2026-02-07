@@ -5595,30 +5595,52 @@ export interface components {
             name: string;
         };
         "controller.acceptInvitationReq": {
+            /** @description Optional first name */
             first_name?: string;
+            /** @description Optional last name */
             last_name?: string;
+            /** @description Password for the new account (min 8 chars) */
             password: string;
+            /** @description Invitation token from the invite URL */
             token: string;
         };
         "controller.adminCreateUserReq": {
+            /** @description User email address */
             email: string;
+            /** @description Mark email as verified */
             email_verified?: boolean;
+            /** @description Optional first name */
             first_name?: string;
+            /** @description Optional last name */
             last_name?: string;
+            /** @description Password (min 8 chars) */
             password: string;
+            /** @description Optional roles to assign */
             roles?: string[];
+            /** @description Send welcome email to user */
             send_welcome?: boolean;
+            /** @description Tenant ID (UUID) */
             tenant_id: string;
         };
         "controller.adminCreateUserResp": {
+            /** @description Creation timestamp */
             created_at?: string;
+            /** @description User email */
             email?: string;
+            /** @description Whether email is verified */
             email_verified?: boolean;
+            /** @description First name */
             first_name?: string;
+            /** @description User ID */
             id?: string;
+            /** @description Whether user is active */
             is_active?: boolean;
+            /** @description Last name */
             last_name?: string;
+            /** @description Assigned roles */
             roles?: string[];
+            /** @description Tenant ID */
+            tenant_id?: string;
         };
         "controller.adminUpdateNamesReq": {
             first_name?: string;

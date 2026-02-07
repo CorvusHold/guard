@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS invitations (
     token_hash TEXT NOT NULL,
     role TEXT,  -- Optional role to assign upon acceptance (e.g., 'admin', 'member')
     invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    status TEXT NOT NULL DEFAULT 'pending',  -- 'pending', 'accepted', 'expired', 'revoked'
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','revoked')),  -- 'pending', 'accepted', 'expired', 'revoked'
     expires_at TIMESTAMPTZ NOT NULL,
     accepted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

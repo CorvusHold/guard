@@ -386,12 +386,12 @@ type Repository interface {
 	DeleteACLTuple(ctx context.Context, tenantID uuid.UUID, subjectType string, subjectID uuid.UUID, permissionID uuid.UUID, objectType string, objectID *string) error
 
 	// --- Invitations ---
-	CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy uuid.UUID, expiresAt time.Time) (Invitation, error)
+	CreateInvitation(ctx context.Context, id uuid.UUID, tenantID *uuid.UUID, email, tokenHash, role string, invitedBy *uuid.UUID, expiresAt time.Time) (Invitation, error)
 	GetInvitationByHash(ctx context.Context, tokenHash string) (Invitation, error)
 	GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitation, error)
 	ListInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
 	ListPendingInvitationsByTenant(ctx context.Context, tenantID uuid.UUID) ([]Invitation, error)
-	AcceptInvitation(ctx context.Context, tokenHash string) error
+	AcceptInvitation(ctx context.Context, tokenHash string) (uuid.UUID, error)
 	RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
 }

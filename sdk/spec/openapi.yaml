@@ -117,13 +117,17 @@ definitions:
   controller.acceptInvitationReq:
     properties:
       first_name:
+        description: Optional first name
         type: string
       last_name:
+        description: Optional last name
         type: string
       password:
+        description: Password for the new account (min 8 chars)
         minLength: 8
         type: string
       token:
+        description: Invitation token from the invite URL
         type: string
     required:
     - password
@@ -132,23 +136,31 @@ definitions:
   controller.adminCreateUserReq:
     properties:
       email:
+        description: User email address
         type: string
       email_verified:
+        description: Mark email as verified
         type: boolean
       first_name:
+        description: Optional first name
         type: string
       last_name:
+        description: Optional last name
         type: string
       password:
+        description: Password (min 8 chars)
         minLength: 8
         type: string
       roles:
+        description: Optional roles to assign
         items:
           type: string
         type: array
       send_welcome:
+        description: Send welcome email to user
         type: boolean
       tenant_id:
+        description: Tenant ID (UUID)
         type: string
     required:
     - email
@@ -158,23 +170,34 @@ definitions:
   controller.adminCreateUserResp:
     properties:
       created_at:
+        description: Creation timestamp
         type: string
       email:
+        description: User email
         type: string
       email_verified:
+        description: Whether email is verified
         type: boolean
       first_name:
+        description: First name
         type: string
       id:
+        description: User ID
         type: string
       is_active:
+        description: Whether user is active
         type: boolean
       last_name:
+        description: Last name
         type: string
       roles:
+        description: Assigned roles
         items:
           type: string
         type: array
+      tenant_id:
+        description: Tenant ID
+        type: string
     type: object
   controller.adminUpdateNamesReq:
     properties:
@@ -1589,6 +1612,8 @@ paths:
       - auth.admin
   /api/v1/auth/admin/invitations/{id}/revoke:
     post:
+      consumes:
+      - application/json
       description: Revokes a pending invitation so it can no longer be accepted.
       parameters:
       - description: Invitation ID (UUID)

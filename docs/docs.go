@@ -693,6 +693,9 @@ const docTemplate = `{
                     }
                 ],
                 "description": "Revokes a pending invitation so it can no longer be accepted.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4917,16 +4920,20 @@ const docTemplate = `{
             ],
             "properties": {
                 "first_name": {
+                    "description": "Optional first name",
                     "type": "string"
                 },
                 "last_name": {
+                    "description": "Optional last name",
                     "type": "string"
                 },
                 "password": {
+                    "description": "Password for the new account (min 8 chars)",
                     "type": "string",
                     "minLength": 8
                 },
                 "token": {
+                    "description": "Invitation token from the invite URL",
                     "type": "string"
                 }
             }
@@ -4940,31 +4947,39 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
+                    "description": "User email address",
                     "type": "string"
                 },
                 "email_verified": {
+                    "description": "Mark email as verified",
                     "type": "boolean"
                 },
                 "first_name": {
+                    "description": "Optional first name",
                     "type": "string"
                 },
                 "last_name": {
+                    "description": "Optional last name",
                     "type": "string"
                 },
                 "password": {
+                    "description": "Password (min 8 chars)",
                     "type": "string",
                     "minLength": 8
                 },
                 "roles": {
+                    "description": "Optional roles to assign",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
                 "send_welcome": {
+                    "description": "Send welcome email to user",
                     "type": "boolean"
                 },
                 "tenant_id": {
+                    "description": "Tenant ID (UUID)",
                     "type": "string"
                 }
             }
@@ -4973,31 +4988,43 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "description": "Creation timestamp",
                     "type": "string"
                 },
                 "email": {
+                    "description": "User email",
                     "type": "string"
                 },
                 "email_verified": {
+                    "description": "Whether email is verified",
                     "type": "boolean"
                 },
                 "first_name": {
+                    "description": "First name",
                     "type": "string"
                 },
                 "id": {
+                    "description": "User ID",
                     "type": "string"
                 },
                 "is_active": {
+                    "description": "Whether user is active",
                     "type": "boolean"
                 },
                 "last_name": {
+                    "description": "Last name",
                     "type": "string"
                 },
                 "roles": {
+                    "description": "Assigned roles",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "tenant_id": {
+                    "description": "Tenant ID",
+                    "type": "string"
                 }
             }
         },
