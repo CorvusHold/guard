@@ -17,7 +17,7 @@ type OAuthClient struct {
 	TenantID         uuid.UUID `json:"tenant_id"`
 	ClientID         string    `json:"client_id"`
 	ClientSecretHash string    `json:"-"`
-	ClientType       string    `json:"client_type"` // confidential | public
+	ClientType       string    `json:"client_type" enums:"confidential,public"` // confidential | public
 	Name             string    `json:"name"`
 	RedirectURIs     []string  `json:"redirect_uris"`
 	Scopes           []string  `json:"scopes"`
@@ -50,7 +50,7 @@ type AuthorizationCode struct {
 type CreateOAuthClientInput struct {
 	TenantID     uuid.UUID
 	Name         string
-	ClientType   string // confidential | public
+	ClientType   string `enums:"confidential,public"` // confidential | public
 	RedirectURIs []string
 	Scopes       []string
 	GrantTypes   []string
@@ -153,5 +153,5 @@ type Repository interface {
 
 	UpsertConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string, scopes []string) (ConsentGrant, error)
 	GetConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string) (ConsentGrant, error)
-	RevokeConsentGrant(ctx context.Context, userID uuid.UUID, clientID string) error
+	RevokeConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string) error
 }

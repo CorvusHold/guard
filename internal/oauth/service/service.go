@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,6 +40,18 @@ func (s *Service) CreateClient(ctx context.Context, in domain.CreateOAuthClientI
 	}
 	if len(in.RedirectURIs) == 0 {
 		return domain.OAuthClient{}, "", errors.New("at least one redirect_uri is required")
+	}
+	for _, uri := range in.RedirectURIs {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			return domain.OAuthClient{}, "", errors.New("invalid redirect_uri: " + uri)
+		}
+		if parsed.Scheme != "https" && parsed.Scheme != "http" && !strings.HasPrefix(uri, "urn:") {
+			return domain.OAuthClient{}, "", errors.New("redirect_uri must use https, http, or urn scheme: " + uri)
+		}
+		if parsed.Fragment != "" {
+			return domain.OAuthClient{}, "", errors.New("redirect_uri must not contain a fragment: " + uri)
+		}
 	}
 	if in.ClientType == "" {
 		in.ClientType = "confidential"
@@ -138,6 +151,9 @@ func (s *Service) ValidateAuthorizeRequest(ctx context.Context, in domain.Author
 	client, err := s.repo.GetOAuthClientByClientID(ctx, in.ClientID)
 	if err != nil {
 		return domain.OAuthClient{}, errors.New("invalid client_id")
+	}
+	if !client.IsActive {
+		return domain.OAuthClient{}, errors.New("client is deactivated")
 	}
 
 	// Validate redirect_uri
@@ -258,6 +274,9 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req domain.Toke
 	if err != nil {
 		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("invalid client")
 	}
+	if !client.IsActive {
+		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("client is deactivated")
+	}
 
 	// Authenticate confidential clients
 	if client.ClientType == "confidential" {
@@ -297,6 +316,9 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 	client, err := s.repo.GetOAuthClientByClientID(ctx, clientID)
 	if err != nil {
 		return domain.OAuthClient{}, errors.New("invalid client")
+	}
+	if !client.IsActive {
+		return domain.OAuthClient{}, errors.New("client is deactivated")
 	}
 
 	if client.ClientType != "confidential" {
@@ -349,15 +371,7 @@ func parseScopes(scope string) []string {
 	if scope == "" {
 		return nil
 	}
-	parts := strings.Fields(scope)
-	var out []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
+	return strings.Fields(scope)
 }
 
 func containsString(arr []string, s string) bool {
@@ -399,7 +413,7 @@ func (s *Service) SaveConsent(ctx context.Context, userID, tenantID uuid.UUID, c
 	return err
 }
 
-// RevokeConsent revokes a user's consent for a client.
-func (s *Service) RevokeConsent(ctx context.Context, userID uuid.UUID, clientID string) error {
-	return s.repo.RevokeConsentGrant(ctx, userID, clientID)
+// RevokeConsent revokes a user's consent for a client within a specific tenant.
+func (s *Service) RevokeConsent(ctx context.Context, userID, tenantID uuid.UUID, clientID string) error {
+	return s.repo.RevokeConsentGrant(ctx, userID, tenantID, clientID)
 }

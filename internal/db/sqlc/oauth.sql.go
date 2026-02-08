@@ -323,52 +323,53 @@ func (q *Queries) ListOAuthClientsByTenant(ctx context.Context, tenantID pgtype.
 const revokeOAuthConsentGrant = `-- name: RevokeOAuthConsentGrant :exec
 UPDATE oauth_consent_grants
 SET revoked_at = now()
-WHERE user_id = $1 AND client_id = $2 AND revoked_at IS NULL
+WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL
 `
 
 type RevokeOAuthConsentGrantParams struct {
 	UserID   pgtype.UUID `json:"user_id"`
 	ClientID string      `json:"client_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
 }
 
 func (q *Queries) RevokeOAuthConsentGrant(ctx context.Context, arg RevokeOAuthConsentGrantParams) error {
-	_, err := q.db.Exec(ctx, revokeOAuthConsentGrant, arg.UserID, arg.ClientID)
+	_, err := q.db.Exec(ctx, revokeOAuthConsentGrant, arg.UserID, arg.ClientID, arg.TenantID)
 	return err
 }
 
 const updateOAuthClient = `-- name: UpdateOAuthClient :exec
 UPDATE oauth_clients
-SET name = COALESCE(NULLIF($3, ''), name),
-    redirect_uris = COALESCE($4, redirect_uris),
-    scopes = COALESCE($5, scopes),
-    grant_types = COALESCE($6, grant_types),
-    logo_uri = COALESCE($7, logo_uri),
-    is_active = COALESCE($8, is_active),
+SET name = COALESCE(NULLIF($1::text, ''), name),
+    redirect_uris = COALESCE($2, redirect_uris),
+    scopes = COALESCE($3, scopes),
+    grant_types = COALESCE($4, grant_types),
+    logo_uri = COALESCE($5, logo_uri),
+    is_active = COALESCE($6, is_active),
     updated_at = now()
-WHERE id = $1 AND tenant_id = $2
+WHERE id = $7 AND tenant_id = $8
 `
 
 type UpdateOAuthClientParams struct {
-	ID           pgtype.UUID `json:"id"`
-	TenantID     pgtype.UUID `json:"tenant_id"`
-	Column3      interface{} `json:"column_3"`
+	Name         string      `json:"name"`
 	RedirectUris []string    `json:"redirect_uris"`
 	Scopes       []string    `json:"scopes"`
 	GrantTypes   []string    `json:"grant_types"`
 	LogoUri      pgtype.Text `json:"logo_uri"`
-	IsActive     bool        `json:"is_active"`
+	IsActive     pgtype.Bool `json:"is_active"`
+	ID           pgtype.UUID `json:"id"`
+	TenantID     pgtype.UUID `json:"tenant_id"`
 }
 
 func (q *Queries) UpdateOAuthClient(ctx context.Context, arg UpdateOAuthClientParams) error {
 	_, err := q.db.Exec(ctx, updateOAuthClient,
-		arg.ID,
-		arg.TenantID,
-		arg.Column3,
+		arg.Name,
 		arg.RedirectUris,
 		arg.Scopes,
 		arg.GrantTypes,
 		arg.LogoUri,
 		arg.IsActive,
+		arg.ID,
+		arg.TenantID,
 	)
 	return err
 }
@@ -376,7 +377,7 @@ func (q *Queries) UpdateOAuthClient(ctx context.Context, arg UpdateOAuthClientPa
 const upsertOAuthConsentGrant = `-- name: UpsertOAuthConsentGrant :one
 INSERT INTO oauth_consent_grants (user_id, tenant_id, client_id, scopes)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (user_id, client_id) DO UPDATE
+ON CONFLICT (user_id, client_id, tenant_id) DO UPDATE
 SET scopes = EXCLUDED.scopes, granted_at = now(), revoked_at = NULL
 RETURNING id, user_id, tenant_id, client_id, scopes, granted_at, revoked_at
 `

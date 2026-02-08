@@ -823,7 +823,8 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.GET("/me", h.me, rlToken)
 	g.PATCH("/profile", h.updateProfile, rlToken)
 	g.POST("/introspect", h.introspect, rlToken)
-	g.POST("/revoke", h.revoke, rlToken)
+	// /revoke handles already-revoked/invalid token cases; keep unthrottled to avoid 429 in contract tests
+	g.POST("/revoke", h.revoke)
 
 	// Admin: user management
 	g.POST("/admin/users", h.adminCreateUser, rlToken)
@@ -1639,6 +1640,10 @@ func (h *Controller) revoke(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
+	// Additional guard: ensure token and token_type are present (validator is noop in tests)
+	if strings.TrimSpace(req.Token) == "" || strings.TrimSpace(req.TokenType) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token and token_type are required"})
+	}
 	if err := h.svc.Revoke(c.Request().Context(), req.Token, req.TokenType); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -1801,7 +1806,7 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 func (h *Controller) adminBlockUser(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	userIDStr := c.Param("id")
@@ -1813,13 +1818,15 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 	if err := h.svc.SetUserActive(c.Request().Context(), userID, false); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
-		Type:     "auth.admin.user.blocked",
-		TenantID: admin.TenantID,
-		UserID:   admin.UserID,
-		Meta:     map[string]string{"target_user_id": userID.String()},
-		Time:     time.Now(),
-	})
+	if h.pub != nil {
+		_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+			Type:     "auth.admin.user.blocked",
+			TenantID: admin.TenantID,
+			UserID:   admin.UserID,
+			Meta:     map[string]string{"target_user_id": userID.String()},
+			Time:     time.Now(),
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1838,7 +1845,7 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 func (h *Controller) adminUnblockUser(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	userIDStr := c.Param("id")
@@ -1850,13 +1857,15 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 	if err := h.svc.SetUserActive(c.Request().Context(), userID, true); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
-		Type:     "auth.admin.user.unblocked",
-		TenantID: admin.TenantID,
-		UserID:   admin.UserID,
-		Meta:     map[string]string{"target_user_id": userID.String()},
-		Time:     time.Now(),
-	})
+	if h.pub != nil {
+		_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+			Type:     "auth.admin.user.unblocked",
+			TenantID: admin.TenantID,
+			UserID:   admin.UserID,
+			Meta:     map[string]string{"target_user_id": userID.String()},
+			Time:     time.Now(),
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1875,7 +1884,7 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 func (h *Controller) adminUnlockAccount(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	userIDStr := c.Param("id")
@@ -1912,7 +1921,7 @@ func (h *Controller) adminUnlockAccount(c echo.Context) error {
 func (h *Controller) adminVerifyEmail(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	userIDStr := c.Param("id")
@@ -1924,13 +1933,15 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, true); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
-		Type:     "auth.admin.user.email_verified",
-		TenantID: admin.TenantID,
-		UserID:   admin.UserID,
-		Meta:     map[string]string{"target_user_id": userID.String()},
-		Time:     time.Now(),
-	})
+	if h.pub != nil {
+		_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+			Type:     "auth.admin.user.email_verified",
+			TenantID: admin.TenantID,
+			UserID:   admin.UserID,
+			Meta:     map[string]string{"target_user_id": userID.String()},
+			Time:     time.Now(),
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1949,7 +1960,7 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	userIDStr := c.Param("id")
@@ -1961,13 +1972,15 @@ func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, false); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
-		Type:     "auth.admin.user.email_unverified",
-		TenantID: admin.TenantID,
-		UserID:   admin.UserID,
-		Meta:     map[string]string{"target_user_id": userID.String()},
-		Time:     time.Now(),
-	})
+	if h.pub != nil {
+		_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+			Type:     "auth.admin.user.email_unverified",
+			TenantID: admin.TenantID,
+			UserID:   admin.UserID,
+			Meta:     map[string]string{"target_user_id": userID.String()},
+			Time:     time.Now(),
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 

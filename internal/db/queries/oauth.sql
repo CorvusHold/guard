@@ -22,14 +22,14 @@ ORDER BY created_at DESC;
 
 -- name: UpdateOAuthClient :exec
 UPDATE oauth_clients
-SET name = COALESCE(NULLIF($3, ''), name),
-    redirect_uris = COALESCE($4, redirect_uris),
-    scopes = COALESCE($5, scopes),
-    grant_types = COALESCE($6, grant_types),
-    logo_uri = COALESCE($7, logo_uri),
-    is_active = COALESCE($8, is_active),
+SET name = COALESCE(NULLIF(sqlc.arg(name)::text, ''), name),
+    redirect_uris = COALESCE(sqlc.arg(redirect_uris), redirect_uris),
+    scopes = COALESCE(sqlc.arg(scopes), scopes),
+    grant_types = COALESCE(sqlc.arg(grant_types), grant_types),
+    logo_uri = COALESCE(sqlc.arg(logo_uri), logo_uri),
+    is_active = COALESCE(sqlc.narg(is_active), is_active),
     updated_at = now()
-WHERE id = $1 AND tenant_id = $2;
+WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
 -- name: DeleteOAuthClient :exec
 DELETE FROM oauth_clients
@@ -62,7 +62,7 @@ WHERE expires_at < now() - INTERVAL '1 hour';
 -- name: UpsertOAuthConsentGrant :one
 INSERT INTO oauth_consent_grants (user_id, tenant_id, client_id, scopes)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (user_id, client_id) DO UPDATE
+ON CONFLICT (user_id, client_id, tenant_id) DO UPDATE
 SET scopes = EXCLUDED.scopes, granted_at = now(), revoked_at = NULL
 RETURNING *;
 
@@ -73,4 +73,4 @@ WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL;
 -- name: RevokeOAuthConsentGrant :exec
 UPDATE oauth_consent_grants
 SET revoked_at = now()
-WHERE user_id = $1 AND client_id = $2 AND revoked_at IS NULL;
+WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL;

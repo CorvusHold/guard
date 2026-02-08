@@ -93,7 +93,7 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 			tenant := tenants[0]
 			response = EmailDiscoveryResponse{
 				Found:      true,
-				HasTenant:  true,
+				HasTenant:  false,
 				TenantID:   tenant.ID,
 				TenantName: tenant.Name,
 				UserExists: true,
@@ -108,7 +108,7 @@ func (h *Controller) emailDiscovery(c echo.Context) error {
 
 			response = EmailDiscoveryResponse{
 				Found:       true,
-				HasTenant:   true,
+				HasTenant:   false,
 				UserExists:  true,
 				Suggestions: suggestions,
 				Tenants:     toTenantInfos(tenants),

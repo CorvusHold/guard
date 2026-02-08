@@ -90,7 +90,7 @@ func (s *Service) InviteUser(ctx context.Context, in domain.InviteUserInput) (do
 				"This invitation expires at " + expiresAt.Format("2006-01-02 15:04 UTC") + "."
 		}
 		if err := s.emailSender.Send(ctx, *in.TenantID, in.Email, subject, body); err != nil {
-			s.log.Warn().Err(err).Str("email", in.Email).Msg("failed to send invitation email")
+			s.log.Warn().Err(err).Str("invitation_id", invID.String()).Msg("failed to send invitation email")
 		}
 	}
 
@@ -327,7 +327,7 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 		subject := "Welcome — your account has been created"
 		body := "Your account has been created. You can sign in at:\n\n" + loginLink
 		if err := s.emailSender.Send(ctx, in.TenantID, in.Email, subject, body); err != nil {
-			s.log.Warn().Err(err).Str("email", in.Email).Msg("failed to send welcome email")
+			s.log.Warn().Err(err).Str("user_id", userID.String()).Msg("failed to send welcome email")
 		}
 	}
 

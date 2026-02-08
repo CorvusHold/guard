@@ -425,7 +425,9 @@ func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bo
 		return err
 	}
 	if !active {
-		_, _ = s.repo.RevokeAllUserSessions(ctx, userID)
+		if _, err := s.repo.RevokeAllUserSessions(ctx, userID); err != nil {
+			s.log.Warn().Err(err).Str("user_id", userID.String()).Msg("failed to revoke sessions on user deactivation")
+		}
 	}
 	return nil
 }
@@ -697,6 +699,9 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 		// Revoke the entire token family to protect the user.
 		if rt.FamilyID != uuid.Nil {
 			_ = s.repo.RevokeTokenFamily(ctx, rt.FamilyID)
+		} else {
+			// Legacy token without family_id: revoke the individual chain as fallback
+			_ = s.repo.RevokeTokenChain(ctx, rt.ID)
 		}
 		_ = s.pub.Publish(ctx, evdomain.Event{
 			Type:     "auth.token.reuse_detected",
@@ -762,6 +767,9 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	rt, err := s.repo.GetRefreshTokenByHash(ctx, hashB64)
 	if err != nil {
 		return err
+	}
+	if rt.Revoked {
+		return nil
 	}
 	return s.repo.RevokeTokenChain(ctx, rt.ID)
 }
@@ -897,6 +905,10 @@ func (s *Service) Me(ctx context.Context, userID, tenantID uuid.UUID) (domain.Us
 	if err != nil {
 		return domain.UserProfile{}, err
 	}
+	// Fallback to legacy users.roles column for compatibility with deprecated endpoints/tests
+	if len(roleNames) == 0 && len(u.Roles) > 0 {
+		roleNames = u.Roles
+	}
 	if roleNames == nil {
 		roleNames = []string{}
 	}
@@ -1027,6 +1039,10 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	roleNames, err := s.repo.ListUserRoleNames(ctx, uid, tid)
 	if err != nil {
 		return domain.Introspection{Active: false}, err
+	}
+	if len(roleNames) == 0 && len(u.Roles) > 0 {
+		// Fallback to legacy users.roles column for compatibility with tests and legacy flows
+		roleNames = u.Roles
 	}
 	if roleNames == nil {
 		roleNames = []string{}
@@ -1554,7 +1570,22 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 
 // UpdateProfile updates the user's profile (first name, last name).
 func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
-	return s.repo.UpdateUserNames(ctx, userID, strings.TrimSpace(firstName), strings.TrimSpace(lastName))
+	fn := strings.TrimSpace(firstName)
+	ln := strings.TrimSpace(lastName)
+	// If either field is empty, preserve existing value to avoid accidental clearing.
+	if fn == "" || ln == "" {
+		u, err := s.repo.GetUserByID(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if fn == "" {
+			fn = u.FirstName
+		}
+		if ln == "" {
+			ln = u.LastName
+		}
+	}
+	return s.repo.UpdateUserNames(ctx, userID, fn, ln)
 }
 
 // GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.

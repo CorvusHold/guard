@@ -13,6 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog/log"
 
 	"github.com/corvusHold/guard/internal/config"
 )
@@ -25,12 +26,17 @@ const (
 // NewJWT returns an Echo middleware that validates access JWTs and
 // stores user and tenant IDs in the context.
 func NewJWT(cfg config.Config) echo.MiddlewareFunc {
-	// Pre-load EC public key if ES256 is configured
+	// Pre-load EC public key if ES256 is configured. We allow either a private or public key PEM.
 	var ecPubKey *ecdsa.PublicKey
-	if cfg.JWTSigningAlgorithm == "ES256" && cfg.JWTPrivateKeyPath != "" {
-		if key, err := loadECPublicKey(cfg.JWTPrivateKeyPath); err == nil {
-			ecPubKey = key
+	if cfg.JWTSigningAlgorithm == "ES256" {
+		if cfg.JWTPrivateKeyPath == "" {
+			log.Fatal().Msg("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
 		}
+		key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
+		if err != nil {
+			log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC public/public key for ES256 JWT verification")
+		}
+		ecPubKey = key
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -95,11 +101,26 @@ func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 	if block == nil {
 		return nil, fmt.Errorf("no PEM block found in %s", path)
 	}
-	privKey, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
+	switch block.Type {
+	case "EC PRIVATE KEY":
+		privKey, err := x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		return &privKey.PublicKey, nil
+	case "PUBLIC KEY", "EC PUBLIC KEY":
+		pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		pubKey, ok := pubAny.(*ecdsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("expected EC PUBLIC KEY, got %T in %s", pubAny, path)
+		}
+		return pubKey, nil
+	default:
+		return nil, fmt.Errorf("expected EC PRIVATE KEY or EC PUBLIC KEY PEM block, got %q in %s", block.Type, path)
 	}
-	return &privKey.PublicKey, nil
 }
 
 // UserID returns the authenticated user's ID from context.

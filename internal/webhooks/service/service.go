@@ -63,6 +63,7 @@ func (s *Service) EnqueueEvent(ctx context.Context, tenantID uuid.UUID, eventTyp
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, wh := range webhooks {
 		d := domain.Delivery{
 			ID:          uuid.New(),
@@ -74,11 +75,11 @@ func (s *Service) EnqueueEvent(ctx context.Context, tenantID uuid.UUID, eventTyp
 			MaxAttempts: 5,
 			CreatedAt:   time.Now(),
 		}
-		if err := s.repo.CreateDelivery(ctx, d); err != nil {
-			return err
+		if err := s.repo.CreateDelivery(ctx, d); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // SignPayload creates an HMAC-SHA256 signature for a payload.

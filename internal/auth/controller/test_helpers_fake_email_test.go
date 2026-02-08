@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// tokensResponse matches the shape of auth token payloads returned by HTTP endpoints.
+// tokensResponse matches auth token payloads returned by HTTP endpoints.
 type tokensResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`

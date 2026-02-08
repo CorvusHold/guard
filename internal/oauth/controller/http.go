@@ -566,7 +566,7 @@ func (h *Controller) tokenAuthorizationCode(c echo.Context, clientID, clientSecr
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":             "invalid_grant",
-			"error_description": err.Error(),
+			"error_description": "authorization code exchange failed",
 		})
 	}
 
@@ -617,7 +617,7 @@ func (h *Controller) tokenClientCredentials(c echo.Context, clientID, clientSecr
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error":             "invalid_client",
-			"error_description": err.Error(),
+			"error_description": "client authentication failed",
 		})
 	}
 
@@ -644,20 +644,7 @@ func (h *Controller) tokenClientCredentials(c echo.Context, clientID, clientSecr
 		"grant":     "client_credentials",
 	}
 
-	var signingMethod jwt.SigningMethod
-	var signKey interface{}
-	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
-		signingMethod = h.keyMgr.SigningMethod()
-		signKey = h.keyMgr.SigningKey(signingKey)
-	} else {
-		signingMethod = jwt.SigningMethodHS256
-		signKey = []byte(signingKey)
-	}
-	t := jwt.NewWithClaims(signingMethod, claims)
-	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
-		t.Header["kid"] = h.keyMgr.KeyID()
-	}
-	accessToken, err := t.SignedString(signKey)
+	accessToken, err := h.signJWTClaims(claims, signingKey)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":             "server_error",
@@ -738,6 +725,11 @@ func (h *Controller) issueIDToken(c echo.Context, userID, tenantID uuid.UUID, cl
 		}
 	}
 
+	return h.signJWTClaims(claims, signingKey)
+}
+
+// signJWTClaims signs JWT claims using the configured key manager or HMAC fallback.
+func (h *Controller) signJWTClaims(claims jwt.MapClaims, signingKey string) (string, error) {
 	var signingMethod jwt.SigningMethod
 	var signKey interface{}
 	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
@@ -751,7 +743,6 @@ func (h *Controller) issueIDToken(c echo.Context, userID, tenantID uuid.UUID, cl
 	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
 		t.Header["kid"] = h.keyMgr.KeyID()
 	}
-
 	return t.SignedString(signKey)
 }
 
@@ -782,7 +773,7 @@ func (h *Controller) extractAuthFromRequest(c echo.Context) (uuid.UUID, uuid.UUI
 
 func (h *Controller) parseAccessToken(tokenStr string) (uuid.UUID, uuid.UUID, bool) {
 	// Verify the JWT signature via the auth service — these routes are NOT behind auth middleware.
-	introspection, err := h.authSvc.Introspect(context.Background(), tokenStr)
+	introspection, err := h.authSvc.Introspect(context.TODO(), tokenStr)
 	if err != nil || !introspection.Active {
 		return uuid.Nil, uuid.Nil, false
 	}

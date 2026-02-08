@@ -147,9 +147,6 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 3: Revoke with missing token - validation behavior
 	// ============================================================
 	t.Run("Revoke_Missing_Token", func(t *testing.T) {
-		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
-		_ = newTokens // Use tokens to prevent unused var
-
 		revokeBody := map[string]string{
 			"token_type": "refresh",
 		}
@@ -164,14 +161,15 @@ func TestTokenRevoke_Flow(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "Revoke without token should return 400")
 	})
 
+	// Prepare one fresh token for the remaining negative cases to avoid rate limit noise.
+	negTokens := loginAndGetTokens(t, e, tenantID, email, password)
+
 	// ============================================================
 	// Test 4: Revoke with missing token_type fails
 	// ============================================================
 	t.Run("Revoke_Missing_Token_Type", func(t *testing.T) {
-		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
-
 		revokeBody := map[string]string{
-			"token": newTokens.RefreshToken,
+			"token": negTokens.RefreshToken,
 		}
 		body, _ := json.Marshal(revokeBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader(body))
@@ -187,8 +185,6 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 5: Revoke with invalid JSON fails
 	// ============================================================
 	t.Run("Revoke_Invalid_JSON", func(t *testing.T) {
-		_ = loginAndGetTokens(t, e, tenantID, email, password)
-
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/revoke", bytes.NewReader([]byte("invalid json")))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -202,11 +198,9 @@ func TestTokenRevoke_Flow(t *testing.T) {
 	// Test 6: Revoke already revoked token (idempotent)
 	// ============================================================
 	t.Run("Revoke_Already_Revoked_Token", func(t *testing.T) {
-		newTokens := loginAndGetTokens(t, e, tenantID, email, password)
-
-		// First revoke
+		// First revoke using the same token
 		revokeBody := map[string]string{
-			"token":      newTokens.RefreshToken,
+			"token":      negTokens.RefreshToken,
 			"token_type": "refresh",
 		}
 		body, _ := json.Marshal(revokeBody)
@@ -222,7 +216,7 @@ func TestTokenRevoke_Flow(t *testing.T) {
 		rec2 := httptest.NewRecorder()
 		e.ServeHTTP(rec2, req2)
 
-		// Double revoke should return 400 for deterministic contract
-		assert.Equal(t, http.StatusBadRequest, rec2.Code, "Revoke already revoked token should return 400")
+		// Double revoke is idempotent: return 204 NoContent
+		assert.Equal(t, http.StatusNoContent, rec2.Code, "Revoke already revoked token should return 204")
 	})
 }

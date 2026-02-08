@@ -221,7 +221,11 @@ func (h *Controller) selfRegisterPasskey(c echo.Context) error {
 	}
 	var aaguid []byte
 	if req.AAGUID != "" {
-		aaguid, _ = base64.URLEncoding.DecodeString(req.AAGUID)
+		var aaguidErr error
+		aaguid, aaguidErr = base64.URLEncoding.DecodeString(req.AAGUID)
+		if aaguidErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid aaguid encoding"})
+		}
 	}
 	cred := authsvc.WebAuthnCredential{
 		ID:              uuid.New(),

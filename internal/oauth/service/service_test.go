@@ -24,9 +24,10 @@ type mockRepo struct {
 
 func newMockRepo() *mockRepo {
 	return &mockRepo{
-		clients: make(map[string]domain.OAuthClient),
-		byID:    make(map[uuid.UUID]domain.OAuthClient),
-		codes:   make(map[string]domain.AuthorizationCode),
+		clients:  make(map[string]domain.OAuthClient),
+		byID:     make(map[uuid.UUID]domain.OAuthClient),
+		codes:    make(map[string]domain.AuthorizationCode),
+		consents: make(map[string]domain.ConsentGrant),
 	}
 }
 
@@ -148,7 +149,7 @@ func (m *mockRepo) GetConsentGrant(_ context.Context, userID, _ uuid.UUID, clien
 	return g, nil
 }
 
-func (m *mockRepo) RevokeConsentGrant(_ context.Context, userID uuid.UUID, clientID string) error {
+func (m *mockRepo) RevokeConsentGrant(_ context.Context, userID, _ uuid.UUID, clientID string) error {
 	if m.consents == nil {
 		return nil
 	}
@@ -481,7 +482,7 @@ func TestExchangeAuthorizationCode_PKCEWrongVerifier(t *testing.T) {
 
 	tenantID := uuid.New()
 	userID := uuid.New()
-	client, _, _ := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
+	client, _, err := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
 		TenantID:     tenantID,
 		Name:         "SPA",
 		ClientType:   "public",
@@ -489,12 +490,15 @@ func TestExchangeAuthorizationCode_PKCEWrongVerifier(t *testing.T) {
 		GrantTypes:   []string{"authorization_code"},
 		Scopes:       []string{"openid"},
 	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
 
 	verifier := "correct-verifier"
 	h := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h[:])
 
-	result, _ := svc.CreateAuthorizationCode(context.Background(), domain.AuthorizeInput{
+	result, err := svc.CreateAuthorizationCode(context.Background(), domain.AuthorizeInput{
 		ClientID:            client.ClientID,
 		RedirectURI:         "https://spa.com/cb",
 		Scope:               "openid",
@@ -503,9 +507,12 @@ func TestExchangeAuthorizationCode_PKCEWrongVerifier(t *testing.T) {
 		CodeChallenge:       challenge,
 		CodeChallengeMethod: "S256",
 	})
+	if err != nil {
+		t.Fatalf("CreateAuthorizationCode: %v", err)
+	}
 
 	// Exchange with wrong verifier
-	_, _, err := svc.ExchangeAuthorizationCode(context.Background(), domain.TokenRequest{
+	_, _, err = svc.ExchangeAuthorizationCode(context.Background(), domain.TokenRequest{
 		GrantType:    "authorization_code",
 		Code:         result.Code,
 		RedirectURI:  "https://spa.com/cb",
@@ -521,7 +528,7 @@ func TestAuthenticateClient(t *testing.T) {
 	repo := newMockRepo()
 	svc := New(repo)
 
-	client, secret, _ := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
+	client, secret, err := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
 		TenantID:     uuid.New(),
 		Name:         "M2M App",
 		ClientType:   "confidential",
@@ -529,6 +536,9 @@ func TestAuthenticateClient(t *testing.T) {
 		GrantTypes:   []string{"client_credentials"},
 		Scopes:       []string{"openid"},
 	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
 
 	// Correct credentials
 	authenticated, err := svc.AuthenticateClient(context.Background(), client.ClientID, secret)
@@ -556,7 +566,7 @@ func TestAuthenticateClient_PublicClientDenied(t *testing.T) {
 	repo := newMockRepo()
 	svc := New(repo)
 
-	client, _, _ := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
+	client, _, err := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
 		TenantID:     uuid.New(),
 		Name:         "SPA",
 		ClientType:   "public",
@@ -564,8 +574,11 @@ func TestAuthenticateClient_PublicClientDenied(t *testing.T) {
 		GrantTypes:   []string{"authorization_code", "client_credentials"},
 		Scopes:       []string{"openid"},
 	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
 
-	_, err := svc.AuthenticateClient(context.Background(), client.ClientID, "any-secret")
+	_, err = svc.AuthenticateClient(context.Background(), client.ClientID, "any-secret")
 	if err == nil {
 		t.Error("expected error: client_credentials requires confidential client")
 	}
@@ -576,7 +589,7 @@ func TestExchangeAuthorizationCode_RedirectURIMismatch(t *testing.T) {
 	svc := New(repo)
 
 	tenantID := uuid.New()
-	client, secret, _ := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
+	client, secret, err := svc.CreateClient(context.Background(), domain.CreateOAuthClientInput{
 		TenantID:     tenantID,
 		Name:         "Test",
 		ClientType:   "confidential",
@@ -584,16 +597,22 @@ func TestExchangeAuthorizationCode_RedirectURIMismatch(t *testing.T) {
 		GrantTypes:   []string{"authorization_code"},
 		Scopes:       []string{"openid"},
 	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
 
-	result, _ := svc.CreateAuthorizationCode(context.Background(), domain.AuthorizeInput{
+	result, err := svc.CreateAuthorizationCode(context.Background(), domain.AuthorizeInput{
 		ClientID:    client.ClientID,
 		RedirectURI: "https://example.com/callback",
 		Scope:       "openid",
 		UserID:      uuid.New(),
 		TenantID:    tenantID,
 	})
+	if err != nil {
+		t.Fatalf("CreateAuthorizationCode: %v", err)
+	}
 
-	_, _, err := svc.ExchangeAuthorizationCode(context.Background(), domain.TokenRequest{
+	_, _, err = svc.ExchangeAuthorizationCode(context.Background(), domain.TokenRequest{
 		GrantType:    "authorization_code",
 		Code:         result.Code,
 		RedirectURI:  "https://evil.com/callback",

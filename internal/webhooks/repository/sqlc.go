@@ -102,7 +102,8 @@ func (r *Repository) ListPendingDeliveries(ctx context.Context, limit int) ([]do
 		`SELECT id, webhook_id, event_type, payload, status, attempts, max_attempts, next_retry_at, last_error, created_at, completed_at
 		 FROM webhook_deliveries
 		 WHERE status IN ('pending', 'retrying') AND (next_retry_at IS NULL OR next_retry_at <= now())
-		 ORDER BY created_at ASC LIMIT $1`, limit,
+		 ORDER BY created_at ASC LIMIT $1
+		 FOR UPDATE SKIP LOCKED`, limit,
 	)
 	if err != nil {
 		return nil, err

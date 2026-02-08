@@ -680,16 +680,6 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 	}
 }
 
-type tokensResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-// publisherFunc helps implement evdomain.Publisher in tests via a func.
-type publisherFunc func(ctx context.Context, e evdomain.Event) error
-
-func (f publisherFunc) Publish(ctx context.Context, e evdomain.Event) error { return f(ctx, e) }
-
 // Group subject with object-scoped and type-scoped permissions
 func TestHTTP_Authorize_Group_ObjectAndTypeScope(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {

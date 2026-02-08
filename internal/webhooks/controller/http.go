@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 
+	"github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/webhooks/domain"
 	whsvc "github.com/corvusHold/guard/internal/webhooks/service"
 	"github.com/google/uuid"
@@ -46,9 +47,14 @@ func (ctrl *Controller) create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	tenantID, ok := middleware.TenantID(c)
+	if !ok {
+		headerVal := c.Request().Header.Get("X-Tenant-ID")
+		parsed, err := uuid.Parse(headerVal)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authenticated tenant context required"})
+		}
+		tenantID = parsed
 	}
 	wh, err := ctrl.svc.Create(c.Request().Context(), domain.CreateWebhookInput{
 		TenantID: tenantID,
@@ -63,9 +69,14 @@ func (ctrl *Controller) create(c echo.Context) error {
 }
 
 func (ctrl *Controller) list(c echo.Context) error {
-	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	tenantID, ok := middleware.TenantID(c)
+	if !ok {
+		headerVal := c.Request().Header.Get("X-Tenant-ID")
+		parsed, err := uuid.Parse(headerVal)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authenticated tenant context required"})
+		}
+		tenantID = parsed
 	}
 	webhooks, err := ctrl.svc.List(c.Request().Context(), tenantID)
 	if err != nil {
@@ -79,9 +90,14 @@ func (ctrl *Controller) get(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	tenantID, ok := middleware.TenantID(c)
+	if !ok {
+		headerVal := c.Request().Header.Get("X-Tenant-ID")
+		parsed, err := uuid.Parse(headerVal)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authenticated tenant context required"})
+		}
+		tenantID = parsed
 	}
 	wh, err := ctrl.svc.Get(c.Request().Context(), id, tenantID)
 	if err != nil {
@@ -95,9 +111,14 @@ func (ctrl *Controller) update(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	tenantID, ok := middleware.TenantID(c)
+	if !ok {
+		headerVal := c.Request().Header.Get("X-Tenant-ID")
+		parsed, err := uuid.Parse(headerVal)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authenticated tenant context required"})
+		}
+		tenantID = parsed
 	}
 	var req updateWebhookRequest
 	if err := c.Bind(&req); err != nil {
@@ -115,9 +136,14 @@ func (ctrl *Controller) delete(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	tenantID, ok := middleware.TenantID(c)
+	if !ok {
+		headerVal := c.Request().Header.Get("X-Tenant-ID")
+		parsed, err := uuid.Parse(headerVal)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authenticated tenant context required"})
+		}
+		tenantID = parsed
 	}
 	if err := ctrl.svc.Delete(c.Request().Context(), id, tenantID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})

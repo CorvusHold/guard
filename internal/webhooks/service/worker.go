@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -60,6 +61,7 @@ func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
 	wh, err := w.repo.GetWebhookByID(ctx, d.WebhookID)
 	if err != nil {
 		log.Error().Err(err).Str("delivery_id", d.ID.String()).Msg("webhook worker: failed to get webhook")
+		w.markFailed(ctx, d, fmt.Sprintf("webhook not found: %s", err.Error()))
 		return
 	}
 
@@ -82,7 +84,10 @@ func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
 		w.scheduleRetry(ctx, d, err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		now := time.Now()
@@ -99,7 +104,7 @@ func (w *Worker) scheduleRetry(ctx context.Context, d domain.Delivery, lastError
 		w.markFailed(ctx, d, lastError)
 		return
 	}
-	// Exponential backoff: 10s, 30s, 90s, 270s, ...
+	// Exponential backoff: 10s, 20s, 40s, 80s, ...
 	backoff := time.Duration(10*(1<<uint(d.Attempts))) * time.Second
 	nextRetry := time.Now().Add(backoff)
 	if err := w.repo.UpdateDeliveryStatus(ctx, d.ID, "retrying", lastError, &nextRetry, nil); err != nil {

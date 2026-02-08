@@ -469,7 +469,9 @@ func main() {
 	applications.RegisterV1(apiV1, pgPool)
 	// Webhooks
 	webhooks.RegisterV1(apiV1, pgPool)
-	webhooks.StartWorker(context.Background(), pgPool)
+	webhookCtx, webhookCancel := context.WithCancel(context.Background())
+	defer webhookCancel()
+	webhooks.StartWorker(webhookCtx, pgPool)
 	// SCIM 2.0 provisioning
 	scimSvc := scimsvc.New(pgPool)
 	scimCtrl := scimctrl.New(scimSvc, settService)

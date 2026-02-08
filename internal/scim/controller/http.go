@@ -37,7 +37,14 @@ func (ctrl *Controller) scimBearerAuth(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		// Load the expected bearer token for this tenant
-		expected, _ := ctrl.settings.GetString(c.Request().Context(), sdomain.KeySCIMBearerToken, &tid, "")
+		expected, err := ctrl.settings.GetString(c.Request().Context(), sdomain.KeySCIMBearerToken, &tid, "")
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, domain.SCIMError{
+				Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+				Detail:  "failed to load SCIM configuration",
+				Status:  500,
+			})
+		}
 		if expected == "" {
 			return c.JSON(http.StatusForbidden, domain.SCIMError{
 				Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"},

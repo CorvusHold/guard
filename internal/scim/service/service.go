@@ -141,7 +141,7 @@ func (s *Service) CreateUser(ctx context.Context, tenantID uuid.UUID, user domai
 	if err != nil {
 		return domain.SCIMUser{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx,
 		`INSERT INTO users (id, first_name, last_name, created_at, updated_at) VALUES ($1, $2, $3, $4, $4)`,
@@ -189,8 +189,8 @@ func (s *Service) UpdateUser(ctx context.Context, tenantID uuid.UUID, userID str
 	}
 
 	_, err = s.pg.Exec(ctx,
-		`UPDATE users SET first_name = $1, last_name = $2, blocked = $3, updated_at = now() WHERE id = $4`,
-		user.Name.GivenName, user.Name.FamilyName, !user.Active, uid,
+		`UPDATE users SET first_name = $1, last_name = $2, blocked = $3, updated_at = now() WHERE id = $4 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $5)`,
+		user.Name.GivenName, user.Name.FamilyName, !user.Active, uid, tenantID,
 	)
 	if err != nil {
 		return domain.SCIMUser{}, err
@@ -210,15 +210,15 @@ func (s *Service) PatchUser(ctx context.Context, tenantID uuid.UUID, userID stri
 			val, _ := op.Value.(string)
 			switch strings.ToLower(op.Path) {
 			case "name.givenname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2`, val, uid)
+				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
 			case "name.familyname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2`, val, uid)
+				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
 			case "active":
 				boolVal := strings.EqualFold(val, "true") || val == ""
 				if bv, ok := op.Value.(bool); ok {
 					boolVal = bv
 				}
-				_, err = s.pg.Exec(ctx, `UPDATE users SET blocked = $1, updated_at = now() WHERE id = $2`, !boolVal, uid)
+				_, err = s.pg.Exec(ctx, `UPDATE users SET blocked = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, !boolVal, uid, tenantID)
 			case "username":
 				_, err = s.pg.Exec(ctx, `UPDATE auth_identities SET email = $1 WHERE user_id = $2 AND tenant_id = $3`, val, uid, tenantID)
 			default:
@@ -226,10 +226,14 @@ func (s *Service) PatchUser(ctx context.Context, tenantID uuid.UUID, userID stri
 				if strings.ToLower(op.Path) == "name" {
 					if m, ok := op.Value.(map[string]interface{}); ok {
 						if gn, ok := m["givenName"].(string); ok {
-							s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2`, gn, uid)
+							if _, err = s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, gn, uid, tenantID); err != nil {
+								return domain.SCIMUser{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
+							}
 						}
 						if fn, ok := m["familyName"].(string); ok {
-							s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2`, fn, uid)
+							if _, err = s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, fn, uid, tenantID); err != nil {
+								return domain.SCIMUser{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
+							}
 						}
 					}
 				}
@@ -237,9 +241,9 @@ func (s *Service) PatchUser(ctx context.Context, tenantID uuid.UUID, userID stri
 		case "remove":
 			switch strings.ToLower(op.Path) {
 			case "name.givenname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = '', updated_at = now() WHERE id = $1`, uid)
+				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
 			case "name.familyname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = '', updated_at = now() WHERE id = $1`, uid)
+				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
 			}
 		}
 		if err != nil {
@@ -381,7 +385,9 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 							if memberID, ok := mMap["value"].(string); ok {
 								mid, parseErr := uuid.Parse(memberID)
 								if parseErr == nil {
-									s.pg.Exec(ctx, `INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, gid, mid)
+									if _, err = s.pg.Exec(ctx, `INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, gid, mid); err != nil {
+										return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
+									}
 								}
 							}
 						}
@@ -402,7 +408,9 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 							memberID := rest[:end]
 							mid, parseErr := uuid.Parse(memberID)
 							if parseErr == nil {
-								s.pg.Exec(ctx, `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`, gid, mid)
+								if _, err = s.pg.Exec(ctx, `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`, gid, mid); err != nil {
+									return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
+								}
 							}
 						}
 					}

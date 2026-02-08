@@ -78,35 +78,19 @@ func (r *SQLCRepository) UpdateOAuthClient(ctx context.Context, id, tenantID uui
 	if in.Name != nil {
 		name = *in.Name
 	}
-	// When IsActive is nil, preserve the existing value by fetching current state.
-	if in.IsActive == nil {
-		existing, fetchErr := r.q.GetOAuthClientByID(ctx, db.GetOAuthClientByIDParams{
-			ID:       uuidToPG(id),
-			TenantID: uuidToPG(tenantID),
-		})
-		if fetchErr != nil {
-			return fetchErr
-		}
-		return r.q.UpdateOAuthClient(ctx, db.UpdateOAuthClientParams{
-			ID:           uuidToPG(id),
-			TenantID:     uuidToPG(tenantID),
-			Column3:      name,
-			RedirectUris: in.RedirectURIs,
-			Scopes:       in.Scopes,
-			GrantTypes:   in.GrantTypes,
-			LogoUri:      textToPGPtr(in.LogoURI),
-			IsActive:     existing.IsActive,
-		})
+	isActive := pgtype.Bool{}
+	if in.IsActive != nil {
+		isActive = pgtype.Bool{Bool: *in.IsActive, Valid: true}
 	}
 	return r.q.UpdateOAuthClient(ctx, db.UpdateOAuthClientParams{
 		ID:           uuidToPG(id),
 		TenantID:     uuidToPG(tenantID),
-		Column3:      name,
+		Name:         name,
 		RedirectUris: in.RedirectURIs,
 		Scopes:       in.Scopes,
 		GrantTypes:   in.GrantTypes,
 		LogoUri:      textToPGPtr(in.LogoURI),
-		IsActive:     *in.IsActive,
+		IsActive:     isActive,
 	})
 }
 
@@ -174,10 +158,11 @@ func (r *SQLCRepository) GetConsentGrant(ctx context.Context, userID, tenantID u
 	return mapConsentGrant(row), nil
 }
 
-func (r *SQLCRepository) RevokeConsentGrant(ctx context.Context, userID uuid.UUID, clientID string) error {
+func (r *SQLCRepository) RevokeConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string) error {
 	return r.q.RevokeOAuthConsentGrant(ctx, db.RevokeOAuthConsentGrantParams{
 		UserID:   uuidToPG(userID),
 		ClientID: clientID,
+		TenantID: uuidToPG(tenantID),
 	})
 }
 

@@ -224,7 +224,7 @@ func TestIntegration_ConsentPersistence(t *testing.T) {
 	scopes := []string{"openid", "profile"}
 
 	// No consent initially
-	if svc.HasConsent(ctx, userID, clientID, scopes) {
+	if svc.HasConsent(ctx, userID, tenantID, clientID, scopes) {
 		t.Error("expected no consent initially")
 	}
 
@@ -235,28 +235,28 @@ func TestIntegration_ConsentPersistence(t *testing.T) {
 	}
 
 	// Now has consent
-	if !svc.HasConsent(ctx, userID, clientID, scopes) {
+	if !svc.HasConsent(ctx, userID, tenantID, clientID, scopes) {
 		t.Error("expected consent after save")
 	}
 
 	// Subset of scopes should also pass
-	if !svc.HasConsent(ctx, userID, clientID, []string{"openid"}) {
+	if !svc.HasConsent(ctx, userID, tenantID, clientID, []string{"openid"}) {
 		t.Error("expected consent for subset of scopes")
 	}
 
 	// Superset should fail
-	if svc.HasConsent(ctx, userID, clientID, []string{"openid", "profile", "email"}) {
+	if svc.HasConsent(ctx, userID, tenantID, clientID, []string{"openid", "profile", "email"}) {
 		t.Error("expected no consent for superset of scopes")
 	}
 
 	// Revoke
-	err = svc.RevokeConsent(ctx, userID, clientID)
+	err = svc.RevokeConsent(ctx, userID, tenantID, clientID)
 	if err != nil {
 		t.Fatalf("RevokeConsent: %v", err)
 	}
 
 	// No consent after revoke
-	if svc.HasConsent(ctx, userID, clientID, scopes) {
+	if svc.HasConsent(ctx, userID, tenantID, clientID, scopes) {
 		t.Error("expected no consent after revoke")
 	}
 }
