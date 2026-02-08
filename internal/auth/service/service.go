@@ -1549,11 +1549,11 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 		return errors.New("token expired or already used")
 	}
 
-	if err := s.repo.ConsumeEmailVerificationToken(ctx, tokenHash); err != nil {
+	if err := s.repo.SetUserEmailVerified(ctx, tok.UserID, true); err != nil {
 		return err
 	}
 
-	if err := s.repo.SetUserEmailVerified(ctx, tok.UserID, true); err != nil {
+	if err := s.repo.ConsumeEmailVerificationToken(ctx, tokenHash); err != nil {
 		return err
 	}
 

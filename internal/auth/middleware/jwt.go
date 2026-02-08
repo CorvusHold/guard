@@ -67,7 +67,7 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 				default:
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{"HS256", "ES256"}))
+			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{cfg.JWTSigningAlgorithm}))
 			if err != nil || !tok.Valid {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			}
@@ -91,7 +91,7 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 	}
 }
 
-// loadECPublicKey reads an EC private key PEM file and extracts the public key.
+// loadECPublicKey reads a PEM file containing an EC private or public key and returns the public key.
 func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -108,7 +108,7 @@ func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 			return nil, err
 		}
 		return &privKey.PublicKey, nil
-	case "PUBLIC KEY", "EC PUBLIC KEY":
+	case "PUBLIC KEY":
 		pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
 			return nil, err
@@ -119,7 +119,7 @@ func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 		}
 		return pubKey, nil
 	default:
-		return nil, fmt.Errorf("expected EC PRIVATE KEY or EC PUBLIC KEY PEM block, got %q in %s", block.Type, path)
+		return nil, fmt.Errorf("expected EC PRIVATE KEY or PUBLIC KEY PEM block, got %q in %s", block.Type, path)
 	}
 }
 

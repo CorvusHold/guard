@@ -27,9 +27,12 @@ SET consumed_at = now()
 WHERE code_hash = $1 AND consumed_at IS NULL
 `
 
-func (q *Queries) ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash string) error {
-	_, err := q.db.Exec(ctx, consumeOAuthAuthorizationCode, codeHash)
-	return err
+func (q *Queries) ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash string) (int64, error) {
+	result, err := q.db.Exec(ctx, consumeOAuthAuthorizationCode, codeHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createOAuthAuthorizationCode = `-- name: CreateOAuthAuthorizationCode :one

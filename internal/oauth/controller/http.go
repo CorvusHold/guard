@@ -326,7 +326,10 @@ func (h *Controller) authorize(c echo.Context) error {
 		if err != nil {
 			return redirectWithError(c, in.RedirectURI, in.State, "server_error", "failed to create authorization code")
 		}
-		u, _ := url.Parse(result.RedirectURI)
+		u, err := url.Parse(result.RedirectURI)
+		if err != nil {
+			return redirectWithError(c, in.RedirectURI, in.State, "server_error", "invalid redirect URI")
+		}
 		q := u.Query()
 		q.Set("code", result.Code)
 		if result.State != "" {
@@ -461,7 +464,10 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 	_ = h.svc.SaveConsent(c.Request().Context(), userID, tenantID, req.ClientID, scopes)
 
 	// Redirect with code
-	redirectURL, _ := url.Parse(result.RedirectURI)
+	redirectURL, err := url.Parse(result.RedirectURI)
+	if err != nil {
+		return redirectWithError(c, req.RedirectURI, req.State, "server_error", "invalid redirect URI")
+	}
 	q := redirectURL.Query()
 	q.Set("code", result.Code)
 	if result.State != "" {
@@ -753,7 +759,7 @@ func (h *Controller) extractAuthFromRequest(c echo.Context) (uuid.UUID, uuid.UUI
 	auth := c.Request().Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		tokenStr := strings.TrimPrefix(auth, "Bearer ")
-		userID, tenantID, ok := h.parseAccessToken(tokenStr)
+		userID, tenantID, ok := h.parseAccessToken(c.Request().Context(), tokenStr)
 		if ok {
 			return userID, tenantID, true
 		}
@@ -762,7 +768,7 @@ func (h *Controller) extractAuthFromRequest(c echo.Context) (uuid.UUID, uuid.UUI
 	// Try cookie
 	cookie, err := c.Cookie("guard_access_token")
 	if err == nil && cookie.Value != "" {
-		userID, tenantID, ok := h.parseAccessToken(cookie.Value)
+		userID, tenantID, ok := h.parseAccessToken(c.Request().Context(), cookie.Value)
 		if ok {
 			return userID, tenantID, true
 		}
@@ -771,9 +777,9 @@ func (h *Controller) extractAuthFromRequest(c echo.Context) (uuid.UUID, uuid.UUI
 	return uuid.Nil, uuid.Nil, false
 }
 
-func (h *Controller) parseAccessToken(tokenStr string) (uuid.UUID, uuid.UUID, bool) {
+func (h *Controller) parseAccessToken(ctx context.Context, tokenStr string) (uuid.UUID, uuid.UUID, bool) {
 	// Verify the JWT signature via the auth service — these routes are NOT behind auth middleware.
-	introspection, err := h.authSvc.Introspect(context.TODO(), tokenStr)
+	introspection, err := h.authSvc.Introspect(ctx, tokenStr)
 	if err != nil || !introspection.Active {
 		return uuid.Nil, uuid.Nil, false
 	}

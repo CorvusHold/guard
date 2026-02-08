@@ -40,7 +40,7 @@ func (s *Service) InviteUser(ctx context.Context, in domain.InviteUserInput) (do
 
 	// Get invitation TTL from settings (default 7 days)
 	ttl, _ := s.settings.GetDuration(ctx, sdomain.KeyInvitationTTL, in.TenantID, 7*24*time.Hour)
-	expiresAt := time.Now().Add(ttl)
+	expiresAt := time.Now().UTC().Add(ttl)
 
 	invID := uuid.New()
 	inv, err := s.repo.CreateInvitation(ctx, invID, in.TenantID, in.Email, tokenHash, in.Role, &in.InvitedBy, expiresAt)
@@ -79,16 +79,14 @@ func (s *Service) InviteUser(ctx context.Context, in domain.InviteUserInput) (do
 		}
 		inviteURL := baseURL + "/accept-invitation?token=" + rawToken
 		subject := "You've been invited to join"
-		body := "You have been invited to join.\n\n" +
+		intro := "You have been invited to join."
+		if inv.Role != "" {
+			intro = "You have been invited with the role: " + inv.Role + "."
+		}
+		body := intro + "\n\n" +
 			"Click the link below to accept the invitation:\n" +
 			inviteURL + "\n\n" +
 			"This invitation expires at " + expiresAt.Format("2006-01-02 15:04 UTC") + "."
-		if inv.Role != "" {
-			body = "You have been invited with the role: " + inv.Role + ".\n\n" +
-				"Click the link below to accept the invitation:\n" +
-				inviteURL + "\n\n" +
-				"This invitation expires at " + expiresAt.Format("2006-01-02 15:04 UTC") + "."
-		}
 		if err := s.emailSender.Send(ctx, *in.TenantID, in.Email, subject, body); err != nil {
 			s.log.Warn().Err(err).Str("invitation_id", invID.String()).Msg("failed to send invitation email")
 		}
@@ -240,7 +238,9 @@ func (s *Service) runAcceptInvitationOps(ctx context.Context, repo domain.Reposi
 	// If a role was specified, assign it via RBAC
 	if inv.Role != "" {
 		role, err := repo.GetRoleByName(ctx, *inv.TenantID, inv.Role)
-		if err == nil && role.ID != uuid.Nil {
+		if err != nil {
+			s.log.Warn().Err(err).Str("role", inv.Role).Str("tenant_id", inv.TenantID.String()).Msg("role not found, skipping assignment on invitation acceptance")
+		} else if role.ID != uuid.Nil {
 			if err := repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID); err != nil {
 				s.log.Warn().Err(err).Str("role", inv.Role).Str("user_id", userID.String()).Msg("failed to assign role on invitation acceptance")
 			}
@@ -320,7 +320,7 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 
 	// Build login link for event and welcome email
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
-	loginLink := baseURL + "/"
+	loginLink := strings.TrimRight(baseURL, "/") + "/"
 
 	// Send welcome email if requested and enabled
 	if in.SendWelcome && s.isEmailEnabled(ctx, &in.TenantID) && s.emailSender != nil {
@@ -338,7 +338,6 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 		UserID:   userID,
 		Meta: map[string]string{
 			"email":        in.Email,
-			"user_id":      userID.String(),
 			"login_link":   loginLink,
 			"send_welcome": strconv.FormatBool(in.SendWelcome),
 		},
@@ -394,7 +393,11 @@ func (s *Service) runAdminCreateUserOps(ctx context.Context, repo domain.Reposit
 	}
 	for _, roleName := range roles {
 		role, err := repo.GetRoleByName(ctx, in.TenantID, roleName)
-		if err == nil && role.ID != uuid.Nil {
+		if err != nil {
+			s.log.Warn().Err(err).Str("role", roleName).Str("tenant_id", in.TenantID.String()).Msg("role not found, skipping assignment")
+			continue
+		}
+		if role.ID != uuid.Nil {
 			if err := repo.AddUserRole(ctx, userID, in.TenantID, role.ID); err != nil {
 				s.log.Warn().Err(err).Str("role", roleName).Str("user_id", userID.String()).Msg("failed to assign role to admin-created user")
 			}

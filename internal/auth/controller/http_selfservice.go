@@ -211,18 +211,21 @@ func (h *Controller) selfRegisterPasskey(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	credID, err := base64.URLEncoding.DecodeString(req.CredentialID)
+	if err := c.Validate(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "credential_id and public_key are required"})
+	}
+	credID, err := base64.RawURLEncoding.DecodeString(req.CredentialID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid credential_id encoding"})
 	}
-	pubKey, err := base64.URLEncoding.DecodeString(req.PublicKey)
+	pubKey, err := base64.RawURLEncoding.DecodeString(req.PublicKey)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid public_key encoding"})
 	}
 	var aaguid []byte
 	if req.AAGUID != "" {
 		var aaguidErr error
-		aaguid, aaguidErr = base64.URLEncoding.DecodeString(req.AAGUID)
+		aaguid, aaguidErr = base64.RawURLEncoding.DecodeString(req.AAGUID)
 		if aaguidErr != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid aaguid encoding"})
 		}

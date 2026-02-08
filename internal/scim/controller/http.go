@@ -10,6 +10,7 @@ import (
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog/log"
 )
 
 // Controller handles SCIM 2.0 HTTP requests.
@@ -129,7 +130,8 @@ func (ctrl *Controller) listUsers(c echo.Context) error {
 	}
 	resp, err := ctrl.svc.ListUsers(c.Request().Context(), tid, filter, startIndex, count)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, domain.SCIMError{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"}, Detail: err.Error(), Status: 500})
+		log.Error().Err(err).Str("tenant_id", tid.String()).Msg("scim: list users failed")
+		return c.JSON(http.StatusInternalServerError, domain.SCIMError{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"}, Detail: "Internal Server Error", Status: 500})
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -180,7 +182,11 @@ func (ctrl *Controller) createUser(c echo.Context) error {
 	}
 	created, err := ctrl.svc.CreateUser(c.Request().Context(), tid, user)
 	if err != nil {
-		return c.JSON(http.StatusConflict, domain.SCIMError{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"}, Detail: err.Error(), Status: 409})
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
+			return c.JSON(http.StatusConflict, domain.SCIMError{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"}, Detail: "User already exists", Status: 409})
+		}
+		log.Error().Err(err).Str("tenant_id", tid.String()).Msg("scim: create user failed")
+		return c.JSON(http.StatusInternalServerError, domain.SCIMError{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:Error"}, Detail: "Internal Server Error", Status: 500})
 	}
 	return c.JSON(http.StatusCreated, created)
 }

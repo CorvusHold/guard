@@ -50,7 +50,7 @@ INSERT INTO oauth_authorization_codes (
 SELECT * FROM oauth_authorization_codes
 WHERE code_hash = $1 AND consumed_at IS NULL AND expires_at > now();
 
--- name: ConsumeOAuthAuthorizationCode :exec
+-- name: ConsumeOAuthAuthorizationCode :execrows
 UPDATE oauth_authorization_codes
 SET consumed_at = now()
 WHERE code_hash = $1 AND consumed_at IS NULL;

@@ -10,6 +10,7 @@ import (
 
 	"github.com/corvusHold/guard/internal/webhooks/domain"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // Service implements webhook business logic.
@@ -75,8 +76,11 @@ func (s *Service) EnqueueEvent(ctx context.Context, tenantID uuid.UUID, eventTyp
 			MaxAttempts: 5,
 			CreatedAt:   time.Now(),
 		}
-		if err := s.repo.CreateDelivery(ctx, d); err != nil && firstErr == nil {
-			firstErr = err
+		if err := s.repo.CreateDelivery(ctx, d); err != nil {
+			log.Error().Err(err).Str("webhook_id", wh.ID.String()).Str("event_type", eventType).Msg("webhook: failed to enqueue delivery")
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 	return firstErr

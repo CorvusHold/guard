@@ -2,10 +2,17 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrTokenInvalid is returned when a verification token is not found, already consumed, or expired.
+var ErrTokenInvalid = errors.New("token not found, already used, or expired")
+
+// ErrNotFound is returned when a requested resource does not exist.
+var ErrNotFound = errors.New("not found")
 
 // Cookie names shared across auth and SSO controllers.
 const (

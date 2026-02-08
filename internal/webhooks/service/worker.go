@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/corvusHold/guard/internal/webhooks/domain"
@@ -22,12 +24,43 @@ type Worker struct {
 
 // NewWorker creates a new webhook delivery worker.
 func NewWorker(repo domain.Repository) *Worker {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address: %s", addr)
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			for _, ip := range ips {
+				if isBlockedIP(ip.IP) {
+					return nil, fmt.Errorf("webhook target resolves to blocked IP: %s", ip.IP)
+				}
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
 	return &Worker{
 		repo:      repo,
-		client:    &http.Client{Timeout: 10 * time.Second},
+		client:    &http.Client{Timeout: 10 * time.Second, Transport: transport},
 		interval:  5 * time.Second,
 		batchSize: 50,
 	}
+}
+
+// isBlockedIP returns true if the IP is private, loopback, link-local, or a cloud metadata address.
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	// Block cloud metadata endpoint 169.254.169.254
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return true
+	}
+	return false
 }
 
 // Run starts the worker loop. It blocks until the context is cancelled.
@@ -62,6 +95,17 @@ func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
 	if err != nil {
 		log.Error().Err(err).Str("delivery_id", d.ID.String()).Msg("webhook worker: failed to get webhook")
 		w.markFailed(ctx, d, fmt.Sprintf("webhook not found: %s", err.Error()))
+		return
+	}
+
+	// Validate URL before making request (SSRF protection)
+	parsedURL, err := url.Parse(wh.URL)
+	if err != nil || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") {
+		w.markFailed(ctx, d, fmt.Sprintf("invalid or disallowed webhook URL: %s", wh.URL))
+		return
+	}
+	if parsedURL.Host == "" {
+		w.markFailed(ctx, d, "webhook URL has no host")
 		return
 	}
 
@@ -104,8 +148,11 @@ func (w *Worker) scheduleRetry(ctx context.Context, d domain.Delivery, lastError
 		w.markFailed(ctx, d, lastError)
 		return
 	}
-	// Exponential backoff: 10s, 20s, 40s, 80s, ...
+	// Exponential backoff: 10s, 20s, 40s, 80s, ... capped at 10 minutes
 	backoff := time.Duration(10*(1<<uint(d.Attempts))) * time.Second
+	if backoff > 10*time.Minute {
+		backoff = 10 * time.Minute
+	}
 	nextRetry := time.Now().Add(backoff)
 	if err := w.repo.UpdateDeliveryStatus(ctx, d.ID, "retrying", lastError, &nextRetry, nil); err != nil {
 		log.Error().Err(err).Str("delivery_id", d.ID.String()).Msg("webhook worker: failed to schedule retry")

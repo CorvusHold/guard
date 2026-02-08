@@ -797,7 +797,7 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/password/change", h.changePassword, rlToken)
 
 	// Email verification
-	g.POST("/verify-email", h.verifyEmail)
+	g.POST("/verify-email", h.verifyEmail, rlToken)
 
 	// Magic-link auth
 	g.POST("/magic/send", h.sendMagic, rlMagic)
@@ -1806,7 +1806,7 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 func (h *Controller) adminBlockUser(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -1845,7 +1845,7 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 func (h *Controller) adminUnblockUser(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -1884,7 +1884,7 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 func (h *Controller) adminUnlockAccount(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -1896,13 +1896,15 @@ func (h *Controller) adminUnlockAccount(c echo.Context) error {
 	if err := h.svc.UnlockAccount(c.Request().Context(), userID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
-		Type:     "auth.admin.user.unlocked",
-		TenantID: admin.TenantID,
-		UserID:   admin.UserID,
-		Meta:     map[string]string{"target_user_id": userID.String()},
-		Time:     time.Now(),
-	})
+	if h.pub != nil {
+		_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+			Type:     "auth.admin.user.unlocked",
+			TenantID: admin.TenantID,
+			UserID:   admin.UserID,
+			Meta:     map[string]string{"target_user_id": userID.String()},
+			Time:     time.Now(),
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1921,7 +1923,7 @@ func (h *Controller) adminUnlockAccount(c echo.Context) error {
 func (h *Controller) adminVerifyEmail(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -1960,7 +1962,7 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 	admin, err := h.requireAdmin(c)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userIDStr := c.Param("id")

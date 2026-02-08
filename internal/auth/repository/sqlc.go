@@ -1032,7 +1032,7 @@ func (r *SQLCRepository) ConsumeEmailVerificationToken(ctx context.Context, toke
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("token not found, already used, or expired")
+		return domain.ErrTokenInvalid
 	}
 	return nil
 }

@@ -204,34 +204,40 @@ func (s *Service) PatchUser(ctx context.Context, tenantID uuid.UUID, userID stri
 		return domain.SCIMUser{}, fmt.Errorf("invalid user id")
 	}
 
+	tx, err := s.pg.Begin(ctx)
+	if err != nil {
+		return domain.SCIMUser{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	for _, op := range ops {
 		switch strings.ToLower(op.Op) {
 		case "replace", "add":
 			val, _ := op.Value.(string)
 			switch strings.ToLower(op.Path) {
 			case "name.givenname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
 			case "name.familyname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, val, uid, tenantID)
 			case "active":
 				boolVal := strings.EqualFold(val, "true") || val == ""
 				if bv, ok := op.Value.(bool); ok {
 					boolVal = bv
 				}
-				_, err = s.pg.Exec(ctx, `UPDATE users SET blocked = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, !boolVal, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE users SET blocked = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, !boolVal, uid, tenantID)
 			case "username":
-				_, err = s.pg.Exec(ctx, `UPDATE auth_identities SET email = $1 WHERE user_id = $2 AND tenant_id = $3`, val, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE auth_identities SET email = $1 WHERE user_id = $2 AND tenant_id = $3`, val, uid, tenantID)
 			default:
 				// Handle nested name object: {"op":"replace","path":"name","value":{"givenName":"X","familyName":"Y"}}
 				if strings.ToLower(op.Path) == "name" {
 					if m, ok := op.Value.(map[string]interface{}); ok {
 						if gn, ok := m["givenName"].(string); ok {
-							if _, err = s.pg.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, gn, uid, tenantID); err != nil {
+							if _, err = tx.Exec(ctx, `UPDATE users SET first_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, gn, uid, tenantID); err != nil {
 								return domain.SCIMUser{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 							}
 						}
 						if fn, ok := m["familyName"].(string); ok {
-							if _, err = s.pg.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, fn, uid, tenantID); err != nil {
+							if _, err = tx.Exec(ctx, `UPDATE users SET last_name = $1, updated_at = now() WHERE id = $2 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $3)`, fn, uid, tenantID); err != nil {
 								return domain.SCIMUser{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 							}
 						}
@@ -241,14 +247,18 @@ func (s *Service) PatchUser(ctx context.Context, tenantID uuid.UUID, userID stri
 		case "remove":
 			switch strings.ToLower(op.Path) {
 			case "name.givenname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET first_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE users SET first_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
 			case "name.familyname":
-				_, err = s.pg.Exec(ctx, `UPDATE users SET last_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE users SET last_name = '', updated_at = now() WHERE id = $1 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $2)`, uid, tenantID)
 			}
 		}
 		if err != nil {
 			return domain.SCIMUser{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.SCIMUser{}, err
 	}
 	return s.GetUser(ctx, tenantID, userID)
 }
@@ -258,8 +268,19 @@ func (s *Service) DeleteUser(ctx context.Context, tenantID uuid.UUID, userID str
 	if err != nil {
 		return fmt.Errorf("invalid user id")
 	}
-	_, err = s.pg.Exec(ctx, `DELETE FROM user_tenants WHERE user_id = $1 AND tenant_id = $2`, uid, tenantID)
-	return err
+	tx, err := s.pg.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `DELETE FROM auth_identities WHERE user_id = $1 AND tenant_id = $2`, uid, tenantID); err != nil {
+		return fmt.Errorf("delete auth_identities: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM user_tenants WHERE user_id = $1 AND tenant_id = $2`, uid, tenantID); err != nil {
+		return fmt.Errorf("delete user_tenants: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Service) GetGroup(ctx context.Context, tenantID uuid.UUID, groupID string) (domain.SCIMGroup, error) {
@@ -385,6 +406,11 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 							if memberID, ok := mMap["value"].(string); ok {
 								mid, parseErr := uuid.Parse(memberID)
 								if parseErr == nil {
+									// Verify user belongs to the same tenant before adding to group
+									var exists bool
+									if checkErr := s.pg.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_tenants WHERE user_id = $1 AND tenant_id = $2)`, mid, tenantID).Scan(&exists); checkErr != nil || !exists {
+										return domain.SCIMGroup{}, fmt.Errorf("user %s not found in tenant", mid)
+									}
 									if _, err = s.pg.Exec(ctx, `INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, gid, mid); err != nil {
 										return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 									}

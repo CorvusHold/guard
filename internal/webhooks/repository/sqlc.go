@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/corvusHold/guard/internal/webhooks/domain"
@@ -81,8 +82,14 @@ func (r *Repository) UpdateWebhook(ctx context.Context, id, tenantID uuid.UUID, 
 }
 
 func (r *Repository) DeleteWebhook(ctx context.Context, id, tenantID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2`, id, tenantID)
-	return err
+	tag, err := r.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2`, id, tenantID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("webhook not found")
+	}
+	return nil
 }
 
 func (r *Repository) CreateDelivery(ctx context.Context, d domain.Delivery) error {

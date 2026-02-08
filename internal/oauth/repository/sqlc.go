@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -130,7 +131,14 @@ func (r *SQLCRepository) GetAuthorizationCodeByHash(ctx context.Context, codeHas
 }
 
 func (r *SQLCRepository) ConsumeAuthorizationCode(ctx context.Context, codeHash string) error {
-	return r.q.ConsumeOAuthAuthorizationCode(ctx, codeHash)
+	rows, err := r.q.ConsumeOAuthAuthorizationCode(ctx, codeHash)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("authorization code not found, already used, or expired")
+	}
+	return nil
 }
 
 func (r *SQLCRepository) UpsertConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string, scopes []string) (domain.ConsentGrant, error) {
