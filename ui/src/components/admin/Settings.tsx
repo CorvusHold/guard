@@ -14,6 +14,8 @@ import UserRolesPanel from './rbac/UserRolesPanel'
 import MyMfaPanel from './users/MyMfaPanel'
 import MySessionsPanel from './users/MySessionsPanel'
 import UsersPanel from './users/UsersPanel'
+import InvitationsPanel from './users/InvitationsPanel'
+import CreateUserPanel from './users/CreateUserPanel'
 import TenantManagementPanel from './tenants/TenantManagementPanel'
 import TenantSettingsPanel from './tenants/TenantSettingsPanel'
 import SsoProvidersPanel from './sso/SsoProvidersPanel'
@@ -206,18 +208,46 @@ export default function AdminSettings() {
         )}
 
         {activeTab === 'users' && (
-          <div className="rounded-xl border p-4 space-y-3">
-            <h2 className="text-base font-medium">Users Management</h2>
-            <div className="text-sm text-muted-foreground">
-              List users for this tenant, update names, and block/unblock accounts.
-            </div>
-            {!tenantId ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border p-4 space-y-3">
+              <h2 className="text-base font-medium">Users Management</h2>
               <div className="text-sm text-muted-foreground">
-                Enter a tenant ID above to manage users.
+                List users for this tenant, update names, and block/unblock accounts.
               </div>
-            ) : (
-              <UsersPanel tenantId={tenantId} />
-            )}
+              {!tenantId ? (
+                <div className="text-sm text-muted-foreground">
+                  Enter a tenant ID above to manage users.
+                </div>
+              ) : (
+                <UsersPanel tenantId={tenantId} />
+              )}
+            </div>
+            <div className="rounded-xl border p-4 space-y-3">
+              <h2 className="text-base font-medium">Invitations</h2>
+              <div className="text-sm text-muted-foreground">
+                Invite users to join this tenant via email.
+              </div>
+              {!tenantId ? (
+                <div className="text-sm text-muted-foreground">
+                  Enter a tenant ID above to manage invitations.
+                </div>
+              ) : (
+                <InvitationsPanel tenantId={tenantId} />
+              )}
+            </div>
+            <div className="rounded-xl border p-4 space-y-3">
+              <h2 className="text-base font-medium">Create User</h2>
+              <div className="text-sm text-muted-foreground">
+                Directly create a new user account for this tenant.
+              </div>
+              {!tenantId ? (
+                <div className="text-sm text-muted-foreground">
+                  Enter a tenant ID above to create users.
+                </div>
+              ) : (
+                <CreateUserPanel tenantId={tenantId} />
+              )}
+            </div>
           </div>
         )}
 

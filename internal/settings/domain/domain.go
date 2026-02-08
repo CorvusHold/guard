@@ -74,6 +74,9 @@ const (
 	KeyRLTokenWindow  = "auth.ratelimit.token.window"
 	KeyRLMFALimit     = "auth.ratelimit.mfa.limit"
 	KeyRLMFAWindow    = "auth.ratelimit.mfa.window"
+
+	// Invitation settings
+	KeyInvitationTTL = "auth.invitation_ttl" // Duration string, default 7 days (e.g., "168h")
 )
 
 // Settings API rate limiting keys (optional, support tenant overrides).

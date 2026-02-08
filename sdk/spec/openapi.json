@@ -478,6 +478,277 @@
                 }
             }
         },
+        "/api/v1/auth/admin/invitations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all invitations for the specified tenant.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "List invitations for a tenant (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID (UUID)",
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, accepted, expired, revoked)",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.invitationsListResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates an invitation for a user to join a tenant. Sends an invitation email with a link to accept.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Invite a user to join a tenant (admin-only)",
+                "parameters": [
+                    {
+                        "description": "Invitation details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.inviteUserReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.inviteUserResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/admin/invitations/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes an invitation.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Delete an invitation (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/admin/invitations/{id}/revoke": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revokes a pending invitation so it can no longer be accepted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Revoke an invitation (admin-only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/admin/rbac/permissions": {
             "get": {
                 "security": [
@@ -1245,6 +1516,79 @@
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new user account directly in a tenant without going through the invitation flow.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.admin"
+                ],
+                "summary": "Create a user directly in a tenant (admin-only)",
+                "parameters": [
+                    {
+                        "description": "User details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.adminCreateUserReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.adminCreateUserResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/auth/admin/users/{id}": {
@@ -1805,6 +2149,96 @@
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/invitations": {
+            "get": {
+                "description": "Returns invitation details for a given token. Used to display invitation info before accepting.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.invitation"
+                ],
+                "summary": "Get invitation details by token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.invitationResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/invitations/accept": {
+            "post": {
+                "description": "Accepts an invitation using the token and creates a new user account. Returns access tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth.invitation"
+                ],
+                "summary": "Accept an invitation and create account",
+                "parameters": [
+                    {
+                        "description": "Invitation acceptance details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.acceptInvitationReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.authExchangeResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -4475,6 +4909,122 @@
                 }
             }
         },
+        "controller.acceptInvitationReq": {
+            "type": "object",
+            "required": [
+                "password",
+                "token"
+            ],
+            "properties": {
+                "first_name": {
+                    "description": "Optional first name",
+                    "type": "string"
+                },
+                "last_name": {
+                    "description": "Optional last name",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Password for the new account (min 8 chars)",
+                    "type": "string",
+                    "minLength": 8
+                },
+                "token": {
+                    "description": "Invitation token from the invite URL",
+                    "type": "string"
+                }
+            }
+        },
+        "controller.adminCreateUserReq": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "tenant_id"
+            ],
+            "properties": {
+                "email": {
+                    "description": "User email address",
+                    "type": "string"
+                },
+                "email_verified": {
+                    "description": "Mark email as verified",
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "description": "Optional first name",
+                    "type": "string"
+                },
+                "last_name": {
+                    "description": "Optional last name",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Password (min 8 chars)",
+                    "type": "string",
+                    "minLength": 8
+                },
+                "roles": {
+                    "description": "Optional roles to assign",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "send_welcome": {
+                    "description": "Send welcome email to user",
+                    "type": "boolean"
+                },
+                "tenant_id": {
+                    "description": "Tenant ID (UUID)",
+                    "type": "string"
+                }
+            }
+        },
+        "controller.adminCreateUserResp": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Creation timestamp",
+                    "type": "string"
+                },
+                "email": {
+                    "description": "User email",
+                    "type": "string"
+                },
+                "email_verified": {
+                    "description": "Whether email is verified",
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "description": "First name",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "User ID",
+                    "type": "string"
+                },
+                "is_active": {
+                    "description": "Whether user is active",
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "description": "Last name",
+                    "type": "string"
+                },
+                "roles": {
+                    "description": "Assigned roles",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant_id": {
+                    "description": "Tenant ID",
+                    "type": "string"
+                }
+            }
+        },
         "controller.adminUpdateNamesReq": {
             "type": "object",
             "properties": {
@@ -4897,6 +5447,90 @@
             "type": "object",
             "properties": {
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.invitationResp": {
+            "type": "object",
+            "properties": {
+                "accepted_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.invitationsListResp": {
+            "type": "object",
+            "properties": {
+                "invitations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.invitationResp"
+                    }
+                }
+            }
+        },
+        "controller.inviteUserReq": {
+            "type": "object",
+            "required": [
+                "email",
+                "tenant_id"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.inviteUserResp": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invite_url": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 }
             }

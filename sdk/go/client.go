@@ -163,6 +163,7 @@ func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
 		req.Header.Set("X-Auth-Mode", "cookie")
 	} else {
 		// In bearer mode, attach Authorization header if token present
+		req.Header.Set("X-Auth-Mode", "bearer")
 		access, _ := c.tokens.Get(context.Background())
 		if access != "" {
 			req.Header.Set("Authorization", "Bearer "+access)
