@@ -24,7 +24,8 @@ type APIKeyValidator interface {
 	ValidateAPIKey(ctx context.Context, rawKey string) (domain.APIKey, error)
 }
 
-// RequireAPIKey is an Echo middleware that validates API keys via the X-Guard-API-Key header.
+// RequireAPIKey is an Echo middleware that validates API keys via the X-Guard-API-Key header
+// or Authorization: Bearer gk_* header.
 // If the header is present and valid, the request context is enriched with the API key metadata.
 // If the header is absent, the middleware passes through (allowing bearer token auth to handle it).
 // If the header is present but invalid, the request is rejected with 401.
@@ -32,6 +33,15 @@ func RequireAPIKey(validator APIKeyValidator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			rawKey := strings.TrimSpace(c.Request().Header.Get(HeaderAPIKey))
+
+			// Also check Authorization: Bearer gk_* for API key auth
+			if rawKey == "" {
+				auth := strings.TrimSpace(c.Request().Header.Get("Authorization"))
+				if strings.HasPrefix(auth, "Bearer gk_") {
+					rawKey = strings.TrimPrefix(auth, "Bearer ")
+				}
+			}
+
 			if rawKey == "" {
 				return next(c)
 			}
@@ -80,4 +90,27 @@ func APIKeyHasScope(ctx context.Context, scope string) bool {
 		}
 	}
 	return false
+}
+
+// RequireScopes returns an Echo middleware that enforces the given scopes on API key-authenticated requests.
+// If the request is not API key-authenticated (e.g., bearer token), it passes through.
+// If the request is API key-authenticated but lacks the required scope, it returns 403.
+func RequireScopes(scopes ...string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			_, isAPIKey := APIKeyFromContext(c.Request().Context())
+			if !isAPIKey {
+				return next(c)
+			}
+			for _, scope := range scopes {
+				if !APIKeyHasScope(c.Request().Context(), scope) {
+					return c.JSON(http.StatusForbidden, map[string]string{
+						"error":          "insufficient scope",
+						"required_scope": scope,
+					})
+				}
+			}
+			return next(c)
+		}
+	}
 }

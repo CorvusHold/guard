@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -233,7 +234,9 @@ func (s *Service) runAcceptInvitationOps(ctx context.Context, repo domain.Reposi
 	if inv.Role != "" {
 		role, err := repo.GetRoleByName(ctx, *inv.TenantID, inv.Role)
 		if err == nil && role.ID != uuid.Nil {
-			_ = repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID)
+			if err := repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID); err != nil {
+				s.log.Warn().Err(err).Str("role", inv.Role).Str("user_id", userID.String()).Msg("failed to assign role on invitation acceptance")
+			}
 		}
 	}
 
@@ -291,53 +294,98 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 		}
 	}
 
-	// Create user
-	if err := s.repo.CreateUser(ctx, userID, in.FirstName, in.LastName, roles); err != nil {
-		return domain.User{}, err
-	}
-
-	// Set email verified if requested
-	if in.EmailVerified {
-		if err := s.repo.SetUserEmailVerified(ctx, userID, true); err != nil {
-			return domain.User{}, err
-		}
-	}
-
-	// Hash password
+	// Hash password before entering transaction
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return domain.User{}, err
 	}
 
-	// Create auth identity
-	if err := s.repo.CreateAuthIdentity(ctx, authID, userID, in.TenantID, in.Email, string(hash)); err != nil {
+	// Execute all DB mutations in a transaction to avoid orphaned records on partial failure
+	if err := s.adminCreateUserTx(ctx, userID, authID, in, roles, string(hash)); err != nil {
 		return domain.User{}, err
 	}
 
-	// Add user to tenant
-	if err := s.repo.AddUserToTenant(ctx, userID, in.TenantID); err != nil {
-		return domain.User{}, err
-	}
+	// Build login link for event and welcome email
+	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
+	loginLink := baseURL + "/"
 
-	// Assign roles via RBAC if specified
-	for _, roleName := range roles {
-		role, err := s.repo.GetRoleByName(ctx, in.TenantID, roleName)
-		if err == nil && role.ID != uuid.Nil {
-			_ = s.repo.AddUserRole(ctx, userID, in.TenantID, role.ID)
+	// Send welcome email if requested and enabled
+	if in.SendWelcome && s.isEmailEnabled(ctx, &in.TenantID) && s.emailSender != nil {
+		subject := "Welcome — your account has been created"
+		body := "Your account has been created. You can sign in at:\n\n" + loginLink
+		if err := s.emailSender.Send(ctx, in.TenantID, in.Email, subject, body); err != nil {
+			s.log.Warn().Err(err).Str("email", in.Email).Msg("failed to send welcome email")
 		}
 	}
 
-	// Publish audit event
+	// Always publish event with full data so webhook consumers can send their own emails
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.admin.user.created",
 		TenantID: in.TenantID,
+		UserID:   userID,
 		Meta: map[string]string{
-			"email":   in.Email,
-			"user_id": userID.String(),
+			"email":        in.Email,
+			"user_id":      userID.String(),
+			"login_link":   loginLink,
+			"send_welcome": strconv.FormatBool(in.SendWelcome),
 		},
 		Time: time.Now(),
 	})
 
 	// Retrieve and return the created user
 	return s.repo.GetUserByID(ctx, userID)
+}
+
+// adminCreateUserTx wraps AdminCreateUser DB mutations in a transaction.
+// Falls back to sequential calls for test fakes that don't support BeginTx.
+func (s *Service) adminCreateUserTx(ctx context.Context, userID, authID uuid.UUID, in domain.AdminCreateUserInput, roles []string, passwordHash string) error {
+	type txStarter interface {
+		BeginTx(ctx context.Context) (interface {
+			Rollback(context.Context) error
+			Commit(context.Context) error
+		}, domain.Repository, error)
+	}
+
+	if txRepo, ok := s.repo.(txStarter); ok {
+		tx, repo, err := txRepo.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if err := s.runAdminCreateUserOps(ctx, repo, userID, authID, in, roles, passwordHash); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
+	// Fallback: no transaction support (test fakes)
+	return s.runAdminCreateUserOps(ctx, s.repo, userID, authID, in, roles, passwordHash)
+}
+
+// runAdminCreateUserOps performs the actual DB operations for admin user creation.
+func (s *Service) runAdminCreateUserOps(ctx context.Context, repo domain.Repository, userID, authID uuid.UUID, in domain.AdminCreateUserInput, roles []string, passwordHash string) error {
+	if err := repo.CreateUser(ctx, userID, in.FirstName, in.LastName, roles); err != nil {
+		return err
+	}
+	if in.EmailVerified {
+		if err := repo.SetUserEmailVerified(ctx, userID, true); err != nil {
+			return err
+		}
+	}
+	if err := repo.CreateAuthIdentity(ctx, authID, userID, in.TenantID, in.Email, passwordHash); err != nil {
+		return err
+	}
+	if err := repo.AddUserToTenant(ctx, userID, in.TenantID); err != nil {
+		return err
+	}
+	for _, roleName := range roles {
+		role, err := repo.GetRoleByName(ctx, in.TenantID, roleName)
+		if err == nil && role.ID != uuid.Nil {
+			if err := repo.AddUserRole(ctx, userID, in.TenantID, role.ID); err != nil {
+				s.log.Warn().Err(err).Str("role", roleName).Str("user_id", userID.String()).Msg("failed to assign role to admin-created user")
+			}
+		}
+	}
+	return nil
 }

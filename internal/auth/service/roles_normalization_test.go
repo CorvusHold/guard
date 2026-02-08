@@ -34,7 +34,29 @@ func (f *fakeRepo) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID 
 func (f *fakeRepo) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
 	return domain.RefreshToken{}, nil
 }
-func (f *fakeRepo) RevokeTokenChain(ctx context.Context, id uuid.UUID) error { return nil }
+func (f *fakeRepo) RevokeTokenChain(ctx context.Context, id uuid.UUID) error        { return nil }
+func (f *fakeRepo) RevokeTokenFamily(ctx context.Context, familyID uuid.UUID) error { return nil }
+func (f *fakeRepo) InsertRefreshTokenWithFamily(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata, familyID uuid.UUID) error {
+	return nil
+}
+func (f *fakeRepo) IsMFAEnrolled(ctx context.Context, userID, tenantID uuid.UUID) (bool, error) {
+	return false, nil
+}
+func (f *fakeRepo) ListUsersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]domain.UserExport, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListAllTenantsWithStats(ctx context.Context, limit, offset int) ([]domain.TenantStats, error) {
+	return nil, nil
+}
+func (f *fakeRepo) SearchUsersGlobal(ctx context.Context, query string) ([]domain.UserSearchResult, error) {
+	return nil, nil
+}
+func (f *fakeRepo) QueryAuditLogs(ctx context.Context, tenantID *uuid.UUID, userID *uuid.UUID, action string, limit, offset int) ([]domain.AuditLogEntry, int, error) {
+	return nil, 0, nil
+}
+func (f *fakeRepo) PlatformStats(ctx context.Context) (domain.PlatformStatsResult, error) {
+	return domain.PlatformStatsResult{}, nil
+}
 func (f *fakeRepo) CreateMagicLink(ctx context.Context, id uuid.UUID, userID *uuid.UUID, tenantID uuid.UUID, email, tokenHash, redirectURL string, expiresAt time.Time) error {
 	return nil
 }
@@ -209,6 +231,17 @@ func (f *fakeRepo) ConsumePasswordResetToken(ctx context.Context, tokenHash stri
 }
 func (f *fakeRepo) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
 	return 1, nil
+}
+
+// --- Email verification token methods ---
+func (f *fakeRepo) CreateEmailVerificationToken(ctx context.Context, id, userID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	return nil
+}
+func (f *fakeRepo) GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (domain.EmailVerificationToken, error) {
+	return domain.EmailVerificationToken{}, nil
+}
+func (f *fakeRepo) ConsumeEmailVerificationToken(ctx context.Context, tokenHash string) error {
+	return nil
 }
 
 // --- Tenant lookup ---

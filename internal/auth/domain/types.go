@@ -7,6 +7,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Cookie names shared across auth and SSO controllers.
+const (
+	CookieAccessToken  = "guard_access_token"
+	CookieRefreshToken = "guard_refresh_token"
+)
+
 type PortalLink struct {
 	Link string `json:"link"`
 }
@@ -160,6 +166,12 @@ type Service interface {
 	ConfirmPasswordReset(ctx context.Context, in PasswordResetConfirmInput) error
 	// ChangePassword changes the password for a logged-in user.
 	ChangePassword(ctx context.Context, in PasswordChangeInput) error
+
+	// Email verification
+	// SendEmailVerification creates a token and optionally sends a verification email.
+	SendEmailVerification(ctx context.Context, userID, tenantID uuid.UUID, email string) error
+	// VerifyEmail validates a verification token and marks the user's email as verified.
+	VerifyEmail(ctx context.Context, rawToken string) error
 	// UpdateProfile updates the user's profile (first name, last name).
 	UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error
 
@@ -221,6 +233,19 @@ type Service interface {
 	ListAPIKeys(ctx context.Context, tenantID uuid.UUID) ([]APIKey, error)
 	// RevokeAPIKey revokes an API key.
 	RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error
+
+	// --- Self-Service ---
+	RevokeTokenChain(ctx context.Context, tokenID uuid.UUID) error
+	IsMFAEnrolled(ctx context.Context, userID, tenantID uuid.UUID) (bool, error)
+
+	// --- Platform Admin ---
+	ListAllTenantsWithStats(ctx context.Context, limit, offset int) ([]TenantStats, error)
+	SearchUsersGlobal(ctx context.Context, query string) ([]UserSearchResult, error)
+	QueryAuditLogs(ctx context.Context, tenantID *uuid.UUID, userID *uuid.UUID, action string, limit, offset int) ([]AuditLogEntry, int, error)
+	PlatformStats(ctx context.Context) (PlatformStatsResult, error)
+
+	// --- Bulk ---
+	ListUsersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]UserExport, error)
 }
 
 // AccessTokenClaims represents the claims in an access token.
@@ -303,8 +328,10 @@ type Repository interface {
 	AddUserToTenant(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) error
 
 	InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *RefreshTokenMetadata) error
+	InsertRefreshTokenWithFamily(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *RefreshTokenMetadata, familyID uuid.UUID) error
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	RevokeTokenChain(ctx context.Context, id uuid.UUID) error
+	RevokeTokenFamily(ctx context.Context, familyID uuid.UUID) error
 
 	// Magic link operations
 	CreateMagicLink(ctx context.Context, id uuid.UUID, userID *uuid.UUID, tenantID uuid.UUID, email, tokenHash, redirectURL string, expiresAt time.Time) error
@@ -385,6 +412,11 @@ type Repository interface {
 	CreatePasswordResetToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error
 	GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error)
+
+	// Email verification tokens
+	CreateEmailVerificationToken(ctx context.Context, id, userID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error
+	GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (EmailVerificationToken, error)
+	ConsumeEmailVerificationToken(ctx context.Context, tokenHash string) error
 	// UpdateAuthIdentityPassword updates the password hash for an auth identity.
 	// Returns the number of rows affected.
 	UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error)
@@ -417,6 +449,18 @@ type Repository interface {
 	ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]APIKey, error)
 	RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error
 	UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error
+
+	// --- Self-Service ---
+	IsMFAEnrolled(ctx context.Context, userID, tenantID uuid.UUID) (bool, error)
+
+	// --- Platform Admin ---
+	ListAllTenantsWithStats(ctx context.Context, limit, offset int) ([]TenantStats, error)
+	SearchUsersGlobal(ctx context.Context, query string) ([]UserSearchResult, error)
+	QueryAuditLogs(ctx context.Context, tenantID *uuid.UUID, userID *uuid.UUID, action string, limit, offset int) ([]AuditLogEntry, int, error)
+	PlatformStats(ctx context.Context) (PlatformStatsResult, error)
+
+	// --- Bulk ---
+	ListUsersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]UserExport, error)
 }
 
 type AuthIdentity struct {
@@ -450,6 +494,7 @@ type RefreshToken struct {
 	ID              uuid.UUID
 	UserID          uuid.UUID
 	TenantID        uuid.UUID
+	FamilyID        uuid.UUID // All tokens in a rotation chain share the same family_id
 	Revoked         bool
 	ExpiresAt       time.Time
 	CreatedAt       time.Time
@@ -476,6 +521,18 @@ type MagicLink struct {
 
 // PasswordResetToken represents a password reset token record.
 type PasswordResetToken struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TenantID   uuid.UUID
+	Email      string
+	TokenHash  string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+}
+
+// EmailVerificationToken represents an email verification token record.
+type EmailVerificationToken struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
 	TenantID   uuid.UUID
@@ -696,4 +753,54 @@ type APIKey struct {
 	LastUsedAt *time.Time
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// --- Platform Admin types ---
+
+// TenantStats is a tenant with aggregate user count.
+type TenantStats struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UserCount int       `json:"user_count"`
+}
+
+// UserSearchResult is a user returned from a global search.
+type UserSearchResult struct {
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Tenants   []string  `json:"tenants"`
+}
+
+// AuditLogEntry represents a single audit log row.
+type AuditLogEntry struct {
+	ID        int64      `json:"id"`
+	UserID    *uuid.UUID `json:"user_id,omitempty"`
+	TenantID  *uuid.UUID `json:"tenant_id,omitempty"`
+	Action    string     `json:"action"`
+	Meta      string     `json:"meta"`
+	IP        string     `json:"ip"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// PlatformStatsResult holds aggregate platform statistics.
+type PlatformStatsResult struct {
+	TotalTenants   int `json:"total_tenants"`
+	TotalUsers     int `json:"total_users"`
+	ActiveSessions int `json:"active_sessions"`
+	TotalAPIKeys   int `json:"total_api_keys"`
+}
+
+// UserExport represents a user row for bulk export.
+type UserExport struct {
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Roles     []string  `json:"roles"`
+	CreatedAt time.Time `json:"created_at"`
+	Blocked   bool      `json:"blocked"`
 }

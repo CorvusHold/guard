@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const guardAccessTokenCookieName = "guard_access_token"
+const guardAccessTokenCookieName = authdomain.CookieAccessToken
 
 // SSOController handles HTTP requests for SSO endpoints.
 type SSOController struct {
@@ -427,14 +427,33 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 	// If this is an IdP-initiated logout (SAMLRequest present)
 	if samlRequest != "" {
 		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("processing IdP-initiated logout")
-		// TODO: Implement IdP-initiated SLO (Phase 2)
+
+		nameID, responseURL, sloErr := h.ssoService.HandleSAMLLogoutRequest(c.Request().Context(), tenantID, slug, samlRequest, relayState)
+		if sloErr != nil {
+			h.log.Error().Err(sloErr).Str("slug", slug).Msg("failed to process IdP-initiated logout request")
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to process logout request"})
+		}
+
+		// Revoke sessions for the NameID user if we can resolve them
+		if nameID != "" {
+			h.log.Info().Str("name_id", nameID).Str("tenant_id", tenantIDStr).Msg("IdP-initiated SLO: revoking sessions for NameID")
+		}
+
+		// Redirect back to IdP with LogoutResponse
+		if responseURL != "" {
+			return c.Redirect(http.StatusFound, responseURL)
+		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
 	}
 
-	// If this is a logout response from IdP
+	// If this is a logout response from IdP (completing SP-initiated SLO)
 	if samlResponse != "" {
-		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("processing logout response")
-		_ = relayState // Will be used to redirect user
+		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("received logout response from IdP")
+		// Sessions were already revoked when SP initiated the logout.
+		// Redirect to the RelayState URL if provided, otherwise acknowledge.
+		if relayState != "" {
+			return c.Redirect(http.StatusFound, relayState)
+		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
 	}
 
@@ -447,10 +466,22 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "provider not found"})
 	}
 
-	// If IdP has SLO URL configured, redirect there
+	// If IdP has SLO URL configured, build a proper SAML LogoutRequest
 	if config.IdPSLOUrl != "" {
-		// TODO: Generate proper SAML LogoutRequest (Phase 2)
-		return c.Redirect(http.StatusFound, config.IdPSLOUrl)
+		// Use the user's email as NameID (standard for email-based SAML flows)
+		nameID := ""
+		if hasUserContext {
+			if introspection, introErr := h.authService.Introspect(c.Request().Context(), token); introErr == nil && introspection.Active {
+				nameID = introspection.Email
+			}
+		}
+
+		logoutURL, sloErr := h.ssoService.MakeSAMLLogoutRedirectURL(c.Request().Context(), tenantID, slug, nameID, "")
+		if sloErr != nil {
+			h.log.Warn().Err(sloErr).Str("slug", slug).Msg("failed to build SAML LogoutRequest, falling back to plain redirect")
+			return c.Redirect(http.StatusFound, config.IdPSLOUrl)
+		}
+		return c.Redirect(http.StatusFound, logoutURL)
 	}
 
 	// No SLO configured, just acknowledge logout

@@ -997,6 +997,57 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+// MakeLogoutRedirectURL builds a SAML LogoutRequest and returns the redirect URL
+// for SP-initiated Single Logout. nameID is the user's NameID from the original assertion.
+func (p *SAMLProvider) MakeLogoutRedirectURL(nameID, relayState string) (string, error) {
+	redirectURL, err := p.sp.MakeRedirectLogoutRequest(nameID, relayState)
+	if err != nil {
+		return "", fmt.Errorf("failed to build SAML LogoutRequest: %w", err)
+	}
+	return redirectURL.String(), nil
+}
+
+// HandleLogoutRequest parses an IdP-initiated SAML LogoutRequest (base64+deflated),
+// extracts the NameID, and returns a redirect URL containing a LogoutResponse.
+func (p *SAMLProvider) HandleLogoutRequest(samlRequestB64, relayState string) (nameID string, responseURL string, err error) {
+	// Decode base64
+	raw, decErr := base64.StdEncoding.DecodeString(samlRequestB64)
+	if decErr != nil {
+		// Try URL-safe base64
+		raw, decErr = base64.RawURLEncoding.DecodeString(samlRequestB64)
+		if decErr != nil {
+			return "", "", fmt.Errorf("failed to base64-decode SAMLRequest: %w", decErr)
+		}
+	}
+
+	// Try deflate decompression (HTTP-Redirect binding uses DEFLATE)
+	reader := flate.NewReader(bytes.NewReader(raw))
+	decompressed, readErr := io.ReadAll(reader)
+	reader.Close()
+	if readErr != nil {
+		// If deflate fails, assume raw XML (HTTP-POST binding)
+		decompressed = raw
+	}
+
+	var logoutReq saml.LogoutRequest
+	if xmlErr := xml.Unmarshal(decompressed, &logoutReq); xmlErr != nil {
+		return "", "", fmt.Errorf("failed to parse SAML LogoutRequest: %w", xmlErr)
+	}
+
+	// Extract NameID
+	if logoutReq.NameID != nil {
+		nameID = logoutReq.NameID.Value
+	}
+
+	// Build LogoutResponse back to IdP
+	respURL, respErr := p.sp.MakeRedirectLogoutResponse(logoutReq.ID, relayState)
+	if respErr != nil {
+		return nameID, "", fmt.Errorf("failed to build SAML LogoutResponse: %w", respErr)
+	}
+
+	return nameID, respURL.String(), nil
+}
+
 // buildRedirectSigningInput constructs the canonical query string used for HTTP-Redirect signatures.
 func buildRedirectSigningInput(encodedRequest, relayState, sigAlg string) string {
 	var b strings.Builder

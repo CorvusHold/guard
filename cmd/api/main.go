@@ -24,14 +24,19 @@ import (
 	"github.com/corvusHold/guard/internal/logger"
 	httpmetrics "github.com/corvusHold/guard/internal/metrics"
 	"github.com/corvusHold/guard/internal/platform/validation"
+	"github.com/corvusHold/guard/internal/webhooks"
 
-	// Tenants DDD slice (factory)
+	// DDD slices (factories)
+	applications "github.com/corvusHold/guard/internal/applications"
+	scimctrl "github.com/corvusHold/guard/internal/scim/controller"
+	scimsvc "github.com/corvusHold/guard/internal/scim/service"
 	tenants "github.com/corvusHold/guard/internal/tenants"
-	// Auth DDD slice (factory)
+
 	pprof "net/http/pprof"
 
 	_ "github.com/corvusHold/guard/docs" // side-effect import of generated docs
 	auth "github.com/corvusHold/guard/internal/auth"
+	authmw "github.com/corvusHold/guard/internal/auth/middleware"
 	settings "github.com/corvusHold/guard/internal/settings"
 	settdomain "github.com/corvusHold/guard/internal/settings/domain"
 	settrepo "github.com/corvusHold/guard/internal/settings/repository"
@@ -329,6 +334,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("invalid DATABASE_URL")
 	}
+	pgCfg.MaxConns = cfg.DBMaxConns
+	pgCfg.MinConns = cfg.DBMinConns
+	pgCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
+	pgCfg.HealthCheckPeriod = cfg.DBHealthCheckPeriod
 	pgPool, err := pgxpool.NewWithConfig(context.Background(), pgCfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("unable to create pg pool")
@@ -437,7 +446,12 @@ func main() {
 	// Settings (tenant-scoped settings management)
 	settings.RegisterV1(apiV1, pgPool, cfg)
 	// Auth (created first so tenant hook can seed default roles)
-	authReg := auth.NewRegistrar(pgPool, cfg)
+	authReg, err := auth.NewRegistrar(pgPool, cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize auth registrar")
+	}
+	// API key authentication middleware (X-Guard-API-Key or Bearer gk_*)
+	apiV1.Use(authmw.RequireAPIKey(authReg.AuthService()))
 	// Tenants (with post-creation hook to seed default RBAC roles)
 	tenants.RegisterV1WithHook(apiV1, pgPool, authReg.SeedDefaultRoles)
 	defer func() {
@@ -451,6 +465,15 @@ func main() {
 	// OAuth 2.0 provider endpoints (/oauth/authorize, /oauth/token, admin CRUD)
 	authAdminGroup := apiV1.Group("/auth/admin")
 	authReg.RegisterOAuth(e, authAdminGroup)
+	// Applications registry
+	applications.RegisterV1(apiV1, pgPool)
+	// Webhooks
+	webhooks.RegisterV1(apiV1, pgPool)
+	webhooks.StartWorker(context.Background(), pgPool)
+	// SCIM 2.0 provisioning
+	scimSvc := scimsvc.New(pgPool)
+	scimCtrl := scimctrl.New(scimSvc)
+	scimCtrl.Register(e)
 
 	// Background dependency ping metrics
 	go func() {

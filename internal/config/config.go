@@ -16,7 +16,12 @@ type Config struct {
 	PublicBaseURL      string
 	ForceHTTPS         bool
 
-	DatabaseURL string
+	DatabaseURL         string
+	DBMaxConns          int32
+	DBMinConns          int32
+	DBMaxConnLifetime   time.Duration
+	DBHealthCheckPeriod time.Duration
+	DBReadReplicaURL    string
 
 	RedisAddr string
 	RedisDB   int
@@ -53,6 +58,11 @@ func Load() (Config, error) {
 	c.ForceHTTPS = getBool("FORCE_HTTPS", false)
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
+	c.DBMaxConns = int32(getInt("DB_MAX_CONNS", 25))
+	c.DBMinConns = int32(getInt("DB_MIN_CONNS", 5))
+	c.DBMaxConnLifetime = getDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute)
+	c.DBHealthCheckPeriod = getDuration("DB_HEALTH_CHECK_PERIOD", 15*time.Second)
+	c.DBReadReplicaURL = getEnv("DB_READ_REPLICA_URL", "")
 
 	c.RedisAddr = getEnv("REDIS_ADDR", "localhost:6379")
 	c.RedisDB = getInt("REDIS_DB", 0)

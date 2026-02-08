@@ -83,6 +83,10 @@ const (
 
 	// Invitation settings
 	KeyInvitationTTL = "auth.invitation_ttl" // Duration string, default 7 days (e.g., "168h")
+
+	// Email sending toggle. When "false", Guard skips sending emails but still
+	// publishes rich events via webhooks so external services can send their own.
+	KeyEmailEnabled = "email.enabled" // "true" (default) or "false"
 )
 
 // Settings API rate limiting keys (optional, support tenant overrides).

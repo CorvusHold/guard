@@ -19,6 +19,143 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/controller.oauth2MetadataResp"
+  /api/v1/applications:
+    get:
+      description: Lists all applications for a tenant
+      tags:
+        - Applications
+      summary: List applications
+      parameters:
+        - description: Limit
+          name: limit
+          in: query
+          schema:
+            type: integer
+        - description: Offset
+          name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      description: Creates a new application within a tenant
+      tags:
+        - Applications
+      summary: Create application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.createAppRequest"
+        description: Application details
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/domain.Application"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  "/api/v1/applications/{id}":
+    get:
+      description: Gets an application by ID
+      tags:
+        - Applications
+      summary: Get application
+      parameters:
+        - description: Application ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/domain.Application"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    put:
+      description: Updates an application
+      tags:
+        - Applications
+      summary: Update application
+      parameters:
+        - description: Application ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.updateAppRequest"
+        description: Updated fields
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/domain.Application"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    delete:
+      description: Deletes an application
+      tags:
+        - Applications
+      summary: Delete application
+      parameters:
+        - description: Application ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /api/v1/auth/admin/api-keys:
     get:
       security:
@@ -140,6 +277,77 @@ paths:
                 type: object
                 additionalProperties:
                   type: string
+  /api/v1/auth/admin/bulk/users/export:
+    get:
+      description: Export all users in a tenant as JSON
+      tags:
+        - Admin Bulk
+      summary: Bulk export users
+      parameters:
+        - description: Export format (json or csv)
+          name: format
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+  /api/v1/auth/admin/bulk/users/import:
+    post:
+      description: "Import users from CSV or JSON. CSV columns:
+        email,first_name,last_name,role. JSON: array of objects."
+      tags:
+        - Admin Bulk
+      summary: Bulk import users
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  description: CSV or JSON file
+                  type: string
+                  format: binary
+              required:
+                - file
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.bulkImportResult"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /api/v1/auth/admin/compliance/report:
+    get:
+      description: Generates a compliance summary report for the platform or a
+        specific tenant
+      tags:
+        - Compliance
+      summary: Compliance report
+      parameters:
+        - description: Tenant ID filter
+          name: tenant_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /api/v1/auth/admin/fga/acl/tuples:
     post:
       security:
@@ -796,6 +1004,106 @@ paths:
                 type: object
                 additionalProperties:
                   type: string
+  /api/v1/auth/admin/platform/audit-logs:
+    get:
+      description: Platform-level endpoint to query audit logs across tenants
+      tags:
+        - Platform Admin
+      summary: Query audit logs
+      parameters:
+        - description: Filter by tenant
+          name: tenant_id
+          in: query
+          schema:
+            type: string
+        - description: Filter by user
+          name: user_id
+          in: query
+          schema:
+            type: string
+        - description: Filter by action
+          name: action
+          in: query
+          schema:
+            type: string
+        - description: Limit
+          name: limit
+          in: query
+          schema:
+            type: integer
+        - description: Offset
+          name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/auth/admin/platform/stats:
+    get:
+      description: Returns aggregate platform statistics
+      tags:
+        - Platform Admin
+      summary: Platform stats
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/auth/admin/platform/tenants:
+    get:
+      description: Platform-level endpoint to list all tenants with user counts
+      tags:
+        - Platform Admin
+      summary: List all tenants with stats
+      parameters:
+        - description: Limit
+          name: limit
+          in: query
+          schema:
+            type: integer
+        - description: Offset
+          name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/auth/admin/platform/users/search:
+    get:
+      description: Platform-level endpoint to search users globally
+      tags:
+        - Platform Admin
+      summary: Search users across tenants
+      parameters:
+        - description: Search query (email)
+          name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /api/v1/auth/admin/rbac/permissions:
     get:
       security:
@@ -2777,6 +3085,133 @@ paths:
                 type: object
                 additionalProperties:
                   type: string
+  /api/v1/auth/self/mfa:
+    get:
+      description: Returns the authenticated user's MFA enrollment status
+      tags:
+        - Self-Service
+      summary: MFA status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/auth/self/passkeys:
+    get:
+      description: Returns the authenticated user's registered passkeys
+      tags:
+        - Self-Service
+      summary: List passkeys
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      description: Stores a new WebAuthn/passkey credential for the authenticated user
+      tags:
+        - Self-Service
+      summary: Register passkey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.registerPasskeyRequest"
+        description: Passkey credential data
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.passkeyResponse"
+  "/api/v1/auth/self/passkeys/{id}":
+    delete:
+      description: Deletes one of the authenticated user's passkeys
+      tags:
+        - Self-Service
+      summary: Delete passkey
+      parameters:
+        - description: Passkey ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+  /api/v1/auth/self/profile:
+    get:
+      description: Returns the authenticated user's profile
+      tags:
+        - Self-Service
+      summary: Get own profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      description: Updates the authenticated user's name
+      tags:
+        - Self-Service
+      summary: Update own profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.updateProfileRequest"
+        description: Profile updates
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/auth/self/sessions:
+    get:
+      description: Returns the authenticated user's active sessions
+      tags:
+        - Self-Service
+      summary: List own sessions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  "/api/v1/auth/self/sessions/{id}":
+    delete:
+      description: Revokes one of the authenticated user's sessions
+      tags:
+        - Self-Service
+      summary: Revoke own session
+      parameters:
+        - description: Session (refresh token) ID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
   /api/v1/auth/sessions:
     get:
       security:
@@ -3017,6 +3452,30 @@ paths:
           description: Bad Request
           content:
             "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /api/v1/auth/verify-email:
+    post:
+      description: Verifies a user's email address using a token sent via email
+      tags:
+        - auth
+      summary: Verify email address
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.verifyEmailReq"
+        description: token
+        required: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          content:
+            application/json:
               schema:
                 type: object
                 additionalProperties:
@@ -4349,6 +4808,17 @@ components:
           type: string
         state:
           type: string
+    controller.bulkImportResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+        skipped:
+          type: integer
     controller.changePasswordReq:
       type: object
       required:
@@ -4395,6 +4865,19 @@ components:
           items:
             type: string
         tenant_id:
+          type: string
+    controller.createAppRequest:
+      type: object
+      required:
+        - name
+      properties:
+        description:
+          type: string
+        homepage_url:
+          type: string
+        logo_uri:
+          type: string
+        name:
           type: string
     controller.createClientReq:
       type: object
@@ -4886,6 +5369,17 @@ components:
             type: string
         userinfo_endpoint:
           type: string
+    controller.passkeyResponse:
+      type: object
+      properties:
+        created_at:
+          type: string
+        friendly_name:
+          type: string
+        id:
+          type: string
+        last_used_at:
+          type: string
     controller.permissionGrantItem:
       type: object
       properties:
@@ -5084,6 +5578,26 @@ components:
       properties:
         refresh_token:
           type: string
+    controller.registerPasskeyRequest:
+      type: object
+      required:
+        - credential_id
+        - public_key
+      properties:
+        aaguid:
+          type: string
+        attestation_type:
+          type: string
+        credential_id:
+          type: string
+        friendly_name:
+          type: string
+        public_key:
+          type: string
+        transports:
+          type: array
+          items:
+            type: string
     controller.resetPasswordConfirmReq:
       type: object
       required:
@@ -5254,6 +5768,19 @@ components:
           type: string
         updated_at:
           type: string
+    controller.updateAppRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        homepage_url:
+          type: string
+        is_active:
+          type: boolean
+        logo_uri:
+          type: string
+        name:
+          type: string
     controller.updateClientReq:
       type: object
       properties:
@@ -5276,6 +5803,13 @@ components:
           items:
             type: string
     controller.updateProfileReq:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+    controller.updateProfileRequest:
       type: object
       properties:
         first_name:
@@ -5366,6 +5900,36 @@ components:
           type: boolean
         want_response_signed:
           type: boolean
+    controller.verifyEmailReq:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+    domain.Application:
+      type: object
+      properties:
+        created_at:
+          type: string
+        created_by:
+          type: string
+        description:
+          type: string
+        homepage_url:
+          type: string
+        id:
+          type: string
+        is_active:
+          type: boolean
+        logo_uri:
+          type: string
+        name:
+          type: string
+        tenant_id:
+          type: string
+        updated_at:
+          type: string
     domain.Introspection:
       type: object
       properties:

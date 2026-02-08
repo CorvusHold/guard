@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,7 +35,7 @@ type Registrar struct {
 	cfg      config.Config
 }
 
-func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
+func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) (*Registrar, error) {
 	r := repo.New(pg)
 	// settings service (DB-backed, with tenant overrides)
 	sr := srepo.New(pg)
@@ -44,7 +46,7 @@ func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
 	// Key manager for JWT signing (ES256 or HS256 fallback)
 	keyMgr, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
 	if err != nil {
-		panic("failed to initialize key manager: " + err.Error())
+		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
 	}
 	authSvc.SetKeyManager(keyMgr)
 
@@ -55,9 +57,10 @@ func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
 	authSSO.SetLogger(logger.New(cfg.AppEnv))
 	authSSO.SetKeyManager(keyMgr)
 
-	pub := evsvc.NewLogger()
-	rlStore := rl.NewRedisStore(cfg)
-	authCtrl := ctrl.New(authSvc, magic, authSSO).WithRateLimit(settings, rlStore).WithPublisher(pub)
+	pub := evsvc.NewMulti(evsvc.NewLogger(), evsvc.NewDB(pg))
+	rlStore := rl.NewCircuitBreakerStore(rl.NewRedisStore(cfg), 5, 10*time.Second)
+	webauthnSvc := svc.NewWebAuthnService(pg)
+	authCtrl := ctrl.New(authSvc, magic, authSSO).WithRateLimit(settings, rlStore).WithPublisher(pub).WithWebAuthn(webauthnSvc)
 
 	// SSO provider management + browser flows
 	ssoRedis := redis.NewClient(&redis.Options{
@@ -76,13 +79,16 @@ func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) *Registrar {
 	// OAuth 2.0 provider module
 	oauthReg := oauth.NewRegistrar(pg, authSvc, settings, cfg, keyMgr, rlStore)
 
-	return &Registrar{ctrl: authCtrl, sso: ssoController, ssoRedis: ssoRedis, authSvc: authSvc, oauth: oauthReg, cfg: cfg}
+	return &Registrar{ctrl: authCtrl, sso: ssoController, ssoRedis: ssoRedis, authSvc: authSvc, oauth: oauthReg, cfg: cfg}, nil
 }
 
 // SeedDefaultRoles creates the standard set of roles for a tenant. Idempotent.
 func (r *Registrar) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) error {
 	return r.authSvc.SeedDefaultRoles(ctx, tenantID)
 }
+
+// AuthService returns the underlying auth service (for API key middleware wiring).
+func (r *Registrar) AuthService() *svc.Service { return r.authSvc }
 
 func (r *Registrar) Close() error {
 	if r.ssoRedis != nil {
@@ -163,66 +169,47 @@ func (r *Registrar) RegisterOAuth(e *echo.Echo, adminGroup *echo.Group) {
 
 // RegisterWellKnown registers root-level endpoints that must not be under /api.
 // This is intended to be used alongside RegisterV1 in cmd/api/main.go.
-func RegisterWellKnown(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
-	r := NewRegistrar(pg, cfg)
+func RegisterWellKnown(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) error {
+	r, err := NewRegistrar(pg, cfg)
+	if err != nil {
+		return err
+	}
 	defer func() { _ = r.Close() }()
 	r.RegisterWellKnown(e)
+	return nil
 }
 
 // RegisterSSOBrowser wires the SSO module and registers browser-based SSO flows under /auth/sso/*.
 // This is intended to be used alongside RegisterV1 in cmd/api/main.go.
-func RegisterSSOBrowser(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
-	r := NewRegistrar(pg, cfg)
+func RegisterSSOBrowser(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) error {
+	r, err := NewRegistrar(pg, cfg)
+	if err != nil {
+		return err
+	}
 	r.RegisterSSOBrowser(e)
+	return nil
 }
 
 // Register wires the auth module and registers HTTP routes (deprecated, use RegisterV1).
-func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) {
-	r := repo.New(pg)
-	// settings service (DB-backed, with tenant overrides)
-	sr := srepo.New(pg)
-	settings := ssvc.New(sr)
-	s := svc.New(r, cfg, settings)
-	// Inject module logger (debug in development)
-	s.SetLogger(logger.New(cfg.AppEnv))
-	// Key manager for JWT signing
-	km, kmErr := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
-	if kmErr != nil {
-		panic("failed to initialize key manager: " + kmErr.Error())
+func Register(e *echo.Echo, pg *pgxpool.Pool, cfg config.Config) error {
+	reg, err := NewRegistrar(pg, cfg)
+	if err != nil {
+		return err
 	}
-	s.SetKeyManager(km)
-	emailSender := emailsvc.NewRouter(settings, cfg)
-	magic := svc.NewMagic(r, cfg, settings, emailSender)
-	sso := svc.NewSSO(r, cfg, settings)
-	sso.SetLogger(logger.New(cfg.AppEnv))
-	sso.SetKeyManager(km)
-	pub := evsvc.NewLogger()
-	rlStore := rl.NewRedisStore(cfg)
-	c := ctrl.New(s, magic, sso).WithRateLimit(settings, rlStore).WithPublisher(pub)
-	c.Register(e)
-
-	// SSO provider management (admin/public SSO provider APIs)
-	ssoRedis := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisAddr,
-		DB:   cfg.RedisDB,
-	})
-	ssoService := ssosvc.New(pg, ssoRedis, cfg.PublicBaseURL)
-	ssoService.SetLogger(logger.New(cfg.AppEnv))
-	ssoService.SetPublisher(pub)
-	// Wire the native SSO provider service into the auth SSO service for portal link generation.
-	sso.SetSSOProviderService(ssoService)
-	ssoController := ssoctrl.New(ssoService, s).WithRateLimitStore(rlStore)
-	ssoController.SetLogger(logger.New(cfg.AppEnv))
-	// Browser SSO flows (/auth/sso/*)
-	ssoController.Register(e)
-	// JSON SSO APIs (/api/v1/sso/*)
+	reg.ctrl.Register(e)
+	reg.sso.Register(e)
 	api := e.Group("/api")
 	apiV1 := api.Group("/v1")
-	ssoController.RegisterV1(apiV1)
+	reg.sso.RegisterV1(apiV1)
+	return nil
 }
 
 // RegisterV1 wires the auth module and registers HTTP routes under /api/v1.
-func RegisterV1(g *echo.Group, pg *pgxpool.Pool, cfg config.Config) {
-	r := NewRegistrar(pg, cfg)
+func RegisterV1(g *echo.Group, pg *pgxpool.Pool, cfg config.Config) error {
+	r, err := NewRegistrar(pg, cfg)
+	if err != nil {
+		return err
+	}
 	r.RegisterV1(g)
+	return nil
 }

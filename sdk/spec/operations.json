@@ -1,11 +1,35 @@
 {
-  "count": 91,
-  "generatedAt": "2026-02-08T13:44:40.961Z",
+  "count": 112,
+  "generatedAt": "2026-02-08T16:08:36.006Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
   },
   "operations": [
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete application",
+      "tags": [
+        "Applications"
+      ]
+    },
     {
       "errors": [
         {
@@ -339,6 +363,34 @@
       ]
     },
     {
+      "errors": [],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_self_passkeys_by_id",
+      "path": "/api/v1/auth/self/passkeys/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete passkey",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_self_sessions_by_id",
+      "path": "/api/v1/auth/self/sessions/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Revoke own session",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -390,6 +442,51 @@
       ]
     },
     {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_applications",
+      "path": "/api/v1/applications",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List applications",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "200"
+      },
+      "summary": "Get application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -423,6 +520,38 @@
       "summary": "List API keys for a tenant (admin-only)",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_bulk_users_export",
+      "path": "/api/v1/auth/admin/bulk/users/export",
+      "requestBody": null,
+      "success": {
+        "status": "200"
+      },
+      "summary": "Bulk export users",
+      "tags": [
+        "Admin Bulk"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_compliance_report",
+      "path": "/api/v1/auth/admin/compliance/report",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Compliance report",
+      "tags": [
+        "Compliance"
       ]
     },
     {
@@ -558,6 +687,78 @@
       "summary": "Get OAuth client",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_audit_logs",
+      "path": "/api/v1/auth/admin/platform/audit-logs",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Query audit logs",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_stats",
+      "path": "/api/v1/auth/admin/platform/stats",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Platform stats",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_tenants",
+      "path": "/api/v1/auth/admin/platform/tenants",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List all tenants with stats",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_users_search",
+      "path": "/api/v1/auth/admin/platform/users/search",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Search users across tenants",
+      "tags": [
+        "Platform Admin"
       ]
     },
     {
@@ -965,6 +1166,78 @@
       "summary": "Count remaining MFA backup codes",
       "tags": [
         "auth.mfa.backup"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_mfa",
+      "path": "/api/v1/auth/self/mfa",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "MFA status",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_passkeys",
+      "path": "/api/v1/auth/self/passkeys",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List passkeys",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_profile",
+      "path": "/api/v1/auth/self/profile",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Get own profile",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_sessions",
+      "path": "/api/v1/auth/self/sessions",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List own sessions",
+      "tags": [
+        "Self-Service"
       ]
     },
     {
@@ -1733,6 +2006,35 @@
             "type": "object"
           },
           "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_applications",
+      "path": "/api/v1/applications",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createAppRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "201"
+      },
+      "summary": "Create application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
         },
         {
           "schema": {
@@ -1810,6 +2112,33 @@
       "summary": "Revoke an API key (admin-only)",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_bulk_users_import",
+      "path": "/api/v1/auth/admin/bulk/users/import",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.bulkImportResult"
+        },
+        "status": "200"
+      },
+      "summary": "Bulk import users",
+      "tags": [
+        "Admin Bulk"
       ]
     },
     {
@@ -3333,6 +3662,25 @@
       ]
     },
     {
+      "errors": [],
+      "method": "post",
+      "operationId": "post_api_v1_auth_self_passkeys",
+      "path": "/api/v1/auth/self/passkeys",
+      "requestBody": {
+        "$ref": "#/definitions/controller.registerPasskeyRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.passkeyResponse"
+        },
+        "status": "201"
+      },
+      "summary": "Register passkey",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -3372,6 +3720,32 @@
       "summary": "Revoke a specific session",
       "tags": [
         "auth.sessions"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_verify_email",
+      "path": "/api/v1/auth/verify-email",
+      "requestBody": {
+        "$ref": "#/definitions/controller.verifyEmailReq"
+      },
+      "success": {
+        "status": "200"
+      },
+      "summary": "Verify email address",
+      "tags": [
+        "auth"
       ]
     },
     {
@@ -3641,6 +4015,55 @@
       "summary": "OAuth 2.0 Token Exchange",
       "tags": [
         "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateAppRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "200"
+      },
+      "summary": "Update application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "put",
+      "operationId": "put_api_v1_auth_self_profile",
+      "path": "/api/v1/auth/self/profile",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateProfileRequest"
+      },
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Update own profile",
+      "tags": [
+        "Self-Service"
       ]
     },
     {

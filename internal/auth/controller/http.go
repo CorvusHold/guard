@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
+	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	"github.com/corvusHold/guard/internal/platform/ratelimit"
@@ -24,9 +25,10 @@ import (
 )
 
 type Controller struct {
-	svc   domain.Service
-	magic domain.MagicLinkService
-	sso   domain.SSOService
+	svc      domain.Service
+	magic    domain.MagicLinkService
+	sso      domain.SSOService
+	webauthn *svc.WebAuthnService
 	// optional rate limit dependencies
 	settings sdomain.Service
 	rl       ratelimit.Store
@@ -35,8 +37,8 @@ type Controller struct {
 }
 
 const (
-	guardAccessTokenCookieName  = "guard_access_token"
-	guardRefreshTokenCookieName = "guard_refresh_token"
+	guardAccessTokenCookieName  = domain.CookieAccessToken
+	guardRefreshTokenCookieName = domain.CookieRefreshToken
 )
 
 // ---- Admin: RBAC v2 ----
@@ -533,6 +535,9 @@ func (h *Controller) WithRateLimit(settings sdomain.Service, store ratelimit.Sto
 // WithPublisher injects an audit event publisher for controller-level event emission.
 func (h *Controller) WithPublisher(p evdomain.Publisher) *Controller { h.pub = p; return h }
 
+// WithWebAuthn injects the WebAuthn service for passkey management.
+func (h *Controller) WithWebAuthn(w *svc.WebAuthnService) *Controller { h.webauthn = w; return h }
+
 // detectAuthMode checks the X-Auth-Mode header to determine if cookie mode is requested.
 // Defaults to the provided defaultAuthMode when header is not present or invalid.
 func detectAuthMode(c echo.Context, defaultAuthMode string) string {
@@ -784,6 +789,9 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/password/reset/confirm", h.resetPasswordConfirm)
 	g.POST("/password/change", h.changePassword, rlToken)
 
+	// Email verification
+	g.POST("/verify-email", h.verifyEmail)
+
 	// Magic-link auth
 	g.POST("/magic/send", h.sendMagic, rlMagic)
 	g.POST("/magic/verify", h.verifyMagic, rlMagic)
@@ -871,6 +879,15 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/mfa/backup/consume", h.backupConsume, rlMFA)
 	g.GET("/mfa/backup/count", h.backupCount, rlMFA)
 	g.POST("/mfa/verify", h.verifyMFA, rlMFA)
+
+	// Platform admin (super-admin dashboard)
+	adminGroup := g.Group("/admin")
+	h.registerSuperAdminRoutes(adminGroup)
+	h.registerBulkRoutes(adminGroup)
+	h.registerComplianceRoutes(adminGroup)
+
+	// Self-service portal (authenticated users)
+	h.registerSelfServiceRoutes(g)
 }
 
 type signupReq struct {
@@ -1008,6 +1025,10 @@ type resetPasswordConfirmReq struct {
 	TenantID    string `json:"tenant_id" validate:"omitempty,uuid4"`
 	Token       string `json:"token" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
+type verifyEmailReq struct {
+	Token string `json:"token" validate:"required"`
 }
 
 type changePasswordReq struct {
@@ -2028,6 +2049,30 @@ func (h *Controller) resetPasswordConfirm(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.NoContent(http.StatusOK)
+}
+
+// Verify Email godoc
+// @Summary      Verify email address
+// @Description  Verifies a user's email address using a token sent via email
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body  verifyEmailReq  true  "token"
+// @Success      200
+// @Failure      400  {object}  map[string]string
+// @Router       /api/v1/auth/verify-email [post]
+func (h *Controller) verifyEmail(c echo.Context) error {
+	var req verifyEmailReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	if req.Token == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "token required"})
+	}
+	if err := h.svc.VerifyEmail(c.Request().Context(), req.Token); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "verified"})
 }
 
 // Change Password godoc

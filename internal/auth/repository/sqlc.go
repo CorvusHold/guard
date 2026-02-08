@@ -393,6 +393,10 @@ func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, 
 }
 
 func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
+	return r.InsertRefreshTokenWithFamily(ctx, id, userID, tenantID, tokenHash, parentID, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata, id)
+}
+
+func (r *SQLCRepository) InsertRefreshTokenWithFamily(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata, familyID uuid.UUID) error {
 	pid := pgtype.UUID{}
 	if parentID != nil {
 		pid = toPgUUID(*parentID)
@@ -409,19 +413,22 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 			log.Ctx(ctx).Warn().Err(err).Str("user_id", userID.String()).Msg("failed to marshal refresh token metadata, using empty JSON")
 		}
 	}
-	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
-		ID:            toPgUUID(id),
-		UserID:        toPgUUID(userID),
-		TenantID:      toPgUUID(tenantID),
-		TokenHash:     tokenHash,
-		ParentID:      pid,
-		UserAgent:     toPgText(userAgent),
-		Ip:            toPgText(ip),
-		ExpiresAt:     toPgTime(expiresAt),
-		AuthMethod:    toPgText(authMethod),
-		SsoProviderID: spid,
-		Metadata:      metadataJSON,
-	})
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at, auth_method, sso_provider_id, metadata, family_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		toPgUUID(id), toPgUUID(userID), toPgUUID(tenantID), tokenHash, pid,
+		toPgText(userAgent), toPgText(ip), toPgTime(expiresAt),
+		toPgText(authMethod), spid, metadataJSON, toPgUUID(familyID),
+	)
+	return err
+}
+
+func (r *SQLCRepository) RevokeTokenFamily(ctx context.Context, familyID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = $1 AND revoked = FALSE`,
+		toPgUUID(familyID),
+	)
+	return err
 }
 
 func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
@@ -947,6 +954,54 @@ func (r *SQLCRepository) GetPasswordResetTokenByHash(ctx context.Context, tokenH
 
 func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (int64, error) {
 	return r.q.ConsumePasswordResetToken(ctx, tokenHash)
+}
+
+// --- Email verification tokens ---
+
+func (r *SQLCRepository) CreateEmailVerificationToken(ctx context.Context, id, userID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO email_verification_tokens (id, user_id, tenant_id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		id, userID, tenantID, email, tokenHash, expiresAt,
+	)
+	return err
+}
+
+func (r *SQLCRepository) GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (domain.EmailVerificationToken, error) {
+	var id, userID, tenantID uuid.UUID
+	var email string
+	var createdAt, expiresAt time.Time
+	var consumedAt *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, user_id, tenant_id, email, created_at, expires_at, consumed_at FROM email_verification_tokens WHERE token_hash = $1`,
+		tokenHash,
+	).Scan(&id, &userID, &tenantID, &email, &createdAt, &expiresAt, &consumedAt)
+	if err != nil {
+		return domain.EmailVerificationToken{}, err
+	}
+	return domain.EmailVerificationToken{
+		ID:         id,
+		UserID:     userID,
+		TenantID:   tenantID,
+		Email:      email,
+		TokenHash:  tokenHash,
+		CreatedAt:  createdAt,
+		ExpiresAt:  expiresAt,
+		ConsumedAt: consumedAt,
+	}, nil
+}
+
+func (r *SQLCRepository) ConsumeEmailVerificationToken(ctx context.Context, tokenHash string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE email_verification_tokens SET consumed_at = now() WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()`,
+		tokenHash,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("token not found, already used, or expired")
+	}
+	return nil
 }
 
 func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
