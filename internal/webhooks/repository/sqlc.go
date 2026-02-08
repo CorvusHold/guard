@@ -29,7 +29,15 @@ func (r *Repository) CreateWebhook(ctx context.Context, wh domain.Webhook) (doma
 	return wh, err
 }
 
-func (r *Repository) GetWebhook(ctx context.Context, id uuid.UUID) (domain.Webhook, error) {
+func (r *Repository) GetWebhook(ctx context.Context, id, tenantID uuid.UUID) (domain.Webhook, error) {
+	var wh domain.Webhook
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, tenant_id, url, secret_hash, events, is_active, created_at, updated_at FROM webhooks WHERE id = $1 AND tenant_id = $2`, id, tenantID,
+	).Scan(&wh.ID, &wh.TenantID, &wh.URL, &wh.SecretHash, &wh.Events, &wh.IsActive, &wh.CreatedAt, &wh.UpdatedAt)
+	return wh, err
+}
+
+func (r *Repository) GetWebhookByID(ctx context.Context, id uuid.UUID) (domain.Webhook, error) {
 	var wh domain.Webhook
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, tenant_id, url, secret_hash, events, is_active, created_at, updated_at FROM webhooks WHERE id = $1`, id,
@@ -56,30 +64,24 @@ func (r *Repository) ListWebhooks(ctx context.Context, tenantID uuid.UUID) ([]do
 	return webhooks, rows.Err()
 }
 
-func (r *Repository) UpdateWebhook(ctx context.Context, id uuid.UUID, url *string, events []string, isActive *bool) (domain.Webhook, error) {
-	current, err := r.GetWebhook(ctx, id)
-	if err != nil {
-		return domain.Webhook{}, err
-	}
-	if url != nil {
-		current.URL = *url
-	}
-	if events != nil {
-		current.Events = events
-	}
-	if isActive != nil {
-		current.IsActive = *isActive
-	}
-	current.UpdatedAt = time.Now()
-	_, err = r.pool.Exec(ctx,
-		`UPDATE webhooks SET url=$1, events=$2, is_active=$3, updated_at=$4 WHERE id=$5`,
-		current.URL, current.Events, current.IsActive, current.UpdatedAt, id,
-	)
-	return current, err
+func (r *Repository) UpdateWebhook(ctx context.Context, id, tenantID uuid.UUID, url *string, events []string, isActive *bool) (domain.Webhook, error) {
+	// Single atomic UPDATE to eliminate TOCTOU race
+	var wh domain.Webhook
+	err := r.pool.QueryRow(ctx,
+		`UPDATE webhooks SET
+			url = COALESCE($3, url),
+			events = COALESCE($4, events),
+			is_active = COALESCE($5, is_active),
+			updated_at = now()
+		 WHERE id = $1 AND tenant_id = $2
+		 RETURNING id, tenant_id, url, secret_hash, events, is_active, created_at, updated_at`,
+		id, tenantID, url, events, isActive,
+	).Scan(&wh.ID, &wh.TenantID, &wh.URL, &wh.SecretHash, &wh.Events, &wh.IsActive, &wh.CreatedAt, &wh.UpdatedAt)
+	return wh, err
 }
 
-func (r *Repository) DeleteWebhook(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id)
+func (r *Repository) DeleteWebhook(ctx context.Context, id, tenantID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	return err
 }
 

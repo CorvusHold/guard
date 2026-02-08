@@ -38,3 +38,11 @@ WHERE token_hash = $1 AND revoked = FALSE;
 
 -- name: RevokeTokenFamily :exec
 UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = $1 AND revoked = FALSE;
+
+-- name: RevokeAllRefreshTokensByUser :execrows
+UPDATE refresh_tokens
+SET revoked = TRUE
+WHERE user_id = $1 AND revoked = FALSE;
+
+-- name: UpdateRefreshTokenLastUsed :exec
+UPDATE refresh_tokens SET last_used_at = now() WHERE token_hash = $1;

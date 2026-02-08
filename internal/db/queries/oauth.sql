@@ -68,7 +68,7 @@ RETURNING *;
 
 -- name: GetOAuthConsentGrant :one
 SELECT * FROM oauth_consent_grants
-WHERE user_id = $1 AND client_id = $2 AND revoked_at IS NULL;
+WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL;
 
 -- name: RevokeOAuthConsentGrant :exec
 UPDATE oauth_consent_grants

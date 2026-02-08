@@ -110,6 +110,8 @@ type Service interface {
 	// RevokeUserSessions revokes all active refresh tokens for a user within a tenant.
 	// Returns the number of tokens revoked.
 	RevokeUserSessions(ctx context.Context, userID, tenantID uuid.UUID) (int64, error)
+	// UnlockAccount clears lockout and resets failed attempts for a user (admin action).
+	UnlockAccount(ctx context.Context, userID uuid.UUID) error
 
 	// MFA (TOTP + backup codes)
 	// StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
@@ -373,6 +375,23 @@ type Repository interface {
 	// RevokeRefreshTokenByHash revokes a specific refresh token by its hash.
 	// Returns the number of tokens revoked (0 or 1).
 	RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error)
+	// RevokeAllUserSessions revokes all active refresh tokens for a user across all tenants.
+	// Returns the number of tokens revoked.
+	RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) (int64, error)
+	// UpdateRefreshTokenLastUsed updates the last_used_at timestamp for a refresh token.
+	UpdateRefreshTokenLastUsed(ctx context.Context, tokenHash string) error
+
+	// --- Account lockout ---
+	// IncrementFailedAttempts increments the failed login counter and returns the new count.
+	IncrementFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) (int32, error)
+	// ResetFailedAttempts resets the failed login counter and clears any lockout.
+	ResetFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) error
+	// LockAccount sets the locked_until timestamp for an account.
+	LockAccount(ctx context.Context, tenantID uuid.UUID, email string, lockedUntil time.Time) error
+	// UnlockAccount clears lockout and resets failed attempts for a user (admin action).
+	UnlockAccount(ctx context.Context, userID uuid.UUID) error
+	// GetLockoutStatus returns the current failed attempts count and locked_until timestamp.
+	GetLockoutStatus(ctx context.Context, tenantID uuid.UUID, email string) (failedAttempts int32, lockedUntil *time.Time, err error)
 
 	// --- RBAC v2 ---
 	// Permissions
@@ -498,6 +517,7 @@ type RefreshToken struct {
 	Revoked         bool
 	ExpiresAt       time.Time
 	CreatedAt       time.Time
+	LastUsedAt      *time.Time // Tracks last usage for session idle timeout
 	UserAgent       string
 	IP              string
 	AuthMethod      string     // "password", "sso", "magic_link"

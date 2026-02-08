@@ -54,7 +54,7 @@ func TestSignPayload_Deterministic(t *testing.T) {
 }
 
 func TestHashSecret(t *testing.T) {
-	h := hashSecret("my-secret")
+	h := HashSecret("my-secret")
 	if h == "" {
 		t.Fatal("expected non-empty hash")
 	}
@@ -62,12 +62,12 @@ func TestHashSecret(t *testing.T) {
 		t.Errorf("expected 64 char hex, got %d", len(h))
 	}
 	// Deterministic
-	h2 := hashSecret("my-secret")
+	h2 := HashSecret("my-secret")
 	if h != h2 {
-		t.Error("hashSecret should be deterministic")
+		t.Error("HashSecret should be deterministic")
 	}
 	// Different input
-	h3 := hashSecret("other-secret")
+	h3 := HashSecret("other-secret")
 	if h == h3 {
 		t.Error("different secrets should produce different hashes")
 	}

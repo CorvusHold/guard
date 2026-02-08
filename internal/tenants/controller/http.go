@@ -42,6 +42,8 @@ func (h *Controller) RegisterV1(g *echo.Group) {
 	g.POST("/tenants", h.createTenant)
 	g.GET("/tenants/:id", h.getTenantByID)
 	g.GET("/tenants/:id/children", h.listChildTenants)
+	g.GET("/tenants/:id/ancestors", h.getTenantAncestors)
+	g.PATCH("/tenants/:id/parent", h.updateTenantParent)
 	g.GET("/tenants/by-name/:name", h.getTenantByName)
 	g.PATCH("/tenants/:id/deactivate", h.deactivateTenant)
 	g.GET("/tenants", h.listTenants)
@@ -196,6 +198,78 @@ func (h *Controller) deactivateTenant(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
 	if err := h.svc.Deactivate(c.Request().Context(), id); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// Get Tenant Ancestors godoc
+// @Summary      Get tenant ancestors
+// @Description  Returns the ancestor chain for a tenant (parent, grandparent, etc.)
+// @Tags         tenants
+// @Produce      json
+// @Param        id   path   string  true  "Tenant ID (UUID)"
+// @Success      200  {array}   tenantResp
+// @Failure      400  {object}  map[string]string
+// @Router       /api/v1/tenants/{id}/ancestors [get]
+func (h *Controller) getTenantAncestors(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
+	ancestors, err := h.svc.GetTenantAncestors(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	items := make([]tenantResp, 0, len(ancestors))
+	for _, ten := range ancestors {
+		items = append(items, tenantResp{
+			ID:             toUUIDString(ten.ID),
+			Name:           ten.Name,
+			IsActive:       ten.IsActive,
+			ParentTenantID: toUUIDString(ten.ParentTenantID),
+			CreatedAt:      toTimeString(ten.CreatedAt),
+			UpdatedAt:      toTimeString(ten.UpdatedAt),
+		})
+	}
+	return c.JSON(http.StatusOK, items)
+}
+
+type updateParentReq struct {
+	ParentTenantID *string `json:"parent_tenant_id"`
+}
+
+// Update Tenant Parent godoc
+// @Summary      Update tenant parent
+// @Description  Re-parents a tenant. Set parent_tenant_id to null to make it a root tenant.
+// @Tags         tenants
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string           true  "Tenant ID (UUID)"
+// @Param        body  body  updateParentReq  true  "New parent"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Router       /api/v1/tenants/{id}/parent [patch]
+func (h *Controller) updateTenantParent(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
+	var req updateParentReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+	var parentID *uuid.UUID
+	if req.ParentTenantID != nil && *req.ParentTenantID != "" {
+		pid, err := uuid.Parse(*req.ParentTenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid parent_tenant_id"})
+		}
+		parentID = &pid
+	}
+	if err := h.svc.UpdateParent(c.Request().Context(), id, parentID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)

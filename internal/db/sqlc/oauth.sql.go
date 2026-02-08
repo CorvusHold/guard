@@ -98,7 +98,7 @@ INSERT INTO oauth_clients (
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10, $11
-) RETURNING id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at
+) RETURNING id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at, application_id
 `
 
 type CreateOAuthClientParams struct {
@@ -145,6 +145,7 @@ func (q *Queries) CreateOAuthClient(ctx context.Context, arg CreateOAuthClientPa
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -191,7 +192,7 @@ func (q *Queries) GetOAuthAuthorizationCodeByHash(ctx context.Context, codeHash 
 }
 
 const getOAuthClientByClientID = `-- name: GetOAuthClientByClientID :one
-SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at FROM oauth_clients
+SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at, application_id FROM oauth_clients
 WHERE client_id = $1 AND is_active = TRUE
 `
 
@@ -213,12 +214,13 @@ func (q *Queries) GetOAuthClientByClientID(ctx context.Context, clientID string)
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
 
 const getOAuthClientByID = `-- name: GetOAuthClientByID :one
-SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at FROM oauth_clients
+SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at, application_id FROM oauth_clients
 WHERE id = $1 AND tenant_id = $2
 `
 
@@ -245,22 +247,24 @@ func (q *Queries) GetOAuthClientByID(ctx context.Context, arg GetOAuthClientByID
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
 
 const getOAuthConsentGrant = `-- name: GetOAuthConsentGrant :one
 SELECT id, user_id, tenant_id, client_id, scopes, granted_at, revoked_at FROM oauth_consent_grants
-WHERE user_id = $1 AND client_id = $2 AND revoked_at IS NULL
+WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL
 `
 
 type GetOAuthConsentGrantParams struct {
 	UserID   pgtype.UUID `json:"user_id"`
 	ClientID string      `json:"client_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
 }
 
 func (q *Queries) GetOAuthConsentGrant(ctx context.Context, arg GetOAuthConsentGrantParams) (OauthConsentGrant, error) {
-	row := q.db.QueryRow(ctx, getOAuthConsentGrant, arg.UserID, arg.ClientID)
+	row := q.db.QueryRow(ctx, getOAuthConsentGrant, arg.UserID, arg.ClientID, arg.TenantID)
 	var i OauthConsentGrant
 	err := row.Scan(
 		&i.ID,
@@ -275,7 +279,7 @@ func (q *Queries) GetOAuthConsentGrant(ctx context.Context, arg GetOAuthConsentG
 }
 
 const listOAuthClientsByTenant = `-- name: ListOAuthClientsByTenant :many
-SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at FROM oauth_clients
+SELECT id, tenant_id, client_id, client_secret_hash, client_type, name, redirect_uris, scopes, grant_types, logo_uri, is_active, created_by, created_at, updated_at, application_id FROM oauth_clients
 WHERE tenant_id = $1
 ORDER BY created_at DESC
 `
@@ -304,6 +308,7 @@ func (q *Queries) ListOAuthClientsByTenant(ctx context.Context, tenantID pgtype.
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}

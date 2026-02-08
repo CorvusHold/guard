@@ -12,14 +12,31 @@ import (
 )
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata, family_id
 FROM refresh_tokens
 WHERE token_hash = $1
 `
 
-func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error) {
+type GetRefreshTokenByHashRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	TokenHash     string             `json:"token_hash"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	Revoked       bool               `json:"revoked"`
+	UserAgent     pgtype.Text        `json:"user_agent"`
+	Ip            pgtype.Text        `json:"ip"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	AuthMethod    pgtype.Text        `json:"auth_method"`
+	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
+	Metadata      []byte             `json:"metadata"`
+	FamilyID      pgtype.UUID        `json:"family_id"`
+}
+
+func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error) {
 	row := q.db.QueryRow(ctx, getRefreshTokenByHash, tokenHash)
-	var i RefreshToken
+	var i GetRefreshTokenByHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -34,13 +51,14 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 		&i.AuthMethod,
 		&i.SsoProviderID,
 		&i.Metadata,
+		&i.FamilyID,
 	)
 	return i, err
 }
 
 const insertRefreshToken = `-- name: InsertRefreshToken :exec
-INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at, auth_method, sso_provider_id, metadata)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at, auth_method, sso_provider_id, metadata, family_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type InsertRefreshTokenParams struct {
@@ -55,6 +73,7 @@ type InsertRefreshTokenParams struct {
 	AuthMethod    pgtype.Text        `json:"auth_method"`
 	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
 	Metadata      []byte             `json:"metadata"`
+	FamilyID      pgtype.UUID        `json:"family_id"`
 }
 
 func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) error {
@@ -70,12 +89,13 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 		arg.AuthMethod,
 		arg.SsoProviderID,
 		arg.Metadata,
+		arg.FamilyID,
 	)
 	return err
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT rt.id, rt.user_id, rt.tenant_id, rt.token_hash, rt.parent_id, rt.revoked, rt.user_agent, rt.ip, rt.created_at, rt.expires_at, rt.auth_method, rt.sso_provider_id, rt.metadata, sp.name as sso_provider_name, sp.slug as sso_provider_slug
+SELECT rt.id, rt.user_id, rt.tenant_id, rt.token_hash, rt.parent_id, rt.revoked, rt.user_agent, rt.ip, rt.created_at, rt.expires_at, rt.auth_method, rt.sso_provider_id, rt.metadata, rt.family_id, sp.name as sso_provider_name, sp.slug as sso_provider_slug
 FROM refresh_tokens rt
 LEFT JOIN sso_providers sp ON rt.sso_provider_id = sp.id
 WHERE rt.user_id = $1 AND rt.tenant_id = $2
@@ -101,6 +121,7 @@ type ListUserSessionsRow struct {
 	AuthMethod      pgtype.Text        `json:"auth_method"`
 	SsoProviderID   pgtype.UUID        `json:"sso_provider_id"`
 	Metadata        []byte             `json:"metadata"`
+	FamilyID        pgtype.UUID        `json:"family_id"`
 	SsoProviderName pgtype.Text        `json:"sso_provider_name"`
 	SsoProviderSlug pgtype.Text        `json:"sso_provider_slug"`
 }
@@ -128,6 +149,7 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 			&i.AuthMethod,
 			&i.SsoProviderID,
 			&i.Metadata,
+			&i.FamilyID,
 			&i.SsoProviderName,
 			&i.SsoProviderSlug,
 		); err != nil {
@@ -139,6 +161,20 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeAllRefreshTokensByUser = `-- name: RevokeAllRefreshTokensByUser :execrows
+UPDATE refresh_tokens
+SET revoked = TRUE
+WHERE user_id = $1 AND revoked = FALSE
+`
+
+func (q *Queries) RevokeAllRefreshTokensByUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAllRefreshTokensByUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
@@ -195,5 +231,23 @@ UPDATE refresh_tokens rt SET revoked = TRUE WHERE rt.id IN (SELECT c.id FROM cha
 
 func (q *Queries) RevokeTokenChain(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeTokenChain, id)
+	return err
+}
+
+const revokeTokenFamily = `-- name: RevokeTokenFamily :exec
+UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = $1 AND revoked = FALSE
+`
+
+func (q *Queries) RevokeTokenFamily(ctx context.Context, familyID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeTokenFamily, familyID)
+	return err
+}
+
+const updateRefreshTokenLastUsed = `-- name: UpdateRefreshTokenLastUsed :exec
+UPDATE refresh_tokens SET last_used_at = now() WHERE token_hash = $1
+`
+
+func (q *Queries) UpdateRefreshTokenLastUsed(ctx context.Context, tokenHash string) error {
+	_, err := q.db.Exec(ctx, updateRefreshTokenLastUsed, tokenHash)
 	return err
 }

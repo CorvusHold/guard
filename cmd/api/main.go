@@ -472,7 +472,7 @@ func main() {
 	webhooks.StartWorker(context.Background(), pgPool)
 	// SCIM 2.0 provisioning
 	scimSvc := scimsvc.New(pgPool)
-	scimCtrl := scimctrl.New(scimSvc)
+	scimCtrl := scimctrl.New(scimSvc, settService)
 	scimCtrl.Register(e)
 
 	// Background dependency ping metrics

@@ -321,7 +321,7 @@ func (h *Controller) authorize(c echo.Context) error {
 	}
 
 	// Skip consent if user has previously approved these scopes for this client
-	if h.svc.HasConsent(c.Request().Context(), userID, in.ClientID, scopes) {
+	if h.svc.HasConsent(c.Request().Context(), userID, tenantID, in.ClientID, scopes) {
 		result, err := h.svc.CreateAuthorizationCode(c.Request().Context(), in)
 		if err != nil {
 			return redirectWithError(c, in.RedirectURI, in.State, "server_error", "failed to create authorization code")
@@ -398,6 +398,24 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 	}
 
 	if !req.Approved {
+		// Validate redirect_uri against registered client before redirecting
+		if req.ClientID != "" {
+			client, err := h.svc.GetClientByClientID(c.Request().Context(), req.ClientID)
+			if err == nil {
+				validURI := false
+				for _, uri := range client.RedirectURIs {
+					if uri == req.RedirectURI {
+						validURI = true
+						break
+					}
+				}
+				if !validURI {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect_uri"})
+				}
+			} else {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
+			}
+		}
 		return redirectWithError(c, req.RedirectURI, req.State, "access_denied", "user denied the request")
 	}
 
@@ -788,35 +806,20 @@ func (h *Controller) buildLoginURL(c echo.Context) string {
 }
 
 func extractTenantID(c echo.Context) (uuid.UUID, error) {
-	// From JWT claims
-	auth := c.Request().Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		tokenStr := strings.TrimPrefix(auth, "Bearer ")
-		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-		token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-		if err == nil {
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if ten, ok := claims["ten"].(string); ok {
-					return uuid.Parse(ten)
-				}
-			}
+	// Use verified claims from JWT middleware context
+	if v := c.Get("auth_tenant_id"); v != nil {
+		if id, ok := v.(uuid.UUID); ok {
+			return id, nil
 		}
 	}
 	return uuid.Nil, fmt.Errorf("tenant_id not found")
 }
 
 func extractUserID(c echo.Context) (uuid.UUID, error) {
-	auth := c.Request().Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		tokenStr := strings.TrimPrefix(auth, "Bearer ")
-		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-		token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-		if err == nil {
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if sub, ok := claims["sub"].(string); ok {
-					return uuid.Parse(sub)
-				}
-			}
+	// Use verified claims from JWT middleware context
+	if v := c.Get("auth_user_id"); v != nil {
+		if id, ok := v.(uuid.UUID); ok {
+			return id, nil
 		}
 	}
 	return uuid.Nil, fmt.Errorf("user_id not found")

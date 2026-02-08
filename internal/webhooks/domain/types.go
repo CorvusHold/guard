@@ -45,10 +45,11 @@ type CreateWebhookInput struct {
 // Repository abstracts data access for webhooks.
 type Repository interface {
 	CreateWebhook(ctx context.Context, wh Webhook) (Webhook, error)
-	GetWebhook(ctx context.Context, id uuid.UUID) (Webhook, error)
+	GetWebhook(ctx context.Context, id, tenantID uuid.UUID) (Webhook, error)
+	GetWebhookByID(ctx context.Context, id uuid.UUID) (Webhook, error)
 	ListWebhooks(ctx context.Context, tenantID uuid.UUID) ([]Webhook, error)
-	UpdateWebhook(ctx context.Context, id uuid.UUID, url *string, events []string, isActive *bool) (Webhook, error)
-	DeleteWebhook(ctx context.Context, id uuid.UUID) error
+	UpdateWebhook(ctx context.Context, id, tenantID uuid.UUID, url *string, events []string, isActive *bool) (Webhook, error)
+	DeleteWebhook(ctx context.Context, id, tenantID uuid.UUID) error
 
 	CreateDelivery(ctx context.Context, d Delivery) error
 	ListPendingDeliveries(ctx context.Context, limit int) ([]Delivery, error)

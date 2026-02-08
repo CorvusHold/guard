@@ -79,7 +79,11 @@ func (ctrl *Controller) get(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	wh, err := ctrl.svc.Get(c.Request().Context(), id)
+	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	}
+	wh, err := ctrl.svc.Get(c.Request().Context(), id, tenantID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "webhook not found"})
 	}
@@ -91,11 +95,15 @@ func (ctrl *Controller) update(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
+	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	}
 	var req updateWebhookRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	wh, err := ctrl.svc.Update(c.Request().Context(), id, req.URL, req.Events, req.IsActive)
+	wh, err := ctrl.svc.Update(c.Request().Context(), id, tenantID, req.URL, req.Events, req.IsActive)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -107,7 +115,11 @@ func (ctrl *Controller) delete(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
-	if err := ctrl.svc.Delete(c.Request().Context(), id); err != nil {
+	tenantID, err := uuid.Parse(c.Request().Header.Get("X-Tenant-ID"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "X-Tenant-ID header required"})
+	}
+	if err := ctrl.svc.Delete(c.Request().Context(), id, tenantID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)

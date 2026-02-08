@@ -23,7 +23,7 @@ func New(repo domain.Repository) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, input domain.CreateWebhookInput) (domain.Webhook, error) {
-	secretHash := hashSecret(input.Secret)
+	secretHash := HashSecret(input.Secret)
 	wh := domain.Webhook{
 		ID:         uuid.New(),
 		TenantID:   input.TenantID,
@@ -37,20 +37,20 @@ func (s *Service) Create(ctx context.Context, input domain.CreateWebhookInput) (
 	return s.repo.CreateWebhook(ctx, wh)
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (domain.Webhook, error) {
-	return s.repo.GetWebhook(ctx, id)
+func (s *Service) Get(ctx context.Context, id, tenantID uuid.UUID) (domain.Webhook, error) {
+	return s.repo.GetWebhook(ctx, id, tenantID)
 }
 
 func (s *Service) List(ctx context.Context, tenantID uuid.UUID) ([]domain.Webhook, error) {
 	return s.repo.ListWebhooks(ctx, tenantID)
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, url *string, events []string, isActive *bool) (domain.Webhook, error) {
-	return s.repo.UpdateWebhook(ctx, id, url, events, isActive)
+func (s *Service) Update(ctx context.Context, id, tenantID uuid.UUID, url *string, events []string, isActive *bool) (domain.Webhook, error) {
+	return s.repo.UpdateWebhook(ctx, id, tenantID, url, events, isActive)
 }
 
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.repo.DeleteWebhook(ctx, id)
+func (s *Service) Delete(ctx context.Context, id, tenantID uuid.UUID) error {
+	return s.repo.DeleteWebhook(ctx, id, tenantID)
 }
 
 // EnqueueEvent creates delivery records for all webhooks subscribed to the event.
@@ -81,14 +81,22 @@ func (s *Service) EnqueueEvent(ctx context.Context, tenantID uuid.UUID, eventTyp
 	return nil
 }
 
-// SignPayload creates an HMAC-SHA256 signature for a payload using the webhook secret.
-func SignPayload(secret string, payload []byte) string {
-	mac := hmac.New(sha256.New, []byte(secret))
+// SignPayload creates an HMAC-SHA256 signature for a payload.
+// The key parameter should be the SHA-256 hex digest of the original secret
+// (i.e., the value returned by HashSecret). Consumers must derive the same
+// HMAC key by computing SHA-256 of their stored secret before verification:
+//
+//	key = hex(sha256(raw_secret))
+//	expected = HMAC-SHA256(key, payload)
+func SignPayload(key string, payload []byte) string {
+	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func hashSecret(secret string) string {
+// HashSecret returns the SHA-256 hex digest of a raw secret.
+// This value is stored in the database and used as the HMAC signing key.
+func HashSecret(secret string) string {
 	h := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(h[:])
 }

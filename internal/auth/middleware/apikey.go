@@ -32,6 +32,9 @@ type APIKeyValidator interface {
 func RequireAPIKey(validator APIKeyValidator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// Clear any client-supplied X-Tenant-ID to prevent spoofing
+			c.Request().Header.Del("X-Tenant-ID")
+
 			rawKey := strings.TrimSpace(c.Request().Header.Get(HeaderAPIKey))
 
 			// Also check Authorization: Bearer gk_* for API key auth
@@ -51,12 +54,10 @@ func RequireAPIKey(validator APIKeyValidator) echo.MiddlewareFunc {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid api key"})
 			}
 
-			// Store API key in context
+			// Store API key in context and propagate tenant via Echo context
 			ctx := context.WithValue(c.Request().Context(), ContextKeyAPIKey, key)
 			c.SetRequest(c.Request().WithContext(ctx))
-
-			// Set tenant header for downstream handlers
-			c.Request().Header.Set("X-Tenant-ID", key.TenantID.String())
+			c.Set("tenantID", key.TenantID.String())
 
 			return next(c)
 		}

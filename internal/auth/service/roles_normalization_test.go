@@ -130,6 +130,27 @@ func (f *fakeRepo) RevokeUserSessions(ctx context.Context, userID, tenantID uuid
 func (f *fakeRepo) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
 	return 0, nil
 }
+func (f *fakeRepo) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (f *fakeRepo) UpdateRefreshTokenLastUsed(ctx context.Context, tokenHash string) error {
+	return nil
+}
+func (f *fakeRepo) IncrementFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) (int32, error) {
+	return 0, nil
+}
+func (f *fakeRepo) ResetFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) error {
+	return nil
+}
+func (f *fakeRepo) LockAccount(ctx context.Context, tenantID uuid.UUID, email string, lockedUntil time.Time) error {
+	return nil
+}
+func (f *fakeRepo) UnlockAccount(ctx context.Context, userID uuid.UUID) error {
+	return nil
+}
+func (f *fakeRepo) GetLockoutStatus(ctx context.Context, tenantID uuid.UUID, email string) (int32, *time.Time, error) {
+	return 0, nil, nil
+}
 
 // --- RBAC v2 stubs to satisfy domain.Repository ---
 // Permissions

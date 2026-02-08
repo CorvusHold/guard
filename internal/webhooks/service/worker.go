@@ -57,7 +57,7 @@ func (w *Worker) processBatch(ctx context.Context) {
 }
 
 func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
-	wh, err := w.repo.GetWebhook(ctx, d.WebhookID)
+	wh, err := w.repo.GetWebhookByID(ctx, d.WebhookID)
 	if err != nil {
 		log.Error().Err(err).Str("delivery_id", d.ID.String()).Msg("webhook worker: failed to get webhook")
 		return

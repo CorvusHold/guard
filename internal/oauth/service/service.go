@@ -233,6 +233,16 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req domain.Toke
 		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("invalid or expired authorization code")
 	}
 
+	// Reject expired codes early
+	if time.Now().UTC().After(code.ExpiresAt) {
+		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("authorization code has expired")
+	}
+
+	// Reject already-consumed codes early
+	if code.ConsumedAt != nil {
+		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("authorization code has already been used")
+	}
+
 	// Validate client_id matches
 	if code.ClientID != req.ClientID {
 		return domain.AuthorizationCode{}, domain.OAuthClient{}, errors.New("client_id mismatch")
@@ -370,8 +380,8 @@ func isValidRedirectURI(registered []string, uri string) bool {
 
 // HasConsent checks if the user has previously granted consent for the given client and scopes.
 // Returns true if all requested scopes are covered by an existing grant.
-func (s *Service) HasConsent(ctx context.Context, userID uuid.UUID, clientID string, scopes []string) bool {
-	grant, err := s.repo.GetConsentGrant(ctx, userID, clientID)
+func (s *Service) HasConsent(ctx context.Context, userID, tenantID uuid.UUID, clientID string, scopes []string) bool {
+	grant, err := s.repo.GetConsentGrant(ctx, userID, tenantID, clientID)
 	if err != nil {
 		return false
 	}

@@ -152,6 +152,6 @@ type Repository interface {
 	ConsumeAuthorizationCode(ctx context.Context, codeHash string) error
 
 	UpsertConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string, scopes []string) (ConsentGrant, error)
-	GetConsentGrant(ctx context.Context, userID uuid.UUID, clientID string) (ConsentGrant, error)
+	GetConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string) (ConsentGrant, error)
 	RevokeConsentGrant(ctx context.Context, userID uuid.UUID, clientID string) error
 }

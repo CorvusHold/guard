@@ -2,11 +2,15 @@ package ratelimit
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 )
+
+// slidingWindowCounter provides a unique suffix for sorted-set members to prevent collisions.
+var slidingWindowCounter atomic.Uint64
 
 // SlidingWindowStore implements a sliding window rate limiter using Redis sorted sets.
 // More accurate than fixed-window counters — prevents burst at window boundaries.
@@ -23,7 +27,8 @@ func (s *SlidingWindowStore) Allow(c echo.Context, key string, limit int, window
 	ctx := c.Request().Context()
 	now := time.Now()
 	windowStart := now.Add(-window)
-	member := fmt.Sprintf("%d-%d", now.UnixNano(), now.UnixNano()%1000)
+	seq := slidingWindowCounter.Add(1)
+	member := fmt.Sprintf("%d-%d", now.UnixNano(), seq)
 
 	pipe := s.client.Pipeline()
 	// Remove expired entries

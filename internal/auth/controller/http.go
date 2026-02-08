@@ -36,6 +36,13 @@ type Controller struct {
 	pub      evdomain.Publisher
 }
 
+// Sentinel errors returned by requireAuth/requireAdmin/requireAdminForTenant
+// so callers can reliably short-circuit after the JSON response is written.
+var (
+	ErrUnauthorized = errors.New("unauthorized")
+	ErrForbidden    = errors.New("forbidden")
+)
+
 const (
 	guardAccessTokenCookieName  = domain.CookieAccessToken
 	guardRefreshTokenCookieName = domain.CookieRefreshToken
@@ -825,6 +832,7 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.PATCH("/admin/users/:id", h.adminUpdateNames, rlToken)
 	g.POST("/admin/users/:id/block", h.adminBlockUser, rlToken)
 	g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
+	g.POST("/admin/users/:id/unlock", h.adminUnlockAccount, rlToken)
 	g.POST("/admin/users/:id/verify-email", h.adminVerifyEmail, rlToken)
 	g.POST("/admin/users/:id/unverify-email", h.adminUnverifyEmail, rlToken)
 
@@ -1181,11 +1189,13 @@ func (h *Controller) resolveAccessToken(c echo.Context) string {
 func (h *Controller) requireAuth(c echo.Context) (domain.Introspection, error) {
 	tok := h.resolveAccessToken(c)
 	if tok == "" {
-		return domain.Introspection{}, c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+		_ = c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+		return domain.Introspection{}, ErrUnauthorized
 	}
 	in, err := h.svc.Introspect(c.Request().Context(), tok)
 	if err != nil || !in.Active {
-		return domain.Introspection{}, c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		_ = c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		return domain.Introspection{}, ErrUnauthorized
 	}
 	return in, nil
 }
@@ -1203,7 +1213,8 @@ func (h *Controller) requireAdmin(c echo.Context) (domain.Introspection, error) 
 			return in, nil
 		}
 	}
-	return domain.Introspection{}, c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	_ = c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	return domain.Introspection{}, ErrForbidden
 }
 
 // requireAdminForTenant calls requireAdmin and then verifies the caller's tenant
@@ -1214,7 +1225,8 @@ func (h *Controller) requireAdminForTenant(c echo.Context, tenantID uuid.UUID) (
 		return in, err
 	}
 	if in.TenantID != tenantID {
-		return domain.Introspection{}, c.JSON(http.StatusForbidden, map[string]string{"error": "tenant mismatch"})
+		_ = c.JSON(http.StatusForbidden, map[string]string{"error": "tenant mismatch"})
+		return domain.Introspection{}, ErrForbidden
 	}
 	return in, nil
 }
@@ -1787,7 +1799,8 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/block [post]
 func (h *Controller) adminBlockUser(c echo.Context) error {
-	if _, err := h.requireAdmin(c); err != nil {
+	admin, err := h.requireAdmin(c)
+	if err != nil {
 		return nil
 	}
 
@@ -1800,6 +1813,13 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 	if err := h.svc.SetUserActive(c.Request().Context(), userID, false); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+		Type:     "auth.admin.user.blocked",
+		TenantID: admin.TenantID,
+		UserID:   admin.UserID,
+		Meta:     map[string]string{"target_user_id": userID.String()},
+		Time:     time.Now(),
+	})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1816,7 +1836,8 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/unblock [post]
 func (h *Controller) adminUnblockUser(c echo.Context) error {
-	if _, err := h.requireAdmin(c); err != nil {
+	admin, err := h.requireAdmin(c)
+	if err != nil {
 		return nil
 	}
 
@@ -1829,6 +1850,50 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 	if err := h.svc.SetUserActive(c.Request().Context(), userID, true); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+		Type:     "auth.admin.user.unblocked",
+		TenantID: admin.TenantID,
+		UserID:   admin.UserID,
+		Meta:     map[string]string{"target_user_id": userID.String()},
+		Time:     time.Now(),
+	})
+	return c.NoContent(http.StatusNoContent)
+}
+
+// Admin Unlock Account godoc
+// @Summary      Unlock a locked account (admin-only)
+// @Description  Clears account lockout and resets failed login attempts. Requires admin role.
+// @Tags         auth.admin
+// @Security     BearerAuth
+// @Param        id   path   string  true  "User ID (UUID)"
+// @Success      204
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      429  {object}  map[string]string
+// @Router       /api/v1/auth/admin/users/{id}/unlock [post]
+func (h *Controller) adminUnlockAccount(c echo.Context) error {
+	admin, err := h.requireAdmin(c)
+	if err != nil {
+		return nil
+	}
+
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+	}
+
+	if err := h.svc.UnlockAccount(c.Request().Context(), userID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+		Type:     "auth.admin.user.unlocked",
+		TenantID: admin.TenantID,
+		UserID:   admin.UserID,
+		Meta:     map[string]string{"target_user_id": userID.String()},
+		Time:     time.Now(),
+	})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1845,7 +1910,8 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/verify-email [post]
 func (h *Controller) adminVerifyEmail(c echo.Context) error {
-	if _, err := h.requireAdmin(c); err != nil {
+	admin, err := h.requireAdmin(c)
+	if err != nil {
 		return nil
 	}
 
@@ -1858,6 +1924,13 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, true); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+		Type:     "auth.admin.user.email_verified",
+		TenantID: admin.TenantID,
+		UserID:   admin.UserID,
+		Meta:     map[string]string{"target_user_id": userID.String()},
+		Time:     time.Now(),
+	})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -1874,7 +1947,8 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/unverify-email [post]
 func (h *Controller) adminUnverifyEmail(c echo.Context) error {
-	if _, err := h.requireAdmin(c); err != nil {
+	admin, err := h.requireAdmin(c)
+	if err != nil {
 		return nil
 	}
 
@@ -1887,6 +1961,13 @@ func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 	if err := h.svc.SetUserEmailVerified(c.Request().Context(), userID, false); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	_ = h.pub.Publish(c.Request().Context(), evdomain.Event{
+		Type:     "auth.admin.user.email_unverified",
+		TenantID: admin.TenantID,
+		UserID:   admin.UserID,
+		Meta:     map[string]string{"target_user_id": userID.String()},
+		Time:     time.Now(),
+	})
 	return c.NoContent(http.StatusNoContent)
 }
 

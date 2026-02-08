@@ -90,11 +90,11 @@ func (w *WebAuthnService) UpdateSignCount(ctx context.Context, credentialID []by
 	return err
 }
 
-// DeleteCredential removes a WebAuthn credential.
-func (w *WebAuthnService) DeleteCredential(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+// DeleteCredential removes a WebAuthn credential scoped to user and tenant.
+func (w *WebAuthnService) DeleteCredential(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID) error {
 	_, err := w.pg.Exec(ctx,
-		`DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2`,
-		id, userID,
+		`DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2 AND tenant_id = $3`,
+		id, userID, tenantID,
 	)
 	return err
 }

@@ -225,6 +225,36 @@ func mapAuthIdentity(ai db.AuthIdentity) domain.AuthIdentity {
 	}
 }
 
+func mapGetRefreshTokenByHashRow(rt db.GetRefreshTokenByHashRow) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
+	}
+	return domain.RefreshToken{
+		ID:            toUUID(rt.ID),
+		UserID:        toUUID(rt.UserID),
+		TenantID:      toUUID(rt.TenantID),
+		Revoked:       rt.Revoked,
+		ExpiresAt:     rt.ExpiresAt.Time,
+		CreatedAt:     rt.CreatedAt.Time,
+		UserAgent:     rt.UserAgent.String,
+		IP:            rt.Ip.String,
+		AuthMethod:    rt.AuthMethod.String,
+		SSOProviderID: ssoProviderID,
+		Metadata:      metadata,
+	}
+}
+
 func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 	var ssoProviderID *uuid.UUID
 	if rt.SsoProviderID.Valid {
@@ -436,7 +466,7 @@ func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash st
 	if err != nil {
 		return domain.RefreshToken{}, err
 	}
-	return mapRefreshToken(rt), nil
+	return mapGetRefreshTokenByHashRow(rt), nil
 }
 
 func (r *SQLCRepository) RevokeTokenChain(ctx context.Context, id uuid.UUID) error {
@@ -1027,6 +1057,61 @@ func (r *SQLCRepository) RevokeRefreshTokenByHash(ctx context.Context, tokenHash
 	return r.q.RevokeRefreshTokenByHash(ctx, tokenHash)
 }
 
+// RevokeAllUserSessions revokes all active refresh tokens for a user across all tenants.
+// Returns the number of tokens revoked.
+func (r *SQLCRepository) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return r.q.RevokeAllRefreshTokensByUser(ctx, toPgUUID(userID))
+}
+
+// UpdateRefreshTokenLastUsed updates the last_used_at timestamp for a refresh token.
+func (r *SQLCRepository) UpdateRefreshTokenLastUsed(ctx context.Context, tokenHash string) error {
+	return r.q.UpdateRefreshTokenLastUsed(ctx, tokenHash)
+}
+
+// --- Account lockout ---
+
+func (r *SQLCRepository) IncrementFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) (int32, error) {
+	return r.q.IncrementFailedAttempts(ctx, db.IncrementFailedAttemptsParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+}
+
+func (r *SQLCRepository) ResetFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) error {
+	return r.q.ResetFailedAttempts(ctx, db.ResetFailedAttemptsParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+}
+
+func (r *SQLCRepository) LockAccount(ctx context.Context, tenantID uuid.UUID, email string, lockedUntil time.Time) error {
+	return r.q.LockAccount(ctx, db.LockAccountParams{
+		TenantID:    toPgUUID(tenantID),
+		Email:       email,
+		LockedUntil: pgtype.Timestamptz{Time: lockedUntil, Valid: true},
+	})
+}
+
+func (r *SQLCRepository) UnlockAccount(ctx context.Context, userID uuid.UUID) error {
+	return r.q.UnlockAccount(ctx, toPgUUID(userID))
+}
+
+func (r *SQLCRepository) GetLockoutStatus(ctx context.Context, tenantID uuid.UUID, email string) (int32, *time.Time, error) {
+	row, err := r.q.GetLockoutStatus(ctx, db.GetLockoutStatusParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	var lockedUntil *time.Time
+	if row.LockedUntil.Valid {
+		t := row.LockedUntil.Time
+		lockedUntil = &t
+	}
+	return row.FailedAttempts, lockedUntil, nil
+}
+
 // --- Invitations ---
 
 func mapInvitation(i db.Invitation) domain.Invitation {
@@ -1174,7 +1259,7 @@ func (r *SQLCRepository) CreateAPIKey(ctx context.Context, id uuid.UUID, tenantI
 	if err != nil {
 		return domain.APIKey{}, err
 	}
-	return mapAPIKey(row), nil
+	return mapCreateAPIKeyRow(row), nil
 }
 
 func (r *SQLCRepository) GetAPIKeyByHash(ctx context.Context, keyHash string) (domain.APIKey, error) {
@@ -1182,7 +1267,7 @@ func (r *SQLCRepository) GetAPIKeyByHash(ctx context.Context, keyHash string) (d
 	if err != nil {
 		return domain.APIKey{}, err
 	}
-	return mapAPIKey(row), nil
+	return mapGetAPIKeyByHashRow(row), nil
 }
 
 func (r *SQLCRepository) ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.APIKey, error) {
@@ -1231,6 +1316,66 @@ func (r *SQLCRepository) RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.
 
 func (r *SQLCRepository) UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error {
 	return r.q.UpdateAPIKeyLastUsed(ctx, toPgUUID(keyID))
+}
+
+// mapCreateAPIKeyRow converts a sqlc CreateAPIKeyRow to a domain APIKey.
+func mapCreateAPIKeyRow(row db.CreateAPIKeyRow) domain.APIKey {
+	k := domain.APIKey{
+		ID:        toUUID(row.ID),
+		TenantID:  toUUID(row.TenantID),
+		Name:      row.Name,
+		KeyPrefix: row.KeyPrefix,
+		Scopes:    row.Scopes,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.CreatedBy.Valid {
+		u := toUUID(row.CreatedBy)
+		k.CreatedBy = &u
+	}
+	if row.ExpiresAt.Valid {
+		t := row.ExpiresAt.Time
+		k.ExpiresAt = &t
+	}
+	if row.RevokedAt.Valid {
+		t := row.RevokedAt.Time
+		k.RevokedAt = &t
+	}
+	if row.LastUsedAt.Valid {
+		t := row.LastUsedAt.Time
+		k.LastUsedAt = &t
+	}
+	return k
+}
+
+// mapGetAPIKeyByHashRow converts a sqlc GetAPIKeyByHashRow to a domain APIKey.
+func mapGetAPIKeyByHashRow(row db.GetAPIKeyByHashRow) domain.APIKey {
+	k := domain.APIKey{
+		ID:        toUUID(row.ID),
+		TenantID:  toUUID(row.TenantID),
+		Name:      row.Name,
+		KeyPrefix: row.KeyPrefix,
+		Scopes:    row.Scopes,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.CreatedBy.Valid {
+		u := toUUID(row.CreatedBy)
+		k.CreatedBy = &u
+	}
+	if row.ExpiresAt.Valid {
+		t := row.ExpiresAt.Time
+		k.ExpiresAt = &t
+	}
+	if row.RevokedAt.Valid {
+		t := row.RevokedAt.Time
+		k.RevokedAt = &t
+	}
+	if row.LastUsedAt.Valid {
+		t := row.LastUsedAt.Time
+		k.LastUsedAt = &t
+	}
+	return k
 }
 
 // mapAPIKey converts a sqlc ApiKey row to a domain APIKey.

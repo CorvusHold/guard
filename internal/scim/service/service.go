@@ -56,6 +56,14 @@ func (s *Service) GetUser(ctx context.Context, tenantID uuid.UUID, userID string
 }
 
 func (s *Service) ListUsers(ctx context.Context, tenantID uuid.UUID, filter string, startIndex, count int) (domain.SCIMListResponse, error) {
+	// Normalize paging parameters to prevent negative OFFSET
+	if startIndex <= 0 {
+		startIndex = 1
+	}
+	if count <= 0 {
+		count = 100
+	}
+
 	baseQuery := `FROM users u
 		 JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = $1
 		 JOIN auth_identities ai ON ai.user_id = u.id AND ai.tenant_id = $1`

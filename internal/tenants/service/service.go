@@ -99,6 +99,27 @@ func (s *service) IsAncestorOf(ctx context.Context, ancestorID, descendantID uui
 	return false, nil
 }
 
+func (s *service) UpdateParent(ctx context.Context, id uuid.UUID, parentID *uuid.UUID) error {
+	// Validate parent exists if specified
+	if parentID != nil {
+		if _, err := s.repo.GetByID(ctx, *parentID); err != nil {
+			return errors.New("parent tenant not found")
+		}
+		// Prevent circular references
+		isDescendant, err := s.IsAncestorOf(ctx, id, *parentID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if isDescendant {
+			return errors.New("cannot set parent to a descendant tenant")
+		}
+		if *parentID == id {
+			return errors.New("cannot set tenant as its own parent")
+		}
+	}
+	return s.repo.UpdateParent(ctx, id, parentID)
+}
+
 func (s *service) GetByID(ctx context.Context, id uuid.UUID) (db.Tenant, error) {
 	return s.repo.GetByID(ctx, id)
 }

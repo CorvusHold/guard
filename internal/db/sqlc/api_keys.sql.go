@@ -28,7 +28,22 @@ type CreateAPIKeyParams struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
-func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
+type CreateAPIKeyRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	Name       string             `json:"name"`
+	KeyHash    string             `json:"key_hash"`
+	KeyPrefix  string             `json:"key_prefix"`
+	Scopes     []string           `json:"scopes"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, createAPIKey,
 		arg.ID,
 		arg.TenantID,
@@ -39,7 +54,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.CreatedBy,
 		arg.ExpiresAt,
 	)
-	var i ApiKey
+	var i CreateAPIKeyRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
@@ -77,9 +92,24 @@ FROM api_keys
 WHERE key_hash = $1 AND revoked_at IS NULL
 `
 
-func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
+type GetAPIKeyByHashRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	Name       string             `json:"name"`
+	KeyHash    string             `json:"key_hash"`
+	KeyPrefix  string             `json:"key_prefix"`
+	Scopes     []string           `json:"scopes"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error) {
 	row := q.db.QueryRow(ctx, getAPIKeyByHash, keyHash)
-	var i ApiKey
+	var i GetAPIKeyByHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,

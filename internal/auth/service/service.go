@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -418,8 +419,20 @@ func (s *Service) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstNa
 }
 
 // SetUserActive toggles the active state of a user.
+// When deactivating (blocking), all active sessions are revoked across all tenants.
 func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
-	return s.repo.SetUserActive(ctx, userID, active)
+	if err := s.repo.SetUserActive(ctx, userID, active); err != nil {
+		return err
+	}
+	if !active {
+		_, _ = s.repo.RevokeAllUserSessions(ctx, userID)
+	}
+	return nil
+}
+
+// UnlockAccount clears lockout and resets failed attempts for a user (admin action).
+func (s *Service) UnlockAccount(ctx context.Context, userID uuid.UUID) error {
+	return s.repo.UnlockAccount(ctx, userID)
 }
 
 // SetUserEmailVerified sets the email_verified flag for a user.
@@ -573,6 +586,11 @@ func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.Acc
 	if in.Email == "" || in.Password == "" {
 		return domain.AccessTokens{}, errors.New("email and password are required")
 	}
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, in.TenantID)
+	if violations := ValidatePassword(in.Password, policy); len(violations) > 0 {
+		return domain.AccessTokens{}, fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
+	}
 	userID := uuid.New()
 	authID := uuid.New()
 	// naive roles default empty
@@ -603,10 +621,28 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		metrics.IncAuthOutcome("password", "failure")
 		return domain.AccessTokens{}, err
 	}
+
+	// Check account lockout status
+	_, lockedUntil, _ := s.repo.GetLockoutStatus(ctx, in.TenantID, in.Email)
+	if lockedUntil != nil && time.Now().Before(*lockedUntil) {
+		metrics.IncAuthOutcome("password", "failure")
+		return domain.AccessTokens{}, errors.New("account is temporarily locked due to too many failed login attempts")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(ai.PasswordHash), []byte(in.Password)); err != nil {
 		metrics.IncAuthOutcome("password", "failure")
+		// Increment failed attempts and lock if threshold exceeded
+		threshold, _ := s.settings.GetInt(ctx, sdomain.KeyLockoutThreshold, &in.TenantID, 5)
+		lockoutDuration, _ := s.settings.GetDuration(ctx, sdomain.KeyLockoutDuration, &in.TenantID, 15*time.Minute)
+		count, _ := s.repo.IncrementFailedAttempts(ctx, in.TenantID, in.Email)
+		if int(count) >= threshold {
+			_ = s.repo.LockAccount(ctx, in.TenantID, in.Email, time.Now().Add(lockoutDuration))
+		}
 		return domain.AccessTokens{}, errors.New("invalid credentials")
 	}
+
+	// Reset failed attempts on successful login
+	_ = s.repo.ResetFailedAttempts(ctx, in.TenantID, in.Email)
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
 		// Build short-lived challenge token (5m) signed with tenant's signing key
@@ -674,6 +710,20 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if time.Now().After(rt.ExpiresAt) {
 		return domain.AccessTokens{}, errors.New("refresh token expired")
 	}
+	// Check session idle timeout: if last_used_at is set and exceeds the idle timeout, reject
+	idleTimeout, _ := s.settings.GetDuration(ctx, sdomain.KeySessionIdleTimeout, &rt.TenantID, 72*time.Hour)
+	if idleTimeout > 0 {
+		lastActivity := rt.CreatedAt
+		if rt.LastUsedAt != nil {
+			lastActivity = *rt.LastUsedAt
+		}
+		if time.Since(lastActivity) > idleTimeout {
+			_ = s.repo.RevokeTokenChain(ctx, rt.ID)
+			return domain.AccessTokens{}, errors.New("session expired due to inactivity")
+		}
+	}
+	// Update last_used_at for idle timeout tracking
+	_ = s.repo.UpdateRefreshTokenLastUsed(ctx, hashB64)
 	// rotate: revoke chain and issue a fresh pair with parent=rt.ID
 	if err := s.repo.RevokeTokenChain(ctx, rt.ID); err != nil {
 		return domain.AccessTokens{}, err
@@ -1265,9 +1315,6 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 	if in.Token == "" {
 		return errors.New("token required")
 	}
-	if len(in.NewPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
-	}
 
 	// Hash the token and look it up
 	h := sha256.Sum256([]byte(in.Token))
@@ -1286,6 +1333,12 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 	// Verify tenant matches if provided
 	if in.TenantID != nil && prt.TenantID != *in.TenantID {
 		return errors.New("invalid token")
+	}
+
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, prt.TenantID)
+	if violations := ValidatePassword(in.NewPassword, policy); len(violations) > 0 {
+		return fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// Hash the new password
@@ -1345,8 +1398,10 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 
 // ChangePassword changes the password for a logged-in user.
 func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeInput) error {
-	if len(in.NewPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, in.TenantID)
+	if violations := ValidatePassword(in.NewPassword, policy); len(violations) > 0 {
+		return fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// Get the user's auth identity
@@ -1535,7 +1590,24 @@ func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) erro
 }
 
 // ParseAccessToken parses an access token and returns the claims.
+// It resolves per-tenant signing keys the same way Introspect does.
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
+	// Pre-parse to extract tenant ID for per-tenant key resolution
+	unverified, _, preErr := new(jwt.Parser).ParseUnverified(tokenStr, jwt.MapClaims{})
+	var tenantSigningKey string
+	if preErr == nil {
+		if uc, ok := unverified.Claims.(jwt.MapClaims); ok {
+			if tenStr, ok := uc["ten"].(string); ok {
+				if tid, err := uuid.Parse(tenStr); err == nil {
+					tenantSigningKey, _ = s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+				}
+			}
+		}
+	}
+	if tenantSigningKey == "" {
+		tenantSigningKey = s.cfg.JWTSigningKey
+	}
+
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		switch t.Method.(type) {
 		case *jwt.SigningMethodECDSA:
@@ -1544,7 +1616,7 @@ func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain
 			}
 			return nil, errors.New("no key manager configured for EC verification")
 		case *jwt.SigningMethodHMAC:
-			return []byte(s.cfg.JWTSigningKey), nil
+			return []byte(tenantSigningKey), nil
 		default:
 			return nil, errors.New("unexpected signing method")
 		}

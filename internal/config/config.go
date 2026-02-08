@@ -96,6 +96,12 @@ func Load() (Config, error) {
 	}
 	c.CookieSameSite = sameSite
 
+	// Refuse to start in production with the insecure default JWT signing key
+	env := strings.ToLower(c.AppEnv)
+	if (env == "production" || env == "prod") && c.JWTSigningKey == "dev-insecure-change-this" {
+		return Config{}, fmt.Errorf("JWT_SIGNING_KEY must be set to a secure value in production (current value is the insecure default)")
+	}
+
 	return c, nil
 }
 

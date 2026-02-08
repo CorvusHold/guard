@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS applications (
     description TEXT NOT NULL DEFAULT '',
     logo_uri TEXT NOT NULL DEFAULT '',
     homepage_url TEXT NOT NULL DEFAULT '',
-    created_by UUID REFERENCES users(id),
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -450,9 +450,12 @@ func (h *SSOController) handleSSOLogout(c echo.Context) error {
 	if samlResponse != "" {
 		h.log.Info().Str("tenant_id", tenantIDStr).Str("slug", slug).Msg("received logout response from IdP")
 		// Sessions were already revoked when SP initiated the logout.
-		// Redirect to the RelayState URL if provided, otherwise acknowledge.
+		// Redirect to the RelayState URL if provided and validated, otherwise acknowledge.
 		if relayState != "" {
-			return c.Redirect(http.StatusFound, relayState)
+			if isSafeRedirect(relayState) {
+				return c.Redirect(http.StatusFound, relayState)
+			}
+			h.log.Warn().Str("relay_state", relayState).Msg("rejected unsafe relayState redirect")
 		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "logged_out"})
 	}
@@ -1226,6 +1229,20 @@ func (h *SSOController) maskSecrets(config *domain.Config) map[string]interface{
 	}
 
 	return result
+}
+
+// isSafeRedirect checks that a redirect URL is either a relative path (no scheme/host)
+// or matches the current request's origin. This prevents open-redirect attacks.
+func isSafeRedirect(target string) bool {
+	u, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+	// Relative paths are safe
+	if u.Scheme == "" && u.Host == "" {
+		return true
+	}
+	return false
 }
 
 // maskString partially masks a string for display.

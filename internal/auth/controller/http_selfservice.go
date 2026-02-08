@@ -264,7 +264,7 @@ func (h *Controller) selfDeletePasskey(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid passkey id"})
 	}
-	if err := h.webauthn.DeleteCredential(c.Request().Context(), passkeyID, in.UserID); err != nil {
+	if err := h.webauthn.DeleteCredential(c.Request().Context(), passkeyID, in.UserID, in.TenantID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)

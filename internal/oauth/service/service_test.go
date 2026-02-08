@@ -136,7 +136,7 @@ func (m *mockRepo) UpsertConsentGrant(_ context.Context, userID, tenantID uuid.U
 	return g, nil
 }
 
-func (m *mockRepo) GetConsentGrant(_ context.Context, userID uuid.UUID, clientID string) (domain.ConsentGrant, error) {
+func (m *mockRepo) GetConsentGrant(_ context.Context, userID, _ uuid.UUID, clientID string) (domain.ConsentGrant, error) {
 	if m.consents == nil {
 		return domain.ConsentGrant{}, domain.ErrNotFound
 	}

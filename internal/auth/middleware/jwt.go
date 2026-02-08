@@ -1,7 +1,12 @@
 package middleware
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -20,6 +25,14 @@ const (
 // NewJWT returns an Echo middleware that validates access JWTs and
 // stores user and tenant IDs in the context.
 func NewJWT(cfg config.Config) echo.MiddlewareFunc {
+	// Pre-load EC public key if ES256 is configured
+	var ecPubKey *ecdsa.PublicKey
+	if cfg.JWTSigningAlgorithm == "ES256" && cfg.JWTPrivateKeyPath != "" {
+		if key, err := loadECPublicKey(cfg.JWTPrivateKeyPath); err == nil {
+			ecPubKey = key
+		}
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
@@ -37,8 +50,18 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 			tokStr := strings.TrimPrefix(auth, "Bearer ")
 
 			tok, err := jwt.Parse(tokStr, func(token *jwt.Token) (any, error) {
-				return []byte(cfg.JWTSigningKey), nil
-			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{"HS256"}))
+				switch token.Method.(type) {
+				case *jwt.SigningMethodECDSA:
+					if ecPubKey != nil {
+						return ecPubKey, nil
+					}
+					return nil, fmt.Errorf("no EC public key configured for ES256 verification")
+				case *jwt.SigningMethodHMAC:
+					return []byte(cfg.JWTSigningKey), nil
+				default:
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{"HS256", "ES256"}))
 			if err != nil || !tok.Valid {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			}
@@ -60,6 +83,23 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// loadECPublicKey reads an EC private key PEM file and extracts the public key.
+func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block found in %s", path)
+	}
+	privKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return &privKey.PublicKey, nil
 }
 
 // UserID returns the authenticated user's ID from context.

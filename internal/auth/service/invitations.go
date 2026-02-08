@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -137,6 +138,12 @@ func (s *Service) AcceptInvitation(ctx context.Context, in domain.AcceptInvitati
 	// Invitation must have a tenant ID (for now, we don't support creating new tenants via invitation)
 	if inv.TenantID == nil {
 		return domain.AccessTokens{}, errors.New("invitation does not have a tenant")
+	}
+
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, *inv.TenantID)
+	if violations := ValidatePassword(in.Password, policy); len(violations) > 0 {
+		return domain.AccessTokens{}, fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// All mutations must happen inside a transaction to prevent partial failures
@@ -272,6 +279,12 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	if in.Email == "" || in.Password == "" {
 		return domain.User{}, errors.New("email and password are required")
+	}
+
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, in.TenantID)
+	if violations := ValidatePassword(in.Password, policy); len(violations) > 0 {
+		return domain.User{}, fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// Check if user already exists in this tenant
