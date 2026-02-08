@@ -139,6 +139,12 @@ func (f *fakeRepo) GetRoleByName(ctx context.Context, tenantID uuid.UUID, name s
 func (f *fakeRepo) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListUserRoleNames(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.Role, error) {
+	return nil, nil
+}
 func (f *fakeRepo) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
 	return nil
 }
@@ -240,6 +246,19 @@ func (f *fakeRepo) RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID 
 func (f *fakeRepo) DeleteInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
 	return nil
 }
+
+// --- API Keys ---
+func (f *fakeRepo) CreateAPIKey(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, keyHash, keyPrefix string, scopes []string, createdBy uuid.UUID, expiresAt *time.Time) (domain.APIKey, error) {
+	return domain.APIKey{ID: id, TenantID: tenantID, Name: name}, nil
+}
+func (f *fakeRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (domain.APIKey, error) {
+	return domain.APIKey{}, nil
+}
+func (f *fakeRepo) ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.APIKey, error) {
+	return []domain.APIKey{}, nil
+}
+func (f *fakeRepo) RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error { return nil }
+func (f *fakeRepo) UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error   { return nil }
 
 func TestService_UpdateUserRoles_NormalizesAndDedupes(t *testing.T) {
 	repo := &fakeRepo{}

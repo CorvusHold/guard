@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2, X } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2, X, Wand2, Globe } from 'lucide-react'
 import { useToast } from '@/lib/toast'
 import { getClient } from '@/lib/sdk'
 import type { LoginOptionsResp, SsoProviderOption } from '@/lib/sdk'
@@ -18,7 +18,7 @@ interface UniversalLoginProps {
   className?: string
 }
 
-type LoginStep = 'email' | 'options' | 'password' | 'mfa'
+type LoginStep = 'email' | 'options' | 'password' | 'mfa' | 'magic_link_sent'
 
 // Provider logo mapping - using simple SVG icons inline
 const providerLogos: Record<string, string> = {
@@ -249,6 +249,31 @@ export default function UniversalLogin({
     }
   }
 
+  const handleMagicLinkSend = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const client = getClient()
+      const tid = loginOptions?.tenant_id || selectedTenantId || tenantId
+      await client.magicSend({
+        email: email.trim().toLowerCase(),
+        tenant_id: tid || '',
+        redirect_url: `${window.location.origin}/auth/callback`
+      })
+      setStep('magic_link_sent')
+      showToast({
+        title: 'Magic link sent',
+        description: 'Check your email for a sign-in link.',
+        variant: 'success'
+      })
+    } catch (e: unknown) {
+      const err = e as Error
+      setError(err?.message || 'Failed to send magic link')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const goBackToEmail = () => {
     setStep('email')
     setPassword('')
@@ -276,6 +301,7 @@ export default function UniversalLogin({
           {step === 'options' && 'Choose how to sign in'}
           {step === 'password' && 'Enter your password'}
           {step === 'mfa' && 'Verify your identity'}
+          {step === 'magic_link_sent' && 'Check your inbox'}
         </CardDescription>
       </CardHeader>
 
@@ -455,8 +481,15 @@ export default function UniversalLogin({
               </div>
             )}
 
-            {/* Password option */}
-            {loginOptions.password_enabled && !loginOptions.sso_required && (
+            {/* SSO required notice */}
+            {loginOptions.sso_required && (
+              <p className="text-sm text-muted-foreground text-center">
+                Your organization requires SSO sign-in.
+              </p>
+            )}
+
+            {/* Password and magic link options */}
+            {(!loginOptions.sso_required && (loginOptions.password_enabled || loginOptions.magic_link_enabled)) && (
               <>
                 {(loginOptions.sso_providers.length > 0 || loginOptions.domain_matched_sso) && (
                   <div className="relative">
@@ -470,23 +503,49 @@ export default function UniversalLogin({
                     </div>
                   </div>
                 )}
-                <Button
-                  type="button"
-                  variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
-                  className="w-full"
-                  onClick={() => {
-                    const tenantCount = loginOptions?.tenants?.length ?? 0
-                    if (!selectedTenantId && tenantCount > 1) {
-                      setError('Please choose an organization to continue.')
-                      return
-                    }
-                    setStep('password')
-                  }}
-                  data-testid="password-option-button"
-                >
-                  <Key className="mr-2 h-4 w-4" />
-                  Password
-                </Button>
+                {loginOptions.password_enabled && (
+                  <Button
+                    type="button"
+                    variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
+                    className="w-full"
+                    onClick={() => {
+                      const tenantCount = loginOptions?.tenants?.length ?? 0
+                      if (!selectedTenantId && tenantCount > 1) {
+                        setError('Please choose an organization to continue.')
+                        return
+                      }
+                      setStep('password')
+                    }}
+                    data-testid="password-option-button"
+                  >
+                    <Key className="mr-2 h-4 w-4" />
+                    Password
+                  </Button>
+                )}
+                {loginOptions.magic_link_enabled && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      const tenantCount = loginOptions?.tenants?.length ?? 0
+                      if (!selectedTenantId && tenantCount > 1) {
+                        setError('Please choose an organization to continue.')
+                        return
+                      }
+                      handleMagicLinkSend()
+                    }}
+                    disabled={loading}
+                    data-testid="magic-link-button"
+                  >
+                    {loading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="mr-2 h-4 w-4" />
+                    )}
+                    Email magic link
+                  </Button>
+                )}
               </>
             )}
 
@@ -652,6 +711,50 @@ export default function UniversalLogin({
               Back
             </Button>
           </form>
+        )}
+
+        {/* Magic Link Sent Step */}
+        {step === 'magic_link_sent' && (
+          <div className="space-y-4 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Mail className="h-6 w-6 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                We sent a sign-in link to
+              </p>
+              <p className="text-sm font-semibold">{email}</p>
+              <p className="text-xs text-muted-foreground">
+                Click the link in your email to sign in. The link expires in 15 minutes.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleMagicLinkSend}
+                disabled={loading}
+                data-testid="resend-magic-link"
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="mr-2 h-4 w-4" />
+                )}
+                Resend magic link
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={goBackToEmail}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to sign in
+              </Button>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

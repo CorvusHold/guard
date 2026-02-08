@@ -21,10 +21,13 @@ type Config struct {
 	RedisAddr string
 	RedisDB   int
 
-	JWTSigningKey   string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
-	MagicLinkTTL    time.Duration
+	JWTSigningKey       string
+	JWTSigningAlgorithm string // HS256 | ES256
+	JWTPrivateKeyPath   string // Path to EC private key PEM (for ES256)
+	JWTKeyID            string // Key ID for JWKS (auto-generated if empty)
+	AccessTokenTTL      time.Duration
+	RefreshTokenTTL     time.Duration
+	MagicLinkTTL        time.Duration
 
 	SMTPHost      string
 	SMTPPort      int
@@ -55,6 +58,9 @@ func Load() (Config, error) {
 	c.RedisDB = getInt("REDIS_DB", 0)
 
 	c.JWTSigningKey = getEnv("JWT_SIGNING_KEY", "dev-insecure-change-this")
+	c.JWTSigningAlgorithm = getEnv("JWT_SIGNING_ALGORITHM", "HS256")
+	c.JWTPrivateKeyPath = getEnv("JWT_PRIVATE_KEY_PATH", "")
+	c.JWTKeyID = getEnv("JWT_KEY_ID", "")
 	c.AccessTokenTTL = getDuration("ACCESS_TOKEN_TTL", time.Minute*15)
 	c.RefreshTokenTTL = getDuration("REFRESH_TOKEN_TTL", time.Hour*24*30)
 	c.MagicLinkTTL = getDuration("MAGIC_LINK_TTL", 15*time.Minute)

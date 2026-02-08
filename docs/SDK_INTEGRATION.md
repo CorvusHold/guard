@@ -28,18 +28,24 @@ Guard implements [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth
 ```json
 {
   "issuer": "https://api.example.com",
-  "token_endpoint": "https://api.example.com/api/v1/auth/refresh",
+  "authorization_endpoint": "https://api.example.com/oauth/authorize",
+  "token_endpoint": "https://api.example.com/oauth/token",
   "introspection_endpoint": "https://api.example.com/api/v1/auth/introspect",
-  "revocation_endpoint": "https://api.example.com/api/v1/auth/revoke",
+  "revocation_endpoint": "https://api.example.com/oauth/revoke",
   "userinfo_endpoint": "https://api.example.com/api/v1/auth/me",
-  "response_types_supported": ["token"],
+  "jwks_uri": "https://api.example.com/.well-known/jwks.json",
+  "response_types_supported": ["code", "token"],
   "grant_types_supported": [
+    "authorization_code",
+    "client_credentials",
     "password",
     "refresh_token",
     "urn:guard:params:oauth:grant-type:magic-link",
     "urn:guard:params:oauth:grant-type:sso"
   ],
-  "scopes_supported": ["openid", "profile", "email"],
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+  "code_challenge_methods_supported": ["S256"],
 
   // Guard-specific extensions
   "guard_auth_modes_supported": ["bearer", "cookie"],

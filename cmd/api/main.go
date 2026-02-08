@@ -278,8 +278,14 @@ func matchesWildcardOrigin(origin, pattern string) bool {
 	return strings.HasSuffix(host, "."+suffix)
 }
 
-// resolveTenantID tries to find a tenant UUID from query or route params.
+// resolveTenantID tries to find a tenant UUID from header, query, or route params.
 func resolveTenantID(c echo.Context) *uuid.UUID {
+	// Header: X-Tenant-ID (set by SDKs and browser apps for preflight-safe tenant context)
+	if v := strings.TrimSpace(c.Request().Header.Get("X-Tenant-ID")); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			return &id
+		}
+	}
 	// Common: ?tenant_id=
 	if v := strings.TrimSpace(c.QueryParam("tenant_id")); v != "" {
 		if id, err := uuid.Parse(v); err == nil {
@@ -430,9 +436,10 @@ func main() {
 	// Register domain routes via factories
 	// Settings (tenant-scoped settings management)
 	settings.RegisterV1(apiV1, pgPool, cfg)
-	// Tenants and Auth
-	tenants.RegisterV1(apiV1, pgPool)
+	// Auth (created first so tenant hook can seed default roles)
 	authReg := auth.NewRegistrar(pgPool, cfg)
+	// Tenants (with post-creation hook to seed default RBAC roles)
+	tenants.RegisterV1WithHook(apiV1, pgPool, authReg.SeedDefaultRoles)
 	defer func() {
 		if cerr := authReg.Close(); cerr != nil {
 			log.Error().Err(cerr).Msg("auth registrar close error")
@@ -441,6 +448,9 @@ func main() {
 	authReg.RegisterV1(apiV1)
 	authReg.RegisterWellKnown(e)
 	authReg.RegisterSSOBrowser(e)
+	// OAuth 2.0 provider endpoints (/oauth/authorize, /oauth/token, admin CRUD)
+	authAdminGroup := apiV1.Group("/auth/admin")
+	authReg.RegisterOAuth(e, authAdminGroup)
 
 	// Background dependency ping metrics
 	go func() {

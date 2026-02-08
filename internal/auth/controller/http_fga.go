@@ -15,21 +15,6 @@ import (
 
 // ---- Admin: FGA (scaffold) ----
 
-// getToken returns the access token from the Authorization header (bearer token)
-// or, if empty and auth mode is "cookie", from the guard access token cookie.
-func (h *Controller) getToken(c echo.Context) string {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	return tok
-}
-
 // fgaCreateGroupReq represents the request to create a group.
 type fgaCreateGroupReq struct {
 	TenantID    string `json:"tenant_id" validate:"required,uuid4"`
@@ -65,26 +50,6 @@ type fgaListGroupsResp struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/groups [post]
 func (h *Controller) fgaCreateGroup(c echo.Context) error {
-	// JWT + admin check
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	var req fgaCreateGroupReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -95,6 +60,10 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	in, err := h.requireAdminForTenant(c, tenantID)
+	if err != nil {
+		return nil
 	}
 
 	g, err := h.svc.CreateGroup(c.Request().Context(), tenantID, req.Name, req.Description)
@@ -132,25 +101,6 @@ func (h *Controller) fgaCreateGroup(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/groups [get]
 func (h *Controller) fgaListGroups(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	tenStr := c.QueryParam("tenant_id")
 	if tenStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
@@ -158,6 +108,9 @@ func (h *Controller) fgaListGroups(c echo.Context) error {
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	groups, err := h.svc.ListGroups(c.Request().Context(), tenantID)
@@ -184,25 +137,6 @@ func (h *Controller) fgaListGroups(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/groups/{id} [delete]
 func (h *Controller) fgaDeleteGroup(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	groupIDStr := c.Param("id")
 	groupID, err := uuid.Parse(groupIDStr)
 	if err != nil {
@@ -215,6 +149,10 @@ func (h *Controller) fgaDeleteGroup(c echo.Context) error {
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	in, err := h.requireAdminForTenant(c, tenantID)
+	if err != nil {
+		return nil
 	}
 
 	if err := h.svc.DeleteGroup(c.Request().Context(), groupID, tenantID); err != nil {
@@ -251,23 +189,9 @@ type fgaModifyGroupMemberReq struct {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/groups/{id}/members [post]
 func (h *Controller) fgaAddGroupMember(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	in, err := h.requireAdmin(c)
+	if err != nil {
+		return nil
 	}
 
 	groupIDStr := c.Param("id")
@@ -316,23 +240,9 @@ func (h *Controller) fgaAddGroupMember(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/groups/{id}/members [delete]
 func (h *Controller) fgaRemoveGroupMember(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	in, err := h.requireAdmin(c)
+	if err != nil {
+		return nil
 	}
 
 	groupIDStr := c.Param("id")
@@ -390,25 +300,6 @@ type fgaCreateACLTupleReq struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/acl/tuples [post]
 func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	var req fgaCreateACLTupleReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -419,6 +310,10 @@ func (h *Controller) fgaCreateACLTuple(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	in, err := h.requireAdminForTenant(c, tenantID)
+	if err != nil {
+		return nil
 	}
 	subjectID, err := uuid.Parse(req.SubjectID)
 	if err != nil {
@@ -472,25 +367,6 @@ type fgaDeleteACLTupleReq struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /api/v1/auth/admin/fga/acl/tuples [delete]
 func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
-	tok := h.getToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	var req fgaDeleteACLTupleReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -501,6 +377,10 @@ func (h *Controller) fgaDeleteACLTuple(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	in, err := h.requireAdminForTenant(c, tenantID)
+	if err != nil {
+		return nil
 	}
 	subjectID, err := uuid.Parse(req.SubjectID)
 	if err != nil {
@@ -563,7 +443,7 @@ type fgaAuthorizeResp struct {
 // @Router       /api/v1/auth/authorize [post]
 func (h *Controller) fgaAuthorize(c echo.Context) error {
 	// JWT check (no admin required)
-	tok := h.getToken(c)
+	tok := h.resolveAccessToken(c)
 	if tok == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 	}

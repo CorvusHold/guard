@@ -19,6 +19,127 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/controller.oauth2MetadataResp"
+  /api/v1/auth/admin/api-keys:
+    get:
+      security:
+        - BearerAuth: []
+      description: Returns all API keys for the caller's tenant. Raw keys are never
+        returned.
+      tags:
+        - auth.admin
+      summary: List API keys for a tenant (admin-only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.apiKeysListResp"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    post:
+      security:
+        - BearerAuth: []
+      description: Creates a new API key for service-to-service authentication. The
+        raw key is returned only once.
+      tags:
+        - auth.admin
+      summary: Create an API key (admin-only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.createAPIKeyReq"
+        description: API key details
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.createAPIKeyResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  "/api/v1/auth/admin/api-keys/{id}/revoke":
+    post:
+      security:
+        - BearerAuth: []
+      description: Revokes an API key. The key will no longer be accepted for
+        authentication.
+      tags:
+        - auth.admin
+      summary: Revoke an API key (admin-only)
+      parameters:
+        - description: API Key ID (UUID)
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /api/v1/auth/admin/fga/acl/tuples:
     post:
       security:
@@ -531,6 +652,144 @@ paths:
                   type: string
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /api/v1/auth/admin/oauth-clients:
+    get:
+      security:
+        - BearerAuth: []
+      description: Returns all OAuth clients for the tenant
+      tags:
+        - auth.admin
+      summary: List OAuth clients
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      security:
+        - BearerAuth: []
+      description: Registers a new OAuth 2.0 client application
+      tags:
+        - auth.admin
+      summary: Create OAuth client
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.createClientReq"
+        description: Client configuration
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/controller.createClientResp"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  "/api/v1/auth/admin/oauth-clients/{id}":
+    get:
+      security:
+        - BearerAuth: []
+      description: Returns a single OAuth client by ID
+      tags:
+        - auth.admin
+      summary: Get OAuth client
+      parameters:
+        - description: Client UUID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/domain.OAuthClient"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    delete:
+      security:
+        - BearerAuth: []
+      description: Deletes an OAuth client
+      tags:
+        - auth.admin
+      summary: Delete OAuth client
+      parameters:
+        - description: Client UUID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    patch:
+      security:
+        - BearerAuth: []
+      description: Updates an existing OAuth client
+      tags:
+        - auth.admin
+      summary: Update OAuth client
+      parameters:
+        - description: Client UUID
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.updateClientReq"
+        description: Fields to update
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          description: Bad Request
           content:
             application/json:
               schema:
@@ -1052,6 +1311,11 @@ paths:
           required: true
           schema:
             type: string
+        - description: Filter by email address (exact match)
+          name: email
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: OK
@@ -1258,11 +1522,13 @@ paths:
     post:
       security:
         - BearerAuth: []
-      description: Updates the roles array for a user. Requires caller to have the
-        admin role.
+      description: "DEPRECATED: Updates the denormalized roles array on the user
+        record. Use the RBAC v2 endpoints (POST/DELETE
+        /admin/rbac/users/{id}/roles) instead."
       tags:
         - auth.admin
-      summary: Update a user's roles (admin-only)
+      summary: Update a user's roles (admin-only) [DEPRECATED]
+      deprecated: true
       parameters:
         - description: User ID (UUID)
           name: id
@@ -3505,6 +3771,219 @@ paths:
                 type: object
                 additionalProperties:
                   type: string
+  /oauth/authorize:
+    get:
+      description: Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1).
+        Returns consent screen data or redirects if consent was previously
+        granted.
+      tags:
+        - OAuth
+      summary: OAuth 2.0 Authorization
+      parameters:
+        - description: Client ID
+          name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - description: Redirect URI
+          name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+        - description: Response type (must be 'code')
+          name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+        - description: Space-separated scopes
+          name: scope
+          in: query
+          schema:
+            type: string
+        - description: CSRF state parameter
+          name: state
+          in: query
+          schema:
+            type: string
+        - description: Nonce for ID token replay protection
+          name: nonce
+          in: query
+          schema:
+            type: string
+        - description: PKCE code challenge
+          name: code_challenge
+          in: query
+          schema:
+            type: string
+        - description: PKCE method (S256)
+          name: code_challenge_method
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Consent screen data
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "302":
+          description: Redirect with authorization code
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /oauth/authorize/decision:
+    post:
+      description: Processes the user's consent decision (approve or deny) for an
+        OAuth authorization request.
+      tags:
+        - OAuth
+      summary: OAuth 2.0 Authorization Decision
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/controller.authorizeDecisionReq"
+        description: Consent decision
+        required: true
+      responses:
+        "302":
+          description: Redirect with authorization code or error
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /oauth/revoke:
+    post:
+      description: Revokes an OAuth 2.0 token (RFC 7009). Accepts refresh_token or
+        access_token.
+      tags:
+        - OAuth
+      summary: Revoke Token
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                token:
+                  description: The token to revoke
+                  type: string
+                token_type_hint:
+                  description: Token type hint (refresh_token or access_token)
+                  type: string
+              required:
+                - token
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /oauth/token:
+    post:
+      description: Exchanges an authorization code, client credentials, or refresh
+        token for access tokens (RFC 6749 §3.2).
+      tags:
+        - OAuth
+      summary: OAuth 2.0 Token Exchange
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  description: Grant type (authorization_code, client_credentials, refresh_token)
+                  type: string
+                code:
+                  description: Authorization code (for authorization_code grant)
+                  type: string
+                redirect_uri:
+                  description: Redirect URI (for authorization_code grant)
+                  type: string
+                client_id:
+                  description: Client ID
+                  type: string
+                client_secret:
+                  description: Client secret
+                  type: string
+                code_verifier:
+                  description: PKCE code verifier
+                  type: string
+                refresh_token:
+                  description: Refresh token (for refresh_token grant)
+                  type: string
+                scope:
+                  description: Requested scopes
+                  type: string
+              required:
+                - grant_type
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/domain.TokenResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
 servers:
   - url: /
 components:
@@ -3587,6 +4066,9 @@ components:
             Recommended/preferred login method based on context
             Values: "sso", "password", "magic_link", "social"
           type: string
+        signup_enabled:
+          description: Whether new user signup is enabled for this tenant
+          type: boolean
         social_providers:
           description: Social login providers (tenant-wide or global)
           type: array
@@ -3602,6 +4084,9 @@ components:
           type: boolean
         tenant_id:
           description: Tenant information (if discovered)
+          type: string
+        tenant_logo_url:
+          description: Tenant logo URL for branding on the login page
           type: string
         tenant_name:
           type: string
@@ -3765,6 +4250,8 @@ components:
       properties:
         created_at:
           type: string
+        email:
+          type: string
         email_verified:
           type: boolean
         first_name:
@@ -3790,6 +4277,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/controller.adminUser"
+    controller.apiKeyItem:
+      type: object
+      properties:
+        created_at:
+          type: string
+        created_by:
+          type: string
+        expires_at:
+          type: string
+        id:
+          type: string
+        key_prefix:
+          type: string
+        last_used_at:
+          type: string
+        name:
+          type: string
+        revoked_at:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        tenant_id:
+          type: string
+        updated_at:
+          type: string
+    controller.apiKeysListResp:
+      type: object
+      properties:
+        api_keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/controller.apiKeyItem"
     controller.authExchangeResp:
       type: object
       properties:
@@ -3800,6 +4321,34 @@ components:
         success:
           type: boolean
           example: true
+    controller.authorizeDecisionReq:
+      type: object
+      required:
+        - client_id
+        - consent_challenge
+        - redirect_uri
+        - response_type
+      properties:
+        approved:
+          type: boolean
+        client_id:
+          type: string
+        code_challenge:
+          type: string
+        code_challenge_method:
+          type: string
+        consent_challenge:
+          type: string
+        nonce:
+          type: string
+        redirect_uri:
+          type: string
+        response_type:
+          type: string
+        scope:
+          type: string
+        state:
+          type: string
     controller.changePasswordReq:
       type: object
       required:
@@ -3811,6 +4360,77 @@ components:
         new_password:
           type: string
           minLength: 8
+    controller.createAPIKeyReq:
+      type: object
+      required:
+        - name
+      properties:
+        expires_at:
+          description: RFC3339 timestamp
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+    controller.createAPIKeyResp:
+      type: object
+      properties:
+        created_at:
+          type: string
+        expires_at:
+          type: string
+        id:
+          type: string
+        key_prefix:
+          type: string
+        name:
+          type: string
+        raw_key:
+          description: Only returned on creation
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        tenant_id:
+          type: string
+    controller.createClientReq:
+      type: object
+      required:
+        - name
+        - redirect_uris
+      properties:
+        client_type:
+          type: string
+          enum:
+            - confidential
+            - public
+        grant_types:
+          type: array
+          items:
+            type: string
+        logo_uri:
+          type: string
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+    controller.createClientResp:
+      type: object
+      properties:
+        client:
+          $ref: "#/components/schemas/domain.OAuthClient"
+        client_secret:
+          type: string
     controller.createProviderRequest:
       type: object
       properties:
@@ -4215,6 +4835,12 @@ components:
     controller.oauth2MetadataResp:
       type: object
       properties:
+        authorization_endpoint:
+          type: string
+        code_challenge_methods_supported:
+          type: array
+          items:
+            type: string
         grant_types_supported:
           type: array
           items:
@@ -4235,6 +4861,8 @@ components:
           items:
             type: string
         issuer:
+          type: string
+        jwks_uri:
           type: string
         response_types_supported:
           type: array
@@ -4293,15 +4921,45 @@ components:
           description: Auth
           type: string
           minLength: 16
+        rl_login_limit:
+          description: Rate limits (per-endpoint, tenant-scoped overrides)
+          type: string
+        rl_login_window:
+          type: string
+        rl_magic_limit:
+          type: string
+        rl_magic_window:
+          type: string
+        rl_mfa_limit:
+          type: string
+        rl_mfa_window:
+          type: string
+        rl_signup_limit:
+          type: string
+        rl_signup_window:
+          type: string
+        rl_sso_limit:
+          type: string
+        rl_sso_window:
+          type: string
+        rl_token_limit:
+          type: string
+        rl_token_window:
+          type: string
         scope:
           description: Scope is deprecated and ignored. Kept for backward compatibility
             with older SDKs.
+          type: string
+        signup_enabled:
+          description: Signup & branding
           type: string
         sso_provider:
           type: string
         sso_redirect_allowlist:
           type: string
         sso_state_ttl:
+          type: string
+        tenant_logo_url:
           type: string
         workos_api_key:
           type: string
@@ -4417,6 +5075,10 @@ components:
           type: array
           items:
             type: string
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/controller.rbacRoleItem"
     controller.refreshReq:
       type: object
       properties:
@@ -4490,12 +5152,42 @@ components:
         app_cors_allowed_origins:
           description: App
           type: string
+        rl_login_limit:
+          description: Rate limits (per-endpoint, tenant-scoped overrides)
+          type: string
+        rl_login_window:
+          type: string
+        rl_magic_limit:
+          type: string
+        rl_magic_window:
+          type: string
+        rl_mfa_limit:
+          type: string
+        rl_mfa_window:
+          type: string
+        rl_signup_limit:
+          type: string
+        rl_signup_window:
+          type: string
+        rl_sso_limit:
+          type: string
+        rl_sso_window:
+          type: string
+        rl_token_limit:
+          type: string
+        rl_token_window:
+          type: string
+        signup_enabled:
+          description: Signup & branding
+          type: string
         sso_provider:
           description: SSO
           type: string
         sso_redirect_allowlist:
           type: string
         sso_state_ttl:
+          type: string
+        tenant_logo_url:
           type: string
         workos_api_key:
           description: masked
@@ -4562,6 +5254,27 @@ components:
           type: string
         updated_at:
           type: string
+    controller.updateClientReq:
+      type: object
+      properties:
+        grant_types:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+        logo_uri:
+          type: string
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
     controller.updateProfileReq:
       type: object
       properties:
@@ -4676,6 +5389,42 @@ components:
           type: string
         user_id:
           type: string
+    domain.OAuthClient:
+      type: object
+      properties:
+        client_id:
+          type: string
+        client_type:
+          description: confidential | public
+          type: string
+        created_at:
+          type: string
+        created_by:
+          type: string
+        grant_types:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+        is_active:
+          type: boolean
+        logo_uri:
+          type: string
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        tenant_id:
+          type: string
+        updated_at:
+          type: string
     domain.PortalLink:
       type: object
       properties:
@@ -4695,6 +5444,21 @@ components:
         - ProviderTypeOAuth2
         - ProviderTypeWorkOS
         - ProviderTypeDev
+    domain.TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        id_token:
+          type: string
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        token_type:
+          type: string
     domain.UserProfile:
       type: object
       properties:

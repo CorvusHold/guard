@@ -75,6 +75,12 @@ const (
 	KeyRLMFALimit     = "auth.ratelimit.mfa.limit"
 	KeyRLMFAWindow    = "auth.ratelimit.mfa.window"
 
+	// Signup control
+	KeySignupEnabled = "auth.signup_enabled" // "true" or "false", default "true"
+
+	// Tenant branding
+	KeyTenantLogoURL = "app.tenant_logo_url" // URL to tenant logo for login page branding
+
 	// Invitation settings
 	KeyInvitationTTL = "auth.invitation_ttl" // Duration string, default 7 days (e.g., "168h")
 )

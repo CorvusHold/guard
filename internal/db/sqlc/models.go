@@ -22,6 +22,21 @@ type AclTuple struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type ApiKey struct {
+	ID         pgtype.UUID        `json:"id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	Name       string             `json:"name"`
+	KeyHash    string             `json:"key_hash"`
+	KeyPrefix  string             `json:"key_prefix"`
+	Scopes     []string           `json:"scopes"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AppSetting struct {
 	ID        pgtype.UUID        `json:"id"`
 	TenantID  pgtype.UUID        `json:"tenant_id"`
@@ -119,6 +134,49 @@ type MfaSecret struct {
 	Secret    string             `json:"secret"`
 	Enabled   bool               `json:"enabled"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type OauthAuthorizationCode struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ClientID            string             `json:"client_id"`
+	UserID              pgtype.UUID        `json:"user_id"`
+	TenantID            pgtype.UUID        `json:"tenant_id"`
+	CodeHash            string             `json:"code_hash"`
+	RedirectUri         string             `json:"redirect_uri"`
+	Scopes              []string           `json:"scopes"`
+	Nonce               pgtype.Text        `json:"nonce"`
+	CodeChallenge       pgtype.Text        `json:"code_challenge"`
+	CodeChallengeMethod pgtype.Text        `json:"code_challenge_method"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt          pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
+type OauthClient struct {
+	ID               pgtype.UUID        `json:"id"`
+	TenantID         pgtype.UUID        `json:"tenant_id"`
+	ClientID         string             `json:"client_id"`
+	ClientSecretHash pgtype.Text        `json:"client_secret_hash"`
+	ClientType       string             `json:"client_type"`
+	Name             string             `json:"name"`
+	RedirectUris     []string           `json:"redirect_uris"`
+	Scopes           []string           `json:"scopes"`
+	GrantTypes       []string           `json:"grant_types"`
+	LogoUri          pgtype.Text        `json:"logo_uri"`
+	IsActive         bool               `json:"is_active"`
+	CreatedBy        pgtype.UUID        `json:"created_by"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OauthConsentGrant struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	ClientID  string             `json:"client_id"`
+	Scopes    []string           `json:"scopes"`
+	GrantedAt pgtype.Timestamptz `json:"granted_at"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
 type PasswordResetToken struct {

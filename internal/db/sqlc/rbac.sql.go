@@ -393,6 +393,79 @@ func (q *Queries) ListUserRoleIDs(ctx context.Context, arg ListUserRoleIDsParams
 	return items, nil
 }
 
+const listUserRoleNames = `-- name: ListUserRoleNames :many
+SELECT r.name
+FROM user_roles ur
+JOIN roles r ON r.id = ur.role_id
+WHERE ur.user_id = $1 AND ur.tenant_id = $2
+ORDER BY r.name
+`
+
+type ListUserRoleNamesParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ListUserRoleNames(ctx context.Context, arg ListUserRoleNamesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listUserRoleNames, arg.UserID, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserRoles = `-- name: ListUserRoles :many
+SELECT r.id, r.tenant_id, r.name, r.description, r.created_at, r.updated_at
+FROM user_roles ur
+JOIN roles r ON r.id = ur.role_id
+WHERE ur.user_id = $1 AND ur.tenant_id = $2
+ORDER BY r.name
+`
+
+type ListUserRolesParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	TenantID pgtype.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ListUserRoles(ctx context.Context, arg ListUserRolesParams) ([]Role, error) {
+	rows, err := q.db.Query(ctx, listUserRoles, arg.UserID, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Role
+	for rows.Next() {
+		var i Role
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeUserRole = `-- name: RemoveUserRole :exec
 DELETE FROM user_roles WHERE user_id = $1 AND tenant_id = $2 AND role_id = $3
 `

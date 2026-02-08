@@ -78,6 +78,7 @@ func init() {
 	rootCmd.AddCommand(settingsCmd)
 	rootCmd.AddCommand(healthCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(apikeyCmd)
 }
 
 func initConfig() {

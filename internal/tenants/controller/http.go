@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,12 +14,23 @@ import (
 	domain "github.com/corvusHold/guard/internal/tenants/domain"
 )
 
+// OnTenantCreatedFunc is called after a tenant is successfully created.
+// It receives the new tenant's UUID and can be used to seed default roles, etc.
+type OnTenantCreatedFunc func(ctx context.Context, tenantID uuid.UUID) error
+
 type Controller struct {
-	svc domain.Service
+	svc             domain.Service
+	onTenantCreated OnTenantCreatedFunc
 }
 
 func New(svc domain.Service) *Controller {
 	return &Controller{svc: svc}
+}
+
+// WithOnTenantCreated sets a callback invoked after tenant creation.
+func (h *Controller) WithOnTenantCreated(fn OnTenantCreatedFunc) *Controller {
+	h.onTenantCreated = fn
+	return h
 }
 
 func (h *Controller) Register(e *echo.Echo) {
@@ -92,6 +104,13 @@ func (h *Controller) createTenant(c echo.Context) error {
 	ten, err := h.svc.Create(c.Request().Context(), req.Name, parentID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	// Seed default roles for the new tenant (best-effort; log but don't fail creation)
+	if h.onTenantCreated != nil {
+		tenantUUID := uuid.UUID(ten.ID.Bytes)
+		if seedErr := h.onTenantCreated(c.Request().Context(), tenantUUID); seedErr != nil {
+			c.Logger().Warnf("onTenantCreated hook failed for tenant %s: %v", tenantUUID, seedErr)
+		}
 	}
 	return c.JSON(http.StatusCreated, tenantResp{
 		ID:             toUUIDString(ten.ID),

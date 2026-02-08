@@ -63,6 +63,7 @@ type GuardClient struct {
 	baseURL  string
 	tenantID string
 	authMode AuthMode
+	apiKey   string
 
 	inner      *ClientWithResponses
 	httpClient HttpRequestDoer
@@ -107,6 +108,15 @@ func WithTokenStore(ts TokenStore) GuardOption {
 func WithAuthMode(mode AuthMode) GuardOption {
 	return func(c *GuardClient) error {
 		c.authMode = mode
+		return nil
+	}
+}
+
+// WithAPIKey configures an API key for service-to-service authentication.
+// When set, the X-Guard-API-Key header is sent on every request.
+func WithAPIKey(apiKey string) GuardOption {
+	return func(c *GuardClient) error {
+		c.apiKey = apiKey
 		return nil
 	}
 }
@@ -158,6 +168,10 @@ func NewGuardClient(baseURL string, opts ...GuardOption) (*GuardClient, error) {
 
 // authEditor injects Authorization header (bearer mode) or X-Auth-Mode header (cookie mode).
 func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
+	// API key authentication takes precedence
+	if c.apiKey != "" {
+		req.Header.Set("X-Guard-API-Key", c.apiKey)
+	}
 	if c.authMode == AuthModeCookie {
 		// In cookie mode, set X-Auth-Mode header to signal backend
 		req.Header.Set("X-Auth-Mode", "cookie")

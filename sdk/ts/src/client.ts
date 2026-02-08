@@ -235,6 +235,20 @@ export interface TenantSettingsResponse {
   workos_default_organization_id?: string;
   sso_state_ttl: string;
   sso_redirect_allowlist: string;
+  app_cors_allowed_origins?: string;
+  // Rate limits (per-endpoint, tenant-scoped overrides)
+  rl_login_limit?: string;
+  rl_login_window?: string;
+  rl_signup_limit?: string;
+  rl_signup_window?: string;
+  rl_magic_limit?: string;
+  rl_magic_window?: string;
+  rl_sso_limit?: string;
+  rl_sso_window?: string;
+  rl_token_limit?: string;
+  rl_token_window?: string;
+  rl_mfa_limit?: string;
+  rl_mfa_window?: string;
 }
 
 export interface TenantSettingsPutRequest {
@@ -246,6 +260,61 @@ export interface TenantSettingsPutRequest {
   workos_default_organization_id?: string | null;
   sso_state_ttl?: string | null; // Go validates time.ParseDuration strings
   sso_redirect_allowlist?: string | null; // comma-separated URLs
+  app_cors_allowed_origins?: string | null;
+  jwt_signing_key?: string | null;
+  // Rate limits (per-endpoint, tenant-scoped overrides)
+  rl_login_limit?: string | null;
+  rl_login_window?: string | null;
+  rl_signup_limit?: string | null;
+  rl_signup_window?: string | null;
+  rl_magic_limit?: string | null;
+  rl_magic_window?: string | null;
+  rl_sso_limit?: string | null;
+  rl_sso_window?: string | null;
+  rl_token_limit?: string | null;
+  rl_token_window?: string | null;
+  rl_mfa_limit?: string | null;
+  rl_mfa_window?: string | null;
+}
+
+// OAuth Client Management Types
+export interface OAuthClientItem {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  client_type: 'confidential' | 'public';
+  name: string;
+  redirect_uris: string[];
+  scopes: string[];
+  grant_types: string[];
+  logo_uri?: string;
+  is_active: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOAuthClientReq {
+  name: string;
+  client_type?: 'confidential' | 'public';
+  redirect_uris: string[];
+  scopes?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+}
+
+export interface CreateOAuthClientResp {
+  client: OAuthClientItem;
+  client_secret?: string;
+}
+
+export interface UpdateOAuthClientReq {
+  name?: string;
+  redirect_uris?: string[];
+  scopes?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+  is_active?: boolean;
 }
 
 // SSO Provider Management Types
@@ -319,12 +388,14 @@ export interface SsoProviderOption {
 export interface LoginOptionsResp {
   password_enabled: boolean;
   magic_link_enabled: boolean;
+  signup_enabled: boolean;
   sso_providers: SsoProviderOption[];
   preferred_method: AuthMethod;
   sso_required: boolean;
   user_exists: boolean;
   tenant_id?: string;
   tenant_name?: string;
+  tenant_logo_url?: string;
   tenants?: Array<{ id: string; name?: string }>;
   domain_matched_sso?: SsoProviderOption;
 }
@@ -464,6 +535,10 @@ export class GuardClient {
         // Set X-Auth-Mode header to signal cookie mode to backend
         headers.set('X-Auth-Mode', 'cookie');
       }
+      // Inject X-Tenant-ID header for CORS preflight and rate-limit tenant resolution
+      if (this.tenantId && !headers.has('X-Tenant-ID')) {
+        headers.set('X-Tenant-ID', String(this.tenantId));
+      }
       return [input, { ...init, headers }];
     };
 
@@ -473,7 +548,6 @@ export class GuardClient {
       delete (defaultHeaders as Record<string, string | undefined>)['authorization'];
       delete (defaultHeaders as Record<string, string | undefined>)['Authorization'];
     }
-    // Tenancy today is via body/query. Header will be added later when server adopts it.
 
     const clientHeader = `ts-sdk/${(pkg as any).version ?? '0.0.0'}`;
     // In cookie mode, always include credentials (cookies) with requests.
@@ -1321,6 +1395,36 @@ export class GuardClient {
     if (!tenant) throw new Error('tenant_id is required');
     const payload = { ...body, tenant_id: tenant } as any;
     return this.request<unknown>(`/api/v1/auth/admin/fga/acl/tuples`, { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
+  // ==============================
+  // OAuth Client Management (Admin)
+  // ==============================
+
+  async listOAuthClients(): Promise<ResponseWrapper<{ clients: OAuthClientItem[] }>> {
+    return this.request<{ clients: OAuthClientItem[] }>('/api/v1/auth/admin/oauth-clients', { method: 'GET' });
+  }
+
+  async createOAuthClient(body: CreateOAuthClientReq): Promise<ResponseWrapper<CreateOAuthClientResp>> {
+    return this.request<CreateOAuthClientResp>('/api/v1/auth/admin/oauth-clients', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async getOAuthClient(id: string): Promise<ResponseWrapper<OAuthClientItem>> {
+    return this.request<OAuthClientItem>(`/api/v1/auth/admin/oauth-clients/${encodeURIComponent(id)}`, { method: 'GET' });
+  }
+
+  async updateOAuthClient(id: string, body: UpdateOAuthClientReq): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/api/v1/auth/admin/oauth-clients/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteOAuthClient(id: string): Promise<ResponseWrapper<unknown>> {
+    return this.request<unknown>(`/api/v1/auth/admin/oauth-clients/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   // ==============================

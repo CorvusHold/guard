@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +154,22 @@ type settingsResponse struct {
 	SSORedirectAllowlist        string `json:"sso_redirect_allowlist"`
 	// App
 	AppCORSAllowedOrigins string `json:"app_cors_allowed_origins"`
+	// Rate limits (per-endpoint, tenant-scoped overrides)
+	RLLoginLimit   string `json:"rl_login_limit,omitempty"`
+	RLLoginWindow  string `json:"rl_login_window,omitempty"`
+	RLSignupLimit  string `json:"rl_signup_limit,omitempty"`
+	RLSignupWindow string `json:"rl_signup_window,omitempty"`
+	RLMagicLimit   string `json:"rl_magic_limit,omitempty"`
+	RLMagicWindow  string `json:"rl_magic_window,omitempty"`
+	RLSsoLimit     string `json:"rl_sso_limit,omitempty"`
+	RLSsoWindow    string `json:"rl_sso_window,omitempty"`
+	RLTokenLimit   string `json:"rl_token_limit,omitempty"`
+	RLTokenWindow  string `json:"rl_token_window,omitempty"`
+	RLMFALimit     string `json:"rl_mfa_limit,omitempty"`
+	RLMFAWindow    string `json:"rl_mfa_window,omitempty"`
+	// Signup & branding
+	SignupEnabled string `json:"signup_enabled,omitempty"`
+	TenantLogoURL string `json:"tenant_logo_url,omitempty"`
 }
 
 type putSettingsRequest struct {
@@ -170,6 +187,22 @@ type putSettingsRequest struct {
 	AppCORSAllowedOrigins *string `json:"app_cors_allowed_origins"`
 	// Auth
 	JWTSigningKey *string `json:"jwt_signing_key" validate:"omitempty,min=16"`
+	// Rate limits (per-endpoint, tenant-scoped overrides)
+	RLLoginLimit   *string `json:"rl_login_limit"`
+	RLLoginWindow  *string `json:"rl_login_window"`
+	RLSignupLimit  *string `json:"rl_signup_limit"`
+	RLSignupWindow *string `json:"rl_signup_window"`
+	RLMagicLimit   *string `json:"rl_magic_limit"`
+	RLMagicWindow  *string `json:"rl_magic_window"`
+	RLSsoLimit     *string `json:"rl_sso_limit"`
+	RLSsoWindow    *string `json:"rl_sso_window"`
+	RLTokenLimit   *string `json:"rl_token_limit"`
+	RLTokenWindow  *string `json:"rl_token_window"`
+	RLMFALimit     *string `json:"rl_mfa_limit"`
+	RLMFAWindow    *string `json:"rl_mfa_window"`
+	// Signup & branding
+	SignupEnabled *string `json:"signup_enabled"`
+	TenantLogoURL *string `json:"tenant_logo_url"`
 }
 
 // Get Tenant Settings godoc
@@ -207,6 +240,21 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 	stateTTL, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSOStateTTL, &id, "")
 	allow, _ := h.service.GetString(c.Request().Context(), sdomain.KeySSORedirectAllowlist, &id, "")
 	corsAllow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyAppCORSAllowedOrigins, &id, "")
+	// Rate limit settings
+	rlLoginLimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLLoginLimit, &id, "")
+	rlLoginWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLLoginWindow, &id, "")
+	rlSignupLimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLSignupLimit, &id, "")
+	rlSignupWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLSignupWindow, &id, "")
+	rlMagicLimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLMagicLimit, &id, "")
+	rlMagicWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLMagicWindow, &id, "")
+	rlSsoLimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLSsoLimit, &id, "")
+	rlSsoWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLSsoWindow, &id, "")
+	rlTokenLimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLTokenLimit, &id, "")
+	rlTokenWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLTokenWindow, &id, "")
+	rlMFALimit, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLMFALimit, &id, "")
+	rlMFAWindow, _ := h.service.GetString(c.Request().Context(), sdomain.KeyRLMFAWindow, &id, "")
+	signupEnabled, _ := h.service.GetString(c.Request().Context(), sdomain.KeySignupEnabled, &id, "")
+	tenantLogoURL, _ := h.service.GetString(c.Request().Context(), sdomain.KeyTenantLogoURL, &id, "")
 	// Mask secrets if present
 	mask := func(s string) string {
 		if s == "" {
@@ -227,6 +275,20 @@ func (h *Controller) getTenantSettings(c echo.Context) error {
 		SSOStateTTL:                 stateTTL,
 		SSORedirectAllowlist:        allow,
 		AppCORSAllowedOrigins:       corsAllow,
+		RLLoginLimit:                rlLoginLimit,
+		RLLoginWindow:               rlLoginWindow,
+		RLSignupLimit:               rlSignupLimit,
+		RLSignupWindow:              rlSignupWindow,
+		RLMagicLimit:                rlMagicLimit,
+		RLMagicWindow:               rlMagicWindow,
+		RLSsoLimit:                  rlSsoLimit,
+		RLSsoWindow:                 rlSsoWindow,
+		RLTokenLimit:                rlTokenLimit,
+		RLTokenWindow:               rlTokenWindow,
+		RLMFALimit:                  rlMFALimit,
+		RLMFAWindow:                 rlMFAWindow,
+		SignupEnabled:               signupEnabled,
+		TenantLogoURL:               tenantLogoURL,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -391,6 +453,64 @@ func (h *Controller) putTenantSettings(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		changed = append(changed, sdomain.KeyJWTSigning)
+	}
+	// Rate limit settings — validate and upsert
+	rlPairs := []struct {
+		limitVal *string
+		limitKey string
+		winVal   *string
+		winKey   string
+	}{
+		{req.RLLoginLimit, sdomain.KeyRLLoginLimit, req.RLLoginWindow, sdomain.KeyRLLoginWindow},
+		{req.RLSignupLimit, sdomain.KeyRLSignupLimit, req.RLSignupWindow, sdomain.KeyRLSignupWindow},
+		{req.RLMagicLimit, sdomain.KeyRLMagicLimit, req.RLMagicWindow, sdomain.KeyRLMagicWindow},
+		{req.RLSsoLimit, sdomain.KeyRLSsoLimit, req.RLSsoWindow, sdomain.KeyRLSsoWindow},
+		{req.RLTokenLimit, sdomain.KeyRLTokenLimit, req.RLTokenWindow, sdomain.KeyRLTokenWindow},
+		{req.RLMFALimit, sdomain.KeyRLMFALimit, req.RLMFAWindow, sdomain.KeyRLMFAWindow},
+	}
+	for _, p := range rlPairs {
+		if p.limitVal != nil {
+			v := strings.TrimSpace(*p.limitVal)
+			if v != "" {
+				if _, err := strconv.Atoi(v); err != nil {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid rate limit value for " + p.limitKey})
+				}
+			}
+			if err := h.repo.Upsert(ctx, p.limitKey, &id, v, false); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+			}
+			changed = append(changed, p.limitKey)
+		}
+		if p.winVal != nil {
+			v := strings.TrimSpace(*p.winVal)
+			if v != "" {
+				if _, err := time.ParseDuration(v); err != nil {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid rate limit window for " + p.winKey})
+				}
+			}
+			if err := h.repo.Upsert(ctx, p.winKey, &id, v, false); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+			}
+			changed = append(changed, p.winKey)
+		}
+	}
+	// Signup & branding settings
+	if req.SignupEnabled != nil {
+		v := strings.TrimSpace(*req.SignupEnabled)
+		if v != "" && v != "true" && v != "false" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "signup_enabled must be 'true' or 'false'"})
+		}
+		if err := h.repo.Upsert(ctx, sdomain.KeySignupEnabled, &id, v, false); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeySignupEnabled)
+	}
+	if req.TenantLogoURL != nil {
+		v := strings.TrimSpace(*req.TenantLogoURL)
+		if err := h.repo.Upsert(ctx, sdomain.KeyTenantLogoURL, &id, v, false); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		changed = append(changed, sdomain.KeyTenantLogoURL)
 	}
 	// Publish audit event (redact secrets)
 	if h.pub != nil && len(changed) > 0 {

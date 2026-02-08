@@ -13,7 +13,9 @@ JOIN tenants t ON t.id = ut.tenant_id
 WHERE ut.user_id = $1;
 
 -- name: ListTenantUsers :many
-SELECT u.id, u.email_verified, u.is_active, u.first_name, u.last_name, u.roles, u.created_at, u.updated_at, u.last_login_at
+SELECT u.id, u.email_verified, u.is_active, u.first_name, u.last_name, u.roles, u.created_at, u.updated_at, u.last_login_at,
+       COALESCE(ai.email, '') AS email
 FROM user_tenants ut
 JOIN users u ON u.id = ut.user_id
+LEFT JOIN auth_identities ai ON ai.user_id = u.id AND ai.tenant_id = ut.tenant_id
 WHERE ut.tenant_id = $1;

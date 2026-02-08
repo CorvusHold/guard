@@ -1,6 +1,6 @@
 {
-  "count": 79,
-  "generatedAt": "2026-02-07T06:38:18.505Z",
+  "count": 91,
+  "generatedAt": "2026-02-08T13:44:40.961Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -180,6 +180,30 @@
         "status": "200"
       },
       "summary": "Delete an invitation (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete OAuth client",
       "tags": [
         "auth.admin"
       ]
@@ -374,6 +398,42 @@
             },
             "type": "object"
           },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_api_keys",
+      "path": "/api/v1/auth/admin/api-keys",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.apiKeysListResp"
+        },
+        "status": "200"
+      },
+      "summary": "List API keys for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "status": "400"
         },
         {
@@ -451,6 +511,51 @@
         "status": "200"
       },
       "summary": "List invitations for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_oauth_clients",
+      "path": "/api/v1/auth/admin/oauth-clients",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List OAuth clients",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.OAuthClient"
+        },
+        "status": "200"
+      },
+      "summary": "Get OAuth client",
       "tags": [
         "auth.admin"
       ]
@@ -1383,6 +1488,34 @@
       ]
     },
     {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_oauth_authorize",
+      "path": "/oauth/authorize",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "OAuth 2.0 Authorization",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
       "errors": [],
       "method": "get",
       "operationId": "get_well_known_oauth_authorization_server",
@@ -1397,6 +1530,38 @@
       "summary": "OAuth 2.0 Authorization Server Metadata",
       "tags": [
         "auth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateClientReq"
+      },
+      "success": {
+        "schema": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Update OAuth client",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -1556,6 +1721,95 @@
       "summary": "Deactivate tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_api_keys",
+      "path": "/api/v1/auth/admin/api-keys",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createAPIKeyReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.createAPIKeyResp"
+        },
+        "status": "201"
+      },
+      "summary": "Create an API key (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_api_keys_by_id_revoke",
+      "path": "/api/v1/auth/admin/api-keys/{id}/revoke",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Revoke an API key (admin-only)",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -1802,6 +2056,35 @@
         "status": "200"
       },
       "summary": "Revoke an invitation (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_oauth_clients",
+      "path": "/api/v1/auth/admin/oauth-clients",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createClientReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.createClientResp"
+        },
+        "status": "201"
+      },
+      "summary": "Create OAuth client",
       "tags": [
         "auth.admin"
       ]
@@ -2096,7 +2379,7 @@
       "success": {
         "status": "204"
       },
-      "summary": "Update a user's roles (admin-only)",
+      "summary": "Update a user's roles (admin-only) [DEPRECATED]",
       "tags": [
         "auth.admin"
       ]
@@ -3250,6 +3533,114 @@
       "summary": "Create tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_authorize_decision",
+      "path": "/oauth/authorize/decision",
+      "requestBody": {
+        "$ref": "#/definitions/controller.authorizeDecisionReq"
+      },
+      "success": null,
+      "summary": "OAuth 2.0 Authorization Decision",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_revoke",
+      "path": "/oauth/revoke",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Revoke Token",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_token",
+      "path": "/oauth/token",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.TokenResponse"
+        },
+        "status": "200"
+      },
+      "summary": "OAuth 2.0 Token Exchange",
+      "tags": [
+        "OAuth"
       ]
     },
     {

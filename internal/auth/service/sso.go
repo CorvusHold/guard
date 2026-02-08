@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strings"
 	"time"
 
-	"strings"
-
 	"github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/corvusHold/guard/internal/auth/keys"
 	ssodomain "github.com/corvusHold/guard/internal/auth/sso/domain"
 	ssosvc "github.com/corvusHold/guard/internal/auth/sso/service"
 	"github.com/corvusHold/guard/internal/config"
@@ -35,6 +35,7 @@ type SSO struct {
 	pub      evdomain.Publisher
 	log      zerolog.Logger
 	ssoSvc   *ssosvc.SSOService
+	keyMgr   *keys.Manager
 }
 
 func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service) *SSO {
@@ -50,6 +51,9 @@ func (s *SSO) SetLogger(l zerolog.Logger) { s.log = l }
 
 // SetSSOProviderService allows injection of the native SSO provider service used for portal flows.
 func (s *SSO) SetSSOProviderService(svc *ssosvc.SSOService) { s.ssoSvc = svc }
+
+// SetKeyManager allows injection of a key manager for asymmetric JWT signing.
+func (s *SSO) SetKeyManager(km *keys.Manager) { s.keyMgr = km }
 
 // Start builds a local callback URL with a signed one-time code.
 func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error) {
@@ -341,16 +345,42 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
-	accClaims := jwt.MapClaims{
-		"sub": userID.String(),
-		"ten": tenantID.String(),
-		"exp": time.Now().Add(accessTTL).Unix(),
-		"iat": time.Now().Unix(),
-		"iss": issuer,
-		"aud": audience,
+	// Resolve roles and name for JWT claims
+	roleNames, _ := s.repo.ListUserRoleNames(ctx, userID, tenantID)
+	if roleNames == nil {
+		roleNames = []string{}
 	}
-	at := jwt.NewWithClaims(jwt.SigningMethodHS256, accClaims)
-	access, err := at.SignedString([]byte(signingKey))
+	var userName string
+	if u, err := s.repo.GetUserByID(ctx, userID); err == nil {
+		userName = strings.TrimSpace(u.FirstName + " " + u.LastName)
+	}
+
+	accClaims := jwt.MapClaims{
+		"sub":   userID.String(),
+		"ten":   tenantID.String(),
+		"exp":   time.Now().Add(accessTTL).Unix(),
+		"iat":   time.Now().Unix(),
+		"iss":   issuer,
+		"aud":   audience,
+		"roles": roleNames,
+		"email": email,
+		"name":  userName,
+	}
+	// Use key manager for signing if available (ES256), otherwise fall back to HS256
+	var ssoSignMethod jwt.SigningMethod
+	var ssoSignKey interface{}
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		ssoSignMethod = s.keyMgr.SigningMethod()
+		ssoSignKey = s.keyMgr.SigningKey(signingKey)
+	} else {
+		ssoSignMethod = jwt.SigningMethodHS256
+		ssoSignKey = []byte(signingKey)
+	}
+	at := jwt.NewWithClaims(ssoSignMethod, accClaims)
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		at.Header["kid"] = s.keyMgr.KeyID()
+	}
+	access, err := at.SignedString(ssoSignKey)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}

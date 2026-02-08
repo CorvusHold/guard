@@ -52,24 +52,8 @@ const (
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/permissions [get]
 func (h *Controller) rbacListPermissions(c echo.Context) error {
-	tok := h.resolveAccessToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// require admin
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	perms, err := h.svc.ListPermissions(c.Request().Context())
@@ -96,25 +80,6 @@ func (h *Controller) rbacListPermissions(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles [get]
 func (h *Controller) rbacListRoles(c echo.Context) error {
-	tok := h.resolveAccessToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	tenStr := c.QueryParam("tenant_id")
 	if tenStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
@@ -122,6 +87,9 @@ func (h *Controller) rbacListRoles(c echo.Context) error {
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	roles, err := h.svc.ListRoles(c.Request().Context(), tenantID)
@@ -149,25 +117,6 @@ func (h *Controller) rbacListRoles(c echo.Context) error {
 // @Failure      403   {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles [post]
 func (h *Controller) rbacCreateRole(c echo.Context) error {
-	tok := h.resolveAccessToken(c)
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	var req rbacCreateRoleReq
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -178,6 +127,9 @@ func (h *Controller) rbacCreateRole(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	r, err := h.svc.CreateRole(c.Request().Context(), tenantID, req.Name, req.Description)
@@ -202,33 +154,6 @@ func (h *Controller) rbacCreateRole(c echo.Context) error {
 // @Failure      403   {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles/{id} [patch]
 func (h *Controller) rbacUpdateRole(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	roleIDStr := c.Param("id")
 	roleID, err := uuid.Parse(roleIDStr)
 	if err != nil {
@@ -245,6 +170,9 @@ func (h *Controller) rbacUpdateRole(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	r, err := h.svc.UpdateRole(c.Request().Context(), roleID, tenantID, req.Name, req.Description)
@@ -267,33 +195,6 @@ func (h *Controller) rbacUpdateRole(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles/{id} [delete]
 func (h *Controller) rbacDeleteRole(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	roleIDStr := c.Param("id")
 	roleID, err := uuid.Parse(roleIDStr)
 	if err != nil {
@@ -306,6 +207,9 @@ func (h *Controller) rbacDeleteRole(c echo.Context) error {
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	if err := h.svc.DeleteRole(c.Request().Context(), roleID, tenantID); err != nil {
@@ -328,33 +232,6 @@ func (h *Controller) rbacDeleteRole(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/users/{id}/roles [get]
 func (h *Controller) rbacListUserRoles(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -368,12 +245,21 @@ func (h *Controller) rbacListUserRoles(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
 	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
+	}
 
-	ids, err := h.svc.ListUserRoleIDs(c.Request().Context(), userID, tenantID)
+	roles, err := h.svc.ListUserRoles(c.Request().Context(), userID, tenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, rbacUserRolesResp{RoleIDs: ids})
+	ids := make([]uuid.UUID, 0, len(roles))
+	items := make([]rbacRoleItem, 0, len(roles))
+	for _, r := range roles {
+		ids = append(ids, r.ID)
+		items = append(items, rbacRoleItem{ID: r.ID, TenantID: r.TenantID, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
+	}
+	return c.JSON(http.StatusOK, rbacUserRolesResp{RoleIDs: ids, Roles: items})
 }
 
 // RBAC Add User Role godoc
@@ -390,33 +276,6 @@ func (h *Controller) rbacListUserRoles(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/users/{id}/roles [post]
 func (h *Controller) rbacAddUserRole(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -433,6 +292,9 @@ func (h *Controller) rbacAddUserRole(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 	roleID, err := uuid.Parse(req.RoleID)
 	if err != nil {
@@ -459,33 +321,6 @@ func (h *Controller) rbacAddUserRole(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/users/{id}/roles [delete]
 func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -502,6 +337,9 @@ func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 	tenantID, err := uuid.Parse(req.TenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 	roleID, err := uuid.Parse(req.RoleID)
 	if err != nil {
@@ -528,31 +366,8 @@ func (h *Controller) rbacRemoveUserRole(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles/{id}/permissions [post]
 func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	roleIDStr := c.Param("id")
@@ -596,31 +411,8 @@ func (h *Controller) rbacUpsertRolePermission(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/roles/{id}/permissions [delete]
 func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	roleIDStr := c.Param("id")
@@ -664,33 +456,6 @@ func (h *Controller) rbacDeleteRolePermission(c echo.Context) error {
 // @Failure      403  {object}  map[string]string
 // @Router       /api/v1/auth/admin/rbac/users/{id}/permissions/resolve [get]
 func (h *Controller) rbacResolveUserPermissions(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -703,6 +468,9 @@ func (h *Controller) rbacResolveUserPermissions(c echo.Context) error {
 	tenantID, err := uuid.Parse(tenStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
 	}
 
 	rp, err := h.svc.ResolveUserPermissions(c.Request().Context(), userID, tenantID)
@@ -894,33 +662,45 @@ func (h *Controller) OAuth2Metadata(c echo.Context) error {
 
 	resp := oauth2MetadataResp{
 		Issuer:                baseURL,
-		TokenEndpoint:         baseURL + "/api/v1/auth/refresh",
+		AuthorizationEndpoint: baseURL + "/oauth/authorize",
+		TokenEndpoint:         baseURL + "/oauth/token",
 		IntrospectionEndpoint: baseURL + "/api/v1/auth/introspect",
-		RevocationEndpoint:    baseURL + "/api/v1/auth/revoke",
+		RevocationEndpoint:    baseURL + "/oauth/revoke",
 		UserinfoEndpoint:      baseURL + "/api/v1/auth/me",
+		JWKSUri:               baseURL + "/.well-known/jwks.json",
 		ResponseTypesSupported: []string{
+			"code",  // Authorization Code Flow (OAuth 2.0 provider)
 			"token", // Direct token response (password, magic link, SSO)
 		},
 		GrantTypesSupported: []string{
-			"password",      // /api/v1/auth/password/login, /api/v1/auth/password/signup
-			"refresh_token", // /api/v1/auth/refresh
+			"authorization_code", // /oauth/token (authorization code exchange)
+			"client_credentials", // /oauth/token (machine-to-machine)
+			"password",           // /api/v1/auth/password/login, /api/v1/auth/password/signup
+			"refresh_token",      // /oauth/token or /api/v1/auth/refresh
 			// Custom grant types
 			"urn:guard:params:oauth:grant-type:magic-link", // /api/v1/auth/magic/verify
 			"urn:guard:params:oauth:grant-type:sso",        // /api/v1/auth/sso/:provider/callback
 		},
 		TokenEndpointAuthMethodsSupported: []string{
-			"none", // Public client, no client authentication required
+			"client_secret_basic", // HTTP Basic auth with client_id:client_secret
+			"client_secret_post",  // client_id and client_secret in POST body
+			"none",                // Public client, no client authentication required
 		},
 		IntrospectionEndpointAuthMethodsSupported: []string{
 			"bearer", // Requires Bearer token in Authorization header
 		},
 		RevocationEndpointAuthMethodsSupported: []string{
-			"bearer", // Requires Bearer token in Authorization header
+			"client_secret_basic", // HTTP Basic auth with client_id:client_secret
+			"none",                // Public clients (no authentication)
 		},
 		ScopesSupported: []string{
-			"openid",  // OpenID Connect compatible
-			"profile", // User profile information
-			"email",   // User email
+			"openid",         // OpenID Connect compatible
+			"profile",        // User profile information
+			"email",          // User email
+			"offline_access", // Refresh tokens
+		},
+		CodeChallengeMethodsSupported: []string{
+			"S256", // PKCE with SHA-256
 		},
 		// Guard-specific extensions
 		GuardAuthModesSupported: []string{"bearer", "cookie"},
@@ -945,6 +725,23 @@ func (h *Controller) RegisterV1(apiV1 *echo.Group) {
 	h.registerAuthRoutes(g)
 }
 
+// resolveTenantForRL extracts a tenant UUID for rate-limit dynamic overrides.
+// Checks query param (?tenant_id=), X-Tenant-ID header, then strips optional "rl-" prefix.
+func resolveTenantForRL(c echo.Context) *uuid.UUID {
+	raw := c.QueryParam("tenant_id")
+	if raw == "" {
+		raw = c.Request().Header.Get("X-Tenant-ID")
+	}
+	if raw == "" {
+		return nil
+	}
+	raw = strings.TrimPrefix(raw, "rl-")
+	if id, err := uuid.Parse(raw); err == nil {
+		return &id
+	}
+	return nil
+}
+
 func (h *Controller) registerAuthRoutes(g *echo.Group) {
 
 	// Rate limits (fixed-window, per-tenant-or-IP)
@@ -953,25 +750,13 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 		p.Name = prefix
 		if h.settings != nil {
 			p.WindowFunc = func(c echo.Context) time.Duration {
-				// extract tenant_id from query
-				var tid *uuid.UUID
-				if v := c.QueryParam("tenant_id"); v != "" {
-					v = strings.TrimPrefix(v, "rl-")
-					if id, err := uuid.Parse(v); err == nil {
-						tid = &id
-					}
-				}
+				// extract tenant_id from query, header, or route param
+				tid := resolveTenantForRL(c)
 				d, _ := h.settings.GetDuration(c.Request().Context(), winKey, tid, defWin)
 				return d
 			}
 			p.LimitFunc = func(c echo.Context) int {
-				var tid *uuid.UUID
-				if v := c.QueryParam("tenant_id"); v != "" {
-					v = strings.TrimPrefix(v, "rl-")
-					if id, err := uuid.Parse(v); err == nil {
-						tid = &id
-					}
-				}
+				tid := resolveTenantForRL(c)
 				n, _ := h.settings.GetInt(c.Request().Context(), limKey, tid, defLim)
 				return n
 			}
@@ -1034,6 +819,11 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 	g.POST("/admin/users/:id/unblock", h.adminUnblockUser, rlToken)
 	g.POST("/admin/users/:id/verify-email", h.adminVerifyEmail, rlToken)
 	g.POST("/admin/users/:id/unverify-email", h.adminUnverifyEmail, rlToken)
+
+	// Admin: API Keys
+	g.POST("/admin/api-keys", h.createAPIKey, rlToken)
+	g.GET("/admin/api-keys", h.listAPIKeys, rlToken)
+	g.POST("/admin/api-keys/:id/revoke", h.revokeAPIKey, rlToken)
 
 	// Admin: Invitations
 	g.POST("/admin/invitations", h.inviteUser, rlToken)
@@ -1127,16 +917,19 @@ func refreshTokenValidationError(message string) validation.ErrorBody {
 // oauth2MetadataResp follows RFC 8414 OAuth 2.0 Authorization Server Metadata
 type oauth2MetadataResp struct {
 	Issuer                                    string   `json:"issuer"`
+	AuthorizationEndpoint                     string   `json:"authorization_endpoint,omitempty"`
 	TokenEndpoint                             string   `json:"token_endpoint,omitempty"`
 	IntrospectionEndpoint                     string   `json:"introspection_endpoint,omitempty"`
 	RevocationEndpoint                        string   `json:"revocation_endpoint,omitempty"`
 	UserinfoEndpoint                          string   `json:"userinfo_endpoint,omitempty"`
+	JWKSUri                                   string   `json:"jwks_uri,omitempty"`
 	ResponseTypesSupported                    []string `json:"response_types_supported,omitempty"`
 	GrantTypesSupported                       []string `json:"grant_types_supported,omitempty"`
 	TokenEndpointAuthMethodsSupported         []string `json:"token_endpoint_auth_methods_supported,omitempty"`
 	IntrospectionEndpointAuthMethodsSupported []string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
 	RevocationEndpointAuthMethodsSupported    []string `json:"revocation_endpoint_auth_methods_supported,omitempty"`
 	ScopesSupported                           []string `json:"scopes_supported,omitempty"`
+	CodeChallengeMethodsSupported             []string `json:"code_challenge_methods_supported,omitempty"`
 	// Guard-specific extensions
 	GuardAuthModesSupported []string `json:"guard_auth_modes_supported,omitempty"`
 	GuardAuthModeDefault    string   `json:"guard_auth_mode_default,omitempty"`
@@ -1234,6 +1027,7 @@ type adminUpdateRolesReq struct {
 // Admin Users DTOs
 type adminUser struct {
 	ID            uuid.UUID  `json:"id"`
+	Email         string     `json:"email"`
 	EmailVerified bool       `json:"email_verified"`
 	IsActive      bool       `json:"is_active"`
 	FirstName     string     `json:"first_name"`
@@ -1292,7 +1086,8 @@ type rbacUpdateRoleReq struct {
 }
 
 type rbacUserRolesResp struct {
-	RoleIDs []uuid.UUID `json:"role_ids"`
+	RoleIDs []uuid.UUID    `json:"role_ids"`
+	Roles   []rbacRoleItem `json:"roles"`
 }
 
 type rbacModifyUserRoleReq struct {
@@ -1358,6 +1153,49 @@ func (h *Controller) resolveAccessToken(c echo.Context) string {
 		}
 	}
 	return ""
+}
+
+// requireAuth extracts the access token and introspects it. Returns the
+// introspection result on success, or a pre-built JSON error response on failure.
+func (h *Controller) requireAuth(c echo.Context) (domain.Introspection, error) {
+	tok := h.resolveAccessToken(c)
+	if tok == "" {
+		return domain.Introspection{}, c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+	}
+	in, err := h.svc.Introspect(c.Request().Context(), tok)
+	if err != nil || !in.Active {
+		return domain.Introspection{}, c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	}
+	return in, nil
+}
+
+// requireAdmin extracts the access token, introspects it, and verifies the caller
+// has the "admin" (or "owner") role. Returns the introspection result on success,
+// or a pre-built JSON error response on failure.
+func (h *Controller) requireAdmin(c echo.Context) (domain.Introspection, error) {
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return in, err
+	}
+	for _, r := range in.Roles {
+		if strings.EqualFold(r, "admin") || strings.EqualFold(r, "owner") {
+			return in, nil
+		}
+	}
+	return domain.Introspection{}, c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+}
+
+// requireAdminForTenant calls requireAdmin and then verifies the caller's tenant
+// matches the provided tenantID. Returns 403 if tenants don't match.
+func (h *Controller) requireAdminForTenant(c echo.Context, tenantID uuid.UUID) (domain.Introspection, error) {
+	in, err := h.requireAdmin(c)
+	if err != nil {
+		return in, err
+	}
+	if in.TenantID != tenantID {
+		return domain.Introspection{}, c.JSON(http.StatusForbidden, map[string]string{"error": "tenant mismatch"})
+	}
+	return in, nil
 }
 
 // Signup godoc
@@ -1669,23 +1507,9 @@ func (h *Controller) me(c echo.Context) error {
 // @Router       /api/v1/auth/profile [patch]
 func (h *Controller) updateProfile(c echo.Context) error {
 	ctx := c.Request().Context()
-	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-
-	// Get token from bearer header or cookie
-	tok := bearerToken(c)
-	if tok == "" && authMode == "cookie" {
-		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
-			tok = cookie.Value
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
-	}
-
-	// Introspect to get user claims
-	claims, err := h.svc.Introspect(ctx, tok)
-	if err != nil || !claims.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	claims, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 
 	var req updateProfileReq
@@ -1699,99 +1523,6 @@ func (h *Controller) updateProfile(c echo.Context) error {
 
 	return c.NoContent(http.StatusOK)
 }
-
-// // EmailDiscovery godoc
-// // @Summary      Discover user/tenant by email
-// // @Description  Check if an email exists in any tenant and provide guidance
-// // @Tags         auth
-// // @Accept       json
-// // @Produce      json
-// // @Param        request body EmailDiscoveryRequest true "Email to discover"
-// // @Success      200  {object}  EmailDiscoveryResponse
-// // @Failure      400  {object}  map[string]string
-// // @Failure      500  {object}  map[string]string
-// // @Router       /api/v1/auth/email/discover [post]
-// func (h *Controller) emailDiscovery(c echo.Context) error {
-// 	var req EmailDiscoveryRequest
-// 	if err := c.Bind(&req); err != nil {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
-// 	}
-
-// 	// Get tenant ID from header if provided
-// 	tenantID := c.Request().Header.Get("X-Tenant-ID")
-
-// 	var response EmailDiscoveryResponse
-
-// 	if tenantID != "" {
-// 		// Tenant is specified, check if user exists in this tenant
-// 		_, err := h.svc.GetUserByEmail(c.Request().Context(), req.Email, tenantID)
-// 		if err != nil {
-// 			if strings.Contains(err.Error(), "not found") {
-// 				// User doesn't exist in this tenant
-// 				response = EmailDiscoveryResponse{
-// 					Found:      false,
-// 					HasTenant:  true,
-// 					TenantID:   tenantID,
-// 					UserExists: false,
-// 				}
-// 			} else {
-// 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-// 			}
-// 		} else {
-// 			// User exists in this tenant
-// 			response = EmailDiscoveryResponse{
-// 				Found:      true,
-// 				HasTenant:  true,
-// 				TenantID:   tenantID,
-// 				UserExists: true,
-// 			}
-// 		}
-// 	} else {
-// 		// No tenant specified, discover which tenant(s) the user belongs to
-// 		tenants, err := h.svc.FindTenantsByUserEmail(c.Request().Context(), req.Email)
-// 		if err != nil {
-// 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-// 		}
-
-// 		if len(tenants) == 0 {
-// 			// Email not found in any tenant
-// 			response = EmailDiscoveryResponse{
-// 				Found:       false,
-// 				HasTenant:   false,
-// 				UserExists:  false,
-// 				Suggestions: generateEmailSuggestions(req.Email),
-// 			}
-// 		} else if len(tenants) == 1 {
-// 			// Email found in exactly one tenant
-// 			tenant := tenants[0]
-// 			response = EmailDiscoveryResponse{
-// 				Found:      true,
-// 				HasTenant:  true,
-// 				TenantID:   tenant.ID,
-// 				TenantName: tenant.Name,
-// 				UserExists: true,
-// 			}
-// 		} else {
-// 			// Email found in multiple tenants - return first one with suggestions
-// 			tenant := tenants[0]
-// 			var suggestions []string
-// 			for _, t := range tenants {
-// 				suggestions = append(suggestions, t.Name)
-// 			}
-
-// 			response = EmailDiscoveryResponse{
-// 				Found:       true,
-// 				HasTenant:   true,
-// 				TenantID:    tenant.ID,
-// 				TenantName:  tenant.Name,
-// 				UserExists:  true,
-// 				Suggestions: suggestions,
-// 			}
-// 		}
-// 	}
-
-// 	return c.JSON(http.StatusOK, response)
-// }
 
 // generateEmailSuggestions generates helpful suggestions for email typos
 func generateEmailSuggestions(email string) []string {
@@ -1882,8 +1613,8 @@ func (h *Controller) revoke(c echo.Context) error {
 }
 
 // Admin Update Roles godoc
-// @Summary      Update a user's roles (admin-only)
-// @Description  Updates the roles array for a user. Requires caller to have the admin role.
+// @Summary      Update a user's roles (admin-only) [DEPRECATED]
+// @Description  DEPRECATED: Updates the denormalized roles array on the user record. Use the RBAC v2 endpoints (POST/DELETE /admin/rbac/users/{id}/roles) instead.
 // @Tags         auth.admin
 // @Security     BearerAuth
 // @Accept       json
@@ -1894,34 +1625,13 @@ func (h *Controller) revoke(c echo.Context) error {
 // @Failure      401   {object}  map[string]string
 // @Failure      403   {object}  map[string]string
 // @Failure      429   {object}  map[string]string
+// @Deprecated
 // @Router       /api/v1/auth/admin/users/{id}/roles [post]
 func (h *Controller) adminUpdateRoles(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	c.Response().Header().Set("Deprecation", "true")
+	c.Response().Header().Set("Sunset", "2026-06-01")
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -1955,6 +1665,7 @@ func (h *Controller) adminUpdateRoles(c echo.Context) error {
 // @Security     BearerAuth
 // @Produce      json
 // @Param        tenant_id  query  string  true  "Tenant ID (UUID)"
+// @Param        email      query  string  false "Filter by email address (exact match)"
 // @Success      200  {object}  adminUsersResp
 // @Failure      400  {object}  map[string]string
 // @Failure      401  {object}  map[string]string
@@ -1962,34 +1673,6 @@ func (h *Controller) adminUpdateRoles(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users [get]
 func (h *Controller) adminListUsers(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
-	}
-
 	tenStr := c.QueryParam("tenant_id")
 	if tenStr == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
@@ -1998,15 +1681,26 @@ func (h *Controller) adminListUsers(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
 	}
+	if _, err := h.requireAdminForTenant(c, tenantID); err != nil {
+		return nil
+	}
 
 	users, err := h.svc.ListTenantUsers(c.Request().Context(), tenantID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+
+	// Optional email filter
+	emailFilter := strings.ToLower(strings.TrimSpace(c.QueryParam("email")))
+
 	out := make([]adminUser, 0, len(users))
 	for _, u := range users {
+		if emailFilter != "" && !strings.EqualFold(u.Email, emailFilter) {
+			continue
+		}
 		out = append(out, adminUser{
 			ID:            u.ID,
+			Email:         u.Email,
 			EmailVerified: u.EmailVerified,
 			IsActive:      u.IsActive,
 			FirstName:     u.FirstName,
@@ -2035,32 +1729,8 @@ func (h *Controller) adminListUsers(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id} [patch]
 func (h *Controller) adminUpdateNames(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -2096,32 +1766,8 @@ func (h *Controller) adminUpdateNames(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/block [post]
 func (h *Controller) adminBlockUser(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -2149,32 +1795,8 @@ func (h *Controller) adminBlockUser(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/unblock [post]
 func (h *Controller) adminUnblockUser(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -2202,32 +1824,8 @@ func (h *Controller) adminUnblockUser(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/verify-email [post]
 func (h *Controller) adminVerifyEmail(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -2255,32 +1853,8 @@ func (h *Controller) adminVerifyEmail(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/admin/users/{id}/unverify-email [post]
 func (h *Controller) adminUnverifyEmail(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	// RBAC: require admin role
-	isAdmin := false
-	for _, r := range in.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	if _, err := h.requireAdmin(c); err != nil {
+		return nil
 	}
 
 	userIDStr := c.Param("id")
@@ -2306,21 +1880,9 @@ func (h *Controller) adminUnverifyEmail(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/sessions [get]
 func (h *Controller) sessionsList(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 
 	sessions, err := h.svc.ListUserSessions(c.Request().Context(), in.UserID, in.TenantID)
@@ -2362,21 +1924,9 @@ func (h *Controller) sessionsList(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/sessions/{id}/revoke [post]
 func (h *Controller) sessionRevoke(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 
 	sidStr := c.Param("id")
@@ -2494,23 +2044,9 @@ func (h *Controller) resetPasswordConfirm(c echo.Context) error {
 // @Router       /api/v1/auth/password/change [post]
 func (h *Controller) changePassword(c echo.Context) error {
 	ctx := c.Request().Context()
-	authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-
-	// Get token from bearer header or cookie
-	tok := bearerToken(c)
-	if tok == "" && authMode == "cookie" {
-		if cookie, err := c.Cookie(guardAccessTokenCookieName); err == nil && cookie.Value != "" {
-			tok = cookie.Value
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing access token"})
-	}
-
-	// Introspect to get user claims
-	claims, err := h.svc.Introspect(ctx, tok)
-	if err != nil || !claims.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	claims, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 
 	var req changePasswordReq
@@ -2709,26 +2245,10 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 	ua := c.Request().UserAgent()
 	ip := c.RealIP()
 	// RBAC: admin only
-	tok := bearerToken(c)
-	if tok == "" {
-		c.Logger().Errorf("sso.portal_link: missing bearer token ip=%s ua=%s", ip, ua)
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	inTok, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !inTok.Active {
-		c.Logger().Errorf("sso.portal_link: invalid token ip=%s ua=%s err=%v", ip, ua, err)
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-	}
-	isAdmin := false
-	for _, r := range inTok.Roles {
-		if strings.EqualFold(r, "admin") {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		c.Logger().Errorf("sso.portal_link: forbidden (non-admin) tenant_id=%s user_id=%s ip=%s ua=%s", inTok.TenantID.String(), inTok.UserID.String(), ip, ua)
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+	inTok, err := h.requireAdmin(c)
+	if err != nil {
+		c.Logger().Errorf("sso.portal_link: auth failed ip=%s ua=%s", ip, ua)
+		return nil
 	}
 
 	// Validate inputs
@@ -2777,21 +2297,9 @@ func (h *Controller) ssoOrganizationPortalLinkGenerator(c echo.Context) error {
 // @Failure      401  {object}  map[string]string
 // @Router       /api/v1/auth/mfa/totp/start [post]
 func (h *Controller) totpStart(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	secret, url, err := h.svc.StartTOTPEnrollment(c.Request().Context(), in.UserID, in.TenantID)
 	if err != nil {
@@ -2820,21 +2328,9 @@ func (h *Controller) totpActivate(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	if err := h.svc.ActivateTOTP(c.Request().Context(), in.UserID, req.Code); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -2852,21 +2348,9 @@ func (h *Controller) totpActivate(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/mfa/totp/disable [post]
 func (h *Controller) totpDisable(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	if err := h.svc.DisableTOTP(c.Request().Context(), in.UserID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -2898,21 +2382,9 @@ func (h *Controller) backupGenerate(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	codes, err := h.svc.GenerateBackupCodes(c.Request().Context(), in.UserID, req.Count)
 	if err != nil {
@@ -2942,21 +2414,9 @@ func (h *Controller) backupConsume(c echo.Context) error {
 	if err := c.Validate(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, validation.ErrorResponse(err))
 	}
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	ok, err := h.svc.ConsumeBackupCode(c.Request().Context(), in.UserID, req.Code)
 	if err != nil {
@@ -2976,21 +2436,9 @@ func (h *Controller) backupConsume(c echo.Context) error {
 // @Failure      429  {object}  map[string]string
 // @Router       /api/v1/auth/mfa/backup/count [get]
 func (h *Controller) backupCount(c echo.Context) error {
-	tok := bearerToken(c)
-	if tok == "" {
-		authMode := detectAuthMode(c, h.cfg.DefaultAuthMode)
-		if authMode == "cookie" {
-			if cookie, cerr := c.Cookie(guardAccessTokenCookieName); cerr == nil && cookie.Value != "" {
-				tok = cookie.Value
-			}
-		}
-	}
-	if tok == "" {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
-	}
-	in, err := h.svc.Introspect(c.Request().Context(), tok)
-	if err != nil || !in.Active {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+	in, err := h.requireAuth(c)
+	if err != nil {
+		return nil
 	}
 	n, err := h.svc.CountRemainingBackupCodes(c.Request().Context(), in.UserID)
 	if err != nil {

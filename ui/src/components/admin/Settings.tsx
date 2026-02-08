@@ -19,12 +19,14 @@ import CreateUserPanel from './users/CreateUserPanel'
 import TenantManagementPanel from './tenants/TenantManagementPanel'
 import TenantSettingsPanel from './tenants/TenantSettingsPanel'
 import SsoProvidersPanel from './sso/SsoProvidersPanel'
+import RateLimitsPanel from './ratelimits/RateLimitsPanel'
+import OAuthClientsPanel from './oauth/OAuthClientsPanel'
 
 export default function AdminSettings() {
   const { user } = useAuth()
   const { tenantId, tenantName, setTenantId } = useTenant()
   const [activeTab, setActiveTab] = useState<
-    'settings' | 'users' | 'account' | 'fga' | 'rbac' | 'tenants' | 'sso'
+    'settings' | 'users' | 'account' | 'fga' | 'rbac' | 'tenants' | 'sso' | 'ratelimits' | 'oauth'
   >('settings')
   const [fgaGroupId, setFgaGroupId] = useState('')
 
@@ -46,7 +48,7 @@ export default function AdminSettings() {
         const hash = window.location.hash || ''
         const m = hash.match(/tab=([a-z]+)/i)
         const val = (m?.[1] || '').toLowerCase()
-        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso']
+        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso', 'ratelimits', 'oauth']
         if (allowed.includes(val)) {
           setActiveTab(val as typeof activeTab)
         }
@@ -57,7 +59,7 @@ export default function AdminSettings() {
       if (!window.location.hash || !window.location.hash.includes('tab=')) {
         const params = new URLSearchParams(window.location.search)
         const src = (params.get('source') || '').toLowerCase()
-        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso']
+        const allowed = ['settings', 'users', 'account', 'fga', 'rbac', 'tenants', 'sso', 'ratelimits', 'oauth']
         if (allowed.includes(src)) {
           setActiveTab(src as typeof activeTab)
         }
@@ -190,6 +192,26 @@ export default function AdminSettings() {
                 data-testid="tab-sso"
               >
                 SSO Providers
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'ratelimits' ? 'default' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('ratelimits')}
+                data-testid="tab-ratelimits"
+              >
+                Rate Limits
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'oauth' ? 'default' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('oauth')}
+                data-testid="tab-oauth"
+              >
+                OAuth Clients
               </Button>
             )}
           </div>
@@ -337,6 +359,38 @@ export default function AdminSettings() {
               </div>
             ) : (
               <SsoProvidersPanel tenantId={tenantId} />
+            )}
+          </div>
+        )}
+
+        {activeTab === 'ratelimits' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">Rate Limit Management</h2>
+            <div className="text-sm text-muted-foreground">
+              Configure per-endpoint rate limits for this tenant.
+            </div>
+            {!tenantId ? (
+              <div className="text-sm text-muted-foreground">
+                Enter a tenant ID above to manage rate limits.
+              </div>
+            ) : (
+              <RateLimitsPanel tenantId={tenantId} />
+            )}
+          </div>
+        )}
+
+        {activeTab === 'oauth' && (
+          <div className="rounded-xl border p-4 space-y-3">
+            <h2 className="text-base font-medium">OAuth 2.0 Client Management</h2>
+            <div className="text-sm text-muted-foreground">
+              Register and manage OAuth 2.0 client applications.
+            </div>
+            {!tenantId ? (
+              <div className="text-sm text-muted-foreground">
+                Enter a tenant ID above to manage OAuth clients.
+              </div>
+            ) : (
+              <OAuthClientsPanel tenantId={tenantId} />
             )}
           </div>
         )}

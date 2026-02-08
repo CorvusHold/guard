@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
 	"github.com/corvusHold/guard/internal/metrics"
@@ -24,11 +26,13 @@ import (
 )
 
 type Service struct {
-	repo     domain.Repository
-	cfg      config.Config
-	settings sdomain.Service
-	pub      evdomain.Publisher
-	log      zerolog.Logger
+	repo        domain.Repository
+	cfg         config.Config
+	settings    sdomain.Service
+	pub         evdomain.Publisher
+	log         zerolog.Logger
+	emailSender edomain.Sender
+	keyMgr      *keys.Manager
 }
 
 // --- FGA: Groups, Memberships, ACL Tuples, Authorization ---
@@ -219,6 +223,10 @@ func (s *Service) DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uui
 // User role assignments
 func (s *Service) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error) {
 	return s.repo.ListUserRoleIDs(ctx, userID, tenantID)
+}
+
+func (s *Service) ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.Role, error) {
+	return s.repo.ListUserRoles(ctx, userID, tenantID)
 }
 
 func (s *Service) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
@@ -543,6 +551,15 @@ func (s *Service) SetPublisher(p evdomain.Publisher) { s.pub = p }
 // SetLogger allows injection of a structured logger for debug tracing.
 func (s *Service) SetLogger(l zerolog.Logger) { s.log = l }
 
+// SetEmailSender allows injection of an email sender for invitation emails.
+func (s *Service) SetEmailSender(sender edomain.Sender) { s.emailSender = sender }
+
+// SetKeyManager allows injection of a key manager for asymmetric JWT signing.
+func (s *Service) SetKeyManager(km *keys.Manager) { s.keyMgr = km }
+
+// KeyManager returns the key manager (for JWKS endpoint).
+func (s *Service) KeyManager() *keys.Manager { return s.keyMgr }
+
 func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.AccessTokens, error) {
 	// Normalize email to lowercase and trim spaces to ensure consistent storage
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
@@ -691,17 +708,54 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
+	// Resolve roles from normalized user_roles table (RBAC v2)
+	roleNames, _ := s.repo.ListUserRoleNames(ctx, userID, tenantID)
+	if roleNames == nil {
+		roleNames = []string{}
+	}
+
+	// Resolve email from auth_identities and name from users table for JWT claims
+	var email, name string
+	if ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID); err == nil {
+		for _, ai := range ids {
+			if ai.TenantID == tenantID {
+				email = ai.Email
+				break
+			}
+		}
+	}
+	if u, err := s.repo.GetUserByID(ctx, userID); err == nil {
+		name = strings.TrimSpace(u.FirstName + " " + u.LastName)
+	}
+
 	// Access JWT
 	claims := jwt.MapClaims{
-		"sub": userID.String(),
-		"ten": tenantID.String(),
-		"exp": time.Now().Add(accessTTL).Unix(),
-		"iat": time.Now().Unix(),
-		"iss": issuer,
-		"aud": audience,
+		"sub":   userID.String(),
+		"ten":   tenantID.String(),
+		"exp":   time.Now().Add(accessTTL).Unix(),
+		"iat":   time.Now().Unix(),
+		"iss":   issuer,
+		"aud":   audience,
+		"roles": roleNames,
+		"email": email,
+		"name":  name,
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	access, err := t.SignedString([]byte(signingKey))
+
+	// Use key manager for signing if available (ES256), otherwise fall back to HS256
+	var signingMethod jwt.SigningMethod
+	var signKey interface{}
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		signingMethod = s.keyMgr.SigningMethod()
+		signKey = s.keyMgr.SigningKey(signingKey)
+	} else {
+		signingMethod = jwt.SigningMethodHS256
+		signKey = []byte(signingKey)
+	}
+	t := jwt.NewWithClaims(signingMethod, claims)
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		t.Header["kid"] = s.keyMgr.KeyID()
+	}
+	access, err := t.SignedString(signKey)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -751,13 +805,21 @@ func (s *Service) Me(ctx context.Context, userID, tenantID uuid.UUID) (domain.Us
 	if ms, err := s.repo.GetMFASecret(ctx, userID); err == nil {
 		mfaEnabled = ms.Enabled
 	}
+	// Resolve roles from normalized user_roles table (RBAC v2) instead of legacy users.roles
+	roleNames, err := s.repo.ListUserRoleNames(ctx, userID, tenantID)
+	if err != nil {
+		return domain.UserProfile{}, err
+	}
+	if roleNames == nil {
+		roleNames = []string{}
+	}
 	prof := domain.UserProfile{
 		ID:            u.ID,
 		TenantID:      tenantID,
 		Email:         email,
 		FirstName:     u.FirstName,
 		LastName:      u.LastName,
-		Roles:         u.Roles,
+		Roles:         roleNames,
 		MFAEnabled:    mfaEnabled,
 		EmailVerified: u.EmailVerified,
 		LastLoginAt:   u.LastLoginAt,
@@ -867,12 +929,21 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 		}
 	}
 
+	// Resolve roles from normalized user_roles table (RBAC v2) instead of legacy users.roles
+	roleNames, err := s.repo.ListUserRoleNames(ctx, uid, tid)
+	if err != nil {
+		return domain.Introspection{Active: false}, err
+	}
+	if roleNames == nil {
+		roleNames = []string{}
+	}
+
 	return domain.Introspection{
 		Active:        true,
 		UserID:        uid,
 		TenantID:      tid,
 		Email:         email,
-		Roles:         u.Roles,
+		Roles:         roleNames,
 		MFAVerified:   false,
 		EmailVerified: u.EmailVerified,
 		Exp:           expInt,
@@ -1289,6 +1360,27 @@ func (s *Service) GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) 
 	return s.repo.CreateRole(ctx, uuid.New(), tenantID, "admin", "Administrator role with full access")
 }
 
+// SeedDefaultRoles creates the standard set of roles for a tenant.
+// Idempotent: skips roles that already exist.
+func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) error {
+	defaults := []struct {
+		Name string
+		Desc string
+	}{
+		{"admin", "Administrator role with full access"},
+		{"member", "Default member role"},
+	}
+	for _, d := range defaults {
+		if _, err := s.repo.GetRoleByName(ctx, tenantID, d.Name); err == nil {
+			continue // already exists
+		}
+		if _, err := s.repo.CreateRole(ctx, uuid.New(), tenantID, d.Name, d.Desc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ParseAccessToken parses an access token and returns the claims.
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
@@ -1302,7 +1394,7 @@ func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain
 		return domain.AccessTokenClaims{}, errors.New("invalid claims")
 	}
 	userIDStr, _ := claims["sub"].(string)
-	tenantIDStr, _ := claims["tenant_id"].(string)
+	tenantIDStr, _ := claims["ten"].(string)
 	email, _ := claims["email"].(string)
 	rolesRaw, _ := claims["roles"].([]interface{})
 

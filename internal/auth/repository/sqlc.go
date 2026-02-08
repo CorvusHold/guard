@@ -108,7 +108,23 @@ func (r *SQLCRepository) ListTenantUsers(ctx context.Context, tenantID uuid.UUID
 	}
 	out := make([]domain.User, 0, len(items))
 	for _, u := range items {
-		out = append(out, mapUser(u))
+		var last *time.Time
+		if u.LastLoginAt.Valid {
+			t := u.LastLoginAt.Time
+			last = &t
+		}
+		out = append(out, domain.User{
+			ID:            toUUID(u.ID),
+			Email:         u.Email,
+			EmailVerified: u.EmailVerified,
+			IsActive:      u.IsActive,
+			FirstName:     u.FirstName.String,
+			LastName:      u.LastName.String,
+			Roles:         u.Roles,
+			CreatedAt:     u.CreatedAt.Time,
+			UpdatedAt:     u.UpdatedAt.Time,
+			LastLoginAt:   last,
+		})
 	}
 	return out, nil
 }
@@ -671,6 +687,22 @@ func (r *SQLCRepository) RemoveUserRole(ctx context.Context, userID uuid.UUID, t
 	return r.q.RemoveUserRole(ctx, db.RemoveUserRoleParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID), RoleID: toPgUUID(roleID)})
 }
 
+func (r *SQLCRepository) ListUserRoleNames(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error) {
+	return r.q.ListUserRoleNames(ctx, db.ListUserRoleNamesParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+}
+
+func (r *SQLCRepository) ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.Role, error) {
+	rows, err := r.q.ListUserRoles(ctx, db.ListUserRolesParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Role, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapRole(row))
+	}
+	return out, nil
+}
+
 // Role-permissions
 func (r *SQLCRepository) ListRolePermissionKeys(ctx context.Context, roleIDs []uuid.UUID) ([]domain.RolePermissionGrant, error) {
 	arr := make([]pgtype.UUID, 0, len(roleIDs))
@@ -1065,4 +1097,113 @@ func (r *SQLCRepository) DeleteInvitation(ctx context.Context, id uuid.UUID, ten
 		ID:       toPgUUID(id),
 		TenantID: toPgUUID(tenantID),
 	})
+}
+
+// --- API Keys ---
+
+func (r *SQLCRepository) CreateAPIKey(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, keyHash, keyPrefix string, scopes []string, createdBy uuid.UUID, expiresAt *time.Time) (domain.APIKey, error) {
+	var pgExpires pgtype.Timestamptz
+	if expiresAt != nil {
+		pgExpires = toPgTime(*expiresAt)
+	}
+	row, err := r.q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+		ID:        toPgUUID(id),
+		TenantID:  toPgUUID(tenantID),
+		Name:      name,
+		KeyHash:   keyHash,
+		KeyPrefix: keyPrefix,
+		Scopes:    scopes,
+		CreatedBy: toPgUUID(createdBy),
+		ExpiresAt: pgExpires,
+	})
+	if err != nil {
+		return domain.APIKey{}, err
+	}
+	return mapAPIKey(row), nil
+}
+
+func (r *SQLCRepository) GetAPIKeyByHash(ctx context.Context, keyHash string) (domain.APIKey, error) {
+	row, err := r.q.GetAPIKeyByHash(ctx, keyHash)
+	if err != nil {
+		return domain.APIKey{}, err
+	}
+	return mapAPIKey(row), nil
+}
+
+func (r *SQLCRepository) ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.APIKey, error) {
+	rows, err := r.q.ListAPIKeysByTenant(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.APIKey, 0, len(rows))
+	for _, row := range rows {
+		k := domain.APIKey{
+			ID:        toUUID(row.ID),
+			TenantID:  toUUID(row.TenantID),
+			Name:      row.Name,
+			KeyPrefix: row.KeyPrefix,
+			Scopes:    row.Scopes,
+			CreatedAt: row.CreatedAt.Time,
+			UpdatedAt: row.UpdatedAt.Time,
+		}
+		if row.CreatedBy.Valid {
+			u := toUUID(row.CreatedBy)
+			k.CreatedBy = &u
+		}
+		if row.ExpiresAt.Valid {
+			t := row.ExpiresAt.Time
+			k.ExpiresAt = &t
+		}
+		if row.RevokedAt.Valid {
+			t := row.RevokedAt.Time
+			k.RevokedAt = &t
+		}
+		if row.LastUsedAt.Valid {
+			t := row.LastUsedAt.Time
+			k.LastUsedAt = &t
+		}
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+func (r *SQLCRepository) RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error {
+	return r.q.RevokeAPIKey(ctx, db.RevokeAPIKeyParams{
+		ID:       toPgUUID(keyID),
+		TenantID: toPgUUID(tenantID),
+	})
+}
+
+func (r *SQLCRepository) UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error {
+	return r.q.UpdateAPIKeyLastUsed(ctx, toPgUUID(keyID))
+}
+
+// mapAPIKey converts a sqlc ApiKey row to a domain APIKey.
+func mapAPIKey(row db.ApiKey) domain.APIKey {
+	k := domain.APIKey{
+		ID:        toUUID(row.ID),
+		TenantID:  toUUID(row.TenantID),
+		Name:      row.Name,
+		KeyPrefix: row.KeyPrefix,
+		Scopes:    row.Scopes,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.CreatedBy.Valid {
+		u := toUUID(row.CreatedBy)
+		k.CreatedBy = &u
+	}
+	if row.ExpiresAt.Valid {
+		t := row.ExpiresAt.Time
+		k.ExpiresAt = &t
+	}
+	if row.RevokedAt.Valid {
+		t := row.RevokedAt.Time
+		k.RevokedAt = &t
+	}
+	if row.LastUsedAt.Valid {
+		t := row.LastUsedAt.Time
+		k.LastUsedAt = &t
+	}
+	return k
 }

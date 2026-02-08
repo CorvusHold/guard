@@ -28,21 +28,36 @@ func (q *Queries) AddUserToTenant(ctx context.Context, arg AddUserToTenantParams
 }
 
 const listTenantUsers = `-- name: ListTenantUsers :many
-SELECT u.id, u.email_verified, u.is_active, u.first_name, u.last_name, u.roles, u.created_at, u.updated_at, u.last_login_at
+SELECT u.id, u.email_verified, u.is_active, u.first_name, u.last_name, u.roles, u.created_at, u.updated_at, u.last_login_at,
+       COALESCE(ai.email, '') AS email
 FROM user_tenants ut
 JOIN users u ON u.id = ut.user_id
+LEFT JOIN auth_identities ai ON ai.user_id = u.id AND ai.tenant_id = ut.tenant_id
 WHERE ut.tenant_id = $1
 `
 
-func (q *Queries) ListTenantUsers(ctx context.Context, tenantID pgtype.UUID) ([]User, error) {
+type ListTenantUsersRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	EmailVerified bool               `json:"email_verified"`
+	IsActive      bool               `json:"is_active"`
+	FirstName     pgtype.Text        `json:"first_name"`
+	LastName      pgtype.Text        `json:"last_name"`
+	Roles         []string           `json:"roles"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	LastLoginAt   pgtype.Timestamptz `json:"last_login_at"`
+	Email         string             `json:"email"`
+}
+
+func (q *Queries) ListTenantUsers(ctx context.Context, tenantID pgtype.UUID) ([]ListTenantUsersRow, error) {
 	rows, err := q.db.Query(ctx, listTenantUsers, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []User
+	var items []ListTenantUsersRow
 	for rows.Next() {
-		var i User
+		var i ListTenantUsersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EmailVerified,
@@ -53,6 +68,7 @@ func (q *Queries) ListTenantUsers(ctx context.Context, tenantID pgtype.UUID) ([]
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastLoginAt,
+			&i.Email,
 		); err != nil {
 			return nil, err
 		}

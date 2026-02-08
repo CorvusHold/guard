@@ -135,6 +135,7 @@ type Service interface {
 	DeleteRole(ctx context.Context, roleID uuid.UUID, tenantID uuid.UUID) error
 	// User role assignments in normalized table.
 	ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error)
+	ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]Role, error)
 	AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
 	RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
 	// Role-permission mapping management (permissionKey is the unique permission key).
@@ -178,6 +179,8 @@ type Service interface {
 
 	// GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
 	GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) (Role, error)
+	// SeedDefaultRoles creates the standard set of roles (admin, member) for a tenant. Idempotent.
+	SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) error
 	// ParseAccessToken parses and validates an access token, returning the claims.
 	// It validates the JWT signature using the tenant-specific signing key (resolved from
 	// the token's tenant claim), verifies standard claims (exp, iss, aud), and returns
@@ -207,6 +210,17 @@ type Service interface {
 	// --- Admin User Creation ---
 	// AdminCreateUser creates a user directly in a tenant (admin operation).
 	AdminCreateUser(ctx context.Context, in AdminCreateUserInput) (User, error)
+
+	// --- API Keys ---
+	// CreateAPIKey creates a new API key for service-to-service authentication.
+	// Returns the APIKey metadata and the raw key (shown only once).
+	CreateAPIKey(ctx context.Context, tenantID uuid.UUID, name string, scopes []string, createdBy uuid.UUID, expiresAt *time.Time) (APIKey, string, error)
+	// ValidateAPIKey validates a raw API key and returns the associated metadata.
+	ValidateAPIKey(ctx context.Context, rawKey string) (APIKey, error)
+	// ListAPIKeys returns all API keys for a tenant.
+	ListAPIKeys(ctx context.Context, tenantID uuid.UUID) ([]APIKey, error)
+	// RevokeAPIKey revokes an API key.
+	RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error
 }
 
 // AccessTokenClaims represents the claims in an access token.
@@ -345,6 +359,8 @@ type Repository interface {
 	GetRoleByName(ctx context.Context, tenantID uuid.UUID, name string) (Role, error)
 	// User role assignments
 	ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]uuid.UUID, error)
+	ListUserRoleNames(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error)
+	ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]Role, error)
 	AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
 	RemoveUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error
 	// Role-permissions
@@ -394,6 +410,13 @@ type Repository interface {
 	AcceptInvitation(ctx context.Context, tokenHash string) (uuid.UUID, error)
 	RevokeInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error
+
+	// --- API Keys ---
+	CreateAPIKey(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, keyHash, keyPrefix string, scopes []string, createdBy uuid.UUID, expiresAt *time.Time) (APIKey, error)
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (APIKey, error)
+	ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]APIKey, error)
+	RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error
+	UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error
 }
 
 type AuthIdentity struct {
@@ -522,6 +545,7 @@ type SSOPortalToken struct {
 // User reflects the users table record.
 type User struct {
 	ID            uuid.UUID
+	Email         string
 	EmailVerified bool
 	IsActive      bool
 	FirstName     string
@@ -655,4 +679,21 @@ type AdminCreateUserInput struct {
 	Roles         []string
 	EmailVerified bool
 	SendWelcome   bool // If true, send welcome email to user
+}
+
+// --- API Keys ---
+
+// APIKey represents a service-to-service API key.
+type APIKey struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Name       string
+	KeyPrefix  string
+	Scopes     []string
+	CreatedBy  *uuid.UUID
+	ExpiresAt  *time.Time
+	RevokedAt  *time.Time
+	LastUsedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }

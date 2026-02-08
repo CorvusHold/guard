@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 )
 
 // SSOProviderOption represents an SSO provider available for login
@@ -58,6 +60,12 @@ type LoginOptionsResponse struct {
 
 	// If email domain matches an SSO provider's configured domains
 	DomainMatchedSSO *SSOProviderOption `json:"domain_matched_sso,omitempty"`
+
+	// Whether new user signup is enabled for this tenant
+	SignupEnabled bool `json:"signup_enabled"`
+
+	// Tenant logo URL for branding on the login page
+	TenantLogoURL string `json:"tenant_logo_url,omitempty"`
 }
 
 // GetLoginOptions godoc
@@ -82,6 +90,7 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 	response := LoginOptionsResponse{
 		PasswordEnabled:  true, // Default: password login enabled
 		MagicLinkEnabled: true, // Default: magic link enabled
+		SignupEnabled:    true, // Default: signup enabled
 		SSOProviders:     []SSOProviderOption{},
 		SocialProviders:  []SocialProviderOption{},
 		PreferredMethod:  "password",
@@ -129,6 +138,16 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 			if userErr == nil {
 				response.UserExists = true
 			}
+		}
+	}
+
+	// If we have a tenant, fetch tenant-scoped settings
+	if tenantID != uuid.Nil && h.settings != nil {
+		if signupStr, sErr := h.settings.GetString(c.Request().Context(), sdomain.KeySignupEnabled, &tenantID, "true"); sErr == nil {
+			response.SignupEnabled = signupStr != "false"
+		}
+		if logoURL, lErr := h.settings.GetString(c.Request().Context(), sdomain.KeyTenantLogoURL, &tenantID, ""); lErr == nil {
+			response.TenantLogoURL = logoURL
 		}
 	}
 

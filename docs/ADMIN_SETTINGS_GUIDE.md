@@ -196,6 +196,39 @@ npx playwright test admin-settings.spec.ts
 - **Principle of least privilege**: Only grant admin access to trusted users
 - **Audit logs**: All settings changes are logged for compliance
 
+## Settings Resolution Model
+
+Guard uses a 3-layer settings resolution chain:
+
+1. **Tenant DB** (`app_settings WHERE tenant_id = <uuid>`) — highest priority
+2. **Global DB** (`app_settings WHERE tenant_id IS NULL`) — fallback
+3. **Env / config.Config** — lowest priority, used as default when DB has no value
+
+Most settings (JWT signing key, token TTLs, email provider, SSO config) are resolved at request-handling time using the `tenant_id` from the parsed request body. The service layer passes `cfg.X` as the default, so the chain works transparently.
+
+### CORS and Rate Limits: `X-Tenant-ID` Header Required
+
+CORS and rate limit middleware run **before** the request body is parsed. They cannot extract `tenant_id` from JSON bodies. To enable per-tenant CORS origins and rate limit overrides on auth endpoints (`/password/login`, `/signup`, `/magic/send`, etc.), clients **must** send the `X-Tenant-ID` header.
+
+The resolution order for tenant context in middleware is:
+1. `X-Tenant-ID` request header
+2. `?tenant_id=` query parameter
+3. `:id` / `:tenant_id` route parameters (for `/api/v1/tenants/:id/*` paths)
+
+The TS SDK (`@corvushold/guard-sdk`) automatically sends `X-Tenant-ID` on every request when `tenantId` is configured in the client constructor. If you use a custom HTTP client, include this header for tenant-scoped CORS and rate limits to work.
+
+### Example: Configuring Tenant CORS
+
+```bash
+# Set tenant-specific CORS origins (augments global CORS_ALLOWED_ORIGINS env)
+curl -X PUT "https://auth.example.com/api/v1/tenants/{tenant_id}/settings" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"app_cors_allowed_origins": "https://app.tenant.com,https://staging.tenant.com"}'
+```
+
+Browser requests from `https://app.tenant.com` will then be allowed, provided the SDK (or custom client) sends `X-Tenant-ID: <tenant_id>` in the request headers.
+
 ## Related Documentation
 
 - [SSO Implementation Guide](./sso/OIDC_IMPLEMENTATION.md)
