@@ -59,7 +59,10 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 
 	// Each failure should fail open (allow=true)
 	for i := 0; i < 3; i++ {
-		allowed, _, _ := cb.Allow(nil, "key", 10, time.Minute)
+		allowed, _, err := cb.Allow(nil, "key", 10, time.Minute)
+		if err != nil {
+			t.Fatalf("iteration %d: unexpected error: %v", i, err)
+		}
 		if !allowed {
 			t.Errorf("iteration %d: expected fail-open (allowed=true)", i)
 		}
@@ -67,7 +70,10 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 
 	// Circuit should now be open — inner should NOT be called
 	prevCount := inner.callCount
-	allowed, _, _ := cb.Allow(nil, "key", 10, time.Minute)
+	allowed, _, err := cb.Allow(nil, "key", 10, time.Minute)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !allowed {
 		t.Error("expected fail-open in open state")
 	}
@@ -81,8 +87,12 @@ func TestCircuitBreaker_RecoverAfterCooldown(t *testing.T) {
 	cb := NewCircuitBreakerStore(inner, 2, 50*time.Millisecond)
 
 	// Trip the circuit
-	cb.Allow(nil, "key", 10, time.Minute)
-	cb.Allow(nil, "key", 10, time.Minute)
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Wait for cooldown
 	time.Sleep(60 * time.Millisecond)
@@ -113,13 +123,18 @@ func TestCircuitBreaker_HalfOpenReOpensOnFailure(t *testing.T) {
 	cb := NewCircuitBreakerStore(inner, 1, 50*time.Millisecond)
 
 	// Trip the circuit
-	cb.Allow(nil, "key", 10, time.Minute)
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Wait for cooldown to enter half-open
 	time.Sleep(60 * time.Millisecond)
 
 	// Probe fails — should re-open
-	allowed, _, _ := cb.Allow(nil, "key", 10, time.Minute)
+	allowed, _, err := cb.Allow(nil, "key", 10, time.Minute)
+	if err != nil {
+		t.Fatalf("unexpected error during half-open probe: %v", err)
+	}
 	if !allowed {
 		t.Error("expected fail-open during half-open probe failure")
 	}
@@ -137,13 +152,19 @@ func TestCircuitBreaker_SuccessResetsFailures(t *testing.T) {
 	cb := NewCircuitBreakerStore(inner, 3, time.Second)
 
 	// 2 failures (below threshold)
-	cb.Allow(nil, "key", 10, time.Minute)
-	cb.Allow(nil, "key", 10, time.Minute)
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Now succeed
 	inner.err = nil
 	inner.allowResult = true
-	cb.Allow(nil, "key", 10, time.Minute)
+	if _, _, err := cb.Allow(nil, "key", 10, time.Minute); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	cb.mu.Lock()
 	failures := cb.failures

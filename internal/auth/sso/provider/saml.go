@@ -1023,7 +1023,9 @@ func (p *SAMLProvider) HandleLogoutRequest(samlRequestB64, relayState string) (n
 	// Try deflate decompression (HTTP-Redirect binding uses DEFLATE)
 	reader := flate.NewReader(bytes.NewReader(raw))
 	decompressed, readErr := io.ReadAll(reader)
-	reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	if readErr != nil {
 		// If deflate fails, assume raw XML (HTTP-POST binding)
 		decompressed = raw

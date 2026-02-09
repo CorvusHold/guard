@@ -157,7 +157,7 @@ func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
