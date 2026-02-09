@@ -1418,6 +1418,28 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
             };
         };
         put?: never;
@@ -1499,6 +1521,28 @@ export interface paths {
                         "application/json": components["schemas"]["domain.OAuthClient"];
                     };
                 };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
                 /** @description Not Found */
                 404: {
                     headers: {
@@ -1539,6 +1583,17 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2954,6 +3009,90 @@ export interface paths {
         /**
          * Unblock a user (admin-only)
          * @description Sets a user's active status to true. Requires caller to have the admin role.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description User ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Too Many Requests */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/admin/users/{id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock a locked account (admin-only)
+         * @description Clears account lockout and resets failed login attempts. Requires admin role.
          */
         post: {
             parameters: {
@@ -6565,6 +6704,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{id}/ancestors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get tenant ancestors
+         * @description Returns the ancestor chain for a tenant (parent, grandparent, etc.)
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tenant ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["controller.tenantResp"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{id}/children": {
         parameters: {
             query?: never;
@@ -6666,6 +6858,62 @@ export interface paths {
                     };
                     content: {
                         "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/tenants/{id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update tenant parent
+         * @description Re-parents a tenant. Set parent_tenant_id to null to make it a root tenant.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tenant ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description New parent */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.updateParentReq"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
                             [key: string]: string;
                         };
                     };
@@ -6828,6 +7076,304 @@ export interface paths {
         };
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List webhooks
+         * @description Lists all webhook subscriptions for the tenant
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create webhook
+         * @description Creates a new webhook subscription for the tenant
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Webhook configuration */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.createWebhookRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.Webhook"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get webhook
+         * @description Returns a single webhook subscription by ID
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Webhook ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.Webhook"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * Update webhook
+         * @description Updates an existing webhook subscription
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Webhook ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description Updated webhook configuration */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["controller.updateWebhookRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.Webhook"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Delete webhook
+         * @description Deletes a webhook subscription
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Webhook ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -7127,6 +7673,746 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scim/v2/Groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List SCIM groups
+         * @description Returns a paginated list of groups for the tenant per SCIM 2.0
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description SCIM filter expression */
+                    filter?: string;
+                    /** @description 1-based start index */
+                    startIndex?: number;
+                    /** @description Page size */
+                    count?: number;
+                };
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMListResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a SCIM group
+         * @description Creates a new group in the tenant
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMGroup"];
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMGroup"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a SCIM group by ID
+         * @description Returns a single group resource
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description Group ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMGroup"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        /**
+         * Replace a SCIM group
+         * @description Replaces an existing group resource
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description Group ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMGroup"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMGroup"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Delete a SCIM group
+         * @description Removes a group from the tenant
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description Group ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Patch a SCIM group
+         * @description Applies partial updates to a group resource
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description Group ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMPatchRequest"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMGroup"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/scim/v2/ResourceTypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SCIM resource types
+         * @description Returns the supported SCIM 2.0 resource types
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SCIM schemas
+         * @description Returns the supported SCIM 2.0 schemas
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/ServiceProviderConfig": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SCIM service provider configuration
+         * @description Returns the SCIM 2.0 service provider configuration
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List SCIM users
+         * @description Returns a paginated list of users for the tenant per SCIM 2.0
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description SCIM filter expression */
+                    filter?: string;
+                    /** @description 1-based start index */
+                    startIndex?: number;
+                    /** @description Page size */
+                    count?: number;
+                };
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMListResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a SCIM user
+         * @description Provisions a new user in the tenant
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMUser"];
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMUser"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a SCIM user by ID
+         * @description Returns a single user resource
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMUser"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        /**
+         * Replace a SCIM user
+         * @description Replaces an existing user resource
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMUser"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMUser"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Delete a SCIM user
+         * @description Deprovisions a user from the tenant
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Patch a SCIM user
+         * @description Applies partial updates to a user resource
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Tenant ID */
+                    "X-Tenant-ID": string;
+                };
+                path: {
+                    /** @description User ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["domain.SCIMPatchRequest"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMUser"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["domain.SCIMError"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7392,6 +8678,11 @@ export interface components {
         "controller.createTenantReq": {
             name: string;
             parent_tenant_id?: string;
+        };
+        "controller.createWebhookRequest": {
+            events: string[];
+            secret: string;
+            url: string;
         };
         "controller.fgaAuthorizeReq": {
             object_id?: string;
@@ -7759,6 +9050,9 @@ export interface components {
             redirect_uris?: string[];
             scopes?: string[];
         };
+        "controller.updateParentReq": {
+            parent_tenant_id?: string;
+        };
         "controller.updateProfileReq": {
             first_name?: string;
             last_name?: string;
@@ -7810,6 +9104,11 @@ export interface components {
             want_assertions_signed?: boolean;
             want_response_signed?: boolean;
         };
+        "controller.updateWebhookRequest": {
+            events?: string[];
+            is_active?: boolean;
+            url?: string;
+        };
         "controller.verifyEmailReq": {
             token: string;
         };
@@ -7838,8 +9137,11 @@ export interface components {
         };
         "domain.OAuthClient": {
             client_id?: string;
-            /** @description confidential | public */
-            client_type?: string;
+            /**
+             * @description confidential | public
+             * @enum {string}
+             */
+            client_type?: "confidential" | "public";
             created_at?: string;
             created_by?: string;
             grant_types?: string[];
@@ -7857,6 +9159,73 @@ export interface components {
         };
         /** @enum {string} */
         "domain.ProviderType": "oidc" | "saml" | "oauth2" | "workos" | "dev";
+        "domain.SCIMEmail": {
+            primary?: boolean;
+            type?: string;
+            value?: string;
+        };
+        "domain.SCIMError": {
+            detail?: string;
+            schemas?: string[];
+            status?: number;
+        };
+        "domain.SCIMGroup": {
+            displayName?: string;
+            id?: string;
+            members?: components["schemas"]["domain.SCIMMemberRef"][];
+            meta?: components["schemas"]["domain.SCIMMeta"];
+            schemas?: string[];
+        };
+        "domain.SCIMGroupRef": {
+            $ref?: string;
+            display?: string;
+            value?: string;
+        };
+        "domain.SCIMListResponse": {
+            Resources?: unknown;
+            itemsPerPage?: number;
+            schemas?: string[];
+            startIndex?: number;
+            totalResults?: number;
+        };
+        "domain.SCIMMemberRef": {
+            $ref?: string;
+            display?: string;
+            value?: string;
+        };
+        "domain.SCIMMeta": {
+            created?: string;
+            lastModified?: string;
+            location?: string;
+            resourceType?: string;
+        };
+        "domain.SCIMName": {
+            familyName?: string;
+            givenName?: string;
+        };
+        "domain.SCIMPatchOp": {
+            /** @description add, remove, replace */
+            op?: string;
+            /** @description attribute path, e.g. "name.givenName" */
+            path?: string;
+            /** @description new value */
+            value?: unknown;
+        };
+        "domain.SCIMPatchRequest": {
+            Operations?: components["schemas"]["domain.SCIMPatchOp"][];
+            schemas?: string[];
+        };
+        "domain.SCIMUser": {
+            active?: boolean;
+            emails?: components["schemas"]["domain.SCIMEmail"][];
+            externalId?: string;
+            groups?: components["schemas"]["domain.SCIMGroupRef"][];
+            id?: string;
+            meta?: components["schemas"]["domain.SCIMMeta"];
+            name?: components["schemas"]["domain.SCIMName"];
+            schemas?: string[];
+            userName?: string;
+        };
         "domain.TokenResponse": {
             access_token?: string;
             expires_in?: number;
@@ -7876,6 +9245,15 @@ export interface components {
             roles?: string[];
             tenant_id?: string;
         };
+        "domain.Webhook": {
+            created_at?: string;
+            events?: string[];
+            id?: string;
+            is_active?: boolean;
+            tenant_id?: string;
+            updated_at?: string;
+            url?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -7884,6 +9262,12 @@ export interface components {
         "controller.magicVerifyReq": {
             content: {
                 "application/json": components["schemas"]["controller.magicVerifyReq"];
+            };
+        };
+        /** @description Group resource */
+        "domain.SCIMGroup": {
+            content: {
+                "application/json": components["schemas"]["domain.SCIMGroup"];
             };
         };
         /** @description permission_key, scope_type, optional resource_type/resource_id */
@@ -7902,6 +9286,18 @@ export interface components {
         "controller.rbacModifyUserRoleReq": {
             content: {
                 "application/json": components["schemas"]["controller.rbacModifyUserRoleReq"];
+            };
+        };
+        /** @description Patch operations */
+        "domain.SCIMPatchRequest": {
+            content: {
+                "application/json": components["schemas"]["domain.SCIMPatchRequest"];
+            };
+        };
+        /** @description User resource */
+        "domain.SCIMUser": {
+            content: {
+                "application/json": components["schemas"]["domain.SCIMUser"];
             };
         };
     };

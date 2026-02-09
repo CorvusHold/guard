@@ -523,6 +523,21 @@ definitions:
     required:
     - name
     type: object
+  controller.createWebhookRequest:
+    properties:
+      events:
+        items:
+          type: string
+        type: array
+      secret:
+        type: string
+      url:
+        type: string
+    required:
+    - events
+    - secret
+    - url
+    type: object
   controller.fgaAuthorizeReq:
     properties:
       object_id:
@@ -1318,6 +1333,11 @@ definitions:
           type: string
         type: array
     type: object
+  controller.updateParentReq:
+    properties:
+      parent_tenant_id:
+        type: string
+    type: object
   controller.updateProfileReq:
     properties:
       first_name:
@@ -1416,6 +1436,17 @@ definitions:
       want_response_signed:
         type: boolean
     type: object
+  controller.updateWebhookRequest:
+    properties:
+      events:
+        items:
+          type: string
+        type: array
+      is_active:
+        type: boolean
+      url:
+        type: string
+    type: object
   controller.verifyEmailReq:
     properties:
       token:
@@ -1475,6 +1506,9 @@ definitions:
         type: string
       client_type:
         description: confidential | public
+        enum:
+        - confidential
+        - public
         type: string
       created_at:
         type: string
@@ -1524,6 +1558,142 @@ definitions:
     - ProviderTypeOAuth2
     - ProviderTypeWorkOS
     - ProviderTypeDev
+  domain.SCIMEmail:
+    properties:
+      primary:
+        type: boolean
+      type:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMError:
+    properties:
+      detail:
+        type: string
+      schemas:
+        items:
+          type: string
+        type: array
+      status:
+        type: integer
+    type: object
+  domain.SCIMGroup:
+    properties:
+      displayName:
+        type: string
+      id:
+        type: string
+      members:
+        items:
+          $ref: '#/definitions/domain.SCIMMemberRef'
+        type: array
+      meta:
+        $ref: '#/definitions/domain.SCIMMeta'
+      schemas:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.SCIMGroupRef:
+    properties:
+      $ref:
+        type: string
+      display:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMListResponse:
+    properties:
+      Resources: {}
+      itemsPerPage:
+        type: integer
+      schemas:
+        items:
+          type: string
+        type: array
+      startIndex:
+        type: integer
+      totalResults:
+        type: integer
+    type: object
+  domain.SCIMMemberRef:
+    properties:
+      $ref:
+        type: string
+      display:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMMeta:
+    properties:
+      created:
+        type: string
+      lastModified:
+        type: string
+      location:
+        type: string
+      resourceType:
+        type: string
+    type: object
+  domain.SCIMName:
+    properties:
+      familyName:
+        type: string
+      givenName:
+        type: string
+    type: object
+  domain.SCIMPatchOp:
+    properties:
+      op:
+        description: add, remove, replace
+        type: string
+      path:
+        description: attribute path, e.g. "name.givenName"
+        type: string
+      value:
+        description: new value
+    type: object
+  domain.SCIMPatchRequest:
+    properties:
+      Operations:
+        items:
+          $ref: '#/definitions/domain.SCIMPatchOp'
+        type: array
+      schemas:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.SCIMUser:
+    properties:
+      active:
+        type: boolean
+      emails:
+        items:
+          $ref: '#/definitions/domain.SCIMEmail'
+        type: array
+      externalId:
+        type: string
+      groups:
+        items:
+          $ref: '#/definitions/domain.SCIMGroupRef'
+        type: array
+      id:
+        type: string
+      meta:
+        $ref: '#/definitions/domain.SCIMMeta'
+      name:
+        $ref: '#/definitions/domain.SCIMName'
+      schemas:
+        items:
+          type: string
+        type: array
+      userName:
+        type: string
+    type: object
   domain.TokenResponse:
     properties:
       access_token:
@@ -1560,6 +1730,25 @@ definitions:
           type: string
         type: array
       tenant_id:
+        type: string
+    type: object
+  domain.Webhook:
+    properties:
+      created_at:
+        type: string
+      events:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      url:
         type: string
     type: object
 info:
@@ -2341,6 +2530,8 @@ paths:
       - auth.admin
   /api/v1/auth/admin/oauth-clients:
     get:
+      consumes:
+      - application/json
       description: Returns all OAuth clients for the tenant
       produces:
       - application/json
@@ -2349,6 +2540,18 @@ paths:
           description: OK
           schema:
             additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
             type: object
       security:
       - BearerAuth: []
@@ -2386,6 +2589,8 @@ paths:
       - auth.admin
   /api/v1/auth/admin/oauth-clients/{id}:
     delete:
+      consumes:
+      - application/json
       description: Deletes an OAuth client
       parameters:
       - description: Client UUID
@@ -2402,12 +2607,20 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Delete OAuth client
       tags:
       - auth.admin
     get:
+      consumes:
+      - application/json
       description: Returns a single OAuth client by ID
       parameters:
       - description: Client UUID
@@ -2422,6 +2635,18 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/domain.OAuthClient'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: Not Found
           schema:
@@ -3292,6 +3517,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Unblock a user (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/users/{id}/unlock:
+    post:
+      description: Clears account lockout and resets failed login attempts. Requires
+        admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unlock a locked account (admin-only)
       tags:
       - auth.admin
   /api/v1/auth/admin/users/{id}/unverify-email:
@@ -5174,6 +5441,33 @@ paths:
       summary: Get tenant by ID
       tags:
       - tenants
+  /api/v1/tenants/{id}/ancestors:
+    get:
+      description: Returns the ancestor chain for a tenant (parent, grandparent, etc.)
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/controller.tenantResp'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get tenant ancestors
+      tags:
+      - tenants
   /api/v1/tenants/{id}/children:
     get:
       description: Lists child tenants of a parent tenant with pagination
@@ -5226,6 +5520,38 @@ paths:
               type: string
             type: object
       summary: Deactivate tenant
+      tags:
+      - tenants
+  /api/v1/tenants/{id}/parent:
+    patch:
+      consumes:
+      - application/json
+      description: Re-parents a tenant. Set parent_tenant_id to null to make it a
+        root tenant.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New parent
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateParentReq'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update tenant parent
       tags:
       - tenants
   /api/v1/tenants/{id}/settings:
@@ -5353,8 +5679,186 @@ paths:
       summary: Get tenant by name
       tags:
       - tenants
+  /api/v1/webhooks:
+    get:
+      description: Lists all webhook subscriptions for the tenant
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List webhooks
+      tags:
+      - Webhooks
+    post:
+      consumes:
+      - application/json
+      description: Creates a new webhook subscription for the tenant
+      parameters:
+      - description: Webhook configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create webhook
+      tags:
+      - Webhooks
+  /api/v1/webhooks/{id}:
+    delete:
+      description: Deletes a webhook subscription
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete webhook
+      tags:
+      - Webhooks
+    get:
+      description: Returns a single webhook subscription by ID
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get webhook
+      tags:
+      - Webhooks
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing webhook subscription
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated webhook configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update webhook
+      tags:
+      - Webhooks
   /oauth/authorize:
     get:
+      consumes:
+      - application/x-www-form-urlencoded
       description: Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1).
         Returns consent screen data or redirects if consent was previously granted.
       parameters:
@@ -5547,6 +6051,464 @@ paths:
       summary: OAuth 2.0 Token Exchange
       tags:
       - OAuth
+  /scim/v2/Groups:
+    get:
+      description: Returns a paginated list of groups for the tenant per SCIM 2.0
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: SCIM filter expression
+        in: query
+        name: filter
+        type: string
+      - description: 1-based start index
+        in: query
+        name: startIndex
+        type: integer
+      - description: Page size
+        in: query
+        name: count
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: List SCIM groups
+      tags:
+      - SCIM
+    post:
+      consumes:
+      - application/json
+      description: Creates a new group in the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMGroup'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Create a SCIM group
+      tags:
+      - SCIM
+  /scim/v2/Groups/{id}:
+    delete:
+      description: Removes a group from the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Delete a SCIM group
+      tags:
+      - SCIM
+    get:
+      description: Returns a single group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Get a SCIM group by ID
+      tags:
+      - SCIM
+    patch:
+      consumes:
+      - application/json
+      description: Applies partial updates to a group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Patch operations
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMPatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Patch a SCIM group
+      tags:
+      - SCIM
+    put:
+      consumes:
+      - application/json
+      description: Replaces an existing group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Group resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMGroup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Replace a SCIM group
+      tags:
+      - SCIM
+  /scim/v2/ResourceTypes:
+    get:
+      description: Returns the supported SCIM 2.0 resource types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM resource types
+      tags:
+      - SCIM
+  /scim/v2/Schemas:
+    get:
+      description: Returns the supported SCIM 2.0 schemas
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM schemas
+      tags:
+      - SCIM
+  /scim/v2/ServiceProviderConfig:
+    get:
+      description: Returns the SCIM 2.0 service provider configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM service provider configuration
+      tags:
+      - SCIM
+  /scim/v2/Users:
+    get:
+      description: Returns a paginated list of users for the tenant per SCIM 2.0
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: SCIM filter expression
+        in: query
+        name: filter
+        type: string
+      - description: 1-based start index
+        in: query
+        name: startIndex
+        type: integer
+      - description: Page size
+        in: query
+        name: count
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: List SCIM users
+      tags:
+      - SCIM
+    post:
+      consumes:
+      - application/json
+      description: Provisions a new user in the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMUser'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Create a SCIM user
+      tags:
+      - SCIM
+  /scim/v2/Users/{id}:
+    delete:
+      description: Deprovisions a user from the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Delete a SCIM user
+      tags:
+      - SCIM
+    get:
+      description: Returns a single user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Get a SCIM user by ID
+      tags:
+      - SCIM
+    patch:
+      consumes:
+      - application/json
+      description: Applies partial updates to a user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Patch operations
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMPatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Patch a SCIM user
+      tags:
+      - SCIM
+    put:
+      consumes:
+      - application/json
+      description: Replaces an existing user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Replace a SCIM user
+      tags:
+      - SCIM
 schemes:
 - https
 - http

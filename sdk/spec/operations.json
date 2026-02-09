@@ -1,6 +1,6 @@
 {
-  "count": 112,
-  "generatedAt": "2026-02-08T16:08:36.006Z",
+  "count": 135,
+  "generatedAt": "2026-02-09T08:03:01.938Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
@@ -218,6 +218,15 @@
             "type": "object"
           },
           "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
         }
       ],
       "method": "delete",
@@ -442,6 +451,102 @@
       ]
     },
     {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete a SCIM user",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
       "errors": [],
       "method": "get",
       "operationId": "get_api_v1_applications",
@@ -645,7 +750,26 @@
       ]
     },
     {
-      "errors": [],
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "500"
+        }
+      ],
       "method": "get",
       "operationId": "get_api_v1_auth_admin_oauth_clients",
       "path": "/api/v1/auth/admin/oauth-clients",
@@ -664,6 +788,24 @@
     },
     {
       "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
         {
           "schema": {
             "additionalProperties": {
@@ -1656,6 +1798,36 @@
         }
       ],
       "method": "get",
+      "operationId": "get_api_v1_tenants_by_id_ancestors",
+      "path": "/api/v1/tenants/{id}/ancestors",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "items": {
+            "$ref": "#/definitions/controller.tenantResp"
+          },
+          "type": "array"
+        },
+        "status": "200"
+      },
+      "summary": "Get tenant ancestors",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "get",
       "operationId": "get_api_v1_tenants_by_id_children",
       "path": "/api/v1/tenants/{id}/children",
       "requestBody": null,
@@ -1769,6 +1941,88 @@
             },
             "type": "object"
           },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_webhooks",
+      "path": "/api/v1/webhooks",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List webhooks",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "200"
+      },
+      "summary": "Get webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "status": "400"
         }
       ],
@@ -1786,6 +2040,186 @@
       "summary": "OAuth 2.0 Authorization",
       "tags": [
         "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_groups",
+      "path": "/scim/v2/Groups",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMListResponse"
+        },
+        "status": "200"
+      },
+      "summary": "List SCIM groups",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Get a SCIM group by ID",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_resourcetypes",
+      "path": "/scim/v2/ResourceTypes",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM resource types",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_schemas",
+      "path": "/scim/v2/Schemas",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM schemas",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_serviceproviderconfig",
+      "path": "/scim/v2/ServiceProviderConfig",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM service provider configuration",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_users",
+      "path": "/scim/v2/Users",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMListResponse"
+        },
+        "status": "200"
+      },
+      "summary": "List SCIM users",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Get a SCIM user by ID",
+      "tags": [
+        "SCIM"
       ]
     },
     {
@@ -1994,6 +2428,84 @@
       "summary": "Deactivate tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_api_v1_tenants_by_id_parent",
+      "path": "/api/v1/tenants/{id}/parent",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateParentReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Update tenant parent",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMPatchRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Patch a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMPatchRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Patch a SCIM user",
+      "tags": [
+        "SCIM"
       ]
     },
     {
@@ -2760,6 +3272,57 @@
         "status": "204"
       },
       "summary": "Unblock a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_users_by_id_unlock",
+      "path": "/api/v1/auth/admin/users/{id}/unlock",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Unlock a locked account (admin-only)",
       "tags": [
         "auth.admin"
       ]
@@ -3928,6 +4491,44 @@
             "type": "object"
           },
           "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_webhooks",
+      "path": "/api/v1/webhooks",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createWebhookRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "201"
+      },
+      "summary": "Create webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
         },
         {
           "schema": {
@@ -4015,6 +4616,70 @@
       "summary": "OAuth 2.0 Token Exchange",
       "tags": [
         "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_scim_v2_groups",
+      "path": "/scim/v2/Groups",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMGroup"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "201"
+      },
+      "summary": "Create a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_scim_v2_users",
+      "path": "/scim/v2/Users",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMUser"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "201"
+      },
+      "summary": "Create a SCIM user",
+      "tags": [
+        "SCIM"
       ]
     },
     {
@@ -4174,6 +4839,108 @@
       "summary": "Upsert tenant settings (subset)",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateWebhookRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "200"
+      },
+      "summary": "Update webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMGroup"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Replace a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMUser"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Replace a SCIM user",
+      "tags": [
+        "SCIM"
       ]
     }
   ]
