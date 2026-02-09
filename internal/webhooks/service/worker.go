@@ -14,6 +14,7 @@ import (
 
 	"github.com/corvusHold/guard/internal/webhooks/domain"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 )
 
 // Worker processes pending webhook deliveries in the background.
@@ -22,6 +23,7 @@ type Worker struct {
 	client       *http.Client
 	interval     time.Duration
 	batchSize    int
+	concurrency  int
 	requireHTTPS bool
 }
 
@@ -60,6 +62,7 @@ func NewWorker(repo domain.Repository) *Worker {
 		client:       &http.Client{Timeout: 10 * time.Second, Transport: transport},
 		interval:     5 * time.Second,
 		batchSize:    50,
+		concurrency:  10,
 		requireHTTPS: requireHTTPS,
 	}
 }
@@ -98,9 +101,16 @@ func (w *Worker) processBatch(ctx context.Context) {
 		return
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(w.concurrency)
 	for _, d := range deliveries {
-		w.deliver(ctx, d)
+		d := d // capture loop variable
+		g.Go(func() error {
+			w.deliver(gctx, d)
+			return nil
+		})
 	}
+	_ = g.Wait()
 }
 
 func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {

@@ -70,7 +70,7 @@ RETURNING *;
 SELECT * FROM oauth_consent_grants
 WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL;
 
--- name: RevokeOAuthConsentGrant :exec
+-- name: RevokeOAuthConsentGrant :execrows
 UPDATE oauth_consent_grants
 SET revoked_at = now()
 WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL;

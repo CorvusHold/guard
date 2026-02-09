@@ -326,7 +326,7 @@ func (q *Queries) ListOAuthClientsByTenant(ctx context.Context, tenantID pgtype.
 	return items, nil
 }
 
-const revokeOAuthConsentGrant = `-- name: RevokeOAuthConsentGrant :exec
+const revokeOAuthConsentGrant = `-- name: RevokeOAuthConsentGrant :execrows
 UPDATE oauth_consent_grants
 SET revoked_at = now()
 WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL
@@ -338,9 +338,12 @@ type RevokeOAuthConsentGrantParams struct {
 	TenantID pgtype.UUID `json:"tenant_id"`
 }
 
-func (q *Queries) RevokeOAuthConsentGrant(ctx context.Context, arg RevokeOAuthConsentGrantParams) error {
-	_, err := q.db.Exec(ctx, revokeOAuthConsentGrant, arg.UserID, arg.ClientID, arg.TenantID)
-	return err
+func (q *Queries) RevokeOAuthConsentGrant(ctx context.Context, arg RevokeOAuthConsentGrantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOAuthConsentGrant, arg.UserID, arg.ClientID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateOAuthClient = `-- name: UpdateOAuthClient :execrows

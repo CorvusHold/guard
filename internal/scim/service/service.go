@@ -292,11 +292,11 @@ func (s *Service) GetGroup(ctx context.Context, tenantID uuid.UUID, groupID stri
 		return domain.SCIMGroup{}, fmt.Errorf("invalid group id")
 	}
 	var name, description string
-	var createdAt time.Time
+	var createdAt, updatedAt time.Time
 	err = s.pg.QueryRow(ctx,
-		`SELECT name, description, created_at FROM groups WHERE id = $1 AND tenant_id = $2`,
+		`SELECT name, description, created_at, updated_at FROM groups WHERE id = $1 AND tenant_id = $2`,
 		gid, tenantID,
-	).Scan(&name, &description, &createdAt)
+	).Scan(&name, &description, &createdAt, &updatedAt)
 	if err != nil {
 		return domain.SCIMGroup{}, err
 	}
@@ -304,7 +304,7 @@ func (s *Service) GetGroup(ctx context.Context, tenantID uuid.UUID, groupID stri
 		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
 		ID:          gid.String(),
 		DisplayName: name,
-		Meta:        domain.SCIMMeta{ResourceType: "Group", Created: createdAt, LastModified: createdAt},
+		Meta:        domain.SCIMMeta{ResourceType: "Group", Created: createdAt, LastModified: updatedAt},
 	}, nil
 }
 
@@ -396,12 +396,15 @@ func (s *Service) UpdateGroup(ctx context.Context, tenantID uuid.UUID, groupID s
 	if err != nil {
 		return domain.SCIMGroup{}, fmt.Errorf("invalid group id")
 	}
-	_, err = s.pg.Exec(ctx,
-		`UPDATE groups SET name = $1 WHERE id = $2 AND tenant_id = $3`,
+	result, err := s.pg.Exec(ctx,
+		`UPDATE groups SET name = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3`,
 		group.DisplayName, gid, tenantID,
 	)
 	if err != nil {
 		return domain.SCIMGroup{}, err
+	}
+	if result.RowsAffected() == 0 {
+		return domain.SCIMGroup{}, fmt.Errorf("group not found")
 	}
 	return s.GetGroup(ctx, tenantID, groupID)
 }

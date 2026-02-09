@@ -109,6 +109,16 @@ func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 			return nil, err
 		}
 		return &privKey.PublicKey, nil
+	case "PRIVATE KEY":
+		privAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		ecKey, ok := privAny.(*ecdsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("expected EC private key in PKCS#8 block, got %T in %s", privAny, path)
+		}
+		return &ecKey.PublicKey, nil
 	case "PUBLIC KEY":
 		pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
@@ -120,7 +130,7 @@ func loadECPublicKey(path string) (*ecdsa.PublicKey, error) {
 		}
 		return pubKey, nil
 	default:
-		return nil, fmt.Errorf("expected EC PRIVATE KEY or PUBLIC KEY PEM block, got %q in %s", block.Type, path)
+		return nil, fmt.Errorf("expected EC PRIVATE KEY, PRIVATE KEY, or PUBLIC KEY PEM block, got %q in %s", block.Type, path)
 	}
 }
 

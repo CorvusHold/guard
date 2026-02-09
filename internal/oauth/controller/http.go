@@ -17,6 +17,7 @@ import (
 
 	authdomain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/auth/keys"
+	authmw "github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/config"
 	"github.com/corvusHold/guard/internal/oauth/domain"
 	"github.com/corvusHold/guard/internal/oauth/service"
@@ -143,8 +144,11 @@ func (h *Controller) createClient(c echo.Context) error {
 // @Description  Returns all OAuth clients for the tenant
 // @Tags         auth.admin
 // @Security     BearerAuth
+// @Accept       json
 // @Produce      json
 // @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
 // @Router       /api/v1/auth/admin/oauth-clients [get]
 func (h *Controller) listClients(c echo.Context) error {
 	tenantID, err := extractTenantID(c)
@@ -164,9 +168,12 @@ func (h *Controller) listClients(c echo.Context) error {
 // @Description  Returns a single OAuth client by ID
 // @Tags         auth.admin
 // @Security     BearerAuth
+// @Accept       json
 // @Produce      json
 // @Param        id  path  string  true  "Client UUID"
 // @Success      200  {object}  domain.OAuthClient
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
 // @Router       /api/v1/auth/admin/oauth-clients/{id} [get]
 func (h *Controller) getClient(c echo.Context) error {
@@ -240,9 +247,11 @@ func (h *Controller) updateClient(c echo.Context) error {
 // @Description  Deletes an OAuth client
 // @Tags         auth.admin
 // @Security     BearerAuth
+// @Accept       json
 // @Param        id  path  string  true  "Client UUID"
 // @Success      204
 // @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
 // @Router       /api/v1/auth/admin/oauth-clients/{id} [delete]
 func (h *Controller) deleteClient(c echo.Context) error {
 	tenantID, err := extractTenantID(c)
@@ -266,6 +275,7 @@ func (h *Controller) deleteClient(c echo.Context) error {
 // @Summary      OAuth 2.0 Authorization
 // @Description  Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.
 // @Tags         OAuth
+// @Accept       application/x-www-form-urlencoded
 // @Produce      json
 // @Param        client_id             query  string  true   "Client ID"
 // @Param        redirect_uri          query  string  true   "Redirect URI"
@@ -834,21 +844,15 @@ func (h *Controller) buildLoginURL(c echo.Context) string {
 }
 
 func extractTenantID(c echo.Context) (uuid.UUID, error) {
-	// Use verified claims from JWT middleware context
-	if v := c.Get("auth_tenant_id"); v != nil {
-		if id, ok := v.(uuid.UUID); ok {
-			return id, nil
-		}
+	if id, ok := authmw.TenantID(c); ok {
+		return id, nil
 	}
 	return uuid.Nil, fmt.Errorf("tenant_id not found")
 }
 
 func extractUserID(c echo.Context) (uuid.UUID, error) {
-	// Use verified claims from JWT middleware context
-	if v := c.Get("auth_user_id"); v != nil {
-		if id, ok := v.(uuid.UUID); ok {
-			return id, nil
-		}
+	if id, ok := authmw.UserID(c); ok {
+		return id, nil
 	}
 	return uuid.Nil, fmt.Errorf("user_id not found")
 }

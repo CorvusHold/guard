@@ -73,7 +73,7 @@ func (s *Service) InviteUser(ctx context.Context, in domain.InviteUserInput) (do
 
 	// Send invitation email (best-effort: log error but don't fail the invitation)
 	if s.emailSender != nil && in.TenantID != nil {
-		baseURL := s.cfg.PublicBaseURL
+		baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, in.TenantID, s.cfg.PublicBaseURL)
 		if baseURL == "" {
 			baseURL = "http://localhost:8080"
 		}

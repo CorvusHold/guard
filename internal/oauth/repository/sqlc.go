@@ -181,11 +181,18 @@ func (r *SQLCRepository) GetConsentGrant(ctx context.Context, userID, tenantID u
 }
 
 func (r *SQLCRepository) RevokeConsentGrant(ctx context.Context, userID, tenantID uuid.UUID, clientID string) error {
-	return r.q.RevokeOAuthConsentGrant(ctx, db.RevokeOAuthConsentGrantParams{
+	rows, err := r.q.RevokeOAuthConsentGrant(ctx, db.RevokeOAuthConsentGrantParams{
 		UserID:   uuidToPG(userID),
 		ClientID: clientID,
 		TenantID: uuidToPG(tenantID),
 	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("consent grant not found")
+	}
+	return nil
 }
 
 // --- Mapping helpers ---
@@ -254,10 +261,14 @@ func mapCode(row db.OauthAuthorizationCode) domain.AuthorizationCode {
 
 // --- pgtype conversion helpers ---
 
+// uuidToPG converts a uuid.UUID to pgtype.UUID with Valid always true.
+// Use this for required (NOT NULL) UUID columns — uuid.Nil is stored as the zero UUID.
 func uuidToPG(id uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
+// uuidToPGNullable converts a uuid.UUID to pgtype.UUID, mapping uuid.Nil to NULL (Valid=false).
+// Use this for optional (nullable) UUID columns such as created_by.
 func uuidToPGNullable(id uuid.UUID) pgtype.UUID {
 	if id == uuid.Nil {
 		return pgtype.UUID{Valid: false}
