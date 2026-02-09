@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -41,6 +42,8 @@ type APIKeysListResponse struct {
 	APIKeys []APIKeyItem `json:"api_keys"`
 }
 
+var uuidRe = regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
+
 var apikeyCmd = &cobra.Command{
 	Use:   "apikey",
 	Short: "API key management commands",
@@ -52,12 +55,17 @@ var apikeyCreateCmd = &cobra.Command{
 	Short: "Create a new API key",
 	Long:  "Creates a new API key for the current tenant. The raw key is shown only once.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name, _ := cmd.Flags().GetString("name")
-		scopesStr, _ := cmd.Flags().GetString("scopes")
-		expiresStr, _ := cmd.Flags().GetString("expires")
-
-		if name == "" {
-			return fmt.Errorf("--name is required")
+		name, err := cmd.Flags().GetString("name")
+		if err != nil {
+			return err
+		}
+		scopesStr, err := cmd.Flags().GetString("scopes")
+		if err != nil {
+			return err
+		}
+		expiresStr, err := cmd.Flags().GetString("expires")
+		if err != nil {
+			return err
 		}
 
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken, Tenant: tenantID}
@@ -83,7 +91,10 @@ var apikeyCreateCmd = &cobra.Command{
 		}
 
 		if outputFmt == "json" {
-			out, _ := json.MarshalIndent(result, "", "  ")
+			out, err := json.MarshalIndent(result, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal api key response: %w", err)
+			}
 			fmt.Println(string(out))
 		} else {
 			fmt.Println("API Key created successfully!")
@@ -122,7 +133,10 @@ var apikeyListCmd = &cobra.Command{
 		}
 
 		if outputFmt == "json" {
-			out, _ := json.MarshalIndent(result, "", "  ")
+			out, err := json.MarshalIndent(result, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal api keys list: %w", err)
+			}
 			fmt.Println(string(out))
 		} else {
 			if len(result.APIKeys) == 0 {
@@ -156,9 +170,12 @@ var apikeyRevokeCmd = &cobra.Command{
 	Use:   "revoke",
 	Short: "Revoke an API key",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		id, _ := cmd.Flags().GetString("id")
-		if id == "" {
-			return fmt.Errorf("--id is required")
+		id, err := cmd.Flags().GetString("id")
+		if err != nil {
+			return err
+		}
+		if !uuidRe.MatchString(id) {
+			return fmt.Errorf("invalid API key id: must be a UUID")
 		}
 
 		client := &GuardClient{BaseURL: apiURL, Token: apiToken, Tenant: tenantID}
@@ -178,18 +195,24 @@ var apikeyRevokeCmd = &cobra.Command{
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max-3] + "..."
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }
 
 func init() {
 	apikeyCreateCmd.Flags().String("name", "", "Name for the API key (required)")
 	apikeyCreateCmd.Flags().String("scopes", "", "Comma-separated scopes (e.g., users:read,invitations:write)")
 	apikeyCreateCmd.Flags().String("expires", "", "Expiration time in RFC3339 format")
+	_ = apikeyCreateCmd.MarkFlagRequired("name")
 
 	apikeyRevokeCmd.Flags().String("id", "", "API key ID to revoke (required)")
+	_ = apikeyRevokeCmd.MarkFlagRequired("id")
 
 	apikeyCmd.AddCommand(apikeyCreateCmd)
 	apikeyCmd.AddCommand(apikeyListCmd)

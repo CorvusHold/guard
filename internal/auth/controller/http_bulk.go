@@ -59,7 +59,9 @@ func (h *Controller) bulkImportUsers(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cannot open file"})
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 
 	// Wrap in a LimitReader as a safety net even if Content-Length was spoofed
 	limitedSrc := io.LimitReader(src, maxImportSize+1)
