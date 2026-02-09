@@ -83,7 +83,7 @@ func (r *SQLCRepository) UpdateOAuthClient(ctx context.Context, id, tenantID uui
 	if in.IsActive != nil {
 		isActive = pgtype.Bool{Bool: *in.IsActive, Valid: true}
 	}
-	return r.q.UpdateOAuthClient(ctx, db.UpdateOAuthClientParams{
+	rows, err := r.q.UpdateOAuthClient(ctx, db.UpdateOAuthClientParams{
 		ID:           uuidToPG(id),
 		TenantID:     uuidToPG(tenantID),
 		Name:         name,
@@ -93,13 +93,27 @@ func (r *SQLCRepository) UpdateOAuthClient(ctx context.Context, id, tenantID uui
 		LogoUri:      textToPGPtr(in.LogoURI),
 		IsActive:     isActive,
 	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("oauth client not found")
+	}
+	return nil
 }
 
 func (r *SQLCRepository) DeleteOAuthClient(ctx context.Context, id, tenantID uuid.UUID) error {
-	return r.q.DeleteOAuthClient(ctx, db.DeleteOAuthClientParams{
+	rows, err := r.q.DeleteOAuthClient(ctx, db.DeleteOAuthClientParams{
 		ID:       uuidToPG(id),
 		TenantID: uuidToPG(tenantID),
 	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("oauth client not found")
+	}
+	return nil
 }
 
 func (r *SQLCRepository) CreateAuthorizationCode(ctx context.Context, code domain.AuthorizationCode) (domain.AuthorizationCode, error) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog/log"
 
 	authsvc "github.com/corvusHold/guard/internal/auth/service"
 )
@@ -37,7 +38,8 @@ func (h *Controller) selfProfile(c echo.Context) error {
 	}
 	profile, err := h.svc.Me(c.Request().Context(), in.UserID, in.TenantID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfProfile").Str("user_id", in.UserID.String()).Str("tenant_id", in.TenantID.String()).Msg("failed to load profile")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(http.StatusOK, profile)
 }
@@ -82,7 +84,8 @@ func (h *Controller) selfUpdateProfile(c echo.Context) error {
 	}
 	err = h.svc.UpdateUserNames(c.Request().Context(), in.UserID, firstName, lastName)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfUpdateProfile").Str("user_id", in.UserID.String()).Msg("failed to update profile")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "updated"})
 }
@@ -100,7 +103,8 @@ func (h *Controller) selfListSessions(c echo.Context) error {
 	}
 	sessions, err := h.svc.ListUserSessions(c.Request().Context(), in.UserID, in.TenantID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfListSessions").Str("user_id", in.UserID.String()).Str("tenant_id", in.TenantID.String()).Msg("failed to list sessions")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"sessions": sessions})
 }
@@ -122,7 +126,8 @@ func (h *Controller) selfRevokeSession(c echo.Context) error {
 	}
 	// Revoke via ownership-verified service method (ensures session belongs to this user+tenant)
 	if err := h.svc.RevokeSession(c.Request().Context(), in.UserID, in.TenantID, sessionID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfRevokeSession").Str("user_id", in.UserID.String()).Str("session_id", sessionID.String()).Msg("failed to revoke session")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -140,7 +145,8 @@ func (h *Controller) selfMFAStatus(c echo.Context) error {
 	}
 	enrolled, err := h.svc.IsMFAEnrolled(c.Request().Context(), in.UserID, in.TenantID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfMFAStatus").Str("user_id", in.UserID.String()).Msg("failed to check MFA status")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"mfa_enrolled": enrolled})
 }
@@ -161,7 +167,8 @@ func (h *Controller) selfListPasskeys(c echo.Context) error {
 	}
 	creds, err := h.webauthn.ListCredentials(c.Request().Context(), in.UserID, in.TenantID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfListPasskeys").Str("user_id", in.UserID.String()).Msg("failed to list passkeys")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	out := make([]passkeyResponse, 0, len(creds))
 	for _, cr := range creds {
@@ -244,7 +251,8 @@ func (h *Controller) selfRegisterPasskey(c echo.Context) error {
 		CreatedAt:       time.Now(),
 	}
 	if err := h.webauthn.StoreCredential(c.Request().Context(), cred); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfRegisterPasskey").Str("user_id", in.UserID.String()).Msg("failed to store passkey")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.JSON(http.StatusCreated, passkeyResponse{
 		ID:           cred.ID.String(),
@@ -272,7 +280,8 @@ func (h *Controller) selfDeletePasskey(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid passkey id"})
 	}
 	if err := h.webauthn.DeleteCredential(c.Request().Context(), passkeyID, in.UserID, in.TenantID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Error().Err(err).Str("func", "selfDeletePasskey").Str("user_id", in.UserID.String()).Str("passkey_id", passkeyID.String()).Msg("failed to delete passkey")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

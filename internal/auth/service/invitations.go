@@ -185,17 +185,18 @@ func (s *Service) AcceptInvitation(ctx context.Context, in domain.AcceptInvitati
 	return s.issueTokens(ctx, userID, *inv.TenantID, "", "", nil, "invitation", nil)
 }
 
+// txStarter is implemented by repositories that support database transactions.
+type txStarter interface {
+	BeginTx(ctx context.Context) (interface {
+		Rollback(context.Context) error
+		Commit(context.Context) error
+	}, domain.Repository, error)
+}
+
 // acceptInvitationTx executes all AcceptInvitation DB mutations inside a single transaction.
 // If the repo supports BeginTx (i.e. *repository.SQLCRepository), it uses a real DB transaction.
 // Otherwise, it falls back to sequential calls (for test fakes).
 func (s *Service) acceptInvitationTx(ctx context.Context, userID, authID uuid.UUID, inv domain.Invitation, in domain.AcceptInvitationInput, roles []string, passwordHash, tokenHash string) error {
-	type txStarter interface {
-		BeginTx(ctx context.Context) (interface {
-			Rollback(context.Context) error
-			Commit(context.Context) error
-		}, domain.Repository, error)
-	}
-
 	// Try to use a real transaction if the repo supports it
 	if txRepo, ok := s.repo.(txStarter); ok {
 		tx, repo, err := txRepo.BeginTx(ctx)
@@ -239,11 +240,13 @@ func (s *Service) runAcceptInvitationOps(ctx context.Context, repo domain.Reposi
 	if inv.Role != "" {
 		role, err := repo.GetRoleByName(ctx, *inv.TenantID, inv.Role)
 		if err != nil {
-			s.log.Warn().Err(err).Str("role", inv.Role).Str("tenant_id", inv.TenantID.String()).Msg("role not found, skipping assignment on invitation acceptance")
-		} else if role.ID != uuid.Nil {
-			if err := repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID); err != nil {
-				s.log.Warn().Err(err).Str("role", inv.Role).Str("user_id", userID.String()).Msg("failed to assign role on invitation acceptance")
-			}
+			return fmt.Errorf("role %q not found in tenant %s: %w", inv.Role, inv.TenantID.String(), err)
+		}
+		if role.ID == uuid.Nil {
+			return fmt.Errorf("role %q resolved to nil ID in tenant %s", inv.Role, inv.TenantID.String())
+		}
+		if err := repo.AddUserRole(ctx, userID, *inv.TenantID, role.ID); err != nil {
+			return fmt.Errorf("failed to assign role %q to user %s in tenant %s: %w", inv.Role, userID.String(), inv.TenantID.String(), err)
 		}
 	}
 
@@ -351,13 +354,6 @@ func (s *Service) AdminCreateUser(ctx context.Context, in domain.AdminCreateUser
 // adminCreateUserTx wraps AdminCreateUser DB mutations in a transaction.
 // Falls back to sequential calls for test fakes that don't support BeginTx.
 func (s *Service) adminCreateUserTx(ctx context.Context, userID, authID uuid.UUID, in domain.AdminCreateUserInput, roles []string, passwordHash string) error {
-	type txStarter interface {
-		BeginTx(ctx context.Context) (interface {
-			Rollback(context.Context) error
-			Commit(context.Context) error
-		}, domain.Repository, error)
-	}
-
 	if txRepo, ok := s.repo.(txStarter); ok {
 		tx, repo, err := txRepo.BeginTx(ctx)
 		if err != nil {
@@ -394,13 +390,13 @@ func (s *Service) runAdminCreateUserOps(ctx context.Context, repo domain.Reposit
 	for _, roleName := range roles {
 		role, err := repo.GetRoleByName(ctx, in.TenantID, roleName)
 		if err != nil {
-			s.log.Warn().Err(err).Str("role", roleName).Str("tenant_id", in.TenantID.String()).Msg("role not found, skipping assignment")
-			continue
+			return fmt.Errorf("role %q not found in tenant %s: %w", roleName, in.TenantID.String(), err)
 		}
-		if role.ID != uuid.Nil {
-			if err := repo.AddUserRole(ctx, userID, in.TenantID, role.ID); err != nil {
-				s.log.Warn().Err(err).Str("role", roleName).Str("user_id", userID.String()).Msg("failed to assign role to admin-created user")
-			}
+		if role.ID == uuid.Nil {
+			return fmt.Errorf("role %q resolved to nil ID in tenant %s", roleName, in.TenantID.String())
+		}
+		if err := repo.AddUserRole(ctx, userID, in.TenantID, role.ID); err != nil {
+			return fmt.Errorf("failed to assign role %q to user %s in tenant %s: %w", roleName, userID.String(), in.TenantID.String(), err)
 		}
 	}
 	return nil

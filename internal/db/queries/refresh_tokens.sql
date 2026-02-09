@@ -6,7 +6,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
 UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1;
 
 -- name: GetRefreshTokenByHash :one
-SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata, family_id
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata, family_id, last_used_at
 FROM refresh_tokens
 WHERE token_hash = $1;
 

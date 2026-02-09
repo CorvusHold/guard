@@ -65,20 +65,17 @@ func (h *Controller) RegisterAdminRoutes(g *echo.Group) {
 
 // RegisterOAuthRoutes registers the public OAuth 2.0 endpoints.
 func (h *Controller) RegisterOAuthRoutes(e *echo.Echo) {
+	var authMW, tokenMW []echo.MiddlewareFunc
 	if h.rlAuth != nil {
-		e.GET("/oauth/authorize", h.authorize, h.rlAuth)
-		e.POST("/oauth/authorize/decision", h.authorizeDecision, h.rlAuth)
-	} else {
-		e.GET("/oauth/authorize", h.authorize)
-		e.POST("/oauth/authorize/decision", h.authorizeDecision)
+		authMW = append(authMW, h.rlAuth)
 	}
 	if h.rlToken != nil {
-		e.POST("/oauth/token", h.token, h.rlToken)
-		e.POST("/oauth/revoke", h.revokeToken, h.rlToken)
-	} else {
-		e.POST("/oauth/token", h.token)
-		e.POST("/oauth/revoke", h.revokeToken)
+		tokenMW = append(tokenMW, h.rlToken)
 	}
+	e.GET("/oauth/authorize", h.authorize, authMW...)
+	e.POST("/oauth/authorize/decision", h.authorizeDecision, authMW...)
+	e.POST("/oauth/token", h.token, tokenMW...)
+	e.POST("/oauth/revoke", h.revokeToken, tokenMW...)
 }
 
 // --- Admin CRUD ---
@@ -401,23 +398,24 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 	}
 
 	if !req.Approved {
+		// Require a valid client_id to prevent open redirects
+		if req.ClientID == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
+		}
 		// Validate redirect_uri against registered client before redirecting
-		if req.ClientID != "" {
-			client, err := h.svc.GetClientByClientID(c.Request().Context(), req.ClientID)
-			if err == nil {
-				validURI := false
-				for _, uri := range client.RedirectURIs {
-					if uri == req.RedirectURI {
-						validURI = true
-						break
-					}
-				}
-				if !validURI {
-					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect_uri"})
-				}
-			} else {
-				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
+		client, err := h.svc.GetClientByClientID(c.Request().Context(), req.ClientID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
+		}
+		validURI := false
+		for _, uri := range client.RedirectURIs {
+			if uri == req.RedirectURI {
+				validURI = true
+				break
 			}
+		}
+		if !validURI {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect_uri"})
 		}
 		return redirectWithError(c, req.RedirectURI, req.State, "access_denied", "user denied the request")
 	}
@@ -445,9 +443,14 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 		TenantID:            tenantID,
 	}
 
-	// Re-validate the request
+	// Re-validate the request; if the error is about redirect_uri or client_id,
+	// return a JSON error instead of redirecting to an unvalidated URI.
 	if _, err := h.svc.ValidateAuthorizeRequest(c.Request().Context(), in); err != nil {
-		return redirectWithError(c, req.RedirectURI, req.State, "invalid_request", err.Error())
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "redirect_uri") || strings.Contains(errMsg, "client_id") || strings.Contains(errMsg, "client is deactivated") {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errMsg})
+		}
+		return redirectWithError(c, req.RedirectURI, req.State, "invalid_request", errMsg)
 	}
 
 	// Create authorization code
@@ -631,6 +634,16 @@ func (h *Controller) tokenClientCredentials(c echo.Context, clientID, clientSecr
 	scopes := strings.Fields(scope)
 	if len(scopes) == 0 {
 		scopes = client.Scopes
+	} else {
+		// Validate that every requested scope is allowed for this client
+		for _, s := range scopes {
+			if !containsScope(client.Scopes, s) {
+				return c.JSON(http.StatusBadRequest, map[string]string{
+					"error":             "invalid_scope",
+					"error_description": "requested scope '" + s + "' not allowed for this client",
+				})
+			}
+		}
 	}
 
 	// Issue a machine-to-machine access token
@@ -667,12 +680,30 @@ func (h *Controller) tokenClientCredentials(c echo.Context, clientID, clientSecr
 }
 
 func (h *Controller) tokenRefreshToken(c echo.Context, clientID, clientSecret string) error {
+	if clientID == "" {
+		clientID = c.FormValue("client_id")
+	}
+	if clientSecret == "" {
+		clientSecret = c.FormValue("client_secret")
+	}
+
 	refreshToken := c.FormValue("refresh_token")
 	if refreshToken == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
 			"error_description": "refresh_token is required",
 		})
+	}
+
+	// Authenticate the client if credentials are provided (confidential clients)
+	if clientID != "" {
+		_, err := h.svc.AuthenticateClient(c.Request().Context(), clientID, clientSecret)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error":             "invalid_client",
+				"error_description": "client authentication failed",
+			})
+		}
 	}
 
 	// Delegate to the existing auth service refresh flow
@@ -830,7 +861,13 @@ func extractClientAuth(c echo.Context) (string, string) {
 		if err == nil {
 			parts := strings.SplitN(string(decoded), ":", 2)
 			if len(parts) == 2 {
-				return parts[0], parts[1]
+				// RFC 6749 §2.3.1: URL-decode client_id and client_secret
+				cid, err1 := url.QueryUnescape(parts[0])
+				csec, err2 := url.QueryUnescape(parts[1])
+				if err1 != nil || err2 != nil {
+					return "", ""
+				}
+				return cid, csec
 			}
 		}
 	}

@@ -27,16 +27,16 @@ func (s *Service) GetUser(ctx context.Context, tenantID uuid.UUID, userID string
 		return domain.SCIMUser{}, fmt.Errorf("invalid user id")
 	}
 	var firstName, lastName, email string
-	var createdAt time.Time
+	var createdAt, updatedAt time.Time
 	var blocked bool
 	err = s.pg.QueryRow(ctx,
-		`SELECT u.first_name, u.last_name, ai.email, u.created_at, u.blocked
+		`SELECT u.first_name, u.last_name, ai.email, u.created_at, u.updated_at, u.blocked
 		 FROM users u
 		 JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = $1
 		 JOIN auth_identities ai ON ai.user_id = u.id AND ai.tenant_id = $1
 		 WHERE u.id = $2`,
 		tenantID, uid,
-	).Scan(&firstName, &lastName, &email, &createdAt, &blocked)
+	).Scan(&firstName, &lastName, &email, &createdAt, &updatedAt, &blocked)
 	if err != nil {
 		return domain.SCIMUser{}, err
 	}
@@ -50,7 +50,7 @@ func (s *Service) GetUser(ctx context.Context, tenantID uuid.UUID, userID string
 		Meta: domain.SCIMMeta{
 			ResourceType: "User",
 			Created:      createdAt,
-			LastModified: createdAt,
+			LastModified: updatedAt,
 		},
 	}, nil
 }
@@ -188,12 +188,15 @@ func (s *Service) UpdateUser(ctx context.Context, tenantID uuid.UUID, userID str
 		return domain.SCIMUser{}, fmt.Errorf("invalid user id")
 	}
 
-	_, err = s.pg.Exec(ctx,
+	result, err := s.pg.Exec(ctx,
 		`UPDATE users SET first_name = $1, last_name = $2, blocked = $3, updated_at = now() WHERE id = $4 AND id IN (SELECT user_id FROM user_tenants WHERE tenant_id = $5)`,
 		user.Name.GivenName, user.Name.FamilyName, !user.Active, uid, tenantID,
 	)
 	if err != nil {
 		return domain.SCIMUser{}, err
+	}
+	if result.RowsAffected() == 0 {
+		return domain.SCIMUser{}, fmt.Errorf("user not found")
 	}
 	return s.GetUser(ctx, tenantID, userID)
 }
@@ -313,16 +316,34 @@ func (s *Service) ListGroups(ctx context.Context, tenantID uuid.UUID, filter str
 		count = 100
 	}
 
+	baseQuery := `FROM groups WHERE tenant_id = $1`
+	args := []interface{}{tenantID}
+	argIdx := 2
+
+	// Support SCIM filter: displayName eq "value"
+	if filter != "" {
+		if strings.Contains(filter, "displayName eq") {
+			parts := strings.SplitN(filter, "\"", 3)
+			if len(parts) >= 2 {
+				baseQuery += fmt.Sprintf(" AND name = $%d", argIdx)
+				args = append(args, parts[1])
+				argIdx++
+			}
+		} else {
+			return domain.SCIMListResponse{}, fmt.Errorf("unsupported filter: %s", filter)
+		}
+	}
+
 	// Get total count for proper SCIM pagination
 	var totalResults int
-	if err := s.pg.QueryRow(ctx, `SELECT COUNT(*) FROM groups WHERE tenant_id = $1`, tenantID).Scan(&totalResults); err != nil {
+	if err := s.pg.QueryRow(ctx, "SELECT COUNT(*) "+baseQuery, args...).Scan(&totalResults); err != nil {
 		return domain.SCIMListResponse{}, err
 	}
 
-	rows, err := s.pg.Query(ctx,
-		`SELECT id, name, created_at FROM groups WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-		tenantID, count, startIndex-1,
-	)
+	query := fmt.Sprintf("SELECT id, name, created_at %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", baseQuery, argIdx, argIdx+1)
+	args = append(args, count, startIndex-1)
+
+	rows, err := s.pg.Query(ctx, query, args...)
 	if err != nil {
 		return domain.SCIMListResponse{}, err
 	}
@@ -391,13 +412,19 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 		return domain.SCIMGroup{}, fmt.Errorf("invalid group id")
 	}
 
+	tx, err := s.pg.Begin(ctx)
+	if err != nil {
+		return domain.SCIMGroup{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	for _, op := range ops {
 		switch strings.ToLower(op.Op) {
 		case "replace", "add":
 			val, _ := op.Value.(string)
 			switch strings.ToLower(op.Path) {
 			case "displayname":
-				_, err = s.pg.Exec(ctx, `UPDATE groups SET name = $1 WHERE id = $2 AND tenant_id = $3`, val, gid, tenantID)
+				_, err = tx.Exec(ctx, `UPDATE groups SET name = $1 WHERE id = $2 AND tenant_id = $3`, val, gid, tenantID)
 			case "members":
 				// Members can be an array of {value: "userId"} objects
 				if members, ok := op.Value.([]interface{}); ok {
@@ -408,10 +435,10 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 								if parseErr == nil {
 									// Verify user belongs to the same tenant before adding to group
 									var exists bool
-									if checkErr := s.pg.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_tenants WHERE user_id = $1 AND tenant_id = $2)`, mid, tenantID).Scan(&exists); checkErr != nil || !exists {
+									if checkErr := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_tenants WHERE user_id = $1 AND tenant_id = $2)`, mid, tenantID).Scan(&exists); checkErr != nil || !exists {
 										return domain.SCIMGroup{}, fmt.Errorf("user %s not found in tenant", mid)
 									}
-									if _, err = s.pg.Exec(ctx, `INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, gid, mid); err != nil {
+									if _, err = tx.Exec(ctx, `INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, gid, mid); err != nil {
 										return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 									}
 								}
@@ -434,7 +461,7 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 							memberID := rest[:end]
 							mid, parseErr := uuid.Parse(memberID)
 							if parseErr == nil {
-								if _, err = s.pg.Exec(ctx, `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`, gid, mid); err != nil {
+								if _, err = tx.Exec(ctx, `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`, gid, mid); err != nil {
 									return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 								}
 							}
@@ -446,6 +473,10 @@ func (s *Service) PatchGroup(ctx context.Context, tenantID uuid.UUID, groupID st
 		if err != nil {
 			return domain.SCIMGroup{}, fmt.Errorf("patch op %s %s: %w", op.Op, op.Path, err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.SCIMGroup{}, err
 	}
 	return s.GetGroup(ctx, tenantID, groupID)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 
+	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/config"
 )
 
@@ -34,7 +35,7 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 		}
 		key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
 		if err != nil {
-			log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC public/public key for ES256 JWT verification")
+			log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
 		}
 		ecPubKey = key
 	}
@@ -45,7 +46,7 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 
 			// If no Authorization header, fall back to cookie-based session token
 			if auth == "" {
-				if cookie, err := c.Cookie("guard_access_token"); err == nil && cookie != nil && cookie.Value != "" {
+				if cookie, err := c.Cookie(domain.CookieAccessToken); err == nil && cookie != nil && cookie.Value != "" {
 					auth = "Bearer " + cookie.Value
 				}
 			}

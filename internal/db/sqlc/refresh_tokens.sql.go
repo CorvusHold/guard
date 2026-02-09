@@ -12,7 +12,7 @@ import (
 )
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata, family_id
+SELECT id, user_id, tenant_id, token_hash, parent_id, revoked, user_agent, ip, created_at, expires_at, auth_method, sso_provider_id, metadata, family_id, last_used_at
 FROM refresh_tokens
 WHERE token_hash = $1
 `
@@ -32,6 +32,7 @@ type GetRefreshTokenByHashRow struct {
 	SsoProviderID pgtype.UUID        `json:"sso_provider_id"`
 	Metadata      []byte             `json:"metadata"`
 	FamilyID      pgtype.UUID        `json:"family_id"`
+	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
 }
 
 func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error) {
@@ -52,6 +53,7 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 		&i.SsoProviderID,
 		&i.Metadata,
 		&i.FamilyID,
+		&i.LastUsedAt,
 	)
 	return i, err
 }

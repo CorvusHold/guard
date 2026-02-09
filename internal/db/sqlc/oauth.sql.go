@@ -21,7 +21,7 @@ func (q *Queries) CleanupExpiredOAuthCodes(ctx context.Context) error {
 	return err
 }
 
-const consumeOAuthAuthorizationCode = `-- name: ConsumeOAuthAuthorizationCode :exec
+const consumeOAuthAuthorizationCode = `-- name: ConsumeOAuthAuthorizationCode :execrows
 UPDATE oauth_authorization_codes
 SET consumed_at = now()
 WHERE code_hash = $1 AND consumed_at IS NULL
@@ -153,7 +153,7 @@ func (q *Queries) CreateOAuthClient(ctx context.Context, arg CreateOAuthClientPa
 	return i, err
 }
 
-const deleteOAuthClient = `-- name: DeleteOAuthClient :exec
+const deleteOAuthClient = `-- name: DeleteOAuthClient :execrows
 DELETE FROM oauth_clients
 WHERE id = $1 AND tenant_id = $2
 `
@@ -163,9 +163,12 @@ type DeleteOAuthClientParams struct {
 	TenantID pgtype.UUID `json:"tenant_id"`
 }
 
-func (q *Queries) DeleteOAuthClient(ctx context.Context, arg DeleteOAuthClientParams) error {
-	_, err := q.db.Exec(ctx, deleteOAuthClient, arg.ID, arg.TenantID)
-	return err
+func (q *Queries) DeleteOAuthClient(ctx context.Context, arg DeleteOAuthClientParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOAuthClient, arg.ID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getOAuthAuthorizationCodeByHash = `-- name: GetOAuthAuthorizationCodeByHash :one
@@ -340,7 +343,7 @@ func (q *Queries) RevokeOAuthConsentGrant(ctx context.Context, arg RevokeOAuthCo
 	return err
 }
 
-const updateOAuthClient = `-- name: UpdateOAuthClient :exec
+const updateOAuthClient = `-- name: UpdateOAuthClient :execrows
 UPDATE oauth_clients
 SET name = COALESCE(NULLIF($1::text, ''), name),
     redirect_uris = COALESCE($2, redirect_uris),
@@ -363,8 +366,8 @@ type UpdateOAuthClientParams struct {
 	TenantID     pgtype.UUID `json:"tenant_id"`
 }
 
-func (q *Queries) UpdateOAuthClient(ctx context.Context, arg UpdateOAuthClientParams) error {
-	_, err := q.db.Exec(ctx, updateOAuthClient,
+func (q *Queries) UpdateOAuthClient(ctx context.Context, arg UpdateOAuthClientParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateOAuthClient,
 		arg.Name,
 		arg.RedirectUris,
 		arg.Scopes,
@@ -374,7 +377,10 @@ func (q *Queries) UpdateOAuthClient(ctx context.Context, arg UpdateOAuthClientPa
 		arg.ID,
 		arg.TenantID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertOAuthConsentGrant = `-- name: UpsertOAuthConsentGrant :one

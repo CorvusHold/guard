@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/corvusHold/guard/internal/webhooks/domain"
@@ -16,10 +18,11 @@ import (
 
 // Worker processes pending webhook deliveries in the background.
 type Worker struct {
-	repo      domain.Repository
-	client    *http.Client
-	interval  time.Duration
-	batchSize int
+	repo         domain.Repository
+	client       *http.Client
+	interval     time.Duration
+	batchSize    int
+	requireHTTPS bool
 }
 
 // NewWorker creates a new webhook delivery worker.
@@ -27,7 +30,7 @@ func NewWorker(repo domain.Repository) *Worker {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, _, err := net.SplitHostPort(addr)
+			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid address: %s", addr)
 			}
@@ -40,14 +43,24 @@ func NewWorker(repo domain.Repository) *Worker {
 					return nil, fmt.Errorf("webhook target resolves to blocked IP: %s", ip.IP)
 				}
 			}
-			return dialer.DialContext(ctx, network, addr)
+			// Dial the validated IP directly to prevent DNS rebinding (TOCTOU).
+			if len(ips) == 0 {
+				return nil, fmt.Errorf("no IPs resolved for host: %s", host)
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 		},
+		// Preserve TLS server name verification when dialing by IP.
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
+
+	requireHTTPS := os.Getenv("WEBHOOK_REQUIRE_HTTPS") == "true"
+
 	return &Worker{
-		repo:      repo,
-		client:    &http.Client{Timeout: 10 * time.Second, Transport: transport},
-		interval:  5 * time.Second,
-		batchSize: 50,
+		repo:         repo,
+		client:       &http.Client{Timeout: 10 * time.Second, Transport: transport},
+		interval:     5 * time.Second,
+		batchSize:    50,
+		requireHTTPS: requireHTTPS,
 	}
 }
 
@@ -102,6 +115,10 @@ func (w *Worker) deliver(ctx context.Context, d domain.Delivery) {
 	parsedURL, err := url.Parse(wh.URL)
 	if err != nil || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") {
 		w.markFailed(ctx, d, fmt.Sprintf("invalid or disallowed webhook URL: %s", wh.URL))
+		return
+	}
+	if w.requireHTTPS && parsedURL.Scheme != "https" {
+		w.markFailed(ctx, d, fmt.Sprintf("webhook URL must use HTTPS: %s", wh.URL))
 		return
 	}
 	if parsedURL.Host == "" {

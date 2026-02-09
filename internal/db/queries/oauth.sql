@@ -20,7 +20,7 @@ SELECT * FROM oauth_clients
 WHERE tenant_id = $1
 ORDER BY created_at DESC;
 
--- name: UpdateOAuthClient :exec
+-- name: UpdateOAuthClient :execrows
 UPDATE oauth_clients
 SET name = COALESCE(NULLIF(sqlc.arg(name)::text, ''), name),
     redirect_uris = COALESCE(sqlc.arg(redirect_uris), redirect_uris),
@@ -31,7 +31,7 @@ SET name = COALESCE(NULLIF(sqlc.arg(name)::text, ''), name),
     updated_at = now()
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
--- name: DeleteOAuthClient :exec
+-- name: DeleteOAuthClient :execrows
 DELETE FROM oauth_clients
 WHERE id = $1 AND tenant_id = $2;
 

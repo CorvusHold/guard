@@ -240,6 +240,11 @@ func mapGetRefreshTokenByHashRow(rt db.GetRefreshTokenByHashRow) domain.RefreshT
 			metadata = &m
 		}
 	}
+	var lastUsedAt *time.Time
+	if rt.LastUsedAt.Valid {
+		t := rt.LastUsedAt.Time
+		lastUsedAt = &t
+	}
 	return domain.RefreshToken{
 		ID:            toUUID(rt.ID),
 		UserID:        toUUID(rt.UserID),
@@ -248,6 +253,7 @@ func mapGetRefreshTokenByHashRow(rt db.GetRefreshTokenByHashRow) domain.RefreshT
 		Revoked:       rt.Revoked,
 		ExpiresAt:     rt.ExpiresAt.Time,
 		CreatedAt:     rt.CreatedAt.Time,
+		LastUsedAt:    lastUsedAt,
 		UserAgent:     rt.UserAgent.String,
 		IP:            rt.Ip.String,
 		AuthMethod:    rt.AuthMethod.String,
@@ -1353,36 +1359,6 @@ func mapCreateAPIKeyRow(row db.CreateAPIKeyRow) domain.APIKey {
 
 // mapGetAPIKeyByHashRow converts a sqlc GetAPIKeyByHashRow to a domain APIKey.
 func mapGetAPIKeyByHashRow(row db.GetAPIKeyByHashRow) domain.APIKey {
-	k := domain.APIKey{
-		ID:        toUUID(row.ID),
-		TenantID:  toUUID(row.TenantID),
-		Name:      row.Name,
-		KeyPrefix: row.KeyPrefix,
-		Scopes:    row.Scopes,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-	}
-	if row.CreatedBy.Valid {
-		u := toUUID(row.CreatedBy)
-		k.CreatedBy = &u
-	}
-	if row.ExpiresAt.Valid {
-		t := row.ExpiresAt.Time
-		k.ExpiresAt = &t
-	}
-	if row.RevokedAt.Valid {
-		t := row.RevokedAt.Time
-		k.RevokedAt = &t
-	}
-	if row.LastUsedAt.Valid {
-		t := row.LastUsedAt.Time
-		k.LastUsedAt = &t
-	}
-	return k
-}
-
-// mapAPIKey converts a sqlc ApiKey row to a domain APIKey.
-func mapAPIKey(row db.ApiKey) domain.APIKey {
 	k := domain.APIKey{
 		ID:        toUUID(row.ID),
 		TenantID:  toUUID(row.TenantID),
