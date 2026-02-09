@@ -24,14 +24,19 @@ import (
 	"github.com/corvusHold/guard/internal/logger"
 	httpmetrics "github.com/corvusHold/guard/internal/metrics"
 	"github.com/corvusHold/guard/internal/platform/validation"
+	"github.com/corvusHold/guard/internal/webhooks"
 
-	// Tenants DDD slice (factory)
+	// DDD slices (factories)
+	applications "github.com/corvusHold/guard/internal/applications"
+	scimctrl "github.com/corvusHold/guard/internal/scim/controller"
+	scimsvc "github.com/corvusHold/guard/internal/scim/service"
 	tenants "github.com/corvusHold/guard/internal/tenants"
-	// Auth DDD slice (factory)
+
 	pprof "net/http/pprof"
 
 	_ "github.com/corvusHold/guard/docs" // side-effect import of generated docs
 	auth "github.com/corvusHold/guard/internal/auth"
+	authmw "github.com/corvusHold/guard/internal/auth/middleware"
 	settings "github.com/corvusHold/guard/internal/settings"
 	settdomain "github.com/corvusHold/guard/internal/settings/domain"
 	settrepo "github.com/corvusHold/guard/internal/settings/repository"
@@ -278,8 +283,14 @@ func matchesWildcardOrigin(origin, pattern string) bool {
 	return strings.HasSuffix(host, "."+suffix)
 }
 
-// resolveTenantID tries to find a tenant UUID from query or route params.
+// resolveTenantID tries to find a tenant UUID from header, query, or route params.
 func resolveTenantID(c echo.Context) *uuid.UUID {
+	// Header: X-Tenant-ID (set by SDKs and browser apps for preflight-safe tenant context)
+	if v := strings.TrimSpace(c.Request().Header.Get("X-Tenant-ID")); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			return &id
+		}
+	}
 	// Common: ?tenant_id=
 	if v := strings.TrimSpace(c.QueryParam("tenant_id")); v != "" {
 		if id, err := uuid.Parse(v); err == nil {
@@ -323,6 +334,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("invalid DATABASE_URL")
 	}
+	pgCfg.MaxConns = cfg.DBMaxConns
+	pgCfg.MinConns = cfg.DBMinConns
+	pgCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
+	pgCfg.HealthCheckPeriod = cfg.DBHealthCheckPeriod
 	pgPool, err := pgxpool.NewWithConfig(context.Background(), pgCfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("unable to create pg pool")
@@ -430,9 +445,15 @@ func main() {
 	// Register domain routes via factories
 	// Settings (tenant-scoped settings management)
 	settings.RegisterV1(apiV1, pgPool, cfg)
-	// Tenants and Auth
-	tenants.RegisterV1(apiV1, pgPool)
-	authReg := auth.NewRegistrar(pgPool, cfg)
+	// Auth (created first so tenant hook can seed default roles)
+	authReg, err := auth.NewRegistrar(pgPool, cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize auth registrar")
+	}
+	// API key authentication middleware (X-Guard-API-Key or Bearer gk_*)
+	apiV1.Use(authmw.RequireAPIKey(authReg.AuthService()))
+	// Tenants (with post-creation hook to seed default RBAC roles)
+	tenants.RegisterV1WithHook(apiV1, pgPool, authReg.SeedDefaultRoles)
 	defer func() {
 		if cerr := authReg.Close(); cerr != nil {
 			log.Error().Err(cerr).Msg("auth registrar close error")
@@ -441,6 +462,20 @@ func main() {
 	authReg.RegisterV1(apiV1)
 	authReg.RegisterWellKnown(e)
 	authReg.RegisterSSOBrowser(e)
+	// OAuth 2.0 provider endpoints (/oauth/authorize, /oauth/token, admin CRUD)
+	authAdminGroup := apiV1.Group("/auth/admin")
+	authReg.RegisterOAuth(e, authAdminGroup)
+	// Applications registry
+	applications.RegisterV1(apiV1, pgPool)
+	// Webhooks
+	webhooks.RegisterV1(apiV1, pgPool)
+	webhookCtx, webhookCancel := context.WithCancel(context.Background())
+	defer webhookCancel()
+	webhooks.StartWorker(webhookCtx, pgPool)
+	// SCIM 2.0 provisioning
+	scimSvc := scimsvc.New(pgPool)
+	scimCtrl := scimctrl.New(scimSvc, settService)
+	scimCtrl.Register(e)
 
 	// Background dependency ping metrics
 	go func() {

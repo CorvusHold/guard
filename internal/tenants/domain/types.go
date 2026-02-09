@@ -46,4 +46,5 @@ type Service interface {
 	ListChildTenants(ctx context.Context, parentID uuid.UUID, opts ListOptions) (ListResult, error)
 	GetTenantAncestors(ctx context.Context, tenantID uuid.UUID) ([]db.Tenant, error)
 	IsAncestorOf(ctx context.Context, ancestorID, descendantID uuid.UUID) (bool, error)
+	UpdateParent(ctx context.Context, id uuid.UUID, parentID *uuid.UUID) error
 }

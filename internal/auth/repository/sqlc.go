@@ -108,7 +108,23 @@ func (r *SQLCRepository) ListTenantUsers(ctx context.Context, tenantID uuid.UUID
 	}
 	out := make([]domain.User, 0, len(items))
 	for _, u := range items {
-		out = append(out, mapUser(u))
+		var last *time.Time
+		if u.LastLoginAt.Valid {
+			t := u.LastLoginAt.Time
+			last = &t
+		}
+		out = append(out, domain.User{
+			ID:            toUUID(u.ID),
+			Email:         u.Email,
+			EmailVerified: u.EmailVerified,
+			IsActive:      u.IsActive,
+			FirstName:     u.FirstName.String,
+			LastName:      u.LastName.String,
+			Roles:         u.Roles,
+			CreatedAt:     u.CreatedAt.Time,
+			UpdatedAt:     u.UpdatedAt.Time,
+			LastLoginAt:   last,
+		})
 	}
 	return out, nil
 }
@@ -209,6 +225,43 @@ func mapAuthIdentity(ai db.AuthIdentity) domain.AuthIdentity {
 	}
 }
 
+func mapGetRefreshTokenByHashRow(rt db.GetRefreshTokenByHashRow) domain.RefreshToken {
+	var ssoProviderID *uuid.UUID
+	if rt.SsoProviderID.Valid {
+		id := toUUID(rt.SsoProviderID)
+		ssoProviderID = &id
+	}
+	var metadata *domain.RefreshTokenMetadata
+	if len(rt.Metadata) > 0 {
+		var m domain.RefreshTokenMetadata
+		if err := json.Unmarshal(rt.Metadata, &m); err != nil {
+			log.Warn().Err(err).Str("token_id", toUUID(rt.ID).String()).Msg("failed to unmarshal refresh token metadata")
+		} else {
+			metadata = &m
+		}
+	}
+	var lastUsedAt *time.Time
+	if rt.LastUsedAt.Valid {
+		t := rt.LastUsedAt.Time
+		lastUsedAt = &t
+	}
+	return domain.RefreshToken{
+		ID:            toUUID(rt.ID),
+		UserID:        toUUID(rt.UserID),
+		TenantID:      toUUID(rt.TenantID),
+		FamilyID:      toUUID(rt.FamilyID),
+		Revoked:       rt.Revoked,
+		ExpiresAt:     rt.ExpiresAt.Time,
+		CreatedAt:     rt.CreatedAt.Time,
+		LastUsedAt:    lastUsedAt,
+		UserAgent:     rt.UserAgent.String,
+		IP:            rt.Ip.String,
+		AuthMethod:    rt.AuthMethod.String,
+		SSOProviderID: ssoProviderID,
+		Metadata:      metadata,
+	}
+}
+
 func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 	var ssoProviderID *uuid.UUID
 	if rt.SsoProviderID.Valid {
@@ -229,6 +282,7 @@ func mapRefreshToken(rt db.RefreshToken) domain.RefreshToken {
 		ID:            toUUID(rt.ID),
 		UserID:        toUUID(rt.UserID),
 		TenantID:      toUUID(rt.TenantID),
+		FamilyID:      toUUID(rt.FamilyID),
 		Revoked:       rt.Revoked,
 		ExpiresAt:     rt.ExpiresAt.Time,
 		CreatedAt:     rt.CreatedAt.Time,
@@ -260,6 +314,7 @@ func mapListUserSessionsRow(rt db.ListUserSessionsRow) domain.RefreshToken {
 		ID:              toUUID(rt.ID),
 		UserID:          toUUID(rt.UserID),
 		TenantID:        toUUID(rt.TenantID),
+		FamilyID:        toUUID(rt.FamilyID),
 		Revoked:         rt.Revoked,
 		ExpiresAt:       rt.ExpiresAt.Time,
 		CreatedAt:       rt.CreatedAt.Time,
@@ -377,6 +432,10 @@ func (r *SQLCRepository) AddUserToTenant(ctx context.Context, userID uuid.UUID, 
 }
 
 func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata) error {
+	return r.InsertRefreshTokenWithFamily(ctx, id, userID, tenantID, tokenHash, parentID, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata, id)
+}
+
+func (r *SQLCRepository) InsertRefreshTokenWithFamily(ctx context.Context, id uuid.UUID, userID uuid.UUID, tenantID uuid.UUID, tokenHash string, parentID *uuid.UUID, userAgent, ip string, expiresAt time.Time, authMethod string, ssoProviderID *uuid.UUID, metadata *domain.RefreshTokenMetadata, familyID uuid.UUID) error {
 	pid := pgtype.UUID{}
 	if parentID != nil {
 		pid = toPgUUID(*parentID)
@@ -393,19 +452,22 @@ func (r *SQLCRepository) InsertRefreshToken(ctx context.Context, id uuid.UUID, u
 			log.Ctx(ctx).Warn().Err(err).Str("user_id", userID.String()).Msg("failed to marshal refresh token metadata, using empty JSON")
 		}
 	}
-	return r.q.InsertRefreshToken(ctx, db.InsertRefreshTokenParams{
-		ID:            toPgUUID(id),
-		UserID:        toPgUUID(userID),
-		TenantID:      toPgUUID(tenantID),
-		TokenHash:     tokenHash,
-		ParentID:      pid,
-		UserAgent:     toPgText(userAgent),
-		Ip:            toPgText(ip),
-		ExpiresAt:     toPgTime(expiresAt),
-		AuthMethod:    toPgText(authMethod),
-		SsoProviderID: spid,
-		Metadata:      metadataJSON,
-	})
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO refresh_tokens (id, user_id, tenant_id, token_hash, parent_id, user_agent, ip, expires_at, auth_method, sso_provider_id, metadata, family_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		toPgUUID(id), toPgUUID(userID), toPgUUID(tenantID), tokenHash, pid,
+		toPgText(userAgent), toPgText(ip), toPgTime(expiresAt),
+		toPgText(authMethod), spid, metadataJSON, toPgUUID(familyID),
+	)
+	return err
+}
+
+func (r *SQLCRepository) RevokeTokenFamily(ctx context.Context, familyID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = $1 AND revoked = FALSE`,
+		toPgUUID(familyID),
+	)
+	return err
 }
 
 func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
@@ -413,7 +475,7 @@ func (r *SQLCRepository) GetRefreshTokenByHash(ctx context.Context, tokenHash st
 	if err != nil {
 		return domain.RefreshToken{}, err
 	}
-	return mapRefreshToken(rt), nil
+	return mapGetRefreshTokenByHashRow(rt), nil
 }
 
 func (r *SQLCRepository) RevokeTokenChain(ctx context.Context, id uuid.UUID) error {
@@ -671,6 +733,22 @@ func (r *SQLCRepository) RemoveUserRole(ctx context.Context, userID uuid.UUID, t
 	return r.q.RemoveUserRole(ctx, db.RemoveUserRoleParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID), RoleID: toPgUUID(roleID)})
 }
 
+func (r *SQLCRepository) ListUserRoleNames(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error) {
+	return r.q.ListUserRoleNames(ctx, db.ListUserRoleNamesParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+}
+
+func (r *SQLCRepository) ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.Role, error) {
+	rows, err := r.q.ListUserRoles(ctx, db.ListUserRolesParams{UserID: toPgUUID(userID), TenantID: toPgUUID(tenantID)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Role, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapRole(row))
+	}
+	return out, nil
+}
+
 // Role-permissions
 func (r *SQLCRepository) ListRolePermissionKeys(ctx context.Context, roleIDs []uuid.UUID) ([]domain.RolePermissionGrant, error) {
 	arr := make([]pgtype.UUID, 0, len(roleIDs))
@@ -917,6 +995,54 @@ func (r *SQLCRepository) ConsumePasswordResetToken(ctx context.Context, tokenHas
 	return r.q.ConsumePasswordResetToken(ctx, tokenHash)
 }
 
+// --- Email verification tokens ---
+
+func (r *SQLCRepository) CreateEmailVerificationToken(ctx context.Context, id, userID, tenantID uuid.UUID, email, tokenHash string, expiresAt time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO email_verification_tokens (id, user_id, tenant_id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		id, userID, tenantID, email, tokenHash, expiresAt,
+	)
+	return err
+}
+
+func (r *SQLCRepository) GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (domain.EmailVerificationToken, error) {
+	var id, userID, tenantID uuid.UUID
+	var email string
+	var createdAt, expiresAt time.Time
+	var consumedAt *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, user_id, tenant_id, email, created_at, expires_at, consumed_at FROM email_verification_tokens WHERE token_hash = $1`,
+		tokenHash,
+	).Scan(&id, &userID, &tenantID, &email, &createdAt, &expiresAt, &consumedAt)
+	if err != nil {
+		return domain.EmailVerificationToken{}, err
+	}
+	return domain.EmailVerificationToken{
+		ID:         id,
+		UserID:     userID,
+		TenantID:   tenantID,
+		Email:      email,
+		TokenHash:  tokenHash,
+		CreatedAt:  createdAt,
+		ExpiresAt:  expiresAt,
+		ConsumedAt: consumedAt,
+	}, nil
+}
+
+func (r *SQLCRepository) ConsumeEmailVerificationToken(ctx context.Context, tokenHash string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE email_verification_tokens SET consumed_at = now() WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()`,
+		tokenHash,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrTokenInvalid
+	}
+	return nil
+}
+
 func (r *SQLCRepository) UpdateAuthIdentityPassword(ctx context.Context, tenantID uuid.UUID, email, passwordHash string) (int64, error) {
 	return r.q.UpdateAuthIdentityPasswordByTenantEmail(ctx, db.UpdateAuthIdentityPasswordByTenantEmailParams{
 		TenantID:     toPgUUID(tenantID),
@@ -938,6 +1064,61 @@ func (r *SQLCRepository) RevokeUserSessions(ctx context.Context, userID, tenantI
 // Returns the number of tokens revoked (0 or 1).
 func (r *SQLCRepository) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, error) {
 	return r.q.RevokeRefreshTokenByHash(ctx, tokenHash)
+}
+
+// RevokeAllUserSessions revokes all active refresh tokens for a user across all tenants.
+// Returns the number of tokens revoked.
+func (r *SQLCRepository) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return r.q.RevokeAllRefreshTokensByUser(ctx, toPgUUID(userID))
+}
+
+// UpdateRefreshTokenLastUsed updates the last_used_at timestamp for a refresh token.
+func (r *SQLCRepository) UpdateRefreshTokenLastUsed(ctx context.Context, tokenHash string) error {
+	return r.q.UpdateRefreshTokenLastUsed(ctx, tokenHash)
+}
+
+// --- Account lockout ---
+
+func (r *SQLCRepository) IncrementFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) (int32, error) {
+	return r.q.IncrementFailedAttempts(ctx, db.IncrementFailedAttemptsParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+}
+
+func (r *SQLCRepository) ResetFailedAttempts(ctx context.Context, tenantID uuid.UUID, email string) error {
+	return r.q.ResetFailedAttempts(ctx, db.ResetFailedAttemptsParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+}
+
+func (r *SQLCRepository) LockAccount(ctx context.Context, tenantID uuid.UUID, email string, lockedUntil time.Time) error {
+	return r.q.LockAccount(ctx, db.LockAccountParams{
+		TenantID:    toPgUUID(tenantID),
+		Email:       email,
+		LockedUntil: pgtype.Timestamptz{Time: lockedUntil, Valid: true},
+	})
+}
+
+func (r *SQLCRepository) UnlockAccount(ctx context.Context, userID uuid.UUID) error {
+	return r.q.UnlockAccount(ctx, toPgUUID(userID))
+}
+
+func (r *SQLCRepository) GetLockoutStatus(ctx context.Context, tenantID uuid.UUID, email string) (int32, *time.Time, error) {
+	row, err := r.q.GetLockoutStatus(ctx, db.GetLockoutStatusParams{
+		TenantID: toPgUUID(tenantID),
+		Email:    email,
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	var lockedUntil *time.Time
+	if row.LockedUntil.Valid {
+		t := row.LockedUntil.Time
+		lockedUntil = &t
+	}
+	return row.FailedAttempts, lockedUntil, nil
 }
 
 // --- Invitations ---
@@ -1065,4 +1246,143 @@ func (r *SQLCRepository) DeleteInvitation(ctx context.Context, id uuid.UUID, ten
 		ID:       toPgUUID(id),
 		TenantID: toPgUUID(tenantID),
 	})
+}
+
+// --- API Keys ---
+
+func (r *SQLCRepository) CreateAPIKey(ctx context.Context, id uuid.UUID, tenantID uuid.UUID, name, keyHash, keyPrefix string, scopes []string, createdBy uuid.UUID, expiresAt *time.Time) (domain.APIKey, error) {
+	var pgExpires pgtype.Timestamptz
+	if expiresAt != nil {
+		pgExpires = toPgTime(*expiresAt)
+	}
+	row, err := r.q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+		ID:        toPgUUID(id),
+		TenantID:  toPgUUID(tenantID),
+		Name:      name,
+		KeyHash:   keyHash,
+		KeyPrefix: keyPrefix,
+		Scopes:    scopes,
+		CreatedBy: toPgUUID(createdBy),
+		ExpiresAt: pgExpires,
+	})
+	if err != nil {
+		return domain.APIKey{}, err
+	}
+	return mapCreateAPIKeyRow(row), nil
+}
+
+func (r *SQLCRepository) GetAPIKeyByHash(ctx context.Context, keyHash string) (domain.APIKey, error) {
+	row, err := r.q.GetAPIKeyByHash(ctx, keyHash)
+	if err != nil {
+		return domain.APIKey{}, err
+	}
+	return mapGetAPIKeyByHashRow(row), nil
+}
+
+func (r *SQLCRepository) ListAPIKeysByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.APIKey, error) {
+	rows, err := r.q.ListAPIKeysByTenant(ctx, toPgUUID(tenantID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.APIKey, 0, len(rows))
+	for _, row := range rows {
+		k := domain.APIKey{
+			ID:        toUUID(row.ID),
+			TenantID:  toUUID(row.TenantID),
+			Name:      row.Name,
+			KeyPrefix: row.KeyPrefix,
+			Scopes:    row.Scopes,
+			CreatedAt: row.CreatedAt.Time,
+			UpdatedAt: row.UpdatedAt.Time,
+		}
+		if row.CreatedBy.Valid {
+			u := toUUID(row.CreatedBy)
+			k.CreatedBy = &u
+		}
+		if row.ExpiresAt.Valid {
+			t := row.ExpiresAt.Time
+			k.ExpiresAt = &t
+		}
+		if row.RevokedAt.Valid {
+			t := row.RevokedAt.Time
+			k.RevokedAt = &t
+		}
+		if row.LastUsedAt.Valid {
+			t := row.LastUsedAt.Time
+			k.LastUsedAt = &t
+		}
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+func (r *SQLCRepository) RevokeAPIKey(ctx context.Context, keyID, tenantID uuid.UUID) error {
+	return r.q.RevokeAPIKey(ctx, db.RevokeAPIKeyParams{
+		ID:       toPgUUID(keyID),
+		TenantID: toPgUUID(tenantID),
+	})
+}
+
+func (r *SQLCRepository) UpdateAPIKeyLastUsed(ctx context.Context, keyID uuid.UUID) error {
+	return r.q.UpdateAPIKeyLastUsed(ctx, toPgUUID(keyID))
+}
+
+// mapCreateAPIKeyRow converts a sqlc CreateAPIKeyRow to a domain APIKey.
+func mapCreateAPIKeyRow(row db.CreateAPIKeyRow) domain.APIKey {
+	k := domain.APIKey{
+		ID:        toUUID(row.ID),
+		TenantID:  toUUID(row.TenantID),
+		Name:      row.Name,
+		KeyPrefix: row.KeyPrefix,
+		Scopes:    row.Scopes,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.CreatedBy.Valid {
+		u := toUUID(row.CreatedBy)
+		k.CreatedBy = &u
+	}
+	if row.ExpiresAt.Valid {
+		t := row.ExpiresAt.Time
+		k.ExpiresAt = &t
+	}
+	if row.RevokedAt.Valid {
+		t := row.RevokedAt.Time
+		k.RevokedAt = &t
+	}
+	if row.LastUsedAt.Valid {
+		t := row.LastUsedAt.Time
+		k.LastUsedAt = &t
+	}
+	return k
+}
+
+// mapGetAPIKeyByHashRow converts a sqlc GetAPIKeyByHashRow to a domain APIKey.
+func mapGetAPIKeyByHashRow(row db.GetAPIKeyByHashRow) domain.APIKey {
+	k := domain.APIKey{
+		ID:        toUUID(row.ID),
+		TenantID:  toUUID(row.TenantID),
+		Name:      row.Name,
+		KeyPrefix: row.KeyPrefix,
+		Scopes:    row.Scopes,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.CreatedBy.Valid {
+		u := toUUID(row.CreatedBy)
+		k.CreatedBy = &u
+	}
+	if row.ExpiresAt.Valid {
+		t := row.ExpiresAt.Time
+		k.ExpiresAt = &t
+	}
+	if row.RevokedAt.Valid {
+		t := row.RevokedAt.Time
+		k.RevokedAt = &t
+	}
+	if row.LastUsedAt.Valid {
+		t := row.LastUsedAt.Time
+		k.LastUsedAt = &t
+	}
+	return k
 }

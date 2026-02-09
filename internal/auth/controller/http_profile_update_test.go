@@ -38,7 +38,7 @@ func TestProfileUpdate_Flow(t *testing.T) {
 	// Create tenant
 	tr := trepo.New(pool)
 	tenantID := uuid.New()
-	err = tr.Create(ctx, tenantID, "profile-update-test-"+tenantID.String(), nil[:8])
+	err = tr.Create(ctx, tenantID, "profile-update-test-"+tenantID.String(), nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		// Cleanup tenant and cascade delete associated users

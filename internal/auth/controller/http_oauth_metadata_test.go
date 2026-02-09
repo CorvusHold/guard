@@ -71,16 +71,24 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 				t.Errorf("expected issuer 'https://api.example.com', got '%s'", metadata.Issuer)
 			}
 
-			if metadata.TokenEndpoint != "https://api.example.com/api/v1/auth/refresh" {
-				t.Errorf("expected token_endpoint 'https://api.example.com/api/v1/auth/refresh', got '%s'", metadata.TokenEndpoint)
+			if metadata.AuthorizationEndpoint != "https://api.example.com/oauth/authorize" {
+				t.Errorf("expected authorization_endpoint 'https://api.example.com/oauth/authorize', got '%s'", metadata.AuthorizationEndpoint)
+			}
+
+			if metadata.TokenEndpoint != "https://api.example.com/oauth/token" {
+				t.Errorf("expected token_endpoint 'https://api.example.com/oauth/token', got '%s'", metadata.TokenEndpoint)
+			}
+
+			if metadata.JWKSUri != "https://api.example.com/.well-known/jwks.json" {
+				t.Errorf("expected jwks_uri 'https://api.example.com/.well-known/jwks.json', got '%s'", metadata.JWKSUri)
 			}
 
 			if metadata.IntrospectionEndpoint != "https://api.example.com/api/v1/auth/introspect" {
 				t.Errorf("expected introspection_endpoint, got '%s'", metadata.IntrospectionEndpoint)
 			}
 
-			if metadata.RevocationEndpoint != "https://api.example.com/api/v1/auth/revoke" {
-				t.Errorf("expected revocation_endpoint, got '%s'", metadata.RevocationEndpoint)
+			if metadata.RevocationEndpoint != "https://api.example.com/oauth/revoke" {
+				t.Errorf("expected revocation_endpoint 'https://api.example.com/oauth/revoke', got '%s'", metadata.RevocationEndpoint)
 			}
 
 			if metadata.UserinfoEndpoint != "https://api.example.com/api/v1/auth/me" {
@@ -122,8 +130,10 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 
 			// Verify grant types
 			expectedGrantTypes := map[string]bool{
-				"password":      true,
-				"refresh_token": true,
+				"authorization_code": true,
+				"client_credentials": true,
+				"password":           true,
+				"refresh_token":      true,
 				"urn:guard:params:oauth:grant-type:magic-link": true,
 				"urn:guard:params:oauth:grant-type:sso":        true,
 			}
@@ -136,9 +146,15 @@ func TestHTTP_OAuth2Metadata(t *testing.T) {
 
 			// Verify scopes
 			expectedScopes := map[string]bool{
-				"openid":  true,
-				"profile": true,
-				"email":   true,
+				"openid":         true,
+				"profile":        true,
+				"email":          true,
+				"offline_access": true,
+			}
+
+			// Verify code_challenge_methods_supported
+			if len(metadata.CodeChallengeMethodsSupported) != 1 || metadata.CodeChallengeMethodsSupported[0] != "S256" {
+				t.Errorf("expected code_challenge_methods_supported [S256], got %v", metadata.CodeChallengeMethodsSupported)
 			}
 
 			for _, scope := range metadata.ScopesSupported {

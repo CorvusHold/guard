@@ -16,15 +16,23 @@ type Config struct {
 	PublicBaseURL      string
 	ForceHTTPS         bool
 
-	DatabaseURL string
+	DatabaseURL         string
+	DBMaxConns          int32
+	DBMinConns          int32
+	DBMaxConnLifetime   time.Duration
+	DBHealthCheckPeriod time.Duration
+	DBReadReplicaURL    string
 
 	RedisAddr string
 	RedisDB   int
 
-	JWTSigningKey   string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
-	MagicLinkTTL    time.Duration
+	JWTSigningKey       string
+	JWTSigningAlgorithm string // HS256 | ES256
+	JWTPrivateKeyPath   string // Path to EC private key PEM (for ES256)
+	JWTKeyID            string // Key ID for JWKS (auto-generated if empty)
+	AccessTokenTTL      time.Duration
+	RefreshTokenTTL     time.Duration
+	MagicLinkTTL        time.Duration
 
 	SMTPHost      string
 	SMTPPort      int
@@ -50,11 +58,19 @@ func Load() (Config, error) {
 	c.ForceHTTPS = getBool("FORCE_HTTPS", false)
 
 	c.DatabaseURL = getEnv("DATABASE_URL", "postgres://guard:guard@localhost:5433/guard?sslmode=disable")
+	c.DBMaxConns = int32(getInt("DB_MAX_CONNS", 25))
+	c.DBMinConns = int32(getInt("DB_MIN_CONNS", 5))
+	c.DBMaxConnLifetime = getDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute)
+	c.DBHealthCheckPeriod = getDuration("DB_HEALTH_CHECK_PERIOD", 15*time.Second)
+	c.DBReadReplicaURL = getEnv("DB_READ_REPLICA_URL", "")
 
 	c.RedisAddr = getEnv("REDIS_ADDR", "localhost:6379")
 	c.RedisDB = getInt("REDIS_DB", 0)
 
 	c.JWTSigningKey = getEnv("JWT_SIGNING_KEY", "dev-insecure-change-this")
+	c.JWTSigningAlgorithm = getEnv("JWT_SIGNING_ALGORITHM", "HS256")
+	c.JWTPrivateKeyPath = getEnv("JWT_PRIVATE_KEY_PATH", "")
+	c.JWTKeyID = getEnv("JWT_KEY_ID", "")
 	c.AccessTokenTTL = getDuration("ACCESS_TOKEN_TTL", time.Minute*15)
 	c.RefreshTokenTTL = getDuration("REFRESH_TOKEN_TTL", time.Hour*24*30)
 	c.MagicLinkTTL = getDuration("MAGIC_LINK_TTL", 15*time.Minute)
@@ -79,6 +95,12 @@ func Load() (Config, error) {
 		sameSite = http.SameSiteLaxMode
 	}
 	c.CookieSameSite = sameSite
+
+	// Refuse to start in production with the insecure default JWT signing key
+	env := strings.ToLower(c.AppEnv)
+	if (env == "production" || env == "prod") && c.JWTSigningKey == "dev-insecure-change-this" {
+		return Config{}, fmt.Errorf("JWT_SIGNING_KEY must be set to a secure value in production (current value is the insecure default)")
+	}
 
 	return c, nil
 }

@@ -58,6 +58,20 @@ SELECT role_id
 FROM user_roles
 WHERE user_id = $1 AND tenant_id = $2;
 
+-- name: ListUserRoleNames :many
+SELECT r.name
+FROM user_roles ur
+JOIN roles r ON r.id = ur.role_id
+WHERE ur.user_id = $1 AND ur.tenant_id = $2
+ORDER BY r.name;
+
+-- name: ListUserRoles :many
+SELECT r.id, r.tenant_id, r.name, r.description, r.created_at, r.updated_at
+FROM user_roles ur
+JOIN roles r ON r.id = ur.role_id
+WHERE ur.user_id = $1 AND ur.tenant_id = $2
+ORDER BY r.name;
+
 -- name: AddUserRole :exec
 INSERT INTO user_roles (user_id, tenant_id, role_id)
 VALUES ($1, $2, $3)

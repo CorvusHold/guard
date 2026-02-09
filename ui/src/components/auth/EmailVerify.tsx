@@ -19,20 +19,21 @@ export default function EmailVerify() {
       return
     }
 
-    // TODO: Implement email verification API call when backend is ready
-    // For now, show a placeholder message
     async function verify() {
       try {
-        // Placeholder - backend email verification endpoint needs to be implemented
-        // const client = getClient()
-        // const res = await client.verifyEmail({ token })
-        
-        // Simulate verification for now
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // For now, show error since backend isn't implemented
-        setState('error')
-        setError('Email verification is not yet implemented. Please contact support.')
+        const cfg = JSON.parse(localStorage.getItem('guard_runtime') || '{}')
+        const baseUrl = cfg?.guard_base_url || ''
+        const res = await fetch(`${baseUrl}/api/v1/auth/verify-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || `Verification failed (HTTP ${res.status})`)
+        }
+        setState('success')
+        show({ variant: 'success', title: 'Email verified', description: 'Your email has been verified.' })
       } catch (err: any) {
         const errMsg = err?.message || String(err)
         setState('error')

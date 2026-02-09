@@ -622,6 +622,48 @@ func (s *SSOService) GetProviderBySlug(ctx context.Context, tenantID uuid.UUID, 
 	return s.getProviderBySlug(ctx, tenantID, slug)
 }
 
+// MakeSAMLLogoutRedirectURL creates a SAML LogoutRequest and returns the redirect URL
+// for SP-initiated Single Logout.
+func (s *SSOService) MakeSAMLLogoutRedirectURL(ctx context.Context, tenantID uuid.UUID, slug, nameID, relayState string) (string, error) {
+	config, err := s.getProviderBySlug(ctx, tenantID, slug)
+	if err != nil {
+		return "", fmt.Errorf("failed to load provider: %w", err)
+	}
+	if config.ProviderType != domain.ProviderTypeSAML {
+		return "", fmt.Errorf("provider %s is not SAML", slug)
+	}
+	samlProvider, err := s.initializeProvider(ctx, config)
+	if err != nil {
+		return "", fmt.Errorf("failed to create SAML provider: %w", err)
+	}
+	sp, ok := samlProvider.(*provider.SAMLProvider)
+	if !ok {
+		return "", fmt.Errorf("provider is not a SAML provider")
+	}
+	return sp.MakeLogoutRedirectURL(nameID, relayState)
+}
+
+// HandleSAMLLogoutRequest parses an IdP-initiated SAML LogoutRequest, revokes the
+// user's local sessions, and returns a redirect URL with a LogoutResponse.
+func (s *SSOService) HandleSAMLLogoutRequest(ctx context.Context, tenantID uuid.UUID, slug, samlRequestB64, relayState string) (nameID string, responseURL string, err error) {
+	config, err := s.getProviderBySlug(ctx, tenantID, slug)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to load provider: %w", err)
+	}
+	if config.ProviderType != domain.ProviderTypeSAML {
+		return "", "", fmt.Errorf("provider %s is not SAML", slug)
+	}
+	samlProvider, err := s.initializeProvider(ctx, config)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create SAML provider: %w", err)
+	}
+	sp, ok := samlProvider.(*provider.SAMLProvider)
+	if !ok {
+		return "", "", fmt.Errorf("provider is not a SAML provider")
+	}
+	return sp.HandleLogoutRequest(samlRequestB64, relayState)
+}
+
 // SPInfo contains the computed Service Provider URLs for SAML configuration.
 type SPInfo struct {
 	// EntityID is the SP Entity ID / Issuer URL (also called "Identifier" in some IdPs)

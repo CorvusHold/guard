@@ -44,6 +44,9 @@ definitions:
           Recommended/preferred login method based on context
           Values: "sso", "password", "magic_link", "social"
         type: string
+      signup_enabled:
+        description: Whether new user signup is enabled for this tenant
+        type: boolean
       social_providers:
         description: Social login providers (tenant-wide or global)
         items:
@@ -59,6 +62,9 @@ definitions:
         type: boolean
       tenant_id:
         description: Tenant information (if discovered)
+        type: string
+      tenant_logo_url:
+        description: Tenant logo URL for branding on the login page
         type: string
       tenant_name:
         type: string
@@ -219,6 +225,8 @@ definitions:
     properties:
       created_at:
         type: string
+      email:
+        type: string
       email_verified:
         type: boolean
       first_name:
@@ -245,6 +253,40 @@ definitions:
           $ref: '#/definitions/controller.adminUser'
         type: array
     type: object
+  controller.apiKeyItem:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      key_prefix:
+        type: string
+      last_used_at:
+        type: string
+      name:
+        type: string
+      revoked_at:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  controller.apiKeysListResp:
+    properties:
+      api_keys:
+        items:
+          $ref: '#/definitions/controller.apiKeyItem'
+        type: array
+    type: object
   controller.authExchangeResp:
     properties:
       access_token:
@@ -254,6 +296,45 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  controller.authorizeDecisionReq:
+    properties:
+      approved:
+        type: boolean
+      client_id:
+        type: string
+      code_challenge:
+        type: string
+      code_challenge_method:
+        type: string
+      consent_challenge:
+        type: string
+      nonce:
+        type: string
+      redirect_uri:
+        type: string
+      response_type:
+        type: string
+      scope:
+        type: string
+      state:
+        type: string
+    required:
+    - client_id
+    - consent_challenge
+    - redirect_uri
+    - response_type
+    type: object
+  controller.bulkImportResult:
+    properties:
+      created:
+        type: integer
+      errors:
+        items:
+          type: string
+        type: array
+      skipped:
+        type: integer
     type: object
   controller.changePasswordReq:
     properties:
@@ -265,6 +346,90 @@ definitions:
     required:
     - current_password
     - new_password
+    type: object
+  controller.createAPIKeyReq:
+    properties:
+      expires_at:
+        description: RFC3339 timestamp
+        type: string
+      name:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    type: object
+  controller.createAPIKeyResp:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      key_prefix:
+        type: string
+      name:
+        type: string
+      raw_key:
+        description: Only returned on creation
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+    type: object
+  controller.createAppRequest:
+    properties:
+      description:
+        type: string
+      homepage_url:
+        type: string
+      logo_uri:
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  controller.createClientReq:
+    properties:
+      client_type:
+        enum:
+        - confidential
+        - public
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      logo_uri:
+        type: string
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      scopes:
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    - redirect_uris
+    type: object
+  controller.createClientResp:
+    properties:
+      client:
+        $ref: '#/definitions/domain.OAuthClient'
+      client_secret:
+        type: string
     type: object
   controller.createProviderRequest:
     properties:
@@ -357,6 +522,21 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  controller.createWebhookRequest:
+    properties:
+      events:
+        items:
+          type: string
+        type: array
+      secret:
+        type: string
+      url:
+        type: string
+    required:
+    - events
+    - secret
+    - url
     type: object
   controller.fgaAuthorizeReq:
     properties:
@@ -668,6 +848,12 @@ definitions:
     type: object
   controller.oauth2MetadataResp:
     properties:
+      authorization_endpoint:
+        type: string
+      code_challenge_methods_supported:
+        items:
+          type: string
+        type: array
       grant_types_supported:
         items:
           type: string
@@ -688,6 +874,8 @@ definitions:
           type: string
         type: array
       issuer:
+        type: string
+      jwks_uri:
         type: string
       response_types_supported:
         items:
@@ -710,6 +898,17 @@ definitions:
           type: string
         type: array
       userinfo_endpoint:
+        type: string
+    type: object
+  controller.passkeyResponse:
+    properties:
+      created_at:
+        type: string
+      friendly_name:
+        type: string
+      id:
+        type: string
+      last_used_at:
         type: string
     type: object
   controller.permissionGrantItem:
@@ -746,15 +945,45 @@ definitions:
         description: Auth
         minLength: 16
         type: string
+      rl_login_limit:
+        description: Rate limits (per-endpoint, tenant-scoped overrides)
+        type: string
+      rl_login_window:
+        type: string
+      rl_magic_limit:
+        type: string
+      rl_magic_window:
+        type: string
+      rl_mfa_limit:
+        type: string
+      rl_mfa_window:
+        type: string
+      rl_signup_limit:
+        type: string
+      rl_signup_window:
+        type: string
+      rl_sso_limit:
+        type: string
+      rl_sso_window:
+        type: string
+      rl_token_limit:
+        type: string
+      rl_token_window:
+        type: string
       scope:
         description: Scope is deprecated and ignored. Kept for backward compatibility
           with older SDKs.
+        type: string
+      signup_enabled:
+        description: Signup & branding
         type: string
       sso_provider:
         type: string
       sso_redirect_allowlist:
         type: string
       sso_state_ttl:
+        type: string
+      tenant_logo_url:
         type: string
       workos_api_key:
         type: string
@@ -870,11 +1099,35 @@ definitions:
         items:
           type: string
         type: array
+      roles:
+        items:
+          $ref: '#/definitions/controller.rbacRoleItem'
+        type: array
     type: object
   controller.refreshReq:
     properties:
       refresh_token:
         type: string
+    type: object
+  controller.registerPasskeyRequest:
+    properties:
+      aaguid:
+        type: string
+      attestation_type:
+        type: string
+      credential_id:
+        type: string
+      friendly_name:
+        type: string
+      public_key:
+        type: string
+      transports:
+        items:
+          type: string
+        type: array
+    required:
+    - credential_id
+    - public_key
     type: object
   controller.resetPasswordConfirmReq:
     properties:
@@ -943,12 +1196,42 @@ definitions:
       app_cors_allowed_origins:
         description: App
         type: string
+      rl_login_limit:
+        description: Rate limits (per-endpoint, tenant-scoped overrides)
+        type: string
+      rl_login_window:
+        type: string
+      rl_magic_limit:
+        type: string
+      rl_magic_window:
+        type: string
+      rl_mfa_limit:
+        type: string
+      rl_mfa_window:
+        type: string
+      rl_signup_limit:
+        type: string
+      rl_signup_window:
+        type: string
+      rl_sso_limit:
+        type: string
+      rl_sso_window:
+        type: string
+      rl_token_limit:
+        type: string
+      rl_token_window:
+        type: string
+      signup_enabled:
+        description: Signup & branding
+        type: string
       sso_provider:
         description: SSO
         type: string
       sso_redirect_allowlist:
         type: string
       sso_state_ttl:
+        type: string
+      tenant_logo_url:
         type: string
       workos_api_key:
         description: masked
@@ -1016,7 +1299,53 @@ definitions:
       updated_at:
         type: string
     type: object
+  controller.updateAppRequest:
+    properties:
+      description:
+        type: string
+      homepage_url:
+        type: string
+      is_active:
+        type: boolean
+      logo_uri:
+        type: string
+      name:
+        type: string
+    type: object
+  controller.updateClientReq:
+    properties:
+      grant_types:
+        items:
+          type: string
+        type: array
+      is_active:
+        type: boolean
+      logo_uri:
+        type: string
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        type: array
+      scopes:
+        items:
+          type: string
+        type: array
+    type: object
+  controller.updateParentReq:
+    properties:
+      parent_tenant_id:
+        type: string
+    type: object
   controller.updateProfileReq:
+    properties:
+      first_name:
+        type: string
+      last_name:
+        type: string
+    type: object
+  controller.updateProfileRequest:
     properties:
       first_name:
         type: string
@@ -1107,6 +1436,47 @@ definitions:
       want_response_signed:
         type: boolean
     type: object
+  controller.updateWebhookRequest:
+    properties:
+      events:
+        items:
+          type: string
+        type: array
+      is_active:
+        type: boolean
+      url:
+        type: string
+    type: object
+  controller.verifyEmailReq:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  domain.Application:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      homepage_url:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      logo_uri:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
   domain.Introspection:
     properties:
       active:
@@ -1130,6 +1500,45 @@ definitions:
       user_id:
         type: string
     type: object
+  domain.OAuthClient:
+    properties:
+      client_id:
+        type: string
+      client_type:
+        description: confidential | public
+        enum:
+        - confidential
+        - public
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      logo_uri:
+        type: string
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        type: array
+      scopes:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
   domain.PortalLink:
     properties:
       link:
@@ -1149,6 +1558,157 @@ definitions:
     - ProviderTypeOAuth2
     - ProviderTypeWorkOS
     - ProviderTypeDev
+  domain.SCIMEmail:
+    properties:
+      primary:
+        type: boolean
+      type:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMError:
+    properties:
+      detail:
+        type: string
+      schemas:
+        items:
+          type: string
+        type: array
+      status:
+        type: integer
+    type: object
+  domain.SCIMGroup:
+    properties:
+      displayName:
+        type: string
+      id:
+        type: string
+      members:
+        items:
+          $ref: '#/definitions/domain.SCIMMemberRef'
+        type: array
+      meta:
+        $ref: '#/definitions/domain.SCIMMeta'
+      schemas:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.SCIMGroupRef:
+    properties:
+      $ref:
+        type: string
+      display:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMListResponse:
+    properties:
+      Resources: {}
+      itemsPerPage:
+        type: integer
+      schemas:
+        items:
+          type: string
+        type: array
+      startIndex:
+        type: integer
+      totalResults:
+        type: integer
+    type: object
+  domain.SCIMMemberRef:
+    properties:
+      $ref:
+        type: string
+      display:
+        type: string
+      value:
+        type: string
+    type: object
+  domain.SCIMMeta:
+    properties:
+      created:
+        type: string
+      lastModified:
+        type: string
+      location:
+        type: string
+      resourceType:
+        type: string
+    type: object
+  domain.SCIMName:
+    properties:
+      familyName:
+        type: string
+      givenName:
+        type: string
+    type: object
+  domain.SCIMPatchOp:
+    properties:
+      op:
+        description: add, remove, replace
+        type: string
+      path:
+        description: attribute path, e.g. "name.givenName"
+        type: string
+      value:
+        description: new value
+    type: object
+  domain.SCIMPatchRequest:
+    properties:
+      Operations:
+        items:
+          $ref: '#/definitions/domain.SCIMPatchOp'
+        type: array
+      schemas:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.SCIMUser:
+    properties:
+      active:
+        type: boolean
+      emails:
+        items:
+          $ref: '#/definitions/domain.SCIMEmail'
+        type: array
+      externalId:
+        type: string
+      groups:
+        items:
+          $ref: '#/definitions/domain.SCIMGroupRef'
+        type: array
+      id:
+        type: string
+      meta:
+        $ref: '#/definitions/domain.SCIMMeta'
+      name:
+        $ref: '#/definitions/domain.SCIMName'
+      schemas:
+        items:
+          type: string
+        type: array
+      userName:
+        type: string
+    type: object
+  domain.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      id_token:
+        type: string
+      refresh_token:
+        type: string
+      scope:
+        type: string
+      token_type:
+        type: string
+    type: object
   domain.UserProfile:
     properties:
       email:
@@ -1172,6 +1732,25 @@ definitions:
       tenant_id:
         type: string
     type: object
+  domain.Webhook:
+    properties:
+      created_at:
+        type: string
+      events:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      url:
+        type: string
+    type: object
 info:
   contact: {}
   description: Central Authentication Service for multi-tenant identity management.
@@ -1192,6 +1771,302 @@ paths:
       summary: OAuth 2.0 Authorization Server Metadata
       tags:
       - auth
+  /api/v1/applications:
+    get:
+      description: Lists all applications for a tenant
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List applications
+      tags:
+      - Applications
+    post:
+      consumes:
+      - application/json
+      description: Creates a new application within a tenant
+      parameters:
+      - description: Application details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createAppRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Application'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create application
+      tags:
+      - Applications
+  /api/v1/applications/{id}:
+    delete:
+      description: Deletes an application
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete application
+      tags:
+      - Applications
+    get:
+      description: Gets an application by ID
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Application'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get application
+      tags:
+      - Applications
+    put:
+      consumes:
+      - application/json
+      description: Updates an application
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateAppRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Application'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update application
+      tags:
+      - Applications
+  /api/v1/auth/admin/api-keys:
+    get:
+      description: Returns all API keys for the caller's tenant. Raw keys are never
+        returned.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.apiKeysListResp'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List API keys for a tenant (admin-only)
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new API key for service-to-service authentication. The
+        raw key is returned only once.
+      parameters:
+      - description: API key details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createAPIKeyReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.createAPIKeyResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create an API key (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/api-keys/{id}/revoke:
+    post:
+      description: Revokes an API key. The key will no longer be accepted for authentication.
+      parameters:
+      - description: API Key ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Revoke an API key (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/bulk/users/export:
+    get:
+      description: Export all users in a tenant as JSON
+      parameters:
+      - description: Export format (json or csv)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Bulk export users
+      tags:
+      - Admin Bulk
+  /api/v1/auth/admin/bulk/users/import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'Import users from CSV or JSON. CSV columns: email,first_name,last_name,role.
+        JSON: array of objects.'
+      parameters:
+      - description: CSV or JSON file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.bulkImportResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Bulk import users
+      tags:
+      - Admin Bulk
+  /api/v1/auth/admin/compliance/report:
+    get:
+      description: Generates a compliance summary report for the platform or a specific
+        tenant
+      parameters:
+      - description: Tenant ID filter
+        in: query
+        name: tenant_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Compliance report
+      tags:
+      - Compliance
   /api/v1/auth/admin/fga/acl/tuples:
     delete:
       consumes:
@@ -1653,6 +2528,264 @@ paths:
       summary: Revoke an invitation (admin-only)
       tags:
       - auth.admin
+  /api/v1/auth/admin/oauth-clients:
+    get:
+      consumes:
+      - application/json
+      description: Returns all OAuth clients for the tenant
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List OAuth clients
+      tags:
+      - auth.admin
+    post:
+      consumes:
+      - application/json
+      description: Registers a new OAuth 2.0 client application
+      parameters:
+      - description: Client configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createClientReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.createClientResp'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create OAuth client
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/oauth-clients/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes an OAuth client
+      parameters:
+      - description: Client UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete OAuth client
+      tags:
+      - auth.admin
+    get:
+      consumes:
+      - application/json
+      description: Returns a single OAuth client by ID
+      parameters:
+      - description: Client UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.OAuthClient'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get OAuth client
+      tags:
+      - auth.admin
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing OAuth client
+      parameters:
+      - description: Client UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateClientReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update OAuth client
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/platform/audit-logs:
+    get:
+      description: Platform-level endpoint to query audit logs across tenants
+      parameters:
+      - description: Filter by tenant
+        in: query
+        name: tenant_id
+        type: string
+      - description: Filter by user
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by action
+        in: query
+        name: action
+        type: string
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Query audit logs
+      tags:
+      - Platform Admin
+  /api/v1/auth/admin/platform/stats:
+    get:
+      description: Returns aggregate platform statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Platform stats
+      tags:
+      - Platform Admin
+  /api/v1/auth/admin/platform/tenants:
+    get:
+      description: Platform-level endpoint to list all tenants with user counts
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List all tenants with stats
+      tags:
+      - Platform Admin
+  /api/v1/auth/admin/platform/users/search:
+    get:
+      description: Platform-level endpoint to search users globally
+      parameters:
+      - description: Search query (email)
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search users across tenants
+      tags:
+      - Platform Admin
   /api/v1/auth/admin/rbac/permissions:
     get:
       description: Returns all known permissions.
@@ -2113,6 +3246,10 @@ paths:
         name: tenant_id
         required: true
         type: string
+      - description: Filter by email address (exact match)
+        in: query
+        name: email
+        type: string
       produces:
       - application/json
       responses:
@@ -2293,8 +3430,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Updates the roles array for a user. Requires caller to have the
-        admin role.
+      deprecated: true
+      description: 'DEPRECATED: Updates the denormalized roles array on the user record.
+        Use the RBAC v2 endpoints (POST/DELETE /admin/rbac/users/{id}/roles) instead.'
       parameters:
       - description: User ID (UUID)
         in: path
@@ -2336,7 +3474,7 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Update a user's roles (admin-only)
+      summary: Update a user's roles (admin-only) [DEPRECATED]
       tags:
       - auth.admin
   /api/v1/auth/admin/users/{id}/unblock:
@@ -2379,6 +3517,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Unblock a user (admin-only)
+      tags:
+      - auth.admin
+  /api/v1/auth/admin/users/{id}/unlock:
+    post:
+      description: Clears account lockout and resets failed login attempts. Requires
+        admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unlock a locked account (admin-only)
       tags:
       - auth.admin
   /api/v1/auth/admin/users/{id}/unverify-email:
@@ -3428,6 +4608,136 @@ paths:
       summary: Revoke token
       tags:
       - auth.tokens
+  /api/v1/auth/self/mfa:
+    get:
+      description: Returns the authenticated user's MFA enrollment status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: MFA status
+      tags:
+      - Self-Service
+  /api/v1/auth/self/passkeys:
+    get:
+      description: Returns the authenticated user's registered passkeys
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List passkeys
+      tags:
+      - Self-Service
+    post:
+      consumes:
+      - application/json
+      description: Stores a new WebAuthn/passkey credential for the authenticated
+        user
+      parameters:
+      - description: Passkey credential data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.registerPasskeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.passkeyResponse'
+      summary: Register passkey
+      tags:
+      - Self-Service
+  /api/v1/auth/self/passkeys/{id}:
+    delete:
+      description: Deletes one of the authenticated user's passkeys
+      parameters:
+      - description: Passkey ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      summary: Delete passkey
+      tags:
+      - Self-Service
+  /api/v1/auth/self/profile:
+    get:
+      description: Returns the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get own profile
+      tags:
+      - Self-Service
+    put:
+      consumes:
+      - application/json
+      description: Updates the authenticated user's name
+      parameters:
+      - description: Profile updates
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update own profile
+      tags:
+      - Self-Service
+  /api/v1/auth/self/sessions:
+    get:
+      description: Returns the authenticated user's active sessions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List own sessions
+      tags:
+      - Self-Service
+  /api/v1/auth/self/sessions/{id}:
+    delete:
+      description: Revokes one of the authenticated user's sessions
+      parameters:
+      - description: Session (refresh token) ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      summary: Revoke own session
+      tags:
+      - Self-Service
   /api/v1/auth/sessions:
     get:
       description: Lists the authenticated user's sessions (refresh tokens) for the
@@ -3633,6 +4943,32 @@ paths:
       summary: Start SSO/OAuth flow
       tags:
       - auth.sso
+  /api/v1/auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verifies a user's email address using a token sent via email
+      parameters:
+      - description: token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.verifyEmailReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify email address
+      tags:
+      - auth
   /api/v1/sso/portal/provider:
     get:
       description: Fetches the masked SSO provider configuration using a portal token
@@ -4105,6 +5441,33 @@ paths:
       summary: Get tenant by ID
       tags:
       - tenants
+  /api/v1/tenants/{id}/ancestors:
+    get:
+      description: Returns the ancestor chain for a tenant (parent, grandparent, etc.)
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/controller.tenantResp'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get tenant ancestors
+      tags:
+      - tenants
   /api/v1/tenants/{id}/children:
     get:
       description: Lists child tenants of a parent tenant with pagination
@@ -4157,6 +5520,38 @@ paths:
               type: string
             type: object
       summary: Deactivate tenant
+      tags:
+      - tenants
+  /api/v1/tenants/{id}/parent:
+    patch:
+      consumes:
+      - application/json
+      description: Re-parents a tenant. Set parent_tenant_id to null to make it a
+        root tenant.
+      parameters:
+      - description: Tenant ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New parent
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateParentReq'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update tenant parent
       tags:
       - tenants
   /api/v1/tenants/{id}/settings:
@@ -4284,6 +5679,836 @@ paths:
       summary: Get tenant by name
       tags:
       - tenants
+  /api/v1/webhooks:
+    get:
+      description: Lists all webhook subscriptions for the tenant
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List webhooks
+      tags:
+      - Webhooks
+    post:
+      consumes:
+      - application/json
+      description: Creates a new webhook subscription for the tenant
+      parameters:
+      - description: Webhook configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.createWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create webhook
+      tags:
+      - Webhooks
+  /api/v1/webhooks/{id}:
+    delete:
+      description: Deletes a webhook subscription
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete webhook
+      tags:
+      - Webhooks
+    get:
+      description: Returns a single webhook subscription by ID
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get webhook
+      tags:
+      - Webhooks
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing webhook subscription
+      parameters:
+      - description: Webhook ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated webhook configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.updateWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update webhook
+      tags:
+      - Webhooks
+  /oauth/authorize:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1).
+        Returns consent screen data or redirects if consent was previously granted.
+      parameters:
+      - description: Client ID
+        in: query
+        name: client_id
+        required: true
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        required: true
+        type: string
+      - description: Response type (must be 'code')
+        in: query
+        name: response_type
+        required: true
+        type: string
+      - description: Space-separated scopes
+        in: query
+        name: scope
+        type: string
+      - description: CSRF state parameter
+        in: query
+        name: state
+        type: string
+      - description: Nonce for ID token replay protection
+        in: query
+        name: nonce
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE method (S256)
+        in: query
+        name: code_challenge_method
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Consent screen data
+          schema:
+            additionalProperties: true
+            type: object
+        "302":
+          description: Redirect with authorization code
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: OAuth 2.0 Authorization
+      tags:
+      - OAuth
+  /oauth/authorize/decision:
+    post:
+      consumes:
+      - application/json
+      description: Processes the user's consent decision (approve or deny) for an
+        OAuth authorization request.
+      parameters:
+      - description: Consent decision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.authorizeDecisionReq'
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect with authorization code or error
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: OAuth 2.0 Authorization Decision
+      tags:
+      - OAuth
+  /oauth/revoke:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Revokes an OAuth 2.0 token (RFC 7009). Accepts refresh_token or
+        access_token.
+      parameters:
+      - description: The token to revoke
+        in: formData
+        name: token
+        required: true
+        type: string
+      - description: Token type hint (refresh_token or access_token)
+        in: formData
+        name: token_type_hint
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Revoke Token
+      tags:
+      - OAuth
+  /oauth/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Exchanges an authorization code, client credentials, or refresh
+        token for access tokens (RFC 6749 §3.2).
+      parameters:
+      - description: Grant type (authorization_code, client_credentials, refresh_token)
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Authorization code (for authorization_code grant)
+        in: formData
+        name: code
+        type: string
+      - description: Redirect URI (for authorization_code grant)
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret
+        in: formData
+        name: client_secret
+        type: string
+      - description: PKCE code verifier
+        in: formData
+        name: code_verifier
+        type: string
+      - description: Refresh token (for refresh_token grant)
+        in: formData
+        name: refresh_token
+        type: string
+      - description: Requested scopes
+        in: formData
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: OAuth 2.0 Token Exchange
+      tags:
+      - OAuth
+  /scim/v2/Groups:
+    get:
+      description: Returns a paginated list of groups for the tenant per SCIM 2.0
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: SCIM filter expression
+        in: query
+        name: filter
+        type: string
+      - description: 1-based start index
+        in: query
+        name: startIndex
+        type: integer
+      - description: Page size
+        in: query
+        name: count
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: List SCIM groups
+      tags:
+      - SCIM
+    post:
+      consumes:
+      - application/json
+      description: Creates a new group in the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMGroup'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Create a SCIM group
+      tags:
+      - SCIM
+  /scim/v2/Groups/{id}:
+    delete:
+      description: Removes a group from the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Delete a SCIM group
+      tags:
+      - SCIM
+    get:
+      description: Returns a single group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Get a SCIM group by ID
+      tags:
+      - SCIM
+    patch:
+      consumes:
+      - application/json
+      description: Applies partial updates to a group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Patch operations
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMPatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Patch a SCIM group
+      tags:
+      - SCIM
+    put:
+      consumes:
+      - application/json
+      description: Replaces an existing group resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Group resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMGroup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Replace a SCIM group
+      tags:
+      - SCIM
+  /scim/v2/ResourceTypes:
+    get:
+      description: Returns the supported SCIM 2.0 resource types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM resource types
+      tags:
+      - SCIM
+  /scim/v2/Schemas:
+    get:
+      description: Returns the supported SCIM 2.0 schemas
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM schemas
+      tags:
+      - SCIM
+  /scim/v2/ServiceProviderConfig:
+    get:
+      description: Returns the SCIM 2.0 service provider configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: SCIM service provider configuration
+      tags:
+      - SCIM
+  /scim/v2/Users:
+    get:
+      description: Returns a paginated list of users for the tenant per SCIM 2.0
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: SCIM filter expression
+        in: query
+        name: filter
+        type: string
+      - description: 1-based start index
+        in: query
+        name: startIndex
+        type: integer
+      - description: Page size
+        in: query
+        name: count
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: List SCIM users
+      tags:
+      - SCIM
+    post:
+      consumes:
+      - application/json
+      description: Provisions a new user in the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMUser'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Create a SCIM user
+      tags:
+      - SCIM
+  /scim/v2/Users/{id}:
+    delete:
+      description: Deprovisions a user from the tenant
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Delete a SCIM user
+      tags:
+      - SCIM
+    get:
+      description: Returns a single user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Get a SCIM user by ID
+      tags:
+      - SCIM
+    patch:
+      consumes:
+      - application/json
+      description: Applies partial updates to a user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Patch operations
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMPatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Patch a SCIM user
+      tags:
+      - SCIM
+    put:
+      consumes:
+      - application/json
+      description: Replaces an existing user resource
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User resource
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SCIMUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.SCIMUser'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/domain.SCIMError'
+      summary: Replace a SCIM user
+      tags:
+      - SCIM
 schemes:
 - https
 - http

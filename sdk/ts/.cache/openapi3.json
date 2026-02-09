@@ -28,6 +28,529 @@
         }
       }
     },
+    "/api/v1/applications": {
+      "get": {
+        "description": "Lists all applications for a tenant",
+        "tags": [
+          "Applications"
+        ],
+        "summary": "List applications",
+        "parameters": [
+          {
+            "description": "Limit",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Offset",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Creates a new application within a tenant",
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Create application",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.createAppRequest"
+              }
+            }
+          },
+          "description": "Application details",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Application"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{id}": {
+      "get": {
+        "description": "Gets an application by ID",
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Get application",
+        "parameters": [
+          {
+            "description": "Application ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Application"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "description": "Updates an application",
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Update application",
+        "parameters": [
+          {
+            "description": "Application ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateAppRequest"
+              }
+            }
+          },
+          "description": "Updated fields",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Application"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Deletes an application",
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Delete application",
+        "parameters": [
+          {
+            "description": "Application ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/api-keys": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns all API keys for the caller's tenant. Raw keys are never returned.",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "List API keys for a tenant (admin-only)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.apiKeysListResp"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Creates a new API key for service-to-service authentication. The raw key is returned only once.",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Create an API key (admin-only)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.createAPIKeyReq"
+              }
+            }
+          },
+          "description": "API key details",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.createAPIKeyResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/api-keys/{id}/revoke": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Revokes an API key. The key will no longer be accepted for authentication.",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Revoke an API key (admin-only)",
+        "parameters": [
+          {
+            "description": "API Key ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/bulk/users/export": {
+      "get": {
+        "description": "Export all users in a tenant as JSON",
+        "tags": [
+          "Admin Bulk"
+        ],
+        "summary": "Bulk export users",
+        "parameters": [
+          {
+            "description": "Export format (json or csv)",
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/bulk/users/import": {
+      "post": {
+        "description": "Import users from CSV or JSON. CSV columns: email,first_name,last_name,role. JSON: array of objects.",
+        "tags": [
+          "Admin Bulk"
+        ],
+        "summary": "Bulk import users",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "description": "CSV or JSON file",
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.bulkImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/compliance/report": {
+      "get": {
+        "description": "Generates a compliance summary report for the platform or a specific tenant",
+        "tags": [
+          "Compliance"
+        ],
+        "summary": "Compliance report",
+        "parameters": [
+          {
+            "description": "Tenant ID filter",
+            "name": "tenant_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/admin/fga/acl/tuples": {
       "post": {
         "security": [
@@ -876,6 +1399,458 @@
         }
       }
     },
+    "/api/v1/auth/admin/oauth-clients": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns all OAuth clients for the tenant",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "List OAuth clients",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Registers a new OAuth 2.0 client application",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Create OAuth client",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.createClientReq"
+              }
+            }
+          },
+          "description": "Client configuration",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.createClientResp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/oauth-clients/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns a single OAuth client by ID",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Get OAuth client",
+        "parameters": [
+          {
+            "description": "Client UUID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.OAuthClient"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Deletes an OAuth client",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Delete OAuth client",
+        "parameters": [
+          {
+            "description": "Client UUID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Updates an existing OAuth client",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Update OAuth client",
+        "parameters": [
+          {
+            "description": "Client UUID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateClientReq"
+              }
+            }
+          },
+          "description": "Fields to update",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/platform/audit-logs": {
+      "get": {
+        "description": "Platform-level endpoint to query audit logs across tenants",
+        "tags": [
+          "Platform Admin"
+        ],
+        "summary": "Query audit logs",
+        "parameters": [
+          {
+            "description": "Filter by tenant",
+            "name": "tenant_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by user",
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by action",
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Limit",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Offset",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/platform/stats": {
+      "get": {
+        "description": "Returns aggregate platform statistics",
+        "tags": [
+          "Platform Admin"
+        ],
+        "summary": "Platform stats",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/platform/tenants": {
+      "get": {
+        "description": "Platform-level endpoint to list all tenants with user counts",
+        "tags": [
+          "Platform Admin"
+        ],
+        "summary": "List all tenants with stats",
+        "parameters": [
+          {
+            "description": "Limit",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Offset",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/platform/users/search": {
+      "get": {
+        "description": "Platform-level endpoint to search users globally",
+        "tags": [
+          "Platform Admin"
+        ],
+        "summary": "Search users across tenants",
+        "parameters": [
+          {
+            "description": "Search query (email)",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/admin/rbac/permissions": {
       "get": {
         "security": [
@@ -1714,6 +2689,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Filter by email address (exact match)",
+            "name": "email",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2051,11 +3034,12 @@
             "BearerAuth": []
           }
         ],
-        "description": "Updates the roles array for a user. Requires caller to have the admin role.",
+        "description": "DEPRECATED: Updates the denormalized roles array on the user record. Use the RBAC v2 endpoints (POST/DELETE /admin/rbac/users/{id}/roles) instead.",
         "tags": [
           "auth.admin"
         ],
-        "summary": "Update a user's roles (admin-only)",
+        "summary": "Update a user's roles (admin-only) [DEPRECATED]",
+        "deprecated": true,
         "parameters": [
           {
             "description": "User ID (UUID)",
@@ -2149,6 +3133,88 @@
           "auth.admin"
         ],
         "summary": "Unblock a user (admin-only)",
+        "parameters": [
+          {
+            "description": "User ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/admin/users/{id}/unlock": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Clears account lockout and resets failed login attempts. Requires admin role.",
+        "tags": [
+          "auth.admin"
+        ],
+        "summary": "Unlock a locked account (admin-only)",
         "parameters": [
           {
             "description": "User ID (UUID)",
@@ -4034,6 +5100,205 @@
         }
       }
     },
+    "/api/v1/auth/self/mfa": {
+      "get": {
+        "description": "Returns the authenticated user's MFA enrollment status",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "MFA status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/self/passkeys": {
+      "get": {
+        "description": "Returns the authenticated user's registered passkeys",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "List passkeys",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Stores a new WebAuthn/passkey credential for the authenticated user",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "Register passkey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.registerPasskeyRequest"
+              }
+            }
+          },
+          "description": "Passkey credential data",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/controller.passkeyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/self/passkeys/{id}": {
+      "delete": {
+        "description": "Deletes one of the authenticated user's passkeys",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "Delete passkey",
+        "parameters": [
+          {
+            "description": "Passkey ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/self/profile": {
+      "get": {
+        "description": "Returns the authenticated user's profile",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "Get own profile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "description": "Updates the authenticated user's name",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "Update own profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateProfileRequest"
+              }
+            }
+          },
+          "description": "Profile updates",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/self/sessions": {
+      "get": {
+        "description": "Returns the authenticated user's active sessions",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "List own sessions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/self/sessions/{id}": {
+      "delete": {
+        "description": "Revokes one of the authenticated user's sessions",
+        "tags": [
+          "Self-Service"
+        ],
+        "summary": "Revoke own session",
+        "parameters": [
+          {
+            "description": "Session (refresh token) ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/auth/sessions": {
       "get": {
         "security": [
@@ -4406,6 +5671,44 @@
             "description": "Bad Request",
             "content": {
               "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "description": "Verifies a user's email address using a token sent via email",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify email address",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.verifyEmailReq"
+              }
+            }
+          },
+          "description": "token",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
                 "schema": {
                   "type": "object",
                   "additionalProperties": {
@@ -5355,6 +6658,54 @@
         }
       }
     },
+    "/api/v1/tenants/{id}/ancestors": {
+      "get": {
+        "description": "Returns the ancestor chain for a tenant (parent, grandparent, etc.)",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Get tenant ancestors",
+        "parameters": [
+          {
+            "description": "Tenant ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/controller.tenantResp"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tenants/{id}/children": {
       "get": {
         "description": "Lists child tenants of a parent tenant with pagination",
@@ -5442,6 +6793,55 @@
             "description": "Bad Request",
             "content": {
               "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tenants/{id}/parent": {
+      "patch": {
+        "description": "Re-parents a tenant. Set parent_tenant_id to null to make it a root tenant.",
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Update tenant parent",
+        "parameters": [
+          {
+            "description": "Tenant ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateParentReq"
+              }
+            }
+          },
+          "description": "New parent",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
                 "schema": {
                   "type": "object",
                   "additionalProperties": {
@@ -5633,6 +7033,1448 @@
           }
         }
       }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Lists all webhook subscriptions for the tenant",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhooks",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Creates a new webhook subscription for the tenant",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Create webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.createWebhookRequest"
+              }
+            }
+          },
+          "description": "Webhook configuration",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns a single webhook subscription by ID",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Get webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Updates an existing webhook subscription",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Update webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.updateWebhookRequest"
+              }
+            }
+          },
+          "description": "Updated webhook configuration",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Deletes a webhook subscription",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Delete webhook",
+        "parameters": [
+          {
+            "description": "Webhook ID (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "description": "Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "OAuth 2.0 Authorization",
+        "parameters": [
+          {
+            "description": "Client ID",
+            "name": "client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Redirect URI",
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Response type (must be 'code')",
+            "name": "response_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Space-separated scopes",
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "CSRF state parameter",
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Nonce for ID token replay protection",
+            "name": "nonce",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "PKCE code challenge",
+            "name": "code_challenge",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "PKCE method (S256)",
+            "name": "code_challenge_method",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consent screen data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redirect with authorization code"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize/decision": {
+      "post": {
+        "description": "Processes the user's consent decision (approve or deny) for an OAuth authorization request.",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "OAuth 2.0 Authorization Decision",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.authorizeDecisionReq"
+              }
+            }
+          },
+          "description": "Consent decision",
+          "required": true
+        },
+        "responses": {
+          "302": {
+            "description": "Redirect with authorization code or error"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "description": "Revokes an OAuth 2.0 token (RFC 7009). Accepts refresh_token or access_token.",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Revoke Token",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "description": "The token to revoke",
+                    "type": "string"
+                  },
+                  "token_type_hint": {
+                    "description": "Token type hint (refresh_token or access_token)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "description": "Exchanges an authorization code, client credentials, or refresh token for access tokens (RFC 6749 §3.2).",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "OAuth 2.0 Token Exchange",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grant_type": {
+                    "description": "Grant type (authorization_code, client_credentials, refresh_token)",
+                    "type": "string"
+                  },
+                  "code": {
+                    "description": "Authorization code (for authorization_code grant)",
+                    "type": "string"
+                  },
+                  "redirect_uri": {
+                    "description": "Redirect URI (for authorization_code grant)",
+                    "type": "string"
+                  },
+                  "client_id": {
+                    "description": "Client ID",
+                    "type": "string"
+                  },
+                  "client_secret": {
+                    "description": "Client secret",
+                    "type": "string"
+                  },
+                  "code_verifier": {
+                    "description": "PKCE code verifier",
+                    "type": "string"
+                  },
+                  "refresh_token": {
+                    "description": "Refresh token (for refresh_token grant)",
+                    "type": "string"
+                  },
+                  "scope": {
+                    "description": "Requested scopes",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "grant_type"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Groups": {
+      "get": {
+        "description": "Returns a paginated list of groups for the tenant per SCIM 2.0",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "List SCIM groups",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "SCIM filter expression",
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-based start index",
+            "name": "startIndex",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size",
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Creates a new group in the tenant",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Create a SCIM group",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMGroup"
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Groups/{id}": {
+      "get": {
+        "description": "Returns a single group resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Get a SCIM group by ID",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "description": "Replaces an existing group resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Replace a SCIM group",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMGroup"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Removes a group from the tenant",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Delete a SCIM group",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "description": "Applies partial updates to a group resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Patch a SCIM group",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMPatchRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/ResourceTypes": {
+      "get": {
+        "description": "Returns the supported SCIM 2.0 resource types",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "SCIM resource types",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Schemas": {
+      "get": {
+        "description": "Returns the supported SCIM 2.0 schemas",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "SCIM schemas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/ServiceProviderConfig": {
+      "get": {
+        "description": "Returns the SCIM 2.0 service provider configuration",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "SCIM service provider configuration",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Users": {
+      "get": {
+        "description": "Returns a paginated list of users for the tenant per SCIM 2.0",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "List SCIM users",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "SCIM filter expression",
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-based start index",
+            "name": "startIndex",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size",
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Provisions a new user in the tenant",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Create a SCIM user",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMUser"
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scim/v2/Users/{id}": {
+      "get": {
+        "description": "Returns a single user resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Get a SCIM user by ID",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "description": "Replaces an existing user resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Replace a SCIM user",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMUser"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Deprovisions a user from the tenant",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Delete a SCIM user",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "description": "Applies partial updates to a user resource",
+        "tags": [
+          "SCIM"
+        ],
+        "summary": "Patch a SCIM user",
+        "parameters": [
+          {
+            "description": "Tenant ID",
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/domain.SCIMPatchRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.SCIMError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
@@ -5651,6 +8493,17 @@
           }
         },
         "description": "Magic token in JSON body"
+      },
+      "domain.SCIMGroup": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/domain.SCIMGroup"
+            }
+          }
+        },
+        "description": "Group resource",
+        "required": true
       },
       "controller.rbacRolePermissionReq": {
         "content": {
@@ -5683,6 +8536,28 @@
           }
         },
         "description": "tenant_id, role_id",
+        "required": true
+      },
+      "domain.SCIMPatchRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/domain.SCIMPatchRequest"
+            }
+          }
+        },
+        "description": "Patch operations",
+        "required": true
+      },
+      "domain.SCIMUser": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/domain.SCIMUser"
+            }
+          }
+        },
+        "description": "User resource",
         "required": true
       }
     },
@@ -5759,6 +8634,10 @@
             "description": "Recommended/preferred login method based on context\nValues: \"sso\", \"password\", \"magic_link\", \"social\"",
             "type": "string"
           },
+          "signup_enabled": {
+            "description": "Whether new user signup is enabled for this tenant",
+            "type": "boolean"
+          },
           "social_providers": {
             "description": "Social login providers (tenant-wide or global)",
             "type": "array",
@@ -5779,6 +8658,10 @@
           },
           "tenant_id": {
             "description": "Tenant information (if discovered)",
+            "type": "string"
+          },
+          "tenant_logo_url": {
+            "description": "Tenant logo URL for branding on the login page",
             "type": "string"
           },
           "tenant_name": {
@@ -6002,6 +8885,9 @@
           "created_at": {
             "type": "string"
           },
+          "email": {
+            "type": "string"
+          },
           "email_verified": {
             "type": "boolean"
           },
@@ -6042,6 +8928,58 @@
           }
         }
       },
+      "controller.apiKeyItem": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.apiKeysListResp": {
+        "type": "object",
+        "properties": {
+          "api_keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/controller.apiKeyItem"
+            }
+          }
+        }
+      },
       "controller.authExchangeResp": {
         "type": "object",
         "properties": {
@@ -6054,6 +8992,64 @@
           "success": {
             "type": "boolean",
             "example": true
+          }
+        }
+      },
+      "controller.authorizeDecisionReq": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "consent_challenge",
+          "redirect_uri",
+          "response_type"
+        ],
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "code_challenge": {
+            "type": "string"
+          },
+          "code_challenge_method": {
+            "type": "string"
+          },
+          "consent_challenge": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "string"
+          },
+          "redirect_uri": {
+            "type": "string"
+          },
+          "response_type": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.bulkImportResult": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "type": "integer"
           }
         }
       },
@@ -6070,6 +9066,132 @@
           "new_password": {
             "type": "string",
             "minLength": 8
+          }
+        }
+      },
+      "controller.createAPIKeyReq": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "expires_at": {
+            "description": "RFC3339 timestamp",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "controller.createAPIKeyResp": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "raw_key": {
+            "description": "Only returned on creation",
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.createAppRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "homepage_url": {
+            "type": "string"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.createClientReq": {
+        "type": "object",
+        "required": [
+          "name",
+          "redirect_uris"
+        ],
+        "properties": {
+          "client_type": {
+            "type": "string",
+            "enum": [
+              "confidential",
+              "public"
+            ]
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "controller.createClientResp": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "$ref": "#/components/schemas/domain.OAuthClient"
+          },
+          "client_secret": {
+            "type": "string"
           }
         }
       },
@@ -6207,6 +9329,28 @@
             "type": "string"
           },
           "parent_tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.createWebhookRequest": {
+        "type": "object",
+        "required": [
+          "events",
+          "secret",
+          "url"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secret": {
+            "type": "string"
+          },
+          "url": {
             "type": "string"
           }
         }
@@ -6670,6 +9814,15 @@
       "controller.oauth2MetadataResp": {
         "type": "object",
         "properties": {
+          "authorization_endpoint": {
+            "type": "string"
+          },
+          "code_challenge_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "grant_types_supported": {
             "type": "array",
             "items": {
@@ -6699,6 +9852,9 @@
             }
           },
           "issuer": {
+            "type": "string"
+          },
+          "jwks_uri": {
             "type": "string"
           },
           "response_types_supported": {
@@ -6732,6 +9888,23 @@
             }
           },
           "userinfo_endpoint": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.passkeyResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "friendly_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_used_at": {
             "type": "string"
           }
         }
@@ -6787,8 +9960,49 @@
             "type": "string",
             "minLength": 16
           },
+          "rl_login_limit": {
+            "description": "Rate limits (per-endpoint, tenant-scoped overrides)",
+            "type": "string"
+          },
+          "rl_login_window": {
+            "type": "string"
+          },
+          "rl_magic_limit": {
+            "type": "string"
+          },
+          "rl_magic_window": {
+            "type": "string"
+          },
+          "rl_mfa_limit": {
+            "type": "string"
+          },
+          "rl_mfa_window": {
+            "type": "string"
+          },
+          "rl_signup_limit": {
+            "type": "string"
+          },
+          "rl_signup_window": {
+            "type": "string"
+          },
+          "rl_sso_limit": {
+            "type": "string"
+          },
+          "rl_sso_window": {
+            "type": "string"
+          },
+          "rl_token_limit": {
+            "type": "string"
+          },
+          "rl_token_window": {
+            "type": "string"
+          },
           "scope": {
             "description": "Scope is deprecated and ignored. Kept for backward compatibility with older SDKs.",
+            "type": "string"
+          },
+          "signup_enabled": {
+            "description": "Signup & branding",
             "type": "string"
           },
           "sso_provider": {
@@ -6798,6 +10012,9 @@
             "type": "string"
           },
           "sso_state_ttl": {
+            "type": "string"
+          },
+          "tenant_logo_url": {
             "type": "string"
           },
           "workos_api_key": {
@@ -6973,6 +10190,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/controller.rbacRoleItem"
+            }
           }
         }
       },
@@ -6981,6 +10204,36 @@
         "properties": {
           "refresh_token": {
             "type": "string"
+          }
+        }
+      },
+      "controller.registerPasskeyRequest": {
+        "type": "object",
+        "required": [
+          "credential_id",
+          "public_key"
+        ],
+        "properties": {
+          "aaguid": {
+            "type": "string"
+          },
+          "attestation_type": {
+            "type": "string"
+          },
+          "credential_id": {
+            "type": "string"
+          },
+          "friendly_name": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -7085,6 +10338,47 @@
             "description": "App",
             "type": "string"
           },
+          "rl_login_limit": {
+            "description": "Rate limits (per-endpoint, tenant-scoped overrides)",
+            "type": "string"
+          },
+          "rl_login_window": {
+            "type": "string"
+          },
+          "rl_magic_limit": {
+            "type": "string"
+          },
+          "rl_magic_window": {
+            "type": "string"
+          },
+          "rl_mfa_limit": {
+            "type": "string"
+          },
+          "rl_mfa_window": {
+            "type": "string"
+          },
+          "rl_signup_limit": {
+            "type": "string"
+          },
+          "rl_signup_window": {
+            "type": "string"
+          },
+          "rl_sso_limit": {
+            "type": "string"
+          },
+          "rl_sso_window": {
+            "type": "string"
+          },
+          "rl_token_limit": {
+            "type": "string"
+          },
+          "rl_token_window": {
+            "type": "string"
+          },
+          "signup_enabled": {
+            "description": "Signup & branding",
+            "type": "string"
+          },
           "sso_provider": {
             "description": "SSO",
             "type": "string"
@@ -7093,6 +10387,9 @@
             "type": "string"
           },
           "sso_state_ttl": {
+            "type": "string"
+          },
+          "tenant_logo_url": {
             "type": "string"
           },
           "workos_api_key": {
@@ -7193,7 +10490,78 @@
           }
         }
       },
+      "controller.updateAppRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "homepage_url": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.updateClientReq": {
+        "type": "object",
+        "properties": {
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "controller.updateParentReq": {
+        "type": "object",
+        "properties": {
+          "parent_tenant_id": {
+            "type": "string"
+          }
+        }
+      },
       "controller.updateProfileReq": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.updateProfileRequest": {
         "type": "object",
         "properties": {
           "first_name": {
@@ -7328,6 +10696,69 @@
           }
         }
       },
+      "controller.updateWebhookRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "controller.verifyEmailReq": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.Application": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "homepage_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
       "domain.Introspection": {
         "type": "object",
         "properties": {
@@ -7363,6 +10794,64 @@
           }
         }
       },
+      "domain.OAuthClient": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_type": {
+            "description": "confidential | public",
+            "type": "string",
+            "enum": [
+              "confidential",
+              "public"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
       "domain.PortalLink": {
         "type": "object",
         "properties": {
@@ -7387,6 +10876,237 @@
           "ProviderTypeWorkOS",
           "ProviderTypeDev"
         ]
+      },
+      "domain.SCIMEmail": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.SCIMError": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "integer"
+          }
+        }
+      },
+      "domain.SCIMGroup": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/domain.SCIMMemberRef"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/domain.SCIMMeta"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "domain.SCIMGroupRef": {
+        "type": "object",
+        "properties": {
+          "$ref": {
+            "type": "string"
+          },
+          "display": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.SCIMListResponse": {
+        "type": "object",
+        "properties": {
+          "Resources": {},
+          "itemsPerPage": {
+            "type": "integer"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startIndex": {
+            "type": "integer"
+          },
+          "totalResults": {
+            "type": "integer"
+          }
+        }
+      },
+      "domain.SCIMMemberRef": {
+        "type": "object",
+        "properties": {
+          "$ref": {
+            "type": "string"
+          },
+          "display": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.SCIMMeta": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "string"
+          },
+          "lastModified": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.SCIMName": {
+        "type": "object",
+        "properties": {
+          "familyName": {
+            "type": "string"
+          },
+          "givenName": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.SCIMPatchOp": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "description": "add, remove, replace",
+            "type": "string"
+          },
+          "path": {
+            "description": "attribute path, e.g. \"name.givenName\"",
+            "type": "string"
+          },
+          "value": {
+            "description": "new value"
+          }
+        }
+      },
+      "domain.SCIMPatchRequest": {
+        "type": "object",
+        "properties": {
+          "Operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/domain.SCIMPatchOp"
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "domain.SCIMUser": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/domain.SCIMEmail"
+            }
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/domain.SCIMGroupRef"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/domain.SCIMMeta"
+          },
+          "name": {
+            "$ref": "#/components/schemas/domain.SCIMName"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "userName": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "id_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        }
       },
       "domain.UserProfile": {
         "type": "object",
@@ -7419,6 +11139,35 @@
             }
           },
           "tenant_id": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.Webhook": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "url": {
             "type": "string"
           }
         }

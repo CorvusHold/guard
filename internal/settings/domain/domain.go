@@ -75,8 +75,35 @@ const (
 	KeyRLMFALimit     = "auth.ratelimit.mfa.limit"
 	KeyRLMFAWindow    = "auth.ratelimit.mfa.window"
 
+	// Account lockout
+	KeyLockoutThreshold = "auth.lockout.threshold" // Max failed attempts before lockout, default "5"
+	KeyLockoutDuration  = "auth.lockout.duration"  // Duration of lockout, default "15m"
+
+	// Session idle timeout
+	KeySessionIdleTimeout = "auth.session.idle_timeout" // Duration of inactivity before session expires, default "72h"
+
+	// SCIM provisioning
+	KeySCIMBearerToken = "scim.bearer_token" // Bearer token for SCIM 2.0 API authentication (per-tenant)
+
+	// Password policy
+	KeyPasswordMinLength        = "auth.password.min_length"        // Minimum password length, default "8"
+	KeyPasswordRequireUppercase = "auth.password.require_uppercase" // Require uppercase letter, default "false"
+	KeyPasswordRequireLowercase = "auth.password.require_lowercase" // Require lowercase letter, default "false"
+	KeyPasswordRequireDigit     = "auth.password.require_digit"     // Require digit, default "false"
+	KeyPasswordRequireSpecial   = "auth.password.require_special"   // Require special character, default "false"
+
+	// Signup control
+	KeySignupEnabled = "auth.signup_enabled" // "true" or "false", default "true"
+
+	// Tenant branding
+	KeyTenantLogoURL = "app.tenant_logo_url" // URL to tenant logo for login page branding
+
 	// Invitation settings
 	KeyInvitationTTL = "auth.invitation_ttl" // Duration string, default 7 days (e.g., "168h")
+
+	// Email sending toggle. When "false", Guard skips sending emails but still
+	// publishes rich events via webhooks so external services can send their own.
+	KeyEmailEnabled = "email.enabled" // "true" (default) or "false"
 )
 
 // Settings API rate limiting keys (optional, support tenant overrides).

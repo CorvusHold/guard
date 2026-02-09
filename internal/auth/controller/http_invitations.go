@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/rs/zerolog/log"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/corvusHold/guard/internal/platform/validation"
@@ -477,10 +476,6 @@ func (h *Controller) adminCreateUser(c echo.Context) error {
 	})
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-	}
-
-	if req.SendWelcome {
-		log.Warn().Str("email", req.Email).Msg("SendWelcome requested but email service is not yet integrated")
 	}
 
 	return c.JSON(http.StatusCreated, adminCreateUserResp{

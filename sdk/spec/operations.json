@@ -1,11 +1,35 @@
 {
-  "count": 79,
-  "generatedAt": "2026-02-07T06:38:18.505Z",
+  "count": 135,
+  "generatedAt": "2026-02-09T08:03:01.938Z",
   "info": {
     "title": "Guard CAS API",
     "version": "1.0"
   },
   "operations": [
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete application",
+      "tags": [
+        "Applications"
+      ]
+    },
     {
       "errors": [
         {
@@ -203,6 +227,39 @@
             "type": "object"
           },
           "status": "401"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete OAuth client",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
         },
         {
           "schema": {
@@ -315,6 +372,34 @@
       ]
     },
     {
+      "errors": [],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_self_passkeys_by_id",
+      "path": "/api/v1/auth/self/passkeys/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete passkey",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "delete",
+      "operationId": "delete_api_v1_auth_self_sessions_by_id",
+      "path": "/api/v1/auth/self/sessions/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Revoke own session",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -363,6 +448,215 @@
       "summary": "Delete SSO Provider",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "delete",
+      "operationId": "delete_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Delete a SCIM user",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_applications",
+      "path": "/api/v1/applications",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List applications",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "200"
+      },
+      "summary": "Get application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_api_keys",
+      "path": "/api/v1/auth/admin/api-keys",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.apiKeysListResp"
+        },
+        "status": "200"
+      },
+      "summary": "List API keys for a tenant (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_bulk_users_export",
+      "path": "/api/v1/auth/admin/bulk/users/export",
+      "requestBody": null,
+      "success": {
+        "status": "200"
+      },
+      "summary": "Bulk export users",
+      "tags": [
+        "Admin Bulk"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_compliance_report",
+      "path": "/api/v1/auth/admin/compliance/report",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Compliance report",
+      "tags": [
+        "Compliance"
       ]
     },
     {
@@ -453,6 +747,160 @@
       "summary": "List invitations for a tenant (admin-only)",
       "tags": [
         "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_oauth_clients",
+      "path": "/api/v1/auth/admin/oauth-clients",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List OAuth clients",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.OAuthClient"
+        },
+        "status": "200"
+      },
+      "summary": "Get OAuth client",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_audit_logs",
+      "path": "/api/v1/auth/admin/platform/audit-logs",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Query audit logs",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_stats",
+      "path": "/api/v1/auth/admin/platform/stats",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Platform stats",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_tenants",
+      "path": "/api/v1/auth/admin/platform/tenants",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List all tenants with stats",
+      "tags": [
+        "Platform Admin"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_admin_platform_users_search",
+      "path": "/api/v1/auth/admin/platform/users/search",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Search users across tenants",
+      "tags": [
+        "Platform Admin"
       ]
     },
     {
@@ -860,6 +1308,78 @@
       "summary": "Count remaining MFA backup codes",
       "tags": [
         "auth.mfa.backup"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_mfa",
+      "path": "/api/v1/auth/self/mfa",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "MFA status",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_passkeys",
+      "path": "/api/v1/auth/self/passkeys",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List passkeys",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_profile",
+      "path": "/api/v1/auth/self/profile",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Get own profile",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_api_v1_auth_self_sessions",
+      "path": "/api/v1/auth/self/sessions",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List own sessions",
+      "tags": [
+        "Self-Service"
       ]
     },
     {
@@ -1278,6 +1798,36 @@
         }
       ],
       "method": "get",
+      "operationId": "get_api_v1_tenants_by_id_ancestors",
+      "path": "/api/v1/tenants/{id}/ancestors",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "items": {
+            "$ref": "#/definitions/controller.tenantResp"
+          },
+          "type": "array"
+        },
+        "status": "200"
+      },
+      "summary": "Get tenant ancestors",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "get",
       "operationId": "get_api_v1_tenants_by_id_children",
       "path": "/api/v1/tenants/{id}/children",
       "requestBody": null,
@@ -1383,6 +1933,296 @@
       ]
     },
     {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_webhooks",
+      "path": "/api/v1/webhooks",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "List webhooks",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "200"
+      },
+      "summary": "Get webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_oauth_authorize",
+      "path": "/oauth/authorize",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "OAuth 2.0 Authorization",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_groups",
+      "path": "/scim/v2/Groups",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMListResponse"
+        },
+        "status": "200"
+      },
+      "summary": "List SCIM groups",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Get a SCIM group by ID",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_resourcetypes",
+      "path": "/scim/v2/ResourceTypes",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM resource types",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_schemas",
+      "path": "/scim/v2/Schemas",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM schemas",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "get",
+      "operationId": "get_scim_v2_serviceproviderconfig",
+      "path": "/scim/v2/ServiceProviderConfig",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "SCIM service provider configuration",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "500"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_users",
+      "path": "/scim/v2/Users",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMListResponse"
+        },
+        "status": "200"
+      },
+      "summary": "List SCIM users",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "get",
+      "operationId": "get_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Get a SCIM user by ID",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
       "errors": [],
       "method": "get",
       "operationId": "get_well_known_oauth_authorization_server",
@@ -1397,6 +2237,38 @@
       "summary": "OAuth 2.0 Authorization Server Metadata",
       "tags": [
         "auth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_api_v1_auth_admin_oauth_clients_by_id",
+      "path": "/api/v1/auth/admin/oauth-clients/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateClientReq"
+      },
+      "success": {
+        "schema": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Update OAuth client",
+      "tags": [
+        "auth.admin"
       ]
     },
     {
@@ -1556,6 +2428,229 @@
       "summary": "Deactivate tenant",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_api_v1_tenants_by_id_parent",
+      "path": "/api/v1/tenants/{id}/parent",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateParentReq"
+      },
+      "success": {
+        "status": "204"
+      },
+      "summary": "Update tenant parent",
+      "tags": [
+        "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMPatchRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Patch a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "patch",
+      "operationId": "patch_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMPatchRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Patch a SCIM user",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_applications",
+      "path": "/api/v1/applications",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createAppRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "201"
+      },
+      "summary": "Create application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_api_keys",
+      "path": "/api/v1/auth/admin/api-keys",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createAPIKeyReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.createAPIKeyResp"
+        },
+        "status": "201"
+      },
+      "summary": "Create an API key (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_api_keys_by_id_revoke",
+      "path": "/api/v1/auth/admin/api-keys/{id}/revoke",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Revoke an API key (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_bulk_users_import",
+      "path": "/api/v1/auth/admin/bulk/users/import",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.bulkImportResult"
+        },
+        "status": "200"
+      },
+      "summary": "Bulk import users",
+      "tags": [
+        "Admin Bulk"
       ]
     },
     {
@@ -1802,6 +2897,35 @@
         "status": "200"
       },
       "summary": "Revoke an invitation (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_oauth_clients",
+      "path": "/api/v1/auth/admin/oauth-clients",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createClientReq"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.createClientResp"
+        },
+        "status": "201"
+      },
+      "summary": "Create OAuth client",
       "tags": [
         "auth.admin"
       ]
@@ -2096,7 +3220,7 @@
       "success": {
         "status": "204"
       },
-      "summary": "Update a user's roles (admin-only)",
+      "summary": "Update a user's roles (admin-only) [DEPRECATED]",
       "tags": [
         "auth.admin"
       ]
@@ -2148,6 +3272,57 @@
         "status": "204"
       },
       "summary": "Unblock a user (admin-only)",
+      "tags": [
+        "auth.admin"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "429"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_admin_users_by_id_unlock",
+      "path": "/api/v1/auth/admin/users/{id}/unlock",
+      "requestBody": null,
+      "success": {
+        "status": "204"
+      },
+      "summary": "Unlock a locked account (admin-only)",
       "tags": [
         "auth.admin"
       ]
@@ -3050,6 +4225,25 @@
       ]
     },
     {
+      "errors": [],
+      "method": "post",
+      "operationId": "post_api_v1_auth_self_passkeys",
+      "path": "/api/v1/auth/self/passkeys",
+      "requestBody": {
+        "$ref": "#/definitions/controller.registerPasskeyRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/controller.passkeyResponse"
+        },
+        "status": "201"
+      },
+      "summary": "Register passkey",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
       "errors": [
         {
           "schema": {
@@ -3089,6 +4283,32 @@
       "summary": "Revoke a specific session",
       "tags": [
         "auth.sessions"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_auth_verify_email",
+      "path": "/api/v1/auth/verify-email",
+      "requestBody": {
+        "$ref": "#/definitions/controller.verifyEmailReq"
+      },
+      "success": {
+        "status": "200"
+      },
+      "summary": "Verify email address",
+      "tags": [
+        "auth"
       ]
     },
     {
@@ -3271,6 +4491,265 @@
             "type": "object"
           },
           "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_api_v1_webhooks",
+      "path": "/api/v1/webhooks",
+      "requestBody": {
+        "$ref": "#/definitions/controller.createWebhookRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "201"
+      },
+      "summary": "Create webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "403"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_authorize_decision",
+      "path": "/oauth/authorize/decision",
+      "requestBody": {
+        "$ref": "#/definitions/controller.authorizeDecisionReq"
+      },
+      "success": null,
+      "summary": "OAuth 2.0 Authorization Decision",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_revoke",
+      "path": "/oauth/revoke",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Revoke Token",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_oauth_token",
+      "path": "/oauth/token",
+      "requestBody": null,
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.TokenResponse"
+        },
+        "status": "200"
+      },
+      "summary": "OAuth 2.0 Token Exchange",
+      "tags": [
+        "OAuth"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_scim_v2_groups",
+      "path": "/scim/v2/Groups",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMGroup"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "201"
+      },
+      "summary": "Create a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "409"
+        }
+      ],
+      "method": "post",
+      "operationId": "post_scim_v2_users",
+      "path": "/scim/v2/Users",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMUser"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "201"
+      },
+      "summary": "Create a SCIM user",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_api_v1_applications_by_id",
+      "path": "/api/v1/applications/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateAppRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Application"
+        },
+        "status": "200"
+      },
+      "summary": "Update application",
+      "tags": [
+        "Applications"
+      ]
+    },
+    {
+      "errors": [],
+      "method": "put",
+      "operationId": "put_api_v1_auth_self_profile",
+      "path": "/api/v1/auth/self/profile",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateProfileRequest"
+      },
+      "success": {
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "status": "200"
+      },
+      "summary": "Update own profile",
+      "tags": [
+        "Self-Service"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
         },
         {
           "schema": {
@@ -3360,6 +4839,108 @@
       "summary": "Upsert tenant settings (subset)",
       "tags": [
         "tenants"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": "401"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_api_v1_webhooks_by_id",
+      "path": "/api/v1/webhooks/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/controller.updateWebhookRequest"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.Webhook"
+        },
+        "status": "200"
+      },
+      "summary": "Update webhook",
+      "tags": [
+        "Webhooks"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_scim_v2_groups_by_id",
+      "path": "/scim/v2/Groups/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMGroup"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMGroup"
+        },
+        "status": "200"
+      },
+      "summary": "Replace a SCIM group",
+      "tags": [
+        "SCIM"
+      ]
+    },
+    {
+      "errors": [
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "400"
+        },
+        {
+          "schema": {
+            "$ref": "#/definitions/domain.SCIMError"
+          },
+          "status": "404"
+        }
+      ],
+      "method": "put",
+      "operationId": "put_scim_v2_users_by_id",
+      "path": "/scim/v2/Users/{id}",
+      "requestBody": {
+        "$ref": "#/definitions/domain.SCIMUser"
+      },
+      "success": {
+        "schema": {
+          "$ref": "#/definitions/domain.SCIMUser"
+        },
+        "status": "200"
+      },
+      "summary": "Replace a SCIM user",
+      "tags": [
+        "SCIM"
       ]
     }
   ]

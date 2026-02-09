@@ -7,11 +7,14 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
+	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	evsvc "github.com/corvusHold/guard/internal/events/service"
 	"github.com/corvusHold/guard/internal/metrics"
@@ -24,11 +27,13 @@ import (
 )
 
 type Service struct {
-	repo     domain.Repository
-	cfg      config.Config
-	settings sdomain.Service
-	pub      evdomain.Publisher
-	log      zerolog.Logger
+	repo        domain.Repository
+	cfg         config.Config
+	settings    sdomain.Service
+	pub         evdomain.Publisher
+	log         zerolog.Logger
+	emailSender edomain.Sender
+	keyMgr      *keys.Manager
 }
 
 // --- FGA: Groups, Memberships, ACL Tuples, Authorization ---
@@ -221,6 +226,10 @@ func (s *Service) ListUserRoleIDs(ctx context.Context, userID uuid.UUID, tenantI
 	return s.repo.ListUserRoleIDs(ctx, userID, tenantID)
 }
 
+func (s *Service) ListUserRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]domain.Role, error) {
+	return s.repo.ListUserRoles(ctx, userID, tenantID)
+}
+
 func (s *Service) AddUserRole(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, roleID uuid.UUID) error {
 	return s.repo.AddUserRole(ctx, userID, tenantID, roleID)
 }
@@ -410,8 +419,22 @@ func (s *Service) UpdateUserNames(ctx context.Context, userID uuid.UUID, firstNa
 }
 
 // SetUserActive toggles the active state of a user.
+// When deactivating (blocking), all active sessions are revoked across all tenants.
 func (s *Service) SetUserActive(ctx context.Context, userID uuid.UUID, active bool) error {
-	return s.repo.SetUserActive(ctx, userID, active)
+	if err := s.repo.SetUserActive(ctx, userID, active); err != nil {
+		return err
+	}
+	if !active {
+		if _, err := s.repo.RevokeAllUserSessions(ctx, userID); err != nil {
+			s.log.Warn().Err(err).Str("user_id", userID.String()).Msg("failed to revoke sessions on user deactivation")
+		}
+	}
+	return nil
+}
+
+// UnlockAccount clears lockout and resets failed attempts for a user (admin action).
+func (s *Service) UnlockAccount(ctx context.Context, userID uuid.UUID) error {
+	return s.repo.UnlockAccount(ctx, userID)
 }
 
 // SetUserEmailVerified sets the email_verified flag for a user.
@@ -543,11 +566,32 @@ func (s *Service) SetPublisher(p evdomain.Publisher) { s.pub = p }
 // SetLogger allows injection of a structured logger for debug tracing.
 func (s *Service) SetLogger(l zerolog.Logger) { s.log = l }
 
+// SetEmailSender allows injection of an email sender for invitation emails.
+func (s *Service) SetEmailSender(sender edomain.Sender) { s.emailSender = sender }
+
+// SetKeyManager allows injection of a key manager for asymmetric JWT signing.
+func (s *Service) SetKeyManager(km *keys.Manager) { s.keyMgr = km }
+
+// KeyManager returns the key manager (for JWKS endpoint).
+func (s *Service) KeyManager() *keys.Manager { return s.keyMgr }
+
+// isEmailEnabled checks the email.enabled setting (default true).
+// When false, Guard skips sending emails but still publishes events for webhook consumers.
+func (s *Service) isEmailEnabled(ctx context.Context, tenantID *uuid.UUID) bool {
+	val, _ := s.settings.GetString(ctx, sdomain.KeyEmailEnabled, tenantID, "true")
+	return strings.ToLower(strings.TrimSpace(val)) != "false"
+}
+
 func (s *Service) Signup(ctx context.Context, in domain.SignupInput) (domain.AccessTokens, error) {
 	// Normalize email to lowercase and trim spaces to ensure consistent storage
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	if in.Email == "" || in.Password == "" {
 		return domain.AccessTokens{}, errors.New("email and password are required")
+	}
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, in.TenantID)
+	if violations := ValidatePassword(in.Password, policy); len(violations) > 0 {
+		return domain.AccessTokens{}, fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 	userID := uuid.New()
 	authID := uuid.New()
@@ -579,10 +623,28 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		metrics.IncAuthOutcome("password", "failure")
 		return domain.AccessTokens{}, err
 	}
+
+	// Check account lockout status
+	_, lockedUntil, _ := s.repo.GetLockoutStatus(ctx, in.TenantID, in.Email)
+	if lockedUntil != nil && time.Now().Before(*lockedUntil) {
+		metrics.IncAuthOutcome("password", "failure")
+		return domain.AccessTokens{}, errors.New("account is temporarily locked due to too many failed login attempts")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(ai.PasswordHash), []byte(in.Password)); err != nil {
 		metrics.IncAuthOutcome("password", "failure")
+		// Increment failed attempts and lock if threshold exceeded
+		threshold, _ := s.settings.GetInt(ctx, sdomain.KeyLockoutThreshold, &in.TenantID, 5)
+		lockoutDuration, _ := s.settings.GetDuration(ctx, sdomain.KeyLockoutDuration, &in.TenantID, 15*time.Minute)
+		count, _ := s.repo.IncrementFailedAttempts(ctx, in.TenantID, in.Email)
+		if int(count) >= threshold {
+			_ = s.repo.LockAccount(ctx, in.TenantID, in.Email, time.Now().Add(lockoutDuration))
+		}
 		return domain.AccessTokens{}, errors.New("invalid credentials")
 	}
+
+	// Reset failed attempts on successful login
+	_ = s.repo.ResetFailedAttempts(ctx, in.TenantID, in.Email)
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
 		// Build short-lived challenge token (5m) signed with tenant's signing key
@@ -632,9 +694,41 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
-	if rt.Revoked || time.Now().After(rt.ExpiresAt) {
-		return domain.AccessTokens{}, errors.New("refresh token expired or revoked")
+	if rt.Revoked {
+		// Reuse detection: a revoked token was presented, which indicates potential theft.
+		// Revoke the entire token family to protect the user.
+		if rt.FamilyID != uuid.Nil {
+			_ = s.repo.RevokeTokenFamily(ctx, rt.FamilyID)
+		} else {
+			// Legacy token without family_id: revoke the individual chain as fallback
+			_ = s.repo.RevokeTokenChain(ctx, rt.ID)
+		}
+		_ = s.pub.Publish(ctx, evdomain.Event{
+			Type:     "auth.token.reuse_detected",
+			TenantID: rt.TenantID,
+			UserID:   rt.UserID,
+			Meta:     map[string]string{"ip": in.IP, "user_agent": in.UserAgent, "family_id": rt.FamilyID.String()},
+			Time:     time.Now(),
+		})
+		return domain.AccessTokens{}, errors.New("refresh token reuse detected")
 	}
+	if time.Now().After(rt.ExpiresAt) {
+		return domain.AccessTokens{}, errors.New("refresh token expired")
+	}
+	// Check session idle timeout: if last_used_at is set and exceeds the idle timeout, reject
+	idleTimeout, _ := s.settings.GetDuration(ctx, sdomain.KeySessionIdleTimeout, &rt.TenantID, 72*time.Hour)
+	if idleTimeout > 0 {
+		lastActivity := rt.CreatedAt
+		if rt.LastUsedAt != nil {
+			lastActivity = *rt.LastUsedAt
+		}
+		if time.Since(lastActivity) > idleTimeout {
+			_ = s.repo.RevokeTokenChain(ctx, rt.ID)
+			return domain.AccessTokens{}, errors.New("session expired due to inactivity")
+		}
+	}
+	// Update last_used_at for idle timeout tracking
+	_ = s.repo.UpdateRefreshTokenLastUsed(ctx, hashB64)
 	// rotate: revoke chain and issue a fresh pair with parent=rt.ID
 	if err := s.repo.RevokeTokenChain(ctx, rt.ID); err != nil {
 		return domain.AccessTokens{}, err
@@ -644,7 +738,12 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if rt.AuthMethod != "" {
 		originalAuthMethod = rt.AuthMethod
 	}
-	toks, err := s.issueTokens(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod, rt.SSOProviderID)
+	// Inherit family_id from the parent token for the rotation chain
+	familyID := rt.FamilyID
+	if familyID == uuid.Nil {
+		familyID = rt.ID
+	}
+	toks, err := s.issueTokensWithFamily(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod, rt.SSOProviderID, familyID)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -669,6 +768,9 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	if err != nil {
 		return err
 	}
+	if rt.Revoked {
+		return nil
+	}
 	return s.repo.RevokeTokenChain(ctx, rt.ID)
 }
 
@@ -684,6 +786,11 @@ func (s *Service) IssueTokensForSSO(ctx context.Context, in domain.SSOTokenInput
 }
 
 func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string, ssoProviderID *uuid.UUID) (domain.AccessTokens, error) {
+	// For new login flows, the token becomes its own family root (uuid.Nil signals auto-assign)
+	return s.issueTokensWithFamily(ctx, userID, tenantID, userAgent, ip, parent, authMethod, ssoProviderID, uuid.Nil)
+}
+
+func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uuid.UUID, userAgent, ip string, parent *uuid.UUID, authMethod string, ssoProviderID *uuid.UUID, familyID uuid.UUID) (domain.AccessTokens, error) {
 	// Resolve settings with tenant override and env defaults
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
@@ -691,17 +798,54 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
+	// Resolve roles from normalized user_roles table (RBAC v2)
+	roleNames, _ := s.repo.ListUserRoleNames(ctx, userID, tenantID)
+	if roleNames == nil {
+		roleNames = []string{}
+	}
+
+	// Resolve email from auth_identities and name from users table for JWT claims
+	var email, name string
+	if ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID); err == nil {
+		for _, ai := range ids {
+			if ai.TenantID == tenantID {
+				email = ai.Email
+				break
+			}
+		}
+	}
+	if u, err := s.repo.GetUserByID(ctx, userID); err == nil {
+		name = strings.TrimSpace(u.FirstName + " " + u.LastName)
+	}
+
 	// Access JWT
 	claims := jwt.MapClaims{
-		"sub": userID.String(),
-		"ten": tenantID.String(),
-		"exp": time.Now().Add(accessTTL).Unix(),
-		"iat": time.Now().Unix(),
-		"iss": issuer,
-		"aud": audience,
+		"sub":   userID.String(),
+		"ten":   tenantID.String(),
+		"exp":   time.Now().Add(accessTTL).Unix(),
+		"iat":   time.Now().Unix(),
+		"iss":   issuer,
+		"aud":   audience,
+		"roles": roleNames,
+		"email": email,
+		"name":  name,
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	access, err := t.SignedString([]byte(signingKey))
+
+	// Use key manager for signing if available (ES256), otherwise fall back to HS256
+	var signingMethod jwt.SigningMethod
+	var signKey interface{}
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		signingMethod = s.keyMgr.SigningMethod()
+		signKey = s.keyMgr.SigningKey(signingKey)
+	} else {
+		signingMethod = jwt.SigningMethodHS256
+		signKey = []byte(signingKey)
+	}
+	t := jwt.NewWithClaims(signingMethod, claims)
+	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+		t.Header["kid"] = s.keyMgr.KeyID()
+	}
+	access, err := t.SignedString(signKey)
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -723,7 +867,12 @@ func (s *Service) issueTokens(ctx context.Context, userID, tenantID uuid.UUID, u
 		AuthMethod: authMethod,
 		CreatedVia: createdVia,
 	}
-	if err := s.repo.InsertRefreshToken(ctx, uuid.New(), userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata); err != nil {
+	tokenID := uuid.New()
+	// For new login flows, the token becomes its own family root
+	if familyID == uuid.Nil {
+		familyID = tokenID
+	}
+	if err := s.repo.InsertRefreshTokenWithFamily(ctx, tokenID, userID, tenantID, hashB64, parent, userAgent, ip, expiresAt, authMethod, ssoProviderID, metadata, familyID); err != nil {
 		return domain.AccessTokens{}, err
 	}
 	return domain.AccessTokens{AccessToken: access, RefreshToken: rt}, nil
@@ -751,13 +900,25 @@ func (s *Service) Me(ctx context.Context, userID, tenantID uuid.UUID) (domain.Us
 	if ms, err := s.repo.GetMFASecret(ctx, userID); err == nil {
 		mfaEnabled = ms.Enabled
 	}
+	// Resolve roles from normalized user_roles table (RBAC v2) instead of legacy users.roles
+	roleNames, err := s.repo.ListUserRoleNames(ctx, userID, tenantID)
+	if err != nil {
+		return domain.UserProfile{}, err
+	}
+	// Fallback to legacy users.roles column for compatibility with deprecated endpoints/tests
+	if len(roleNames) == 0 && len(u.Roles) > 0 {
+		roleNames = u.Roles
+	}
+	if roleNames == nil {
+		roleNames = []string{}
+	}
 	prof := domain.UserProfile{
 		ID:            u.ID,
 		TenantID:      tenantID,
 		Email:         email,
 		FirstName:     u.FirstName,
 		LastName:      u.LastName,
-		Roles:         u.Roles,
+		Roles:         roleNames,
 		MFAEnabled:    mfaEnabled,
 		EmailVerified: u.EmailVerified,
 		LastLoginAt:   u.LastLoginAt,
@@ -796,13 +957,20 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
 	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
 
-	// Step 4: Verify signature with correct tenant-specific signing key
+	// Step 4: Verify signature with correct tenant-specific signing key.
+	// Support both ES256 (via key manager) and HS256 (via shared secret).
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-		// HS256 only
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		switch t.Method.(type) {
+		case *jwt.SigningMethodECDSA:
+			if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+				return s.keyMgr.VerificationKey(""), nil
+			}
+			return nil, errors.New("no key manager configured for EC verification")
+		case *jwt.SigningMethodHMAC:
+			return []byte(signingKey), nil
+		default:
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(signingKey), nil
 	})
 	if err != nil || !parsed.Valid {
 		return domain.Introspection{Active: false}, errors.New("invalid token")
@@ -867,12 +1035,25 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 		}
 	}
 
+	// Resolve roles from normalized user_roles table (RBAC v2) instead of legacy users.roles
+	roleNames, err := s.repo.ListUserRoleNames(ctx, uid, tid)
+	if err != nil {
+		return domain.Introspection{Active: false}, err
+	}
+	if len(roleNames) == 0 && len(u.Roles) > 0 {
+		// Fallback to legacy users.roles column for compatibility with tests and legacy flows
+		roleNames = u.Roles
+	}
+	if roleNames == nil {
+		roleNames = []string{}
+	}
+
 	return domain.Introspection{
 		Active:        true,
 		UserID:        uid,
 		TenantID:      tid,
 		Email:         email,
-		Roles:         u.Roles,
+		Roles:         roleNames,
 		MFAVerified:   false,
 		EmailVerified: u.EmailVerified,
 		Exp:           expInt,
@@ -1045,32 +1226,52 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 			ai = identities[0]
 			tenantID = ai.TenantID
 		} else {
-			// Email exists in multiple tenants - send an email with tenant selection options
-			// instead of returning them in the API response to avoid leaking cross-tenant membership.
-			// Build tenant options for the email
-			tenantOpts := make([]domain.TenantOption, 0, len(identities))
+			// Email exists in multiple tenants — generate one reset token per identity
+			// and send one email / publish one event per identity.
 			for _, ident := range identities {
-				// Look up tenant name
-				tenant, err := s.repo.GetTenantByID(ctx, ident.TenantID)
-				name := ""
-				if err == nil {
-					name = tenant.Name
+				ttl, _ := s.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &ident.TenantID, s.cfg.MagicLinkTTL)
+				raw := make([]byte, 32)
+				if _, err := rand.Read(raw); err != nil {
+					return err
 				}
-				tenantOpts = append(tenantOpts, domain.TenantOption{
-					TenantID:   ident.TenantID,
-					TenantName: name,
+				tok := base64.RawURLEncoding.EncodeToString(raw)
+				th := sha256.Sum256([]byte(tok))
+				tokHash := base64.RawURLEncoding.EncodeToString(th[:])
+				exp := time.Now().Add(ttl)
+
+				if err := s.repo.CreatePasswordResetToken(ctx, uuid.New(), ident.UserID, ident.TenantID, email, tokHash, exp); err != nil {
+					s.log.Warn().Err(err).Str("email", email).Str("tenant_id", ident.TenantID.String()).Msg("failed to create reset token for identity")
+					continue
+				}
+
+				baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &ident.TenantID, s.cfg.PublicBaseURL)
+				resetLink := baseURL + "/reset-password?token=" + tok
+
+				if s.isEmailEnabled(ctx, &ident.TenantID) && s.emailSender != nil {
+					subject := "Reset your password"
+					body := "Click the link below to reset your password:\n\n" + resetLink + "\n\nThis link expires in " + ttl.String() + "."
+					if err := s.emailSender.Send(ctx, ident.TenantID, email, subject, body); err != nil {
+						s.log.Warn().Err(err).Str("email", email).Str("tenant_id", ident.TenantID.String()).Msg("failed to send password reset email")
+					}
+				}
+
+				_ = s.pub.Publish(ctx, evdomain.Event{
+					Type:     "auth.password.reset.requested",
+					TenantID: ident.TenantID,
+					UserID:   ident.UserID,
+					Meta: map[string]string{
+						"email":      email,
+						"reset_link": resetLink,
+						"expires_at": exp.Format(time.RFC3339),
+					},
+					Time: time.Now(),
 				})
 			}
-			// TODO: Send email with tenant selection options
-			// In production, integrate with email service:
-			// if err := s.emailService.SendTenantSelectionEmail(ctx, email, tenantOpts); err != nil { ... }
 			s.log.Info().
 				Str("email", email).
-				Int("tenant_count", len(tenantOpts)).
-				Msg("password reset requested for email in multiple tenants - tenant selection email would be sent")
-			// Return explicit error until tenant-selection email flow is implemented.
-			// Do not include tenant details in the error to avoid leaking cross-tenant membership.
-			return errors.New("email service integration required for multi-tenant password reset")
+				Int("identity_count", len(identities)).
+				Msg("password reset requested for email in multiple tenants — sent per-identity")
+			return nil
 		}
 	}
 
@@ -1091,24 +1292,32 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 		return err
 	}
 
-	// TODO: Send reset link via email service
 	// Build reset link for email delivery
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
 	resetLink := baseURL + "/reset-password?token=" + token
-	// In production, integrate with email service:
-	// if err := s.emailService.SendPasswordResetEmail(ctx, email, resetLink); err != nil { ... }
-	_ = resetLink // Suppress unused variable until email service integration
 
-	// Publish audit event
+	// Send email if enabled
+	if s.isEmailEnabled(ctx, &tenantID) && s.emailSender != nil {
+		subject := "Reset your password"
+		body := "Click the link below to reset your password:\n\n" + resetLink + "\n\nThis link expires in " + ttl.String() + "."
+		if err := s.emailSender.Send(ctx, tenantID, email, subject, body); err != nil {
+			s.log.Warn().Err(err).Str("email", email).Msg("failed to send password reset email")
+		}
+	}
+
+	// Always publish event with full data so webhook consumers can send their own emails
 	_ = s.pub.Publish(ctx, evdomain.Event{
 		Type:     "auth.password.reset.requested",
 		TenantID: tenantID,
 		UserID:   ai.UserID,
-		Meta:     map[string]string{"email": email},
-		Time:     time.Now(),
+		Meta: map[string]string{
+			"email":      email,
+			"reset_link": resetLink,
+			"expires_at": exp.Format(time.RFC3339),
+		},
+		Time: time.Now(),
 	})
 
-	// Log the request (in production, this would send an email with resetLink)
 	s.log.Info().
 		Str("email", email).
 		Str("tenant_id", tenantID.String()).
@@ -1121,9 +1330,6 @@ func (s *Service) RequestPasswordReset(ctx context.Context, in domain.PasswordRe
 func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordResetConfirmInput) error {
 	if in.Token == "" {
 		return errors.New("token required")
-	}
-	if len(in.NewPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
 	}
 
 	// Hash the token and look it up
@@ -1143,6 +1349,12 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 	// Verify tenant matches if provided
 	if in.TenantID != nil && prt.TenantID != *in.TenantID {
 		return errors.New("invalid token")
+	}
+
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, prt.TenantID)
+	if violations := ValidatePassword(in.NewPassword, policy); len(violations) > 0 {
+		return fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// Hash the new password
@@ -1202,8 +1414,10 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in domain.PasswordRe
 
 // ChangePassword changes the password for a logged-in user.
 func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeInput) error {
-	if len(in.NewPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
+	// Validate password against tenant policy
+	policy := s.loadPasswordPolicy(ctx, in.TenantID)
+	if violations := ValidatePassword(in.NewPassword, policy); len(violations) > 0 {
+		return fmt.Errorf("password policy violation: %s", strings.Join(violations, "; "))
 	}
 
 	// Get the user's auth identity
@@ -1273,9 +1487,105 @@ func (s *Service) ChangePassword(ctx context.Context, in domain.PasswordChangeIn
 	return nil
 }
 
+// --- Email Verification ---
+
+// SendEmailVerification creates a verification token and optionally sends an email.
+// Always publishes an event so webhook consumers can send their own verification email.
+func (s *Service) SendEmailVerification(ctx context.Context, userID, tenantID uuid.UUID, email string) error {
+	ttl, _ := s.settings.GetDuration(ctx, sdomain.KeyMagicLinkTTL, &tenantID, s.cfg.MagicLinkTTL)
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	h := sha256.Sum256([]byte(token))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+	exp := time.Now().Add(ttl)
+
+	if err := s.repo.CreateEmailVerificationToken(ctx, uuid.New(), userID, tenantID, email, tokenHash, exp); err != nil {
+		return err
+	}
+
+	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &tenantID, s.cfg.PublicBaseURL)
+	verifyLink := baseURL + "/verify-email?token=" + token
+
+	if s.isEmailEnabled(ctx, &tenantID) && s.emailSender != nil {
+		subject := "Verify your email address"
+		body := "Please verify your email address by clicking the link below:\n\n" + verifyLink + "\n\nThis link expires in " + ttl.String() + "."
+		if err := s.emailSender.Send(ctx, tenantID, email, subject, body); err != nil {
+			s.log.Warn().Err(err).Str("email", email).Msg("failed to send email verification")
+		}
+	}
+
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.email.verification.requested",
+		TenantID: tenantID,
+		UserID:   userID,
+		Meta: map[string]string{
+			"email":       email,
+			"verify_link": verifyLink,
+			"expires_at":  exp.Format(time.RFC3339),
+		},
+		Time: time.Now(),
+	})
+
+	return nil
+}
+
+// VerifyEmail validates a verification token and marks the user's email as verified.
+func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
+	if rawToken == "" {
+		return errors.New("token required")
+	}
+	h := sha256.Sum256([]byte(rawToken))
+	tokenHash := base64.RawURLEncoding.EncodeToString(h[:])
+
+	tok, err := s.repo.GetEmailVerificationTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+	if tok.ConsumedAt != nil || time.Now().After(tok.ExpiresAt) {
+		return errors.New("token expired or already used")
+	}
+
+	if err := s.repo.ConsumeEmailVerificationToken(ctx, tokenHash); err != nil {
+		return err
+	}
+
+	if err := s.repo.SetUserEmailVerified(ctx, tok.UserID, true); err != nil {
+		return err
+	}
+
+	_ = s.pub.Publish(ctx, evdomain.Event{
+		Type:     "auth.email.verified",
+		TenantID: tok.TenantID,
+		UserID:   tok.UserID,
+		Meta:     map[string]string{"email": tok.Email},
+		Time:     time.Now(),
+	})
+
+	return nil
+}
+
 // UpdateProfile updates the user's profile (first name, last name).
 func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName string) error {
-	return s.repo.UpdateUserNames(ctx, userID, strings.TrimSpace(firstName), strings.TrimSpace(lastName))
+	fn := strings.TrimSpace(firstName)
+	ln := strings.TrimSpace(lastName)
+	// If either field is empty, preserve existing value to avoid accidental clearing.
+	if fn == "" || ln == "" {
+		u, err := s.repo.GetUserByID(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if fn == "" {
+			fn = u.FirstName
+		}
+		if ln == "" {
+			ln = u.LastName
+		}
+	}
+	return s.repo.UpdateUserNames(ctx, userID, fn, ln)
 }
 
 // GetOrCreateAdminRole returns the admin role for a tenant, creating it if it doesn't exist.
@@ -1289,10 +1599,58 @@ func (s *Service) GetOrCreateAdminRole(ctx context.Context, tenantID uuid.UUID) 
 	return s.repo.CreateRole(ctx, uuid.New(), tenantID, "admin", "Administrator role with full access")
 }
 
+// SeedDefaultRoles creates the standard set of roles for a tenant.
+// Idempotent: skips roles that already exist.
+func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) error {
+	defaults := []struct {
+		Name string
+		Desc string
+	}{
+		{"admin", "Administrator role with full access"},
+		{"member", "Default member role"},
+	}
+	for _, d := range defaults {
+		if _, err := s.repo.GetRoleByName(ctx, tenantID, d.Name); err == nil {
+			continue // already exists
+		}
+		if _, err := s.repo.CreateRole(ctx, uuid.New(), tenantID, d.Name, d.Desc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ParseAccessToken parses an access token and returns the claims.
+// It resolves per-tenant signing keys the same way Introspect does.
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
+	// Pre-parse to extract tenant ID for per-tenant key resolution
+	unverified, _, preErr := new(jwt.Parser).ParseUnverified(tokenStr, jwt.MapClaims{})
+	var tenantSigningKey string
+	if preErr == nil {
+		if uc, ok := unverified.Claims.(jwt.MapClaims); ok {
+			if tenStr, ok := uc["ten"].(string); ok {
+				if tid, err := uuid.Parse(tenStr); err == nil {
+					tenantSigningKey, _ = s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+				}
+			}
+		}
+	}
+	if tenantSigningKey == "" {
+		tenantSigningKey = s.cfg.JWTSigningKey
+	}
+
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		return []byte(s.cfg.JWTSigningKey), nil
+		switch t.Method.(type) {
+		case *jwt.SigningMethodECDSA:
+			if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
+				return s.keyMgr.VerificationKey(""), nil
+			}
+			return nil, errors.New("no key manager configured for EC verification")
+		case *jwt.SigningMethodHMAC:
+			return []byte(tenantSigningKey), nil
+		default:
+			return nil, errors.New("unexpected signing method")
+		}
 	})
 	if err != nil || !token.Valid {
 		return domain.AccessTokenClaims{}, errors.New("invalid token")
@@ -1302,7 +1660,7 @@ func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain
 		return domain.AccessTokenClaims{}, errors.New("invalid claims")
 	}
 	userIDStr, _ := claims["sub"].(string)
-	tenantIDStr, _ := claims["tenant_id"].(string)
+	tenantIDStr, _ := claims["ten"].(string)
 	email, _ := claims["email"].(string)
 	rolesRaw, _ := claims["roles"].([]interface{})
 

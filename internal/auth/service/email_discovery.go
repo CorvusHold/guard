@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // FindTenantsByUserEmail finds all tenants where a user with the given email exists
@@ -50,6 +52,9 @@ func (s *Service) GetUserByEmail(ctx context.Context, email, tenantID string) (*
 
 	identity, err := s.repo.GetAuthIdentityByEmailTenant(ctx, tenantUUID, email)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("user with email %s in tenant %s: %w", email, tenantID, domain.ErrNotFound)
+		}
 		return nil, err
 	}
 

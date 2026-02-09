@@ -38,6 +38,8 @@ interface TenantStats {
   failed_logins_today: number
   mfa_enabled_users: number
   sso_configured: boolean
+  oauth_client_count: number
+  rate_limit_overrides: number
 }
 
 interface TenantDashboardProps {
@@ -74,6 +76,32 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
       if (!cfg) {
         throw new Error('Guard base URL is not configured')
       }
+      // Fetch OAuth client count
+      let oauthClientCount = 0
+      try {
+        const oauthRes = await client.listOAuthClients()
+        if (oauthRes.meta.status >= 200 && oauthRes.meta.status < 300) {
+          oauthClientCount = ((oauthRes.data as any)?.clients ?? []).length
+        }
+      } catch { /* ignore */ }
+
+      // Fetch rate limit overrides count
+      let rlOverrides = 0
+      try {
+        const settingsRes = await client.getTenantSettings(tenantId)
+        if (settingsRes.meta.status >= 200 && settingsRes.meta.status < 300) {
+          const s = settingsRes.data as any
+          const rlKeys = [
+            'rl_login_limit', 'rl_login_window', 'rl_signup_limit', 'rl_signup_window',
+            'rl_magic_limit', 'rl_magic_window', 'rl_sso_limit', 'rl_sso_window',
+            'rl_token_limit', 'rl_token_window', 'rl_mfa_limit', 'rl_mfa_window',
+          ]
+          for (const k of rlKeys) {
+            if (s?.[k]) rlOverrides++
+          }
+        }
+      } catch { /* ignore */ }
+
       try {
         const url = `${cfg.guard_base_url}/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/stats`
         const headers: Record<string, string> = {}
@@ -88,7 +116,7 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
         })
         if (resp.ok) {
           const data = (await resp.json()) as TenantStats
-          setTenantStats(data)
+          setTenantStats({ ...data, oauth_client_count: oauthClientCount, rate_limit_overrides: rlOverrides })
         } else {
           throw new Error(`Failed to load tenant stats (${resp.status})`)
         }
@@ -99,7 +127,9 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
           total_logins_today: Math.floor(Math.random() * 100) + 1,
           failed_logins_today: Math.floor(Math.random() * 10),
           mfa_enabled_users: Math.floor(Math.random() * 200) + 2,
-          sso_configured: Math.random() > 0.5
+          sso_configured: Math.random() > 0.5,
+          oauth_client_count: oauthClientCount,
+          rate_limit_overrides: rlOverrides,
         }
         setTenantStats(mockStats)
       }
@@ -237,6 +267,32 @@ export default function TenantDashboard({ tenantId, onBack }: TenantDashboardPro
               </div>
               <p className="text-xs text-muted-foreground">
                 {tenantStats.sso_configured ? 'Configured' : 'Not configured'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="oauth-clients-stat-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">OAuth Clients</CardTitle>
+              <Globe className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="oauth-clients-stat">{tenantStats.oauth_client_count}</div>
+              <p className="text-xs text-muted-foreground">
+                Registered applications
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="ratelimit-overrides-stat-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Rate Limit Overrides</CardTitle>
+              <Shield className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="ratelimit-overrides-stat">{tenantStats.rate_limit_overrides}</div>
+              <p className="text-xs text-muted-foreground">
+                {tenantStats.rate_limit_overrides > 0 ? 'Custom limits active' : 'Using defaults'}
               </p>
             </CardContent>
           </Card>
