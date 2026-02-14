@@ -97,3 +97,7 @@ See `docs/TEST_PROTOCOL.md` for the canonical testing procedure. Highlights:
 
 - Do not hardcode real API keys
 - For SSO/Email integrations, use mocks or test fixtures
+
+### Auth middleware
+
+- Always attach JWT auth middleware that supports **both** bearer header and cookie token retrieval (`authmw.NewJWT`) when wiring subgroups (e.g., `/api/v1/auth/admin/*`, including OAuth client CRUD). This ensures `extractTenantID/UserID` have context and prevents accidental 401/"unauthorized" responses.

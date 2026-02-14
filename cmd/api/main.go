@@ -464,6 +464,7 @@ func main() {
 	authReg.RegisterSSOBrowser(e)
 	// OAuth 2.0 provider endpoints (/oauth/authorize, /oauth/token, admin CRUD)
 	authAdminGroup := apiV1.Group("/auth/admin")
+	authAdminGroup.Use(authmw.NewJWT(cfg))
 	authReg.RegisterOAuth(e, authAdminGroup)
 	// Applications registry
 	applications.RegisterV1(apiV1, pgPool)
