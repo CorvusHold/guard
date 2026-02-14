@@ -624,6 +624,17 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		return domain.AccessTokens{}, err
 	}
 
+	// Enforce blocked status before proceeding
+	u, err := s.repo.GetUserByID(ctx, ai.UserID)
+	if err != nil {
+		metrics.IncAuthOutcome("password", "failure")
+		return domain.AccessTokens{}, err
+	}
+	if !u.IsActive {
+		metrics.IncAuthOutcome("password", "failure")
+		return domain.AccessTokens{}, errors.New("user is blocked")
+	}
+
 	// Check account lockout status
 	_, lockedUntil, _ := s.repo.GetLockoutStatus(ctx, in.TenantID, in.Email)
 	if lockedUntil != nil && time.Now().Before(*lockedUntil) {
@@ -743,6 +754,15 @@ func (s *Service) Refresh(ctx context.Context, in domain.RefreshInput) (domain.A
 	if familyID == uuid.Nil {
 		familyID = rt.ID
 	}
+	// Enforce blocked status before issuing new tokens
+	user, err := s.repo.GetUserByID(ctx, rt.UserID)
+	if err != nil {
+		return domain.AccessTokens{}, err
+	}
+	if !user.IsActive {
+		return domain.AccessTokens{}, errors.New("user is blocked")
+	}
+
 	toks, err := s.issueTokensWithFamily(ctx, rt.UserID, rt.TenantID, in.UserAgent, in.IP, &rt.ID, originalAuthMethod, rt.SSOProviderID, familyID)
 	if err != nil {
 		return domain.AccessTokens{}, err
@@ -814,9 +834,14 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 			}
 		}
 	}
-	if u, err := s.repo.GetUserByID(ctx, userID); err == nil {
-		name = strings.TrimSpace(u.FirstName + " " + u.LastName)
+	u, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return domain.AccessTokens{}, err
 	}
+	if !u.IsActive {
+		return domain.AccessTokens{}, errors.New("user is blocked")
+	}
+	name = strings.TrimSpace(u.FirstName + " " + u.LastName)
 
 	// Access JWT
 	claims := jwt.MapClaims{
@@ -1018,10 +1043,13 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 		return domain.Introspection{Active: false}, errors.New("token expired")
 	}
 
-	// Step 8: Load user context
+	// Step 8: Load user context and enforce active status
 	u, err := s.repo.GetUserByID(ctx, uid)
 	if err != nil {
 		return domain.Introspection{Active: false}, err
+	}
+	if !u.IsActive {
+		return domain.Introspection{Active: false}, errors.New("user is blocked")
 	}
 	ids, err := s.repo.GetAuthIdentitiesByUser(ctx, uid)
 	if err != nil {

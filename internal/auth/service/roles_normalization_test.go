@@ -79,7 +79,7 @@ func (f *fakeRepo) CreateSSOPortalToken(ctx context.Context, tenantID uuid.UUID,
 	return f.lastPortalToken, nil
 }
 func (f *fakeRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (domain.User, error) {
-	return domain.User{ID: userID}, nil
+	return domain.User{ID: userID, IsActive: true}, nil
 }
 func (f *fakeRepo) GetAuthIdentitiesByUser(ctx context.Context, userID uuid.UUID) ([]domain.AuthIdentity, error) {
 	return nil, nil
