@@ -7296,6 +7296,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "last_successful_method": {
+                    "description": "Last successful login method for this email in this tenant (if known).\nValues: \"sso\", \"password\", \"magic_link\"",
+                    "type": "string"
+                },
                 "magic_link_enabled": {
                     "type": "boolean"
                 },
@@ -7307,6 +7311,17 @@ const docTemplate = `{
                     "description": "Recommended/preferred login method based on context\nValues: \"sso\", \"password\", \"magic_link\", \"social\"",
                     "type": "string"
                 },
+                "recommended_method_reason": {
+                    "description": "Reason for the top recommendation.\nValues: \"sso_required\", \"last_successful_method\", \"domain_matched_sso\", \"preferred_method\", \"default_order\"",
+                    "type": "string"
+                },
+                "recommended_methods": {
+                    "description": "Ordered recommendation list for clients that support adaptive UI.\nValues: \"sso\", \"password\", \"magic_link\"",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "signup_enabled": {
                     "description": "Whether new user signup is enabled for this tenant",
                     "type": "boolean"
@@ -7317,6 +7332,10 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/controller.SocialProviderOption"
                     }
+                },
+                "sso_only": {
+                    "description": "Explicit policy flag for SSO-only login UX.",
+                    "type": "boolean"
                 },
                 "sso_providers": {
                     "description": "SSO providers configured for this tenant",

@@ -3,6 +3,9 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,6 +102,39 @@ func (r *Registrar) Close() error {
 
 func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 	e.GET("/.well-known/oauth-authorization-server", r.ctrl.OAuth2Metadata)
+	e.GET("/login", func(c echo.Context) error {
+		publicBase := strings.TrimRight(r.cfg.PublicBaseURL, "/")
+		if publicBase == "" {
+			return c.JSON(http.StatusNotFound, map[string]string{"message": "Not Found"})
+		}
+
+		target, err := url.Parse(publicBase)
+		if err != nil || target.Scheme == "" || target.Host == "" {
+			return c.JSON(http.StatusNotFound, map[string]string{"message": "Not Found"})
+		}
+
+		reqScheme := "https"
+		if c.Request().TLS == nil {
+			reqScheme = "http"
+		}
+		reqOrigin := reqScheme + "://" + c.Request().Host
+		if strings.EqualFold(reqOrigin, target.Scheme+"://"+target.Host) {
+			return c.JSON(http.StatusNotFound, map[string]string{"message": "Not Found"})
+		}
+
+		loginURL := strings.TrimRight(publicBase, "/") + "/login"
+		q := c.QueryParams()
+		if q.Get("guard-base-url") == "" {
+			q.Set("guard-base-url", reqOrigin)
+		}
+		if q.Get("auth-mode") == "" {
+			q.Set("auth-mode", r.cfg.DefaultAuthMode)
+		}
+		if raw := q.Encode(); raw != "" {
+			loginURL += "?" + raw
+		}
+		return c.Redirect(http.StatusFound, loginURL)
+	})
 
 	// OIDC Discovery (OpenID Connect Discovery 1.0)
 	e.GET("/.well-known/openid-configuration", func(c echo.Context) error {

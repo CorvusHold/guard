@@ -43,8 +43,23 @@ type LoginOptionsResponse struct {
 	// Values: "sso", "password", "magic_link", "social"
 	PreferredMethod string `json:"preferred_method"`
 
+	// Ordered recommendation list for clients that support adaptive UI.
+	// Values: "sso", "password", "magic_link"
+	RecommendedMethods []string `json:"recommended_methods,omitempty"`
+
+	// Reason for the top recommendation.
+	// Values: "sso_required", "last_successful_method", "domain_matched_sso", "preferred_method", "default_order"
+	RecommendedMethodReason string `json:"recommended_method_reason,omitempty"`
+
+	// Last successful login method for this email in this tenant (if known).
+	// Values: "sso", "password", "magic_link"
+	LastSuccessfulMethod string `json:"last_successful_method,omitempty"`
+
 	// If true, SSO is required for this domain/tenant (password disabled)
 	SSORequired bool `json:"sso_required"`
+
+	// Explicit policy flag for SSO-only login UX.
+	SSOOnly bool `json:"sso_only,omitempty"`
 
 	// If true, user exists and can use password login
 	UserExists bool `json:"user_exists"`
@@ -192,20 +207,97 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		}
 	}
 
-	// Determine preferred method based on context
+	if response.SSORequired {
+		response.SSOOnly = true
+		response.PasswordEnabled = false
+		response.MagicLinkEnabled = false
+	}
+
+	if tenantID != uuid.Nil && email != "" && response.UserExists {
+		if user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantID.String()); userErr == nil && user != nil {
+			sessions, sessErr := h.svc.ListUserSessions(c.Request().Context(), user.ID, tenantID)
+			if sessErr == nil {
+				for _, sess := range sessions {
+					method := normalizeLoginMethod(sess.AuthMethod)
+					if method != "" {
+						response.LastSuccessfulMethod = method
+						break
+					}
+				}
+			}
+		}
+	}
+
+	hasSSO := response.DomainMatchedSSO != nil || len(response.SSOProviders) > 0
+	available := map[string]bool{
+		"sso":        hasSSO,
+		"password":   response.PasswordEnabled,
+		"magic_link": response.MagicLinkEnabled,
+	}
+
+	recommended := make([]string, 0, 3)
+	addRecommended := func(method string) {
+		m := normalizeLoginMethod(method)
+		if m == "" || !available[m] {
+			return
+		}
+		for _, existing := range recommended {
+			if existing == m {
+				return
+			}
+		}
+		recommended = append(recommended, m)
+	}
+
+	if response.SSORequired && hasSSO {
+		addRecommended("sso")
+		response.RecommendedMethodReason = "sso_required"
+	}
+	if response.LastSuccessfulMethod != "" {
+		addRecommended(response.LastSuccessfulMethod)
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "last_successful_method"
+		}
+	}
 	if response.DomainMatchedSSO != nil {
-		response.PreferredMethod = "sso"
-		// Check if SSO is enforced for this domain (could be a tenant setting)
-		// For now, we don't enforce - just recommend
-	} else if len(response.SSOProviders) > 0 && !response.UserExists {
-		// New user with SSO available - suggest SSO
-		response.PreferredMethod = "sso"
-	} else if response.UserExists {
-		// Existing user - password is fine
-		response.PreferredMethod = "password"
+		addRecommended("sso")
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "domain_matched_sso"
+		}
+	}
+	if response.PreferredMethod != "" {
+		addRecommended(response.PreferredMethod)
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "preferred_method"
+		}
+	}
+
+	addRecommended("sso")
+	addRecommended("password")
+	addRecommended("magic_link")
+
+	if len(recommended) > 0 {
+		response.RecommendedMethods = recommended
+		response.PreferredMethod = recommended[0]
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "default_order"
+		}
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+func normalizeLoginMethod(method string) string {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "sso":
+		return "sso"
+	case "password":
+		return "password"
+	case "magic_link", "magic", "magic-link":
+		return "magic_link"
+	default:
+		return ""
+	}
 }
 
 // buildSSOLoginURL constructs the V2 tenant-scoped SSO login URL

@@ -150,6 +150,8 @@ async function registerLoginFlowRoutes(
 async function completeLoginFlow(page: import('@playwright/test').Page) {
   await page.getByTestId('email-input').fill('user@example.com')
   await page.getByTestId('continue-button').click()
+  await expect(page.getByTestId('password-option-button')).toBeVisible()
+  await page.getByTestId('password-option-button').click()
   await expect(page.getByTestId('password-input')).toBeVisible()
   await page.getByTestId('password-input').fill('super-secret')
   await Promise.all([
@@ -158,7 +160,7 @@ async function completeLoginFlow(page: import('@playwright/test').Page) {
     ),
     page.getByTestId('signin-button').click()
   ])
-  await expect(page.getByTestId('toast')).toContainText(/login successful/i)
+  await expect(page.getByTestId('toast').filter({ hasText: /login successful/i }).first()).toBeVisible()
 }
 
 async function gotoAdminAndWaitForMe(page: import('@playwright/test').Page) {

@@ -21,14 +21,38 @@ export default function SSOCallback() {
     ensureRuntimeConfigFromQuery()
 
     async function run() {
-      if (!provider || !code) {
-        setStatus('error')
-        setMessage('Missing provider or code in callback URL')
-        return
-      }
       setStatus('loading')
       try {
         const client = getClient()
+
+        // Primary flow: backend redirects to /auth/callback with tokens in fragment/query.
+        // SDK parser persists tokens to storage as a side effect.
+        const parsedTokens = client.parseSsoCallbackTokens(window.location.href)
+        if (parsedTokens?.access_token) {
+          const me = await client.me()
+          if (me.meta.status === 200) {
+            setProfile(me.data as any)
+            setStatus('success')
+            setMessage('Sign-in completed')
+            return
+          }
+          throw new Error('Token callback succeeded but profile lookup failed')
+        }
+
+        // Legacy flow: provider + code in query, then exchange via API callback endpoint.
+        if (!provider || !code) {
+          setStatus('error')
+          setMessage('Missing provider or code in callback URL')
+          return
+        }
+
+        const supportedProviders = new Set(['workos', 'google', 'github', 'azuread', 'dev'])
+        if (!supportedProviders.has(provider)) {
+          setStatus('error')
+          setMessage(`Unsupported provider: ${provider}`)
+          return
+        }
+
         let tenant_id = tenantIdFromQuery
         if (!tenant_id) {
           try {

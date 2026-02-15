@@ -129,8 +129,8 @@ test.describe('Progressive Login Flow', () => {
     })
   })
 
-  test.describe('Email Found - Show Password Step', () => {
-    test('should show password field when email is found', async ({ page }) => {
+  test.describe('Email Found - Show Options Then Password Step', () => {
+    test('should show recommended password option and proceed to password field', async ({ page }) => {
       // Mock API response for found email
       await page.route('**/api/v1/auth/login-options*', async route => {
         await route.fulfill({
@@ -151,7 +151,10 @@ test.describe('Progressive Login Flow', () => {
       await page.fill('[data-testid="email-input"]', 'user@example.com')
       await page.click('[data-testid="continue-button"]')
 
-      // Should show password field
+      await expect(page.locator('[data-testid="password-option-button"]')).toBeVisible()
+      await page.click('[data-testid="password-option-button"]')
+
+      // Should show password field after choosing method
       await expect(page.locator('[data-testid="password-input"]')).toBeVisible()
       await expect(page.locator('[data-testid="password-input"]')).toBeFocused()
       await expect(page.locator('[data-testid="signin-button"]')).toBeVisible()
@@ -207,6 +210,7 @@ test.describe('Progressive Login Flow', () => {
 
       await page.fill('[data-testid="email-input"]', 'user@example.com')
       await page.click('[data-testid="continue-button"]')
+      await page.click('[data-testid="password-option-button"]')
 
       await page.fill('[data-testid="password-input"]', 'password123')
       
@@ -257,6 +261,7 @@ test.describe('Progressive Login Flow', () => {
 
       await page.fill('[data-testid="email-input"]', 'user@example.com')
       await page.click('[data-testid="continue-button"]')
+      await page.click('[data-testid="password-option-button"]')
       
       await page.fill('[data-testid="password-input"]', 'password123')
       await page.click('[data-testid="signin-button"]')
@@ -297,6 +302,7 @@ test.describe('Progressive Login Flow', () => {
 
       await page.fill('[data-testid="email-input"]', 'user@example.com')
       await page.click('[data-testid="continue-button"]')
+      await page.click('[data-testid="password-option-button"]')
       
       await page.fill('[data-testid="password-input"]', 'wrongpassword')
       await page.click('[data-testid="signin-button"]')
@@ -396,6 +402,8 @@ test.describe('Progressive Login Flow', () => {
       await opts
 
       await expect(page.locator('[data-testid="password-option-button"]')).toBeVisible()
+      await expect(page.locator('[data-testid="use-another-method"]')).toBeVisible()
+      await page.locator('[data-testid="use-another-method"] summary').click()
       await expect(page.locator('[data-testid="sso-button-dev"]')).toBeVisible()
       await expect(page.getByText('Primary Organization')).toBeVisible()
     })
@@ -474,8 +482,8 @@ test.describe('Progressive Login Flow', () => {
       // WebKit focus order differs; just assert keyboard can submit the form.
       await page.keyboard.press('Enter')
 
-      // Should transition to password step
-      await expect(page.locator('[data-testid="password-input"]')).toBeVisible()
+      // Should transition to options step first
+      await expect(page.locator('[data-testid="password-option-button"]')).toBeVisible()
     })
 
     test('should have proper ARIA labels', async ({ page }) => {

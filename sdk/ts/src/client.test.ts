@@ -338,6 +338,55 @@ describe('GuardClient', () => {
   });
 
   describe('OAuth2 Discovery', () => {
+    it('buildOAuth2AuthorizeUrl uses client baseUrl and encodes required OAuth2 params', () => {
+      const client = new GuardClient({ baseUrl: 'http://localhost:8082' });
+      const url = client.buildOAuth2AuthorizeUrl({
+        client_id: 'gc_test',
+        redirect_uri: 'http://localhost:3000/callback',
+        code_challenge: 'abc123',
+        code_challenge_method: 'S256',
+        scope: ['openid', 'profile', 'email'],
+        state: 'csrf-state',
+      });
+
+      const parsed = new URL(url);
+      expect(parsed.origin).toBe('http://localhost:8082');
+      expect(parsed.pathname).toBe('/oauth/authorize');
+      expect(parsed.searchParams.get('response_type')).toBe('code');
+      expect(parsed.searchParams.get('client_id')).toBe('gc_test');
+      expect(parsed.searchParams.get('redirect_uri')).toBe('http://localhost:3000/callback');
+      expect(parsed.searchParams.get('scope')).toBe('openid profile email');
+      expect(parsed.searchParams.get('state')).toBe('csrf-state');
+      expect(parsed.searchParams.get('code_challenge')).toBe('abc123');
+      expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
+    });
+
+    it('buildOAuth2AuthorizeUrl defaults code_challenge_method to S256 when challenge is provided', () => {
+      const client = new GuardClient({ baseUrl });
+      const url = client.buildOAuth2AuthorizeUrl({
+        client_id: 'gc_test',
+        redirect_uri: 'https://app.example.com/callback',
+        code_challenge: 'pkce-challenge',
+      });
+
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get('code_challenge')).toBe('pkce-challenge');
+      expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
+    });
+
+    it('buildOAuth2AuthorizeUrl validates required params', () => {
+      const client = new GuardClient({ baseUrl });
+      expect(() => client.buildOAuth2AuthorizeUrl({
+        client_id: '',
+        redirect_uri: 'https://app.example.com/callback',
+      })).toThrow('client_id is required');
+
+      expect(() => client.buildOAuth2AuthorizeUrl({
+        client_id: 'gc_test',
+        redirect_uri: '',
+      })).toThrow('redirect_uri is required');
+    });
+
     it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
       const storage = new InMemoryStorage();
       const { fetchMock, calls } = makeFetchMock([

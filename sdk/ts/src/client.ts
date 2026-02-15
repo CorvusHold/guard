@@ -16,6 +16,20 @@ export interface GuardClientOptions {
   authMode?: 'bearer' | 'cookie';
 }
 
+export interface OAuth2AuthorizeParams {
+  client_id: string;
+  redirect_uri: string;
+  response_type?: 'code';
+  scope?: string | string[];
+  state?: string;
+  nonce?: string;
+  code_challenge?: string;
+  code_challenge_method?: 'S256' | 'plain';
+  prompt?: string;
+  login_hint?: string;
+  max_age?: number;
+}
+
 // OpenAPI component schema aliases
 // Note: The current OpenAPI typings do not expose a dedicated tokens schema,
 // so we define the minimal surface we need here and keep other DTOs sourced
@@ -391,7 +405,16 @@ export interface LoginOptionsResp {
   signup_enabled: boolean;
   sso_providers: SsoProviderOption[];
   preferred_method: AuthMethod;
+  recommended_methods?: AuthMethod[];
+  recommended_method_reason?:
+    | 'sso_required'
+    | 'last_successful_method'
+    | 'domain_matched_sso'
+    | 'preferred_method'
+    | 'default_order';
+  last_successful_method?: AuthMethod;
   sso_required: boolean;
+  sso_only?: boolean;
   user_exists: boolean;
   tenant_id?: string;
   tenant_name?: string;
@@ -1430,6 +1453,59 @@ export class GuardClient {
   // ==============================
   // OAuth2 Discovery (RFC 8414)
   // ==============================
+
+  /**
+   * Build an OAuth2 Authorization Code URL using this Guard client's baseUrl.
+   *
+   * This prevents accidental redirects to the current app origin when initiating
+   * OAuth2 flows from SPAs.
+   *
+   * @example
+   * ```ts
+   * const url = client.buildOAuth2AuthorizeUrl({
+   *   client_id: 'gc_123',
+   *   redirect_uri: 'https://app.example.com/callback',
+   *   code_challenge: 'abc...',
+   *   code_challenge_method: 'S256',
+   *   scope: ['openid', 'profile', 'email'],
+   *   state: 'csrf-state',
+   * });
+   * window.location.href = url;
+   * ```
+   */
+  buildOAuth2AuthorizeUrl(params: OAuth2AuthorizeParams): string {
+    const clientID = params.client_id?.trim();
+    if (!clientID) throw new Error('client_id is required');
+
+    const redirectURI = params.redirect_uri?.trim();
+    if (!redirectURI) throw new Error('redirect_uri is required');
+
+    const responseType = params.response_type ?? 'code';
+    if (responseType !== 'code') {
+      throw new Error('response_type must be "code"');
+    }
+
+    const scope = Array.isArray(params.scope)
+      ? params.scope.filter(Boolean).join(' ').trim()
+      : params.scope?.trim();
+
+    const u = new URL('/oauth/authorize', this.baseUrl);
+    u.searchParams.set('response_type', responseType);
+    u.searchParams.set('client_id', clientID);
+    u.searchParams.set('redirect_uri', redirectURI);
+    if (scope) u.searchParams.set('scope', scope);
+    if (params.state) u.searchParams.set('state', params.state);
+    if (params.nonce) u.searchParams.set('nonce', params.nonce);
+    if (params.code_challenge) u.searchParams.set('code_challenge', params.code_challenge);
+    if (params.code_challenge || params.code_challenge_method) {
+      u.searchParams.set('code_challenge_method', params.code_challenge_method ?? 'S256');
+    }
+    if (params.prompt) u.searchParams.set('prompt', params.prompt);
+    if (params.login_hint) u.searchParams.set('login_hint', params.login_hint);
+    if (params.max_age !== undefined) u.searchParams.set('max_age', String(params.max_age));
+
+    return u.toString();
+  }
 
   /**
    * Fetch OAuth 2.0 Authorization Server Metadata (RFC 8414)

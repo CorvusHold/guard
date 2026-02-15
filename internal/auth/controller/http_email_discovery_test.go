@@ -248,6 +248,13 @@ func TestLoginOptions_Flow(t *testing.T) {
 		err := json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.NotNil(t, resp["password_enabled"])
+		assert.Equal(t, "password", resp["preferred_method"])
+		assert.Equal(t, "password", resp["last_successful_method"])
+		assert.Equal(t, "last_successful_method", resp["recommended_method_reason"])
+		recommended, ok := resp["recommended_methods"].([]interface{})
+		require.True(t, ok, "recommended_methods should be an array")
+		require.GreaterOrEqual(t, len(recommended), 1)
+		assert.Equal(t, "password", recommended[0])
 	})
 
 	// ============================================================
