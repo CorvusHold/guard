@@ -8439,7 +8439,7 @@ export interface components {
             /** @description Authentication methods available */
             password_enabled?: boolean;
             /** @description Recommended/preferred login method based on context
-             *     Values: "sso", "password", "magic_link", "social" */
+             *     Values: "sso", "password", "magic_link" */
             preferred_method?: string;
             /** @description Reason for the top recommendation.
              *     Values: "sso_required", "last_successful_method", "domain_matched_sso", "preferred_method", "default_order" */

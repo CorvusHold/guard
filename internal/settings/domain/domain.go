@@ -94,6 +94,7 @@ const (
 
 	// Signup control
 	KeySignupEnabled = "auth.signup_enabled" // "true" or "false", default "true"
+	KeySSORequired   = "auth.sso_required"   // "true" or "false", default "false"
 
 	// Tenant branding
 	KeyTenantLogoURL = "app.tenant_logo_url" // URL to tenant logo for login page branding

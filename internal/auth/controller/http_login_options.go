@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -40,7 +41,7 @@ type LoginOptionsResponse struct {
 	SocialProviders []SocialProviderOption `json:"social_providers"`
 
 	// Recommended/preferred login method based on context
-	// Values: "sso", "password", "magic_link", "social"
+	// Values: "sso", "password", "magic_link"
 	PreferredMethod string `json:"preferred_method"`
 
 	// Ordered recommendation list for clients that support adaptive UI.
@@ -113,6 +114,8 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 
 	var tenantID uuid.UUID
 	var err error
+	var resolvedUserID uuid.UUID
+	var hasResolvedUser bool
 
 	// If tenant_id provided, use it directly
 	if tenantIDStr != "" {
@@ -144,14 +147,21 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 					} else {
 						response.TenantID = tenant.ID
 						response.TenantName = tenant.Name
+						user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenant.ID)
+						if userErr == nil && user != nil {
+							resolvedUserID = user.ID
+							hasResolvedUser = true
+						}
 					}
 				}
 			}
 		} else {
 			// Check if user exists in specified tenant
-			_, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantIDStr)
-			if userErr == nil {
+			user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantIDStr)
+			if userErr == nil && user != nil {
 				response.UserExists = true
+				resolvedUserID = user.ID
+				hasResolvedUser = true
 			}
 		}
 	}
@@ -160,6 +170,9 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 	if tenantID != uuid.Nil && h.settings != nil {
 		if signupStr, sErr := h.settings.GetString(c.Request().Context(), sdomain.KeySignupEnabled, &tenantID, "true"); sErr == nil {
 			response.SignupEnabled = signupStr != "false"
+		}
+		if ssoRequiredStr, sErr := h.settings.GetString(c.Request().Context(), sdomain.KeySSORequired, &tenantID, "false"); sErr == nil {
+			response.SSORequired = strings.EqualFold(strings.TrimSpace(ssoRequiredStr), "true")
 		}
 		if logoURL, lErr := h.settings.GetString(c.Request().Context(), sdomain.KeyTenantLogoURL, &tenantID, ""); lErr == nil {
 			response.TenantLogoURL = logoURL
@@ -213,16 +226,24 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		response.MagicLinkEnabled = false
 	}
 
-	if tenantID != uuid.Nil && email != "" && response.UserExists {
-		if user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantID.String()); userErr == nil && user != nil {
-			sessions, sessErr := h.svc.ListUserSessions(c.Request().Context(), user.ID, tenantID)
-			if sessErr == nil {
-				for _, sess := range sessions {
-					method := normalizeLoginMethod(sess.AuthMethod)
-					if method != "" {
-						response.LastSuccessfulMethod = method
-						break
-					}
+	if tenantID != uuid.Nil && hasResolvedUser {
+		sessions, sessErr := h.svc.ListUserSessions(c.Request().Context(), resolvedUserID, tenantID)
+		if sessErr == nil {
+			var latestAt time.Time
+			for _, sess := range sessions {
+				method := normalizeLoginMethod(sess.AuthMethod)
+				if method == "" {
+					continue
+				}
+
+				sessionAt := sess.CreatedAt
+				if sess.LastUsedAt != nil && sess.LastUsedAt.After(sessionAt) {
+					sessionAt = *sess.LastUsedAt
+				}
+
+				if response.LastSuccessfulMethod == "" || sessionAt.After(latestAt) {
+					latestAt = sessionAt
+					response.LastSuccessfulMethod = method
 				}
 			}
 		}

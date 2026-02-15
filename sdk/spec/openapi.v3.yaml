@@ -5398,7 +5398,7 @@ components:
         preferred_method:
           description: |-
             Recommended/preferred login method based on context
-            Values: "sso", "password", "magic_link", "social"
+            Values: "sso", "password", "magic_link"
           type: string
         recommended_method_reason:
           description: >-

@@ -387,6 +387,19 @@ describe('GuardClient', () => {
       })).toThrow('redirect_uri is required');
     });
 
+    it('buildOAuth2AuthorizeUrl omits code_challenge_method when code_challenge is absent', () => {
+      const client = new GuardClient({ baseUrl });
+      const url = client.buildOAuth2AuthorizeUrl({
+        client_id: 'gc_test',
+        redirect_uri: 'https://app.example.com/callback',
+        code_challenge_method: 'S256',
+      });
+
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get('code_challenge')).toBeNull();
+      expect(parsed.searchParams.get('code_challenge_method')).toBeNull();
+    });
+
     it('getOAuth2Metadata fetches discovery endpoint and returns metadata', async () => {
       const storage = new InMemoryStorage();
       const { fetchMock, calls } = makeFetchMock([

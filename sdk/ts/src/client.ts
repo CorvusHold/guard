@@ -1497,7 +1497,7 @@ export class GuardClient {
     if (params.state) u.searchParams.set('state', params.state);
     if (params.nonce) u.searchParams.set('nonce', params.nonce);
     if (params.code_challenge) u.searchParams.set('code_challenge', params.code_challenge);
-    if (params.code_challenge || params.code_challenge_method) {
+    if (params.code_challenge) {
       u.searchParams.set('code_challenge_method', params.code_challenge_method ?? 'S256');
     }
     if (params.prompt) u.searchParams.set('prompt', params.prompt);

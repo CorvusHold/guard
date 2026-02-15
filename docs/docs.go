@@ -7308,7 +7308,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "preferred_method": {
-                    "description": "Recommended/preferred login method based on context\nValues: \"sso\", \"password\", \"magic_link\", \"social\"",
+                    "description": "Recommended/preferred login method based on context\nValues: \"sso\", \"password\", \"magic_link\"",
                     "type": "string"
                 },
                 "recommended_method_reason": {

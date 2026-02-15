@@ -32,24 +32,16 @@ export default function SSOCallback() {
           const me = await client.me()
           if (me.meta.status === 200) {
             setProfile(me.data as any)
-            setStatus('success')
-            setMessage('Sign-in completed')
-            return
           }
-          throw new Error('Token callback succeeded but profile lookup failed')
+          setStatus('success')
+          setMessage('Sign-in completed')
+          return
         }
 
         // Legacy flow: provider + code in query, then exchange via API callback endpoint.
         if (!provider || !code) {
           setStatus('error')
           setMessage('Missing provider or code in callback URL')
-          return
-        }
-
-        const supportedProviders = new Set(['workos', 'google', 'github', 'azuread', 'dev'])
-        if (!supportedProviders.has(provider)) {
-          setStatus('error')
-          setMessage(`Unsupported provider: ${provider}`)
           return
         }
 
@@ -64,7 +56,6 @@ export default function SSOCallback() {
             // ignore
           }
         }
-        // Allow any provider slug; backend validates provider/tenant configuration.
         const res = await client.handleSsoCallback(provider as any, {
           tenant_id,
           code,
@@ -94,7 +85,7 @@ export default function SSOCallback() {
         <h1 className="text-xl font-semibold">Completing sign-in...</h1>
         {status === 'loading' && (
           <div className="text-sm text-muted-foreground">
-            Processing callback with {provider.toUpperCase()}...
+            {provider ? `Processing callback with ${provider.toUpperCase()}...` : 'Processing callback...'}
           </div>
         )}
         {status === 'success' && (
@@ -112,6 +103,7 @@ export default function SSOCallback() {
                 onClick={() => {
                   window.location.href = '/'
                 }}
+                data-testid="callback-continue-button"
               >
                 Continue
               </Button>
@@ -132,6 +124,7 @@ export default function SSOCallback() {
                 onClick={() => {
                   window.location.href = '/'
                 }}
+                data-testid="callback-back-button"
               >
                 Back to login
               </Button>

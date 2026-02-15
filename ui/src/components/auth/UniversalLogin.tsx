@@ -147,14 +147,10 @@ export default function UniversalLogin({
 
         // Determine whether there are available methods; always route to options for mode parity.
         const hasMultipleTenants = (tenants?.length || 0) > 1 && !resolvedTenantId
+        const ranked = rankMethods(res.data)
         const hasAnyMethod =
-          !!res.data.domain_matched_sso ||
-          (res.data.sso_providers?.length || 0) > 0 ||
-          (!!res.data.password_enabled && !res.data.sso_required) ||
-          (!!res.data.magic_link_enabled && !res.data.sso_required) ||
-          (hasMultipleTenants &&
-            ((res.data.password_enabled || res.data.magic_link_enabled) ||
-              (res.data.sso_providers?.length || 0) > 0)) ||
+          hasMultipleTenants ||
+          ranked.length > 0 ||
           (!!res.data.signup_enabled && !res.data.user_exists)
 
         if (hasAnyMethod) {
@@ -336,8 +332,8 @@ export default function UniversalLogin({
     return rankMethods(loginOptions)
   }, [loginOptions])
 
-  const primaryMethod = rankedMethods[0] || null
-  const fallbackMethods = rankedMethods.slice(1)
+  const primaryMethod = useMemo(() => rankedMethods[0] || null, [rankedMethods])
+  const fallbackMethods = useMemo(() => rankedMethods.slice(1), [rankedMethods])
 
   const primarySSOProvider = useMemo(() => {
     if (!loginOptions) return null
@@ -346,10 +342,19 @@ export default function UniversalLogin({
 
   const fallbackSSOProviders = useMemo(() => {
     if (!loginOptions) return [] as SsoProviderOption[]
-    if (primaryMethod !== 'sso') return loginOptions.sso_providers || []
-    if (!primarySSOProvider) return loginOptions.sso_providers || []
-    return (loginOptions.sso_providers || []).filter((p) => p.slug !== primarySSOProvider.slug)
-  }, [loginOptions, primaryMethod, primarySSOProvider])
+
+    const bySlug = new Map<string, SsoProviderOption>()
+    if (loginOptions.domain_matched_sso) {
+      bySlug.set(loginOptions.domain_matched_sso.slug, loginOptions.domain_matched_sso)
+    }
+    for (const provider of loginOptions.sso_providers || []) {
+      bySlug.set(provider.slug, provider)
+    }
+
+    const combined = Array.from(bySlug.values())
+    if (!primarySSOProvider) return combined
+    return combined.filter((provider) => provider.slug !== primarySSOProvider.slug)
+  }, [loginOptions, primarySSOProvider])
 
   const ensureTenantChosen = () => {
     if (needsTenantSelection) {
@@ -581,7 +586,7 @@ export default function UniversalLogin({
 
             {(fallbackMethods.length > 0 || (showSignupLink && loginOptions.signup_enabled && !loginOptions.user_exists)) && (
               <details className="rounded-md border p-3" data-testid="use-another-method">
-                <summary className="cursor-pointer text-sm font-medium">Use another method</summary>
+                <summary className="cursor-pointer text-sm font-medium" data-testid="use-another-method-toggle">Use another method</summary>
                 <div className="mt-3 space-y-2">
                   {fallbackMethods.includes('sso') && fallbackSSOProviders.map((provider: SsoProviderOption) => (
                     <Button
