@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
-import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2, X, Wand2, Globe } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, Loader2, Mail, Key, Building2, X, Wand2 } from 'lucide-react'
 import { useToast } from '@/lib/toast'
 import { getClient } from '@/lib/sdk'
 import type { LoginOptionsResp, SsoProviderOption } from '@/lib/sdk'
@@ -19,6 +18,41 @@ interface UniversalLoginProps {
 }
 
 type LoginStep = 'email' | 'options' | 'password' | 'mfa' | 'magic_link_sent'
+type LoginMethod = 'sso' | 'password' | 'magic_link'
+
+function normalizeMethod(method: string | undefined | null): LoginMethod | null {
+  const m = String(method || '').trim().toLowerCase()
+  if (m === 'sso') return 'sso'
+  if (m === 'password') return 'password'
+  if (m === 'magic_link' || m === 'magic' || m === 'magic-link') return 'magic_link'
+  return null
+}
+
+function rankMethods(opts: LoginOptionsResp): LoginMethod[] {
+  const hasDomainMatchedSSO = !!opts.domain_matched_sso
+  const hasSSO = hasDomainMatchedSSO || (opts.sso_providers?.length || 0) > 0
+  const available: Record<LoginMethod, boolean> = {
+    sso: hasSSO,
+    password: !!opts.password_enabled && !opts.sso_required,
+    magic_link: !!opts.magic_link_enabled && !opts.sso_required
+  }
+
+  const out: LoginMethod[] = []
+  const add = (candidate: string | null | undefined) => {
+    const m = normalizeMethod(candidate)
+    if (!m || !available[m] || out.includes(m)) return
+    out.push(m)
+  }
+
+  for (const m of opts.recommended_methods || []) add(m)
+  add(opts.last_successful_method)
+  add(opts.preferred_method)
+  if (hasDomainMatchedSSO) add('sso')
+  add('password')
+  add('magic_link')
+  add('sso')
+  return out
+}
 
 // Provider logo mapping - using simple SVG icons inline
 const providerLogos: Record<string, string> = {
@@ -111,20 +145,16 @@ export default function UniversalLogin({
           setTenantName(resolvedTenantName || '')
         }
 
-        // Determine next step based on options
+        // Determine whether there are available methods; always route to options for mode parity.
         const hasMultipleTenants = (tenants?.length || 0) > 1 && !resolvedTenantId
-        if (res.data.domain_matched_sso) {
-          // Domain matches SSO - show SSO option prominently
+        const ranked = rankMethods(res.data)
+        const hasAnyMethod =
+          hasMultipleTenants ||
+          ranked.length > 0 ||
+          (!!res.data.signup_enabled && !res.data.user_exists)
+
+        if (hasAnyMethod) {
           setStep('options')
-        } else if (res.data.user_exists && res.data.password_enabled && !hasMultipleTenants) {
-          // Existing user with password - go to password
-          setStep('password')
-        } else if (res.data.sso_providers.length > 0 || hasMultipleTenants) {
-          // SSO available - show options
-          setStep('options')
-        } else if (res.data.password_enabled) {
-          // Only password available
-          setStep('password')
         } else {
           setError('No login methods available for this email')
         }
@@ -241,11 +271,15 @@ export default function UniversalLogin({
 
   const handleSSOLogin = (provider: SsoProviderOption) => {
     if (provider.login_url) {
-      // Add redirect URL for callback
-      const redirectUrl = `${window.location.origin}/auth/callback`
-      const url = new URL(provider.login_url)
-      url.searchParams.set('redirect_url', redirectUrl)
-      window.location.href = url.toString()
+      try {
+        // Add redirect URL for callback
+        const redirectUrl = `${window.location.origin}/auth/callback`
+        const url = new URL(provider.login_url)
+        url.searchParams.set('redirect_url', redirectUrl)
+        window.location.href = url.toString()
+      } catch {
+        setError('Invalid SSO provider configuration. Please contact your administrator.')
+      }
     }
   }
 
@@ -255,9 +289,13 @@ export default function UniversalLogin({
     try {
       const client = getClient()
       const tid = loginOptions?.tenant_id || selectedTenantId || tenantId
+      if (!tid) {
+        setError('Please choose an organization to continue.')
+        return
+      }
       await client.magicSend({
         email: email.trim().toLowerCase(),
-        tenant_id: tid || '',
+        tenant_id: tid,
         redirect_url: `${window.location.origin}/auth/callback`
       })
       setStep('magic_link_sent')
@@ -290,6 +328,56 @@ export default function UniversalLogin({
     setTenantName('')
     setLoginOptions(null)
     setError(null)
+  }
+
+  const needsTenantSelection = useMemo(() => {
+    const tenantCount = loginOptions?.tenants?.length ?? 0
+    return tenantCount > 1 && !selectedTenantId
+  }, [loginOptions, selectedTenantId])
+
+  const rankedMethods = useMemo(() => {
+    if (!loginOptions) return []
+    return rankMethods(loginOptions)
+  }, [loginOptions])
+
+  const primaryMethod = useMemo(() => rankedMethods[0] || null, [rankedMethods])
+  const fallbackMethods = useMemo(() => rankedMethods.slice(1), [rankedMethods])
+
+  const primarySSOProvider = useMemo(() => {
+    if (!loginOptions) return null
+    return loginOptions.domain_matched_sso || loginOptions.sso_providers?.[0] || null
+  }, [loginOptions])
+
+  const fallbackSSOProviders = useMemo(() => {
+    if (!loginOptions) return [] as SsoProviderOption[]
+
+    const bySlug = new Map<string, SsoProviderOption>()
+    if (loginOptions.domain_matched_sso) {
+      bySlug.set(loginOptions.domain_matched_sso.slug, loginOptions.domain_matched_sso)
+    }
+    for (const provider of loginOptions.sso_providers || []) {
+      bySlug.set(provider.slug, provider)
+    }
+
+    const combined = Array.from(bySlug.values())
+    if (!primarySSOProvider) return combined
+    return combined.filter((provider) => provider.slug !== primarySSOProvider.slug)
+  }, [loginOptions, primarySSOProvider])
+
+  const ensureTenantChosen = () => {
+    if (needsTenantSelection) {
+      setError('Please choose an organization to continue.')
+      return false
+    }
+    return true
+  }
+
+  const handleCreateAccount = () => {
+    if (onSignupClick) {
+      onSignupClick()
+      return
+    }
+    window.location.href = '/signup'
   }
 
   return (
@@ -395,6 +483,7 @@ export default function UniversalLogin({
                 type="button"
                 onClick={goBackToEmail}
                 className="text-primary hover:underline shrink-0"
+                data-testid="change-email-options"
               >
                 Change
               </button>
@@ -408,7 +497,7 @@ export default function UniversalLogin({
             )}
 
             {/* Tenant selection when multiple tenants are returned */}
-            {loginOptions.tenants?.length ? (
+            {needsTenantSelection ? (
               <div className="space-y-2">
                 <Label>Choose organization</Label>
                 <div className="space-y-2">
@@ -444,109 +533,136 @@ export default function UniversalLogin({
               </div>
             ) : null}
 
-            {/* Domain-matched SSO (recommended) */}
-            {loginOptions.domain_matched_sso && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-green-600">
-                  ✓ Your organization uses SSO
-                </p>
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => handleSSOLogin(loginOptions.domain_matched_sso!)}
-                  data-testid="sso-recommended-button"
-                >
-                  <span className="mr-2">{getProviderIcon(loginOptions.domain_matched_sso.name)}</span>
-                  Continue with {loginOptions.domain_matched_sso.name}
-                </Button>
-              </div>
-            )}
-
-            {/* Other SSO providers */}
-            {loginOptions.sso_providers.length > 0 && !loginOptions.domain_matched_sso && (
-              <div className="space-y-2">
-                {loginOptions.sso_providers.map((provider: SsoProviderOption) => (
-                  <Button
-                    key={provider.slug}
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => handleSSOLogin(provider)}
-                    data-testid={`sso-button-${provider.slug}`}
-                  >
-                    <span className="mr-2">{getProviderIcon(provider.name)}</span>
-                    Continue with {provider.name}
-                  </Button>
-                ))}
-              </div>
-            )}
-
-            {/* SSO required notice */}
             {loginOptions.sso_required && (
               <p className="text-sm text-muted-foreground text-center">
                 Your organization requires SSO sign-in.
               </p>
             )}
 
-            {/* Password and magic link options */}
-            {(!loginOptions.sso_required && (loginOptions.password_enabled || loginOptions.magic_link_enabled)) && (
-              <>
-                {(loginOptions.sso_providers.length > 0 || loginOptions.domain_matched_sso) && (
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <Separator className="w-full" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
-                        Or continue with
-                      </span>
-                    </div>
-                  </div>
+            {primaryMethod === 'sso' && primarySSOProvider && (
+              <div className="space-y-2">
+                {loginOptions.domain_matched_sso && (
+                  <p className="text-sm font-medium text-green-600">
+                    ✓ Your organization uses SSO
+                  </p>
                 )}
-                {loginOptions.password_enabled && (
-                  <Button
-                    type="button"
-                    variant={loginOptions.domain_matched_sso ? 'outline' : 'default'}
-                    className="w-full"
-                    onClick={() => {
-                      const tenantCount = loginOptions?.tenants?.length ?? 0
-                      if (!selectedTenantId && tenantCount > 1) {
-                        setError('Please choose an organization to continue.')
-                        return
-                      }
-                      setStep('password')
-                    }}
-                    data-testid="password-option-button"
-                  >
-                    <Key className="mr-2 h-4 w-4" />
-                    Password
-                  </Button>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => handleSSOLogin(primarySSOProvider)}
+                  data-testid="sso-recommended-button"
+                >
+                  <span className="mr-2">{getProviderIcon(primarySSOProvider.name)}</span>
+                  Continue with {primarySSOProvider.name}
+                </Button>
+              </div>
+            )}
+
+            {primaryMethod === 'password' && (
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => {
+                  if (!ensureTenantChosen()) return
+                  setStep('password')
+                }}
+                data-testid="password-option-button"
+              >
+                <Key className="mr-2 h-4 w-4" />
+                Continue with password
+              </Button>
+            )}
+
+            {primaryMethod === 'magic_link' && (
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => {
+                  if (!ensureTenantChosen()) return
+                  handleMagicLinkSend()
+                }}
+                disabled={loading}
+                data-testid="magic-link-button"
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="mr-2 h-4 w-4" />
                 )}
-                {loginOptions.magic_link_enabled && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      const tenantCount = loginOptions?.tenants?.length ?? 0
-                      if (!selectedTenantId && tenantCount > 1) {
-                        setError('Please choose an organization to continue.')
-                        return
-                      }
-                      handleMagicLinkSend()
-                    }}
-                    disabled={loading}
-                    data-testid="magic-link-button"
-                  >
-                    {loading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Wand2 className="mr-2 h-4 w-4" />
-                    )}
-                    Email magic link
-                  </Button>
-                )}
-              </>
+                Continue with email magic link
+              </Button>
+            )}
+
+            {(fallbackMethods.length > 0 ||
+              fallbackSSOProviders.length > 0 ||
+              (showSignupLink && loginOptions.signup_enabled && !loginOptions.user_exists)) && (
+              <details className="rounded-md border p-3" data-testid="use-another-method">
+                <summary className="cursor-pointer text-sm font-medium" data-testid="use-another-method-toggle">Use another method</summary>
+                <div className="mt-3 space-y-2">
+                  {(fallbackMethods.includes('sso') || fallbackSSOProviders.length > 0) && fallbackSSOProviders.map((provider: SsoProviderOption) => (
+                    <Button
+                      key={provider.slug}
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => handleSSOLogin(provider)}
+                      data-testid={`sso-button-${provider.slug}`}
+                    >
+                      <span className="mr-2">{getProviderIcon(provider.name)}</span>
+                      Continue with {provider.name}
+                    </Button>
+                  ))}
+
+                  {fallbackMethods.includes('password') && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        if (!ensureTenantChosen()) return
+                        setStep('password')
+                      }}
+                      data-testid="password-option-button-fallback"
+                    >
+                      <Key className="mr-2 h-4 w-4" />
+                      Password
+                    </Button>
+                  )}
+
+                  {fallbackMethods.includes('magic_link') && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        if (!ensureTenantChosen()) return
+                        handleMagicLinkSend()
+                      }}
+                      disabled={loading}
+                      data-testid="magic-link-button-fallback"
+                    >
+                      {loading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="mr-2 h-4 w-4" />
+                      )}
+                      Email magic link
+                    </Button>
+                  )}
+
+                  {showSignupLink && loginOptions.signup_enabled && !loginOptions.user_exists && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleCreateAccount}
+                      data-testid="create-account-button"
+                    >
+                      Create account
+                    </Button>
+                  )}
+                </div>
+              </details>
             )}
 
             <Button
@@ -554,6 +670,7 @@ export default function UniversalLogin({
               variant="ghost"
               className="w-full"
               onClick={goBackToEmail}
+              data-testid="back-button-options"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -570,6 +687,7 @@ export default function UniversalLogin({
                 type="button"
                 onClick={goBackToEmail}
                 className="text-primary hover:underline shrink-0"
+                data-testid="change-email-password"
               >
                 Change
               </button>
@@ -596,6 +714,7 @@ export default function UniversalLogin({
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  data-testid="toggle-password-visibility"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -633,6 +752,7 @@ export default function UniversalLogin({
               variant="ghost"
               className="w-full"
               onClick={goBackToEmail}
+              data-testid="back-button-password"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -657,6 +777,7 @@ export default function UniversalLogin({
                     size="sm"
                     onClick={() => setChallengeMethod(method as 'totp' | 'backup_code')}
                     disabled={loading}
+                    data-testid={`mfa-method-${method}`}
                   >
                     {method === 'totp' ? 'Authenticator' : 'Backup code'}
                   </Button>
@@ -706,6 +827,7 @@ export default function UniversalLogin({
                 setChallengeCode('')
                 setStep('password')
               }}
+              data-testid="back-button-mfa"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -749,6 +871,7 @@ export default function UniversalLogin({
                 variant="ghost"
                 className="w-full"
                 onClick={goBackToEmail}
+                data-testid="back-button-magic-link"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to sign in

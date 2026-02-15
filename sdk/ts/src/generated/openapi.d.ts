@@ -8432,16 +8432,27 @@ export interface components {
         "controller.LoginOptionsResponse": {
             /** @description If email domain matches an SSO provider's configured domains */
             domain_matched_sso?: components["schemas"]["controller.SSOProviderOption"];
+            /** @description Last successful login method for this email in this tenant (if known).
+             *     Values: "sso", "password", "magic_link" */
+            last_successful_method?: string;
             magic_link_enabled?: boolean;
             /** @description Authentication methods available */
             password_enabled?: boolean;
             /** @description Recommended/preferred login method based on context
-             *     Values: "sso", "password", "magic_link", "social" */
+             *     Values: "sso", "password", "magic_link" */
             preferred_method?: string;
+            /** @description Reason for the top recommendation.
+             *     Values: "sso_required", "last_successful_method", "domain_matched_sso", "preferred_method", "default_order" */
+            recommended_method_reason?: string;
+            /** @description Ordered recommendation list for clients that support adaptive UI.
+             *     Values: "sso", "password", "magic_link" */
+            recommended_methods?: string[];
             /** @description Whether new user signup is enabled for this tenant */
             signup_enabled?: boolean;
             /** @description Social login providers (tenant-wide or global) */
             social_providers?: components["schemas"]["controller.SocialProviderOption"][];
+            /** @description Explicit policy flag for SSO-only login UX. */
+            sso_only?: boolean;
             /** @description SSO providers configured for this tenant */
             sso_providers?: components["schemas"]["controller.SSOProviderOption"][];
             /** @description If true, SSO is required for this domain/tenant (password disabled) */

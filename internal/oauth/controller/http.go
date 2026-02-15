@@ -831,16 +831,21 @@ func (h *Controller) parseAccessToken(ctx context.Context, tokenStr string) (uui
 }
 
 func (h *Controller) buildLoginURL(c echo.Context) string {
-	baseURL := h.cfg.PublicBaseURL
+	baseURL := strings.TrimRight(h.cfg.PublicBaseURL, "/")
+	reqScheme := "https"
+	if c.Request().TLS == nil {
+		reqScheme = "http"
+	}
+	guardBaseURL := reqScheme + "://" + c.Request().Host
 	if baseURL == "" {
-		scheme := "https"
-		if c.Request().TLS == nil {
-			scheme = "http"
-		}
-		baseURL = scheme + "://" + c.Request().Host
+		baseURL = guardBaseURL
 	}
 	returnTo := c.Request().URL.String()
-	return baseURL + "/login?return_to=" + url.QueryEscape(returnTo)
+	q := url.Values{}
+	q.Set("return_to", returnTo)
+	q.Set("guard-base-url", guardBaseURL)
+	q.Set("auth-mode", h.cfg.DefaultAuthMode)
+	return baseURL + "/login?" + q.Encode()
 }
 
 func extractTenantID(c echo.Context) (uuid.UUID, error) {

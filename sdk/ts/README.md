@@ -20,6 +20,36 @@ This SDK uses a spec‑first approach. Core auth flows implemented:
 - Token introspection
 - Magic link: send + verify
 
+## OAuth2 Authorization Code (PKCE)
+
+Use the SDK to build the authorization URL from the configured `baseUrl` (Guard API host),
+instead of manually composing `/oauth/authorize` against the current page origin.
+
+```ts
+import { GuardClient } from '@corvushold/guard-sdk';
+
+const client = new GuardClient({
+  baseUrl: 'http://localhost:8082', // Guard API URL
+});
+
+const authorizeUrl = client.buildOAuth2AuthorizeUrl({
+  client_id: 'gc_VXfCQgfwZChIpUFVCLAgEecI_OKSMszh',
+  redirect_uri: 'http://localhost:3000/callback',
+  code_challenge: 'PKCE_CODE_CHALLENGE',
+  code_challenge_method: 'S256',
+  scope: ['openid', 'profile', 'email'],
+  state: crypto.randomUUID(),
+});
+
+window.location.href = authorizeUrl;
+```
+
+Notes:
+
+- `response_type` defaults to `code`.
+- `scope` accepts either a string (`"openid profile email"`) or a string array.
+- When `code_challenge` is set and `code_challenge_method` is omitted, the SDK defaults to `S256`.
+
 ## WorkOS Organization Portal Link
 
 Generate a WorkOS Admin Portal link for an organization (server enforces admin-only RBAC):

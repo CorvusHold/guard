@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -40,11 +41,26 @@ type LoginOptionsResponse struct {
 	SocialProviders []SocialProviderOption `json:"social_providers"`
 
 	// Recommended/preferred login method based on context
-	// Values: "sso", "password", "magic_link", "social"
+	// Values: "sso", "password", "magic_link"
 	PreferredMethod string `json:"preferred_method"`
+
+	// Ordered recommendation list for clients that support adaptive UI.
+	// Values: "sso", "password", "magic_link"
+	RecommendedMethods []string `json:"recommended_methods,omitempty"`
+
+	// Reason for the top recommendation.
+	// Values: "sso_required", "last_successful_method", "domain_matched_sso", "preferred_method", "default_order"
+	RecommendedMethodReason string `json:"recommended_method_reason,omitempty"`
+
+	// Last successful login method for this email in this tenant (if known).
+	// Values: "sso", "password", "magic_link"
+	LastSuccessfulMethod string `json:"last_successful_method,omitempty"`
 
 	// If true, SSO is required for this domain/tenant (password disabled)
 	SSORequired bool `json:"sso_required"`
+
+	// Explicit policy flag for SSO-only login UX.
+	SSOOnly bool `json:"sso_only,omitempty"`
 
 	// If true, user exists and can use password login
 	UserExists bool `json:"user_exists"`
@@ -98,6 +114,8 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 
 	var tenantID uuid.UUID
 	var err error
+	var resolvedUserID uuid.UUID
+	var hasResolvedUser bool
 
 	// If tenant_id provided, use it directly
 	if tenantIDStr != "" {
@@ -129,14 +147,21 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 					} else {
 						response.TenantID = tenant.ID
 						response.TenantName = tenant.Name
+						user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenant.ID)
+						if userErr == nil && user != nil {
+							resolvedUserID = user.ID
+							hasResolvedUser = true
+						}
 					}
 				}
 			}
 		} else {
 			// Check if user exists in specified tenant
-			_, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantIDStr)
-			if userErr == nil {
+			user, userErr := h.svc.GetUserByEmail(c.Request().Context(), email, tenantIDStr)
+			if userErr == nil && user != nil {
 				response.UserExists = true
+				resolvedUserID = user.ID
+				hasResolvedUser = true
 			}
 		}
 	}
@@ -145,6 +170,9 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 	if tenantID != uuid.Nil && h.settings != nil {
 		if signupStr, sErr := h.settings.GetString(c.Request().Context(), sdomain.KeySignupEnabled, &tenantID, "true"); sErr == nil {
 			response.SignupEnabled = signupStr != "false"
+		}
+		if ssoRequiredStr, sErr := h.settings.GetString(c.Request().Context(), sdomain.KeySSORequired, &tenantID, "false"); sErr == nil {
+			response.SSORequired = strings.EqualFold(strings.TrimSpace(ssoRequiredStr), "true")
 		}
 		if logoURL, lErr := h.settings.GetString(c.Request().Context(), sdomain.KeyTenantLogoURL, &tenantID, ""); lErr == nil {
 			response.TenantLogoURL = logoURL
@@ -192,20 +220,111 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		}
 	}
 
-	// Determine preferred method based on context
+	hasSSO := response.DomainMatchedSSO != nil || len(response.SSOProviders) > 0
+	if response.SSORequired {
+		response.PasswordEnabled = false
+		response.MagicLinkEnabled = false
+		response.SSOOnly = hasSSO
+		if !hasSSO {
+			response.PreferredMethod = ""
+		}
+	}
+
+	if tenantID != uuid.Nil && hasResolvedUser {
+		sessions, sessErr := h.svc.ListUserSessions(c.Request().Context(), resolvedUserID, tenantID)
+		if sessErr == nil {
+			var latestAt time.Time
+			for _, sess := range sessions {
+				method := normalizeLoginMethod(sess.AuthMethod)
+				if method == "" {
+					continue
+				}
+
+				sessionAt := sess.CreatedAt
+				if sess.LastUsedAt != nil && sess.LastUsedAt.After(sessionAt) {
+					sessionAt = *sess.LastUsedAt
+				}
+
+				if response.LastSuccessfulMethod == "" || sessionAt.After(latestAt) {
+					latestAt = sessionAt
+					response.LastSuccessfulMethod = method
+				}
+			}
+		}
+	}
+
+	available := map[string]bool{
+		"sso":        hasSSO,
+		"password":   response.PasswordEnabled,
+		"magic_link": response.MagicLinkEnabled,
+	}
+
+	recommended := make([]string, 0, 3)
+	addRecommended := func(method string) {
+		m := normalizeLoginMethod(method)
+		if m == "" || !available[m] {
+			return
+		}
+		for _, existing := range recommended {
+			if existing == m {
+				return
+			}
+		}
+		recommended = append(recommended, m)
+	}
+
+	if response.SSORequired && hasSSO {
+		addRecommended("sso")
+		response.RecommendedMethodReason = "sso_required"
+	}
+	if response.LastSuccessfulMethod != "" {
+		addRecommended(response.LastSuccessfulMethod)
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "last_successful_method"
+		}
+	}
 	if response.DomainMatchedSSO != nil {
-		response.PreferredMethod = "sso"
-		// Check if SSO is enforced for this domain (could be a tenant setting)
-		// For now, we don't enforce - just recommend
-	} else if len(response.SSOProviders) > 0 && !response.UserExists {
-		// New user with SSO available - suggest SSO
-		response.PreferredMethod = "sso"
-	} else if response.UserExists {
-		// Existing user - password is fine
-		response.PreferredMethod = "password"
+		addRecommended("sso")
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "domain_matched_sso"
+		}
+	}
+	if response.PreferredMethod != "" {
+		addRecommended(response.PreferredMethod)
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "preferred_method"
+		}
+	}
+
+	addRecommended("sso")
+	addRecommended("password")
+	addRecommended("magic_link")
+
+	if len(recommended) > 0 {
+		response.RecommendedMethods = recommended
+		response.PreferredMethod = recommended[0]
+		if response.RecommendedMethodReason == "" {
+			response.RecommendedMethodReason = "default_order"
+		}
+	} else {
+		response.PreferredMethod = ""
+		response.RecommendedMethodReason = ""
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+func normalizeLoginMethod(method string) string {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "sso":
+		return "sso"
+	case "password":
+		return "password"
+	case "magic_link", "magic", "magic-link":
+		return "magic_link"
+	default:
+		return ""
+	}
 }
 
 // buildSSOLoginURL constructs the V2 tenant-scoped SSO login URL
