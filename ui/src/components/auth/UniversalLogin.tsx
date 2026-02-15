@@ -271,11 +271,15 @@ export default function UniversalLogin({
 
   const handleSSOLogin = (provider: SsoProviderOption) => {
     if (provider.login_url) {
-      // Add redirect URL for callback
-      const redirectUrl = `${window.location.origin}/auth/callback`
-      const url = new URL(provider.login_url)
-      url.searchParams.set('redirect_url', redirectUrl)
-      window.location.href = url.toString()
+      try {
+        // Add redirect URL for callback
+        const redirectUrl = `${window.location.origin}/auth/callback`
+        const url = new URL(provider.login_url)
+        url.searchParams.set('redirect_url', redirectUrl)
+        window.location.href = url.toString()
+      } catch {
+        setError('Invalid SSO provider configuration. Please contact your administrator.')
+      }
     }
   }
 
@@ -285,9 +289,13 @@ export default function UniversalLogin({
     try {
       const client = getClient()
       const tid = loginOptions?.tenant_id || selectedTenantId || tenantId
+      if (!tid) {
+        setError('Please choose an organization to continue.')
+        return
+      }
       await client.magicSend({
         email: email.trim().toLowerCase(),
-        tenant_id: tid || '',
+        tenant_id: tid,
         redirect_url: `${window.location.origin}/auth/callback`
       })
       setStep('magic_link_sent')
@@ -475,6 +483,7 @@ export default function UniversalLogin({
                 type="button"
                 onClick={goBackToEmail}
                 className="text-primary hover:underline shrink-0"
+                data-testid="change-email-options"
               >
                 Change
               </button>
@@ -488,7 +497,7 @@ export default function UniversalLogin({
             )}
 
             {/* Tenant selection when multiple tenants are returned */}
-            {loginOptions.tenants?.length ? (
+            {needsTenantSelection ? (
               <div className="space-y-2">
                 <Label>Choose organization</Label>
                 <div className="space-y-2">
@@ -584,11 +593,13 @@ export default function UniversalLogin({
               </Button>
             )}
 
-            {(fallbackMethods.length > 0 || (showSignupLink && loginOptions.signup_enabled && !loginOptions.user_exists)) && (
+            {(fallbackMethods.length > 0 ||
+              fallbackSSOProviders.length > 0 ||
+              (showSignupLink && loginOptions.signup_enabled && !loginOptions.user_exists)) && (
               <details className="rounded-md border p-3" data-testid="use-another-method">
                 <summary className="cursor-pointer text-sm font-medium" data-testid="use-another-method-toggle">Use another method</summary>
                 <div className="mt-3 space-y-2">
-                  {fallbackMethods.includes('sso') && fallbackSSOProviders.map((provider: SsoProviderOption) => (
+                  {(fallbackMethods.includes('sso') || fallbackSSOProviders.length > 0) && fallbackSSOProviders.map((provider: SsoProviderOption) => (
                     <Button
                       key={provider.slug}
                       type="button"
@@ -659,6 +670,7 @@ export default function UniversalLogin({
               variant="ghost"
               className="w-full"
               onClick={goBackToEmail}
+              data-testid="back-button-options"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -675,6 +687,7 @@ export default function UniversalLogin({
                 type="button"
                 onClick={goBackToEmail}
                 className="text-primary hover:underline shrink-0"
+                data-testid="change-email-password"
               >
                 Change
               </button>
@@ -701,6 +714,7 @@ export default function UniversalLogin({
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  data-testid="toggle-password-visibility"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -738,6 +752,7 @@ export default function UniversalLogin({
               variant="ghost"
               className="w-full"
               onClick={goBackToEmail}
+              data-testid="back-button-password"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -762,6 +777,7 @@ export default function UniversalLogin({
                     size="sm"
                     onClick={() => setChallengeMethod(method as 'totp' | 'backup_code')}
                     disabled={loading}
+                    data-testid={`mfa-method-${method}`}
                   >
                     {method === 'totp' ? 'Authenticator' : 'Backup code'}
                   </Button>
@@ -811,6 +827,7 @@ export default function UniversalLogin({
                 setChallengeCode('')
                 setStep('password')
               }}
+              data-testid="back-button-mfa"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -854,6 +871,7 @@ export default function UniversalLogin({
                 variant="ghost"
                 className="w-full"
                 onClick={goBackToEmail}
+                data-testid="back-button-magic-link"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to sign in

@@ -220,10 +220,14 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		}
 	}
 
+	hasSSO := response.DomainMatchedSSO != nil || len(response.SSOProviders) > 0
 	if response.SSORequired {
-		response.SSOOnly = true
 		response.PasswordEnabled = false
 		response.MagicLinkEnabled = false
+		response.SSOOnly = hasSSO
+		if !hasSSO {
+			response.PreferredMethod = ""
+		}
 	}
 
 	if tenantID != uuid.Nil && hasResolvedUser {
@@ -249,7 +253,6 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		}
 	}
 
-	hasSSO := response.DomainMatchedSSO != nil || len(response.SSOProviders) > 0
 	available := map[string]bool{
 		"sso":        hasSSO,
 		"password":   response.PasswordEnabled,
@@ -303,6 +306,9 @@ func (h *Controller) getLoginOptions(c echo.Context) error {
 		if response.RecommendedMethodReason == "" {
 			response.RecommendedMethodReason = "default_order"
 		}
+	} else {
+		response.PreferredMethod = ""
+		response.RecommendedMethodReason = ""
 	}
 
 	return c.JSON(http.StatusOK, response)
