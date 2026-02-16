@@ -1,0 +1,111 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f6f8fb;
+  color: #112;
+}
+
+.page {
+  width: min(1100px, 100% - 2rem);
+  margin: 2rem auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d5dbe7;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 4px 20px rgba(18, 35, 76, 0.05);
+}
+
+.muted {
+  color: #4f5b78;
+}
+
+.grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+input {
+  border: 1px solid #b9c4db;
+  border-radius: 0.45rem;
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+}
+
+button {
+  border: 1px solid #234fd8;
+  background: #234fd8;
+  color: #fff;
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+button.secondary {
+  border-color: #8a96b3;
+  background: #fff;
+  color: #22304e;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.notice {
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.92rem;
+}
+
+.notice.success {
+  border: 1px solid #8bd5ac;
+  background: #e7fff1;
+  color: #0f5d35;
+}
+
+.notice.error {
+  border: 1px solid #f3a6a6;
+  background: #fff0f0;
+  color: #7d1a1a;
+}
+
+.debug pre {
+  margin: 0;
+  background: #f0f3fa;
+  border: 1px solid #d0d8eb;
+  border-radius: 0.45rem;
+  padding: 0.6rem;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 0.78rem;
+}
