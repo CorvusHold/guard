@@ -12,6 +12,7 @@ It demonstrates:
 - Guard API running (default: `http://localhost:8080`)
 - `jq` installed (for bootstrap script)
 - `pnpm` installed
+- `curl`, `openssl`, and `python3` installed (required by `scripts/oauth2-smoke.sh`)
 
 ## Quick start
 

@@ -32,18 +32,18 @@ source /dev/stdin <<<"$bootstrap_env"
 : "${BOOTSTRAP_USER_PASSWORD:?bootstrap-token did not return BOOTSTRAP_USER_PASSWORD}"
 
 # 2) Create an OAuth public client in that tenant via admin token
-create_payload="$(cat <<JSON
-{
-  "name": "$POC_CLIENT_NAME",
-  "client_type": "public",
-  "redirect_uris": ["$POC_REDIRECT_URI"],
-  "scopes": ["openid", "profile", "email", "offline_access"],
-  "grant_types": ["authorization_code", "refresh_token"]
-}
-JSON
-)"
+create_payload="$(jq -n \
+  --arg name "$POC_CLIENT_NAME" \
+  --arg redirect "$POC_REDIRECT_URI" \
+  '{
+    name: $name,
+    client_type: "public",
+    redirect_uris: [$redirect],
+    scopes: ["openid", "profile", "email", "offline_access"],
+    grant_types: ["authorization_code", "refresh_token"]
+  }')"
 
-create_resp="$(curl -sS -X POST "$GUARD_BASE_URL/api/v1/auth/admin/oauth-clients" \
+create_resp="$(curl -sS --connect-timeout 5 --max-time 10 -X POST "$GUARD_BASE_URL/api/v1/auth/admin/oauth-clients" \
   -H "Authorization: Bearer $GUARD_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d "$create_payload")"
