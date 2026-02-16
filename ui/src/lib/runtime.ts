@@ -65,7 +65,9 @@ export function ensureRuntimeConfigFromQuery(): void {
     const currentParams = new URLSearchParams(window.location.search)
     const kept = new URLSearchParams()
     const src = currentParams.get('source')
+    const returnTo = currentParams.get('return_to')
     if (src) kept.set('source', src)
+    if (returnTo) kept.set('return_to', returnTo)
 
     if (pathname.startsWith('/auth/callback')) {
       const provider = currentParams.get('provider')

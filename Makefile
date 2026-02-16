@@ -12,6 +12,7 @@ export RATE_LIMIT_RETRIES ?= 2
         grafana-url prometheus-url alertmanager-url mailhog-url \
         api-test-wait conformance-up conformance conformance-down \
         migrate-up-test-dc examples-up examples-down examples-wait examples-seed examples-url \
+        oauth2-poc-install oauth2-poc-bootstrap oauth2-poc-smoke oauth2-poc-workflow oauth2-poc-dev \
         test-rbac-admin test-fga test-integration test-fga-smoke test-fga-nonadmin-check \
         portal-e2e-infra-up portal-e2e-setup portal-e2e portal-e2e-suite-no-down portal-e2e-suite portal-e2e-down \
         release-check docker-build docker-build-local
@@ -249,6 +250,28 @@ examples-down:
 examples-url:
 	@echo "Examples API: http://localhost:8081"
 	@echo "MailHog: http://localhost:8025"
+
+# ---- OAuth2 POC (examples/oauth2-poc) ----
+
+# Install POC dependencies
+oauth2-poc-install:
+	pnpm --dir examples/oauth2-poc install
+
+# Bootstrap tenant/admin/oauth client and write POC env file
+oauth2-poc-bootstrap:
+	bash examples/oauth2-poc/scripts/bootstrap.sh
+
+# Run API-level OAuth2 smoke checks (signup/authorize/token/me/revoke)
+oauth2-poc-smoke:
+	bash examples/oauth2-poc/scripts/oauth2-smoke.sh
+
+# Run bootstrap + smoke in sequence
+oauth2-poc-workflow:
+	bash examples/oauth2-poc/scripts/run-workflow.sh
+
+# Start local POC dev server
+oauth2-poc-dev:
+	bash -lc 'cd examples/oauth2-poc && pnpm run dev'
 
 # ---- k6 scenarios (via compose service 'k6') ----
 

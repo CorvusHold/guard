@@ -16,6 +16,18 @@ export interface GuardClientOptions {
   authMode?: 'bearer' | 'cookie';
 }
 
+export interface OAuth2TokenExchangeInput {
+  code: string;
+  client_id: string;
+  redirect_uri: string;
+  code_verifier: string;
+}
+
+export interface OAuth2RevokeInput {
+  token: string;
+  token_type_hint?: 'refresh_token' | 'access_token';
+}
+
 export interface OAuth2AuthorizeParams {
   client_id: string;
   redirect_uri: string;
@@ -37,6 +49,10 @@ export interface OAuth2AuthorizeParams {
 type TokensResp = {
   access_token?: string | null;
   refresh_token?: string | null;
+  id_token?: string | null;
+  token_type?: string | null;
+  expires_in?: number;
+  scope?: string | null;
   success?: boolean;
 };
 type MfaChallengeResp = OpenAPIComponents['schemas']['controller.mfaChallengeResp'];
@@ -1514,6 +1530,54 @@ export class GuardClient {
    */
   async getOAuth2Metadata(): Promise<ResponseWrapper<OAuth2MetadataResp>> {
     return this.request<OAuth2MetadataResp>('/.well-known/oauth-authorization-server', { method: 'GET' });
+  }
+
+  /**
+   * Exchange an OAuth2 authorization code for tokens (Authorization Code + PKCE).
+   */
+  async exchangeOAuth2Code(input: OAuth2TokenExchangeInput): Promise<ResponseWrapper<TokensResp>> {
+    const code = input.code?.trim();
+    const clientID = input.client_id?.trim();
+    const redirectURI = input.redirect_uri?.trim();
+    const codeVerifier = input.code_verifier?.trim();
+
+    if (!code) throw new Error('code is required');
+    if (!clientID) throw new Error('client_id is required');
+    if (!redirectURI) throw new Error('redirect_uri is required');
+    if (!codeVerifier) throw new Error('code_verifier is required');
+
+    const body = new URLSearchParams();
+    body.set('grant_type', 'authorization_code');
+    body.set('code', code);
+    body.set('client_id', clientID);
+    body.set('redirect_uri', redirectURI);
+    body.set('code_verifier', codeVerifier);
+
+    const res = await this.request<TokensResp>('/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    if (res.meta.status >= 200 && res.meta.status < 300) this.persistTokensFrom(res.data);
+    return res;
+  }
+
+  /**
+   * Revoke an OAuth2 token (RFC7009). Server returns 200 for unknown tokens as well.
+   */
+  async revokeOAuth2Token(input: OAuth2RevokeInput): Promise<ResponseWrapper<{ status?: string }>> {
+    const token = input.token?.trim();
+    if (!token) throw new Error('token is required');
+
+    const body = new URLSearchParams();
+    body.set('token', token);
+    if (input.token_type_hint) body.set('token_type_hint', input.token_type_hint);
+
+    return this.request<{ status?: string }>('/oauth/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
   }
 
   /**
