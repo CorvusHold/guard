@@ -318,6 +318,15 @@ func (h *Controller) authorize(c echo.Context) error {
 		loginURL := h.buildLoginURL(c)
 		return c.Redirect(http.StatusFound, loginURL)
 	}
+	if client.TenantID != tenantID {
+		return redirectWithError(
+			c,
+			in.RedirectURI,
+			in.State,
+			"access_denied",
+			"authenticated user is not allowed to access this client tenant",
+		)
+	}
 
 	in.UserID = userID
 	in.TenantID = tenantID
@@ -433,6 +442,20 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 	userID, tenantID, authenticated := h.extractAuthFromRequest(c)
 	if !authenticated {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+	}
+
+	client, err := h.svc.GetClientByClientID(c.Request().Context(), req.ClientID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
+	}
+	if client.TenantID != tenantID {
+		return redirectWithError(
+			c,
+			req.RedirectURI,
+			req.State,
+			"access_denied",
+			"authenticated user is not allowed to access this client tenant",
+		)
 	}
 
 	// Verify CSRF consent challenge

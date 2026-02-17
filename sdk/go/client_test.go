@@ -5,11 +5,33 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	guard "github.com/corvusHold/guard/sdk/go"
 )
+
+type testTokenStore struct {
+	access  string
+	refresh string
+}
+
+func (s *testTokenStore) Get(_ context.Context) (string, string) {
+	return s.access, s.refresh
+}
+
+func (s *testTokenStore) Set(_ context.Context, access, refresh string) error {
+	s.access = access
+	s.refresh = refresh
+	return nil
+}
+
+func (s *testTokenStore) Clear(_ context.Context) error {
+	s.access = ""
+	s.refresh = ""
+	return nil
+}
 
 // TestPasswordSignup tests the PasswordSignup method
 func TestPasswordSignup(t *testing.T) {
@@ -609,6 +631,172 @@ func TestCookieMode(t *testing.T) {
 	_, err = client.Me(context.Background())
 	if err != nil {
 		t.Fatalf("Me request failed: %v", err)
+	}
+}
+
+func TestBuildOAuth2AuthorizeURL(t *testing.T) {
+	client, err := guard.NewGuardClient("https://guard.example.com")
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	prompt := "login"
+	loginHint := "user@example.com"
+
+	authorizeURL, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+		ClientID:      "client-123",
+		RedirectURI:   "http://localhost:3004/callback",
+		Scope:         "openid profile email offline_access",
+		State:         "state-123",
+		Nonce:         "nonce-123",
+		CodeChallenge: "challenge-123",
+		Prompt:        &prompt,
+		LoginHint:     &loginHint,
+	})
+	if err != nil {
+		t.Fatalf("BuildOAuth2AuthorizeURL failed: %v", err)
+	}
+
+	parsed, err := url.Parse(authorizeURL)
+	if err != nil {
+		t.Fatalf("failed to parse URL: %v", err)
+	}
+	if parsed.Path != "/oauth/authorize" {
+		t.Fatalf("expected /oauth/authorize path, got %s", parsed.Path)
+	}
+	q := parsed.Query()
+	if q.Get("client_id") != "client-123" {
+		t.Fatalf("expected client_id=client-123, got %s", q.Get("client_id"))
+	}
+	if q.Get("redirect_uri") != "http://localhost:3004/callback" {
+		t.Fatalf("unexpected redirect_uri: %s", q.Get("redirect_uri"))
+	}
+	if q.Get("code_challenge_method") != "S256" {
+		t.Fatalf("expected default code_challenge_method S256, got %s", q.Get("code_challenge_method"))
+	}
+	if q.Get("prompt") != "login" {
+		t.Fatalf("expected prompt=login, got %s", q.Get("prompt"))
+	}
+	if q.Get("login_hint") != "user@example.com" {
+		t.Fatalf("expected login_hint=user@example.com, got %s", q.Get("login_hint"))
+	}
+}
+
+func TestExchangeOAuth2Code(t *testing.T) {
+	store := &testTokenStore{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token":
+			if r.Method != http.MethodPost {
+				t.Fatalf("expected POST, got %s", r.Method)
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
+			if r.Form.Get("grant_type") != "authorization_code" {
+				t.Fatalf("expected authorization_code grant, got %s", r.Form.Get("grant_type"))
+			}
+			if r.Form.Get("code") != "code-123" {
+				t.Fatalf("expected code-123, got %s", r.Form.Get("code"))
+			}
+			if r.Form.Get("code_verifier") != "verifier-123" {
+				t.Fatalf("expected verifier-123, got %s", r.Form.Get("code_verifier"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "oauth-access-1",
+				"refresh_token": "oauth-refresh-1",
+				"token_type":    "Bearer",
+			})
+		case "/api/v1/auth/me":
+			if got := r.Header.Get("Authorization"); got != "Bearer oauth-access-1" {
+				t.Fatalf("expected Authorization Bearer oauth-access-1, got %s", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1", "email": "user@example.com"})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := guard.NewGuardClient(server.URL, guard.WithTokenStore(store))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	resp, err := client.ExchangeOAuth2Code(context.Background(), guard.OAuth2CodeExchangeRequest{
+		Code:         "code-123",
+		CodeVerifier: "verifier-123",
+		RedirectURI:  "http://localhost:3004/callback",
+	})
+	if err != nil {
+		t.Fatalf("ExchangeOAuth2Code failed: %v", err)
+	}
+	if resp.AccessToken == nil || *resp.AccessToken != "oauth-access-1" {
+		t.Fatalf("unexpected access token: %+v", resp.AccessToken)
+	}
+	if store.access != "oauth-access-1" || store.refresh != "oauth-refresh-1" {
+		t.Fatalf("tokens not persisted in store, got access=%s refresh=%s", store.access, store.refresh)
+	}
+
+	if _, err := client.Me(context.Background()); err != nil {
+		t.Fatalf("Me after exchange failed: %v", err)
+	}
+}
+
+func TestOAuth2RefreshUsesTokenStore(t *testing.T) {
+	store := &testTokenStore{refresh: "refresh-from-store"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/token" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm failed: %v", err)
+		}
+		if r.Form.Get("grant_type") != "refresh_token" {
+			t.Fatalf("expected refresh_token grant, got %s", r.Form.Get("grant_type"))
+		}
+		if r.Form.Get("refresh_token") != "refresh-from-store" {
+			t.Fatalf("expected refresh-from-store, got %s", r.Form.Get("refresh_token"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  "oauth-access-2",
+			"refresh_token": "oauth-refresh-2",
+			"token_type":    "Bearer",
+		})
+	}))
+	defer server.Close()
+
+	client, err := guard.NewGuardClient(server.URL, guard.WithTokenStore(store))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	resp, err := client.OAuth2Refresh(context.Background(), guard.OAuth2RefreshRequest{})
+	if err != nil {
+		t.Fatalf("OAuth2Refresh failed: %v", err)
+	}
+	if resp.AccessToken == nil || *resp.AccessToken != "oauth-access-2" {
+		t.Fatalf("unexpected access token: %+v", resp.AccessToken)
+	}
+	if store.access != "oauth-access-2" || store.refresh != "oauth-refresh-2" {
+		t.Fatalf("tokens not persisted, got access=%s refresh=%s", store.access, store.refresh)
+	}
+}
+
+func TestOAuth2RefreshWithoutStoredToken(t *testing.T) {
+	client, err := guard.NewGuardClient("http://localhost:8080")
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	_, err = client.OAuth2Refresh(context.Background(), guard.OAuth2RefreshRequest{})
+	if err == nil || !strings.Contains(err.Error(), "no refresh token available") {
+		t.Fatalf("expected no refresh token error, got %v", err)
 	}
 }
 
