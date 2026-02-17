@@ -57,10 +57,15 @@ fi
 
 # Pre-grant consent for the bootstrap user so first browser login can redirect
 # directly back to the BFF callback (no manual consent decision step in browser).
+login_payload="$(jq -n \
+  --arg tenant_id "$BOOTSTRAP_TENANT_ID" \
+  --arg email "$BOOTSTRAP_USER_EMAIL" \
+  --arg password "$BOOTSTRAP_USER_PASSWORD" \
+  '{tenant_id: $tenant_id, email: $email, password: $password}')"
 login_json="$(curl -sS --connect-timeout 5 --max-time 15 -X POST "$GUARD_BASE_URL/api/v1/auth/password/login" \
   -H 'X-Auth-Mode: json' \
   -H 'Content-Type: application/json' \
-  -d "{\"tenant_id\":\"$BOOTSTRAP_TENANT_ID\",\"email\":\"$BOOTSTRAP_USER_EMAIL\",\"password\":\"$BOOTSTRAP_USER_PASSWORD\"}")"
+  -d "$login_payload")"
 bootstrap_access="$(printf '%s' "$login_json" | jq -r '.access_token // empty')"
 if [[ -z "$bootstrap_access" ]]; then
   echo "Warning: failed to login bootstrap user for consent pre-grant" >&2
@@ -84,6 +89,7 @@ fi
 
 mkdir -p "$BACKEND_DIR"
 cat > "$BACKEND_DIR/.env" <<EOF
+# WARNING: contains credentials, do NOT commit this file
 PORT=3004
 GUARD_BASE_URL=$GUARD_BASE_URL
 OAUTH_CLIENT_ID=$client_id

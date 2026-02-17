@@ -221,40 +221,31 @@ func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
 // persistTokens saves tokens to the token store if present (bearer mode only).
 // In cookie mode, tokens are stored in HTTP-only cookies by the server.
 func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerAuthExchangeResp) error {
-	if c.authMode == AuthModeCookie {
-		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally
-		return nil
-	}
 	if t == nil {
 		return nil
 	}
-	var access, refresh string
-	if t.AccessToken != nil {
-		access = *t.AccessToken
-	}
-	if t.RefreshToken != nil {
-		refresh = *t.RefreshToken
-	}
-	if access == "" && refresh == "" {
-		return nil
-	}
-	return c.tokens.Set(ctx, access, refresh)
+	return c.persistAccessRefresh(ctx, t.AccessToken, t.RefreshToken)
 }
 
 // persistDomainTokens saves OAuth token endpoint responses to the token store (bearer mode only).
 func (c *GuardClient) persistDomainTokens(ctx context.Context, t *DomainTokenResponse) error {
-	if c.authMode == AuthModeCookie {
-		return nil
-	}
 	if t == nil {
 		return nil
 	}
-	var access, refresh string
-	if t.AccessToken != nil {
-		access = *t.AccessToken
+	return c.persistAccessRefresh(ctx, t.AccessToken, t.RefreshToken)
+}
+
+func (c *GuardClient) persistAccessRefresh(ctx context.Context, accessToken, refreshToken *string) error {
+	if c.authMode == AuthModeCookie {
+		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally.
+		return nil
 	}
-	if t.RefreshToken != nil {
-		refresh = *t.RefreshToken
+	var access, refresh string
+	if accessToken != nil {
+		access = *accessToken
+	}
+	if refreshToken != nil {
+		refresh = *refreshToken
 	}
 	if access == "" && refresh == "" {
 		return nil

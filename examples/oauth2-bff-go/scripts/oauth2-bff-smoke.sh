@@ -41,12 +41,18 @@ cleanup() {
 trap cleanup EXIT
 
 echo "[0/9] Start BFF backend"
+# Build once and run the binary to reduce repeated compile latency in smoke runs.
+backend_bin="$tmp_dir/backend"
+(
+  cd "$BACKEND_DIR"
+  go build -o "$backend_bin" .
+)
 (
   cd "$BACKEND_DIR"
   set -a
   source "$BACKEND_DIR/.env"
   set +a
-  exec go run .
+  exec "$backend_bin"
 ) >"$tmp_dir/backend.log" 2>&1 &
 backend_pid="$!"
 
@@ -79,6 +85,9 @@ if [[ -z "$state" || -z "$code_challenge" ]]; then
 fi
 
 echo "[2/9] Signup smoke user"
+# NOTE: This script currently leaves the smoke user in Guard because deleting it
+# requires admin credentials not present in backend/.env. To purge manually,
+# use an admin token and call DELETE /api/v1/auth/admin/users/{id}.
 new_email="oauth-bff-smoke-$(openssl rand -hex 4)@example.com"
 new_password="Password123!"
 curl -sS -X POST "$GUARD_BASE_URL/api/v1/auth/password/signup" \

@@ -284,6 +284,7 @@ authorizeURL, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
     State:         state,
     Nonce:         nonce,
     CodeChallenge: codeChallenge,
+    CodeChallengeMethod: "S256",
 })
 
 // 2) Exchange callback code server-side (tokens persisted to TokenStore in bearer mode)

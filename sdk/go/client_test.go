@@ -687,19 +687,29 @@ func TestExchangeOAuth2Code(t *testing.T) {
 		switch r.URL.Path {
 		case "/oauth/token":
 			if r.Method != http.MethodPost {
-				t.Fatalf("expected POST, got %s", r.Method)
+				t.Errorf("expected POST, got %s", r.Method)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
 			}
 			if err := r.ParseForm(); err != nil {
-				t.Fatalf("ParseForm failed: %v", err)
+				t.Errorf("ParseForm failed: %v", err)
+				http.Error(w, "invalid form", http.StatusBadRequest)
+				return
 			}
 			if r.Form.Get("grant_type") != "authorization_code" {
-				t.Fatalf("expected authorization_code grant, got %s", r.Form.Get("grant_type"))
+				t.Errorf("expected authorization_code grant, got %s", r.Form.Get("grant_type"))
+				http.Error(w, "unexpected grant_type", http.StatusBadRequest)
+				return
 			}
 			if r.Form.Get("code") != "code-123" {
-				t.Fatalf("expected code-123, got %s", r.Form.Get("code"))
+				t.Errorf("expected code-123, got %s", r.Form.Get("code"))
+				http.Error(w, "unexpected code", http.StatusBadRequest)
+				return
 			}
 			if r.Form.Get("code_verifier") != "verifier-123" {
-				t.Fatalf("expected verifier-123, got %s", r.Form.Get("code_verifier"))
+				t.Errorf("expected verifier-123, got %s", r.Form.Get("code_verifier"))
+				http.Error(w, "unexpected verifier", http.StatusBadRequest)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -710,13 +720,17 @@ func TestExchangeOAuth2Code(t *testing.T) {
 			})
 		case "/api/v1/auth/me":
 			if got := r.Header.Get("Authorization"); got != "Bearer oauth-access-1" {
-				t.Fatalf("expected Authorization Bearer oauth-access-1, got %s", got)
+				t.Errorf("expected Authorization Bearer oauth-access-1, got %s", got)
+				http.Error(w, "unexpected authorization", http.StatusUnauthorized)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1", "email": "user@example.com"})
 		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
 		}
 	}))
 	defer server.Close()
@@ -750,16 +764,24 @@ func TestOAuth2RefreshUsesTokenStore(t *testing.T) {
 	store := &testTokenStore{refresh: "refresh-from-store"}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/oauth/token" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
 		}
 		if err := r.ParseForm(); err != nil {
-			t.Fatalf("ParseForm failed: %v", err)
+			t.Errorf("ParseForm failed: %v", err)
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
 		}
 		if r.Form.Get("grant_type") != "refresh_token" {
-			t.Fatalf("expected refresh_token grant, got %s", r.Form.Get("grant_type"))
+			t.Errorf("expected refresh_token grant, got %s", r.Form.Get("grant_type"))
+			http.Error(w, "unexpected grant_type", http.StatusBadRequest)
+			return
 		}
 		if r.Form.Get("refresh_token") != "refresh-from-store" {
-			t.Fatalf("expected refresh-from-store, got %s", r.Form.Get("refresh_token"))
+			t.Errorf("expected refresh-from-store, got %s", r.Form.Get("refresh_token"))
+			http.Error(w, "unexpected refresh token", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

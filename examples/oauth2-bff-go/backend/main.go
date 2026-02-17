@@ -47,6 +47,7 @@ type pendingAuth struct {
 }
 
 type session struct {
+	mu           sync.Mutex
 	ID           string
 	AccessToken  string
 	RefreshToken string
@@ -69,7 +70,9 @@ func (s *sessionStore) getOrCreate(w http.ResponseWriter, r *http.Request) *sess
 
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		if existing, ok := s.sessions[cookie.Value]; ok {
+			existing.mu.Lock()
 			existing.UpdatedAt = time.Now()
+			existing.mu.Unlock()
 			return existing
 		}
 	}
@@ -92,10 +95,14 @@ type sessionTokenStore struct {
 }
 
 func (s *sessionTokenStore) Get(_ context.Context) (string, string) {
+	s.sess.mu.Lock()
+	defer s.sess.mu.Unlock()
 	return s.sess.AccessToken, s.sess.RefreshToken
 }
 
 func (s *sessionTokenStore) Set(_ context.Context, access, refresh string) error {
+	s.sess.mu.Lock()
+	defer s.sess.mu.Unlock()
 	s.sess.AccessToken = access
 	s.sess.RefreshToken = refresh
 	s.sess.UpdatedAt = time.Now()
@@ -103,6 +110,8 @@ func (s *sessionTokenStore) Set(_ context.Context, access, refresh string) error
 }
 
 func (s *sessionTokenStore) Clear(_ context.Context) error {
+	s.sess.mu.Lock()
+	defer s.sess.mu.Unlock()
 	s.sess.AccessToken = ""
 	s.sess.RefreshToken = ""
 	s.sess.UpdatedAt = time.Now()
@@ -166,12 +175,14 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 	verifier := mustRandomString(48)
 	challenge := codeChallengeS256(verifier)
 
+	sess.mu.Lock()
 	sess.Pending = &pendingAuth{
 		State:        state,
 		Nonce:        nonce,
 		CodeVerifier: verifier,
 		CreatedAt:    time.Now(),
 	}
+	sess.mu.Unlock()
 
 	client, err := a.newClient(sess)
 	if err != nil {
@@ -213,16 +224,19 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		a.redirectUIError(w, r, "missing_code", "oauth callback did not contain code")
 		return
 	}
-	if sess.Pending == nil {
+	sess.mu.Lock()
+	pending := sess.Pending
+	sess.mu.Unlock()
+	if pending == nil {
 		a.redirectUIError(w, r, "missing_state", "missing pending oauth session; reset and retry")
 		return
 	}
-	if time.Since(sess.Pending.CreatedAt) > pendingTTL {
+	if time.Since(pending.CreatedAt) > pendingTTL {
 		a.clearSession(sess)
 		a.redirectUIError(w, r, "state_expired", "oauth state expired; start login again")
 		return
 	}
-	if state != sess.Pending.State {
+	if state != pending.State {
 		a.clearSession(sess)
 		a.redirectUIError(w, r, "state_mismatch", "oauth state mismatch; start login again")
 		return
@@ -235,7 +249,7 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = client.ExchangeOAuth2Code(r.Context(), guard.OAuth2CodeExchangeRequest{
 		Code:         code,
-		CodeVerifier: sess.Pending.CodeVerifier,
+		CodeVerifier: pending.CodeVerifier,
 		RedirectURI:  a.cfg.RedirectURI,
 		ClientID:     strPtr(a.cfg.OAuthClient),
 	})
@@ -262,13 +276,19 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess.mu.Lock()
 	sess.Pending = nil
+	sess.mu.Unlock()
 	http.Redirect(w, r, "/?auth=ok", http.StatusFound)
 }
 
 func (a *app) handleMe(w http.ResponseWriter, r *http.Request) {
 	sess := a.sessions.getOrCreate(w, r)
-	if sess.AccessToken == "" {
+	sess.mu.Lock()
+	accessToken := sess.AccessToken
+	refreshToken := sess.RefreshToken
+	sess.mu.Unlock()
+	if accessToken == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 		return
 	}
@@ -280,10 +300,15 @@ func (a *app) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	profile, err := client.Me(r.Context())
 	if err != nil {
-		if sess.RefreshToken != "" {
+		originalErr := err
+		if refreshToken != "" && isAuthRelatedError(originalErr) {
 			if _, rerr := client.OAuth2Refresh(r.Context(), guard.OAuth2RefreshRequest{ClientID: strPtr(a.cfg.OAuthClient)}); rerr == nil {
 				profile, err = client.Me(r.Context())
+			} else {
+				err = fmt.Errorf("%w (refresh failed: %v)", originalErr, rerr)
 			}
+		} else {
+			err = originalErr
 		}
 	}
 	if err != nil {
@@ -306,6 +331,10 @@ func (a *app) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+		return
+	}
 	sess := a.sessions.getOrCreate(w, r)
 	client, err := a.newClient(sess)
 	if err == nil {
@@ -346,10 +375,23 @@ func (a *app) clearSession(sess *session) {
 	if sess == nil {
 		return
 	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
 	sess.Pending = nil
 	sess.AccessToken = ""
 	sess.RefreshToken = ""
 	sess.UpdatedAt = time.Now()
+}
+
+func isAuthRelatedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unauthorized") ||
+		strings.Contains(msg, "401") ||
+		strings.Contains(msg, "expired") ||
+		strings.Contains(msg, "invalid token")
 }
 
 func (a *app) tenantMismatch(profile *guard.DomainUserProfile) (bool, string, string) {

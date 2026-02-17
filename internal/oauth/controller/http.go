@@ -448,6 +448,16 @@ func (h *Controller) authorizeDecision(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid client_id"})
 	}
+	validURI := false
+	for _, uri := range client.RedirectURIs {
+		if uri == req.RedirectURI {
+			validURI = true
+			break
+		}
+	}
+	if !validURI {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid redirect_uri"})
+	}
 	if client.TenantID != tenantID {
 		return redirectWithError(
 			c,

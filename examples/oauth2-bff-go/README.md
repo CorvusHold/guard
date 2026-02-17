@@ -48,6 +48,10 @@ cp examples/oauth2-bff-go/backend/.env.example examples/oauth2-bff-go/backend/.e
 Required values:
 - `OAUTH_CLIENT_ID`: OAuth client ID from Guard admin
 - `OAUTH_REDIRECT_URI`: must exactly match Guard client redirect URI (default: `http://localhost:3004/oauth/callback`)
+- `TENANT_ID`: tenant allowed to use this BFF app (bootstrap writes this automatically to `.env`)
+
+Security note:
+- `examples/oauth2-bff-go/backend/.env` contains sensitive values (including bootstrap credentials) and must never be committed.
 
 ## Run
 
