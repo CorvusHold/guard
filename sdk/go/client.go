@@ -277,6 +277,10 @@ func (c *GuardClient) BuildOAuth2AuthorizeURL(params OAuth2AuthorizeParams) (str
 	challengeMethod := params.CodeChallengeMethod
 	if challengeMethod == "" {
 		challengeMethod = "S256"
+	} else {
+		if challengeMethod != "S256" && challengeMethod != "plain" {
+			return "", errors.New("invalid code_challenge_method: must be 'S256' or 'plain'")
+		}
 	}
 
 	base, err := url.Parse(c.baseURL)

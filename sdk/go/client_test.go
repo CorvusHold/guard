@@ -635,7 +635,7 @@ func TestCookieMode(t *testing.T) {
 }
 
 func TestBuildOAuth2AuthorizeURL(t *testing.T) {
-	client, err := guard.NewGuardClient("https://guard.example.com")
+	client, err := guard.NewGuardClient("http://localhost:8080")
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -679,6 +679,34 @@ func TestBuildOAuth2AuthorizeURL(t *testing.T) {
 	if q.Get("login_hint") != "user@example.com" {
 		t.Fatalf("expected login_hint=user@example.com, got %s", q.Get("login_hint"))
 	}
+
+	t.Run("missing client_id", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "",
+			RedirectURI:   "http://localhost:3004/callback",
+			Scope:         "openid",
+			State:         "s",
+			Nonce:         "n",
+			CodeChallenge: "c",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing client_id")
+		}
+	})
+
+	t.Run("missing redirect_uri", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "client-123",
+			RedirectURI:   "",
+			Scope:         "openid",
+			State:         "s",
+			Nonce:         "n",
+			CodeChallenge: "c",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing redirect_uri")
+		}
+	})
 }
 
 func TestExchangeOAuth2Code(t *testing.T) {

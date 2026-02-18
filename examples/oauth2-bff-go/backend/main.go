@@ -37,6 +37,7 @@ type config struct {
 	Scope            string
 	ExpectedTenantID string
 	ForcePromptLogin bool
+	CookieSecure     bool
 }
 
 type pendingAuth struct {
@@ -58,10 +59,11 @@ type session struct {
 type sessionStore struct {
 	mu       sync.Mutex
 	sessions map[string]*session
+	secure   bool
 }
 
-func newSessionStore() *sessionStore {
-	return &sessionStore{sessions: make(map[string]*session)}
+func newSessionStore(secure bool) *sessionStore {
+	return &sessionStore{sessions: make(map[string]*session), secure: secure}
 }
 
 func (s *sessionStore) getOrCreate(w http.ResponseWriter, r *http.Request) *session {
@@ -80,12 +82,14 @@ func (s *sessionStore) getOrCreate(w http.ResponseWriter, r *http.Request) *sess
 	sid := mustRandomString(24)
 	sess := &session{ID: sid, UpdatedAt: time.Now()}
 	s.sessions[sid] = sess
+	// Secure flag is configurable to support local http development while enforcing HTTPS in production.
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    sid,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   s.secure,
 	})
 	return sess
 }
@@ -125,7 +129,7 @@ type app struct {
 
 func main() {
 	cfg := loadConfig()
-	app := &app{cfg: cfg, sessions: newSessionStore()}
+	app := &app{cfg: cfg, sessions: newSessionStore(cfg.CookieSecure)}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/config", app.handleConfig)
@@ -387,9 +391,23 @@ func isAuthRelatedError(err error) bool {
 	if err == nil {
 		return false
 	}
+	var sc interface{ StatusCode() int }
+	if errors.As(err, &sc) {
+		code := sc.StatusCode()
+		if code == http.StatusUnauthorized || code == http.StatusForbidden {
+			return true
+		}
+	}
+	var respErr interface{ Response() *http.Response }
+	if errors.As(err, &respErr) {
+		if resp := respErr.Response(); resp != nil {
+			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+				return true
+			}
+		}
+	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unauthorized") ||
-		strings.Contains(msg, "401") ||
 		strings.Contains(msg, "expired") ||
 		strings.Contains(msg, "invalid token")
 }
@@ -431,6 +449,7 @@ func loadConfig() config {
 		Scope:            strings.TrimSpace(envOr("OAUTH_SCOPE", "openid profile email offline_access")),
 		ExpectedTenantID: strings.TrimSpace(os.Getenv("TENANT_ID")),
 		ForcePromptLogin: parseBoolEnv("BFF_FORCE_PROMPT_LOGIN", true),
+		CookieSecure:     parseBoolEnv("BFF_COOKIE_SECURE", false),
 	}
 	if cfg.OAuthClient == "" {
 		log.Fatal("missing OAUTH_CLIENT_ID")

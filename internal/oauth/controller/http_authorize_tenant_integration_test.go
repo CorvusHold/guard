@@ -3,9 +3,10 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -138,8 +139,19 @@ func TestIntegrationAuthorizeDecision_DeniesMismatchedTenantSession(t *testing.T
 	}
 
 	state := "state-tenant-mismatch-decision"
-	body := `{"approved":true,"consent_challenge":"dummy-challenge","client_id":"gc_integration_mismatch_decision","redirect_uri":"http://localhost:3004/oauth/callback","response_type":"code","scope":"openid profile email offline_access","state":"` + state + `","nonce":"nonce-123","code_challenge":"challenge-123","code_challenge_method":"S256"}`
-	req := httptest.NewRequest(http.MethodPost, "/oauth/authorize/decision", io.NopCloser(strings.NewReader(body)))
+	body, _ := json.Marshal(map[string]any{
+		"approved":              true,
+		"consent_challenge":     "dummy-challenge",
+		"client_id":             "gc_integration_mismatch_decision",
+		"redirect_uri":          "http://localhost:3004/oauth/callback",
+		"response_type":         "code",
+		"scope":                 "openid profile email offline_access",
+		"state":                 state,
+		"nonce":                 "nonce-123",
+		"code_challenge":        "challenge-123",
+		"code_challenge_method": "S256",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/oauth/authorize/decision", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer integration-token")
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()

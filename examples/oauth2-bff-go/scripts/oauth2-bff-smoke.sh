@@ -31,10 +31,20 @@ tmp_dir="$(mktemp -d)"
 cookies_file="$tmp_dir/cookies.txt"
 headers_file="$tmp_dir/headers.txt"
 backend_pid=""
+created_user_id=""
 cleanup() {
   if [[ -n "$backend_pid" ]]; then
     kill "$backend_pid" >/dev/null 2>&1 || true
     wait "$backend_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$created_user_id" ]]; then
+    admin_token="${ADMIN_TOKEN:-}"
+    if [[ -n "$admin_token" ]]; then
+      curl -sS -X DELETE "$GUARD_BASE_URL/api/v1/auth/admin/users/$created_user_id" \
+        -H "Authorization: Bearer $admin_token" >/dev/null || true
+    else
+      echo "[cleanup] Smoke user not deleted (missing ADMIN_TOKEN). User id: $created_user_id email: ${new_email:-}" >&2
+    fi
   fi
   rm -rf "$tmp_dir"
 }
@@ -85,16 +95,19 @@ if [[ -z "$state" || -z "$code_challenge" ]]; then
 fi
 
 echo "[2/9] Signup smoke user"
-# NOTE: This script currently leaves the smoke user in Guard because deleting it
-# requires admin credentials not present in backend/.env. To purge manually,
-# use an admin token and call DELETE /api/v1/auth/admin/users/{id}.
+# NOTE: If ADMIN_TOKEN is provided, the script will delete the smoke user during cleanup.
+# Otherwise it will log the created user id/email so you can delete it manually via
+# DELETE /api/v1/auth/admin/users/{id}.
 new_email="oauth-bff-smoke-$(openssl rand -hex 4)@example.com"
 new_password="Password123!"
-curl -sS -X POST "$GUARD_BASE_URL/api/v1/auth/password/signup" \
+signup_json="$(curl -sS -X POST "$GUARD_BASE_URL/api/v1/auth/password/signup" \
   -H 'X-Auth-Mode: json' \
   -H 'Content-Type: application/json' \
-  -d "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$new_email\",\"password\":\"$new_password\",\"first_name\":\"OAuth\",\"last_name\":\"BFF\"}" >/dev/null
-
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$new_email\",\"password\":\"$new_password\",\"first_name\":\"OAuth\",\"last_name\":\"BFF\"}")"
+created_user_id="$(printf '%s' "$signup_json" | jq -r '.id // empty')"
+if [[ -z "$created_user_id" ]]; then
+  echo "warning: could not extract user id for cleanup; signup response: $signup_json" >&2
+fi
 echo "[3/9] Password login for smoke user"
 login_json="$(curl -sS -X POST "$GUARD_BASE_URL/api/v1/auth/password/login" \
   -H 'X-Auth-Mode: json' \
@@ -104,6 +117,11 @@ user_access="$(printf '%s' "$login_json" | jq -r '.access_token // empty')"
 if [[ -z "$user_access" ]]; then
   echo "password login failed: $login_json" >&2
   exit 1
+fi
+me_json="$(curl -sS -H "Authorization: Bearer $user_access" "$GUARD_BASE_URL/api/v1/auth/me")"
+created_user_id="$(printf '%s' "$me_json" | jq -r '.id // .user.id // empty')"
+if [[ -z "$created_user_id" ]]; then
+  echo "warning: could not extract user id for cleanup; me response: $me_json" >&2
 fi
 
 echo "[4/9] GET /oauth/authorize (reuse BFF state/challenge)"
