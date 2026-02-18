@@ -60,10 +60,21 @@ type sessionStore struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	secure   bool
+	ttl      time.Duration
+	stopCh   chan struct{}
 }
 
-func newSessionStore(secure bool) *sessionStore {
-	return &sessionStore{sessions: make(map[string]*session), secure: secure}
+func newSessionStore(secure bool, ttl time.Duration) *sessionStore {
+	store := &sessionStore{
+		sessions: make(map[string]*session),
+		secure:   secure,
+		ttl:      ttl,
+		stopCh:   make(chan struct{}),
+	}
+	if ttl > 0 {
+		go store.sweepExpiredSessions()
+	}
+	return store
 }
 
 func (s *sessionStore) getOrCreate(w http.ResponseWriter, r *http.Request) *session {
@@ -92,6 +103,37 @@ func (s *sessionStore) getOrCreate(w http.ResponseWriter, r *http.Request) *sess
 		Secure:   s.secure,
 	})
 	return sess
+}
+
+func (s *sessionStore) Stop() {
+	if s.stopCh == nil {
+		return
+	}
+	close(s.stopCh)
+}
+
+func (s *sessionStore) sweepExpiredSessions() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			cutoff := time.Now().Add(-s.ttl)
+			for id, sess := range s.sessions {
+				sess.mu.Lock()
+				stale := sess.UpdatedAt.Before(cutoff)
+				sess.mu.Unlock()
+				if stale {
+					delete(s.sessions, id)
+				}
+			}
+			s.mu.Unlock()
+		}
+	}
 }
 
 type sessionTokenStore struct {
@@ -129,7 +171,10 @@ type app struct {
 
 func main() {
 	cfg := loadConfig()
-	app := &app{cfg: cfg, sessions: newSessionStore(cfg.CookieSecure)}
+	sessionTTL := 24 * time.Hour
+	sessions := newSessionStore(cfg.CookieSecure, sessionTTL)
+	defer sessions.Stop()
+	app := &app{cfg: cfg, sessions: sessions}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/config", app.handleConfig)
@@ -311,8 +356,6 @@ func (a *app) handleMe(w http.ResponseWriter, r *http.Request) {
 			} else {
 				err = fmt.Errorf("%w (refresh failed: %v)", originalErr, rerr)
 			}
-		} else {
-			err = originalErr
 		}
 	}
 	if err != nil {

@@ -87,30 +87,7 @@ func TestIntegrationAuthorize_DeniesMismatchedTenantSession(t *testing.T) {
 	if err := h.authorize(c); err != nil {
 		t.Fatalf("authorize returned error: %v", err)
 	}
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected 302 redirect, got %d body=%s", rec.Code, rec.Body.String())
-	}
-
-	redirectLocation := rec.Header().Get("Location")
-	if redirectLocation == "" {
-		t.Fatalf("expected Location header")
-	}
-	u, err := url.Parse(redirectLocation)
-	if err != nil {
-		t.Fatalf("invalid redirect location %q: %v", redirectLocation, err)
-	}
-	if u.Scheme != "http" || u.Host != "localhost:3004" || u.Path != "/oauth/callback" {
-		t.Fatalf("expected redirect to callback URI, got %s", redirectLocation)
-	}
-	if got := u.Query().Get("error"); got != "access_denied" {
-		t.Fatalf("expected error=access_denied, got %q", got)
-	}
-	if got := u.Query().Get("state"); got != state {
-		t.Fatalf("expected state=%s, got %q", state, got)
-	}
-	if got := u.Query().Get("error_description"); !strings.Contains(got, "not allowed to access this client tenant") {
-		t.Fatalf("expected tenant mismatch description, got %q", got)
-	}
+	assertTenantMismatchRedirect(t, rec, state, "localhost:3004", "/oauth/callback")
 }
 
 func TestIntegrationAuthorizeDecision_DeniesMismatchedTenantSession(t *testing.T) {
@@ -161,6 +138,11 @@ func TestIntegrationAuthorizeDecision_DeniesMismatchedTenantSession(t *testing.T
 	if err := h.authorizeDecision(c); err != nil {
 		t.Fatalf("authorizeDecision returned error: %v", err)
 	}
+	assertTenantMismatchRedirect(t, rec, state, "localhost:3004", "/oauth/callback")
+}
+
+func assertTenantMismatchRedirect(t *testing.T, rec *httptest.ResponseRecorder, expectedState, expectedHost, expectedPath string) {
+	t.Helper()
 	if rec.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -173,14 +155,14 @@ func TestIntegrationAuthorizeDecision_DeniesMismatchedTenantSession(t *testing.T
 	if err != nil {
 		t.Fatalf("invalid redirect location %q: %v", redirectLocation, err)
 	}
-	if u.Scheme != "http" || u.Host != "localhost:3004" || u.Path != "/oauth/callback" {
+	if u.Scheme != "http" || u.Host != expectedHost || u.Path != expectedPath {
 		t.Fatalf("expected redirect to callback URI, got %s", redirectLocation)
 	}
 	if got := u.Query().Get("error"); got != "access_denied" {
 		t.Fatalf("expected error=access_denied, got %q", got)
 	}
-	if got := u.Query().Get("state"); got != state {
-		t.Fatalf("expected state=%s, got %q", state, got)
+	if got := u.Query().Get("state"); got != expectedState {
+		t.Fatalf("expected state=%s, got %q", expectedState, got)
 	}
 	if got := u.Query().Get("error_description"); !strings.Contains(got, "not allowed to access this client tenant") {
 		t.Fatalf("expected tenant mismatch description, got %q", got)

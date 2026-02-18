@@ -11,6 +11,11 @@ if [[ ! -f "$BACKEND_DIR/.env" ]]; then
 fi
 
 # shellcheck disable=SC1090
+if ! python3 --version >/dev/null 2>&1; then
+  echo "python3 is required to run this smoke test" >&2
+  exit 1
+fi
+
 set -a
 source "$BACKEND_DIR/.env"
 set +a
@@ -87,8 +92,13 @@ if [[ -z "$location" ]]; then
 fi
 
 authorize_url="$location"
-state="$(python3 -c 'import urllib.parse,sys;u=urllib.parse.urlparse(sys.argv[1]);q=urllib.parse.parse_qs(u.query);print(q.get("state",[""])[0])' "$authorize_url")"
-code_challenge="$(python3 -c 'import urllib.parse,sys;u=urllib.parse.urlparse(sys.argv[1]);q=urllib.parse.parse_qs(u.query);print(q.get("code_challenge",[""])[0])' "$authorize_url")"
+read -r state code_challenge < <(python3 - <<'PY'
+import sys, urllib.parse
+u = urllib.parse.urlparse(sys.argv[1])
+q = urllib.parse.parse_qs(u.query)
+print(q.get("state", [""])[0], q.get("code_challenge", [""])[0])
+PY
+"$authorize_url")
 if [[ -z "$state" || -z "$code_challenge" ]]; then
   echo "authorize URL missing required parameters: $authorize_url" >&2
   exit 1
@@ -164,8 +174,15 @@ if [[ "$me_email" != "$new_email" ]]; then
   exit 1
 fi
 
-echo "[8/9] Logout BFF session"
+echo "[8/10] Logout BFF session"
 curl -sS -X POST -b "$cookies_file" "$BACKEND_BASE_URL/api/logout" >/dev/null
 
-echo "[9/9] SUCCESS"
+echo "[9/10] Verify BFF session cleared"
+logout_check_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$cookies_file" "$BACKEND_BASE_URL/api/me")"
+if [[ "$logout_check_status" != "401" ]]; then
+  echo "/api/me after logout expected 401, got $logout_check_status" >&2
+  exit 1
+fi
+
+echo "[10/10] SUCCESS"
 echo "OAuth2 BFF smoke succeeded for user: $new_email"

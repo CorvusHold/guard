@@ -707,6 +707,77 @@ func TestBuildOAuth2AuthorizeURL(t *testing.T) {
 			t.Fatalf("expected error for missing redirect_uri")
 		}
 	})
+
+	t.Run("missing scope", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "client-123",
+			RedirectURI:   "http://localhost:3004/callback",
+			Scope:         "",
+			State:         "s",
+			Nonce:         "n",
+			CodeChallenge: "c",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing scope")
+		}
+	})
+
+	t.Run("missing state", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "client-123",
+			RedirectURI:   "http://localhost:3004/callback",
+			Scope:         "openid",
+			State:         "",
+			Nonce:         "n",
+			CodeChallenge: "c",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing state")
+		}
+	})
+
+	t.Run("missing nonce", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "client-123",
+			RedirectURI:   "http://localhost:3004/callback",
+			Scope:         "openid",
+			State:         "s",
+			Nonce:         "",
+			CodeChallenge: "c",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing nonce")
+		}
+	})
+
+	t.Run("missing code_challenge", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:      "client-123",
+			RedirectURI:   "http://localhost:3004/callback",
+			Scope:         "openid",
+			State:         "s",
+			Nonce:         "n",
+			CodeChallenge: "",
+		})
+		if err == nil {
+			t.Fatalf("expected error for missing code_challenge")
+		}
+	})
+
+	t.Run("invalid code_challenge_method", func(t *testing.T) {
+		_, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+			ClientID:            "client-123",
+			RedirectURI:         "http://localhost:3004/callback",
+			Scope:               "openid",
+			State:               "s",
+			Nonce:               "n",
+			CodeChallenge:       "c",
+			CodeChallengeMethod: "invalid",
+		})
+		if err == nil {
+			t.Fatalf("expected error for invalid code_challenge_method")
+		}
+	})
 }
 
 func TestExchangeOAuth2Code(t *testing.T) {

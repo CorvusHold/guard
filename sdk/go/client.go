@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -287,7 +288,10 @@ func (c *GuardClient) BuildOAuth2AuthorizeURL(params OAuth2AuthorizeParams) (str
 	if err != nil {
 		return "", err
 	}
-	authorizeURL := base.ResolveReference(&url.URL{Path: "/oauth/authorize"})
+	authorizeURL, err := url.Parse(strings.TrimRight(base.String(), "/") + "/oauth/authorize")
+	if err != nil {
+		return "", err
+	}
 
 	q := authorizeURL.Query()
 	q.Set("client_id", params.ClientID)
