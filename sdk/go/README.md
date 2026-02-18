@@ -21,6 +21,7 @@ A comprehensive Go client for Corvus Guard with full feature parity with the Typ
 - ✅ **Cookie Mode**: Support for both bearer token and cookie-based authentication
 - ✅ **Session Management**: List and revoke user sessions
 - ✅ **MFA Support**: TOTP and backup codes
+- ✅ **OAuth2 BFF**: Server-side Authorization Code + PKCE exchange and refresh helpers
 
 ## Installation
 
@@ -272,6 +273,37 @@ For more details, see [middleware package documentation](sdk/go/middleware/doc.g
 
 ### Authentication
 
+#### OAuth2 BFF (Authorization Code + PKCE)
+
+```go
+// 1) Build authorize URL on your backend (state/nonce/verifier generated per request)
+authorizeURL, err := client.BuildOAuth2AuthorizeURL(guard.OAuth2AuthorizeParams{
+    ClientID:      oauthClientID,
+    RedirectURI:   "http://localhost:3004/oauth/callback",
+    Scope:         "openid profile email offline_access",
+    State:         state,
+    Nonce:         nonce,
+    CodeChallenge: codeChallenge,
+    CodeChallengeMethod: "S256",
+})
+
+// 2) Exchange callback code server-side (tokens persisted to TokenStore in bearer mode)
+tokens, err := client.ExchangeOAuth2Code(ctx, guard.OAuth2CodeExchangeRequest{
+    Code:         code,
+    CodeVerifier: codeVerifier,
+    RedirectURI:  "http://localhost:3004/oauth/callback",
+    ClientID:     &oauthClientID,
+})
+
+// 3) Refresh via OAuth token endpoint (grant_type=refresh_token)
+refreshed, err := client.OAuth2Refresh(ctx, guard.OAuth2RefreshRequest{ClientID: &oauthClientID})
+_ = tokens
+_ = refreshed
+```
+
+See the complete front+backend reference implementation in:
+- `examples/oauth2-bff-go/`
+
 #### Password Signup
 
 ```go
@@ -510,6 +542,7 @@ func boolPtr(b bool) *bool {
 
 **Examples**
 - [examples/backend-auth/](examples/backend-auth/) - Complete backend API example
+- [examples/oauth2-bff-go/](../../examples/oauth2-bff-go/) - OAuth2 BFF flow (front + backend) using Go SDK token exchange helpers
 
 ## Testing
 

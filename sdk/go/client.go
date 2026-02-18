@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -68,6 +69,38 @@ type GuardClient struct {
 	inner      *ClientWithResponses
 	httpClient HttpRequestDoer
 	tokens     TokenStore
+}
+
+// OAuth2AuthorizeParams configures an OAuth2 Authorization Code + PKCE authorize URL.
+type OAuth2AuthorizeParams struct {
+	ClientID            string
+	RedirectURI         string
+	Scope               string
+	State               string
+	Nonce               string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	Prompt              *string
+	LoginHint           *string
+}
+
+// OAuth2CodeExchangeRequest holds parameters for exchanging an authorization code.
+type OAuth2CodeExchangeRequest struct {
+	Code         string
+	CodeVerifier string
+	RedirectURI  string
+	ClientID     *string
+	ClientSecret *string
+	Scope        *string
+}
+
+// OAuth2RefreshRequest holds parameters for exchanging a refresh token.
+// If RefreshToken is nil or empty, the client token store refresh token is used.
+type OAuth2RefreshRequest struct {
+	RefreshToken *string
+	ClientID     *string
+	ClientSecret *string
+	Scope        *string
 }
 
 // SSOPortalSession represents the minimal portal session context returned by the API.
@@ -189,24 +222,160 @@ func (c *GuardClient) authEditor(_ context.Context, req *http.Request) error {
 // persistTokens saves tokens to the token store if present (bearer mode only).
 // In cookie mode, tokens are stored in HTTP-only cookies by the server.
 func (c *GuardClient) persistTokens(ctx context.Context, t *ControllerAuthExchangeResp) error {
-	if c.authMode == AuthModeCookie {
-		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally
-		return nil
-	}
 	if t == nil {
 		return nil
 	}
-	var access, refresh string
-	if t.AccessToken != nil {
-		access = *t.AccessToken
+	return c.persistAccessRefresh(ctx, t.AccessToken, t.RefreshToken)
+}
+
+// persistDomainTokens saves OAuth token endpoint responses to the token store (bearer mode only).
+func (c *GuardClient) persistDomainTokens(ctx context.Context, t *DomainTokenResponse) error {
+	if t == nil {
+		return nil
 	}
-	if t.RefreshToken != nil {
-		refresh = *t.RefreshToken
+	return c.persistAccessRefresh(ctx, t.AccessToken, t.RefreshToken)
+}
+
+func (c *GuardClient) persistAccessRefresh(ctx context.Context, accessToken, refreshToken *string) error {
+	if c.authMode == AuthModeCookie {
+		// In cookie mode, tokens are in HTTP-only cookies; don't persist locally.
+		return nil
+	}
+	var access, refresh string
+	if accessToken != nil {
+		access = *accessToken
+	}
+	if refreshToken != nil {
+		refresh = *refreshToken
 	}
 	if access == "" && refresh == "" {
 		return nil
 	}
 	return c.tokens.Set(ctx, access, refresh)
+}
+
+// BuildOAuth2AuthorizeURL builds an /oauth/authorize URL for Authorization Code + PKCE.
+func (c *GuardClient) BuildOAuth2AuthorizeURL(params OAuth2AuthorizeParams) (string, error) {
+	if params.ClientID == "" {
+		return "", errors.New("client_id required")
+	}
+	if params.RedirectURI == "" {
+		return "", errors.New("redirect_uri required")
+	}
+	if params.Scope == "" {
+		return "", errors.New("scope required")
+	}
+	if params.State == "" {
+		return "", errors.New("state required")
+	}
+	if params.Nonce == "" {
+		return "", errors.New("nonce required")
+	}
+	if params.CodeChallenge == "" {
+		return "", errors.New("code_challenge required")
+	}
+
+	challengeMethod := params.CodeChallengeMethod
+	if challengeMethod == "" {
+		challengeMethod = "S256"
+	} else {
+		if challengeMethod != "S256" && challengeMethod != "plain" {
+			return "", errors.New("invalid code_challenge_method: must be 'S256' or 'plain'")
+		}
+	}
+
+	base, err := url.Parse(c.baseURL)
+	if err != nil {
+		return "", err
+	}
+	authorizeURL, err := url.Parse(strings.TrimRight(base.String(), "/") + "/oauth/authorize")
+	if err != nil {
+		return "", err
+	}
+
+	q := authorizeURL.Query()
+	q.Set("client_id", params.ClientID)
+	q.Set("redirect_uri", params.RedirectURI)
+	q.Set("response_type", "code")
+	q.Set("scope", params.Scope)
+	q.Set("state", params.State)
+	q.Set("nonce", params.Nonce)
+	q.Set("code_challenge", params.CodeChallenge)
+	q.Set("code_challenge_method", challengeMethod)
+	if params.Prompt != nil && *params.Prompt != "" {
+		q.Set("prompt", *params.Prompt)
+	}
+	if params.LoginHint != nil && *params.LoginHint != "" {
+		q.Set("login_hint", *params.LoginHint)
+	}
+	authorizeURL.RawQuery = q.Encode()
+
+	return authorizeURL.String(), nil
+}
+
+// ExchangeOAuth2Code exchanges an authorization code for tokens using /oauth/token.
+// On success, it persists access/refresh tokens in bearer mode.
+func (c *GuardClient) ExchangeOAuth2Code(ctx context.Context, req OAuth2CodeExchangeRequest) (*DomainTokenResponse, error) {
+	if req.Code == "" {
+		return nil, errors.New("authorization code required")
+	}
+	if req.CodeVerifier == "" {
+		return nil, errors.New("code_verifier required")
+	}
+	if req.RedirectURI == "" {
+		return nil, errors.New("redirect_uri required")
+	}
+
+	body := PostOauthTokenFormdataRequestBody{
+		GrantType:    "authorization_code",
+		Code:         &req.Code,
+		CodeVerifier: &req.CodeVerifier,
+		RedirectUri:  &req.RedirectURI,
+		ClientId:     req.ClientID,
+		ClientSecret: req.ClientSecret,
+		Scope:        req.Scope,
+	}
+	resp, err := c.inner.PostOauthTokenWithFormdataBodyWithResponse(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
+	_ = c.persistDomainTokens(ctx, resp.JSON200)
+	return resp.JSON200, nil
+}
+
+// OAuth2Refresh exchanges a refresh token for a new access token using /oauth/token.
+// If req.RefreshToken is not provided, the token store refresh token is used.
+func (c *GuardClient) OAuth2Refresh(ctx context.Context, req OAuth2RefreshRequest) (*DomainTokenResponse, error) {
+	refreshToken := ""
+	if req.RefreshToken != nil {
+		refreshToken = *req.RefreshToken
+	}
+	if refreshToken == "" {
+		_, refreshToken = c.tokens.Get(ctx)
+	}
+	if refreshToken == "" {
+		return nil, errors.New("no refresh token available")
+	}
+
+	body := PostOauthTokenFormdataRequestBody{
+		GrantType:    "refresh_token",
+		RefreshToken: &refreshToken,
+		ClientId:     req.ClientID,
+		ClientSecret: req.ClientSecret,
+		Scope:        req.Scope,
+	}
+	resp, err := c.inner.PostOauthTokenWithFormdataBodyWithResponse(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, errors.New(resp.Status())
+	}
+	_ = c.persistDomainTokens(ctx, resp.JSON200)
+	return resp.JSON200, nil
 }
 
 // PasswordLogin performs email/password login. On 200 returns tokens; on 202 returns MFA challenge.

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Guard OAuth2 BFF (Go SDK)</title>
+    <style>
+      :root {
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #f6f8fb;
+        color: #1f2937;
+      }
+      .wrap {
+        max-width: 840px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      button {
+        border: 1px solid #c7d2e3;
+        background: #fff;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        margin-right: 8px;
+      }
+      pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 12px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .muted {
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Guard OAuth2 BFF Example (Go SDK)</h1>
+      <p class="muted">
+        Frontend only triggers login/logout and profile fetch. OAuth code exchange happens server-side in Go.
+      </p>
+      <p id="tenant-heads-up" class="muted"></p>
+
+      <div class="card">
+        <h2>Actions</h2>
+        <button id="login">Login via Guard</button>
+        <button id="fresh-login">Fresh Login (force account chooser)</button>
+        <button id="me">Fetch /api/me</button>
+        <button id="logout">Logout</button>
+        <button id="reset">Reset Local Session</button>
+      </div>
+
+      <div class="card">
+        <h2>Backend Config</h2>
+        <pre id="config">loading...</pre>
+      </div>
+
+      <div class="card">
+        <h2>Response</h2>
+        <pre id="out">Click an action.</pre>
+      </div>
+    </div>
+
+    <script>
+      const out = document.getElementById('out');
+      const config = document.getElementById('config');
+      const qp = new URLSearchParams(window.location.search);
+
+      const show = (label, value) => {
+        out.textContent = `${label}\n\n${typeof value === 'string' ? value : JSON.stringify(value, null, 2)}`;
+      };
+
+      async function loadConfig() {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        config.textContent = JSON.stringify(data, null, 2);
+        const tenantHeadsUp = document.getElementById('tenant-heads-up');
+        const expectedTenant = data.expected_tenant_id || '<not configured>';
+        tenantHeadsUp.textContent = `Heads-up: Login always redirects to Guard /oauth/authorize first. Use an account in tenant ${expectedTenant}; other-tenant users are blocked and returned with an error.`;
+      }
+
+      document.getElementById('login').onclick = () => {
+        window.location.href = '/oauth/login';
+      };
+
+      document.getElementById('fresh-login').onclick = () => {
+        window.location.href = '/oauth/login?fresh=1';
+      };
+
+      document.getElementById('me').onclick = async () => {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        show(`GET /api/me [${res.status}]`, data);
+      };
+
+      document.getElementById('logout').onclick = async () => {
+        const res = await fetch('/api/logout', { method: 'POST' });
+        const data = await res.json();
+        show(`POST /api/logout [${res.status}]`, data);
+      };
+
+      document.getElementById('reset').onclick = async () => {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        const data = await res.json();
+        show(`POST /api/reset [${res.status}]`, data);
+      };
+
+      if (qp.get('auth') === 'error') {
+        const code = qp.get('error') || 'unknown_error';
+        const message = qp.get('message') || 'Authentication failed';
+        show('OAuth error', { code, message, next: 'Use Fresh Login or Reset Local Session' });
+      }
+      if (qp.get('auth') === 'ok') {
+        show('OAuth success', 'Session established. Click Fetch /api/me to confirm profile.');
+      }
+
+      loadConfig().catch((err) => {
+        config.textContent = `failed: ${err}`;
+      });
+    </script>
+  </body>
+</html>
