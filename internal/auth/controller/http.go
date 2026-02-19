@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
@@ -671,15 +672,34 @@ func (h *Controller) OAuth2Metadata(c echo.Context) error {
 		}
 		baseURL = scheme + "://" + c.Request().Host
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	var tenantID *uuid.UUID
+	if rawTenantID := strings.TrimSpace(c.QueryParam("tenant_id")); rawTenantID != "" {
+		tid, err := uuid.Parse(rawTenantID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+		}
+		tenantID = &tid
+	}
+
+	issuerURL := authissuer.ResolveIssuer(h.cfg, tenantID)
+	if issuerURL == "" {
+		issuerURL = baseURL
+	}
+	jwksURI := authissuer.ResolveJWKSURI(h.cfg, tenantID)
+	if jwksURI == "" {
+		jwksURI = baseURL + "/.well-known/jwks.json"
+	}
 
 	resp := oauth2MetadataResp{
-		Issuer:                baseURL,
+		Issuer:                issuerURL,
 		AuthorizationEndpoint: baseURL + "/oauth/authorize",
 		TokenEndpoint:         baseURL + "/oauth/token",
 		IntrospectionEndpoint: baseURL + "/api/v1/auth/introspect",
 		RevocationEndpoint:    baseURL + "/oauth/revoke",
 		UserinfoEndpoint:      baseURL + "/api/v1/auth/me",
-		JWKSUri:               baseURL + "/.well-known/jwks.json",
+		JWKSUri:               jwksURI,
 		ResponseTypesSupported: []string{
 			"code",  // Authorization Code Flow (OAuth 2.0 provider)
 			"token", // Direct token response (password, magic link, SSO)

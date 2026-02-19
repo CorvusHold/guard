@@ -23,6 +23,35 @@ A comprehensive Go client for Corvus Guard with full feature parity with the Typ
 - ✅ **MFA Support**: TOTP and backup codes
 - ✅ **OAuth2 BFF**: Server-side Authorization Code + PKCE exchange and refresh helpers
 
+## Migration Notes (JWT key isolation release)
+
+If you are upgrading from older Guard integrations:
+
+- Guard access/ID tokens are now expected as **ES256** only for runtime validation.
+- Do **not** use shared HMAC secrets between your app and Guard for JWT verification.
+- Prefer tenant-scoped issuer/JWKS:
+  - Issuer: `https://guard.example.com/t/{tenant_id}`
+  - JWKS: `https://guard.example.com/t/{tenant_id}/.well-known/jwks.json`
+- Validate `kid` and refresh JWKS when a new key appears.
+
+### Token validation helper (Go SDK)
+
+```go
+validator := guard.NewTokenValidator(
+    "https://guard.example.com",
+    guard.WithValidatorTenantID("8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34"),
+)
+
+claims, err := validator.Validate(ctx, accessToken)
+if err != nil {
+    // invalid/expired token
+}
+
+_ = claims // use sub, ten, iss, aud, roles, etc.
+```
+
+Use `WithValidatorTenantID` for tenant-path issuer mode so verification key resolution remains isolated per tenant.
+
 ## Installation
 
 ```bash

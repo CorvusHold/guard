@@ -17,7 +17,8 @@ REDIS_ADDR=localhost:6379
 
 # Optional - Override defaults
 PUBLIC_BASE_URL=https://auth.example.com
-JWT_SIGNING_KEY=<secret-key>
+JWT_SIGNING_ALGORITHM=ES256
+JWT_PRIVATE_KEY_PATH=/etc/guard/keys/jwt-es256-private.pem
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=7d
 LOG_LEVEL=info

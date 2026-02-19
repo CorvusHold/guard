@@ -29,16 +29,17 @@ const (
 func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 	// Pre-load EC public key if ES256 is configured. We allow either a private or public key PEM.
 	var ecPubKey *ecdsa.PublicKey
-	if cfg.JWTSigningAlgorithm == "ES256" {
-		if cfg.JWTPrivateKeyPath == "" {
-			log.Fatal().Msg("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
-		}
-		key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
-		if err != nil {
-			log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
-		}
-		ecPubKey = key
+	if cfg.JWTSigningAlgorithm != "ES256" {
+		log.Fatal().Msg("JWT_SIGNING_ALGORITHM must be ES256")
 	}
+	if cfg.JWTPrivateKeyPath == "" {
+		log.Fatal().Msg("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
+	}
+	key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
+	}
+	ecPubKey = key
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -57,18 +58,14 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 			tokStr := strings.TrimPrefix(auth, "Bearer ")
 
 			tok, err := jwt.Parse(tokStr, func(token *jwt.Token) (any, error) {
-				switch token.Method.(type) {
-				case *jwt.SigningMethodECDSA:
-					if ecPubKey != nil {
-						return ecPubKey, nil
-					}
-					return nil, fmt.Errorf("no EC public key configured for ES256 verification")
-				case *jwt.SigningMethodHMAC:
-					return []byte(cfg.JWTSigningKey), nil
-				default:
+				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{cfg.JWTSigningAlgorithm}))
+				if ecPubKey == nil {
+					return nil, fmt.Errorf("no EC public key configured for ES256 verification")
+				}
+				return ecPubKey, nil
+			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{"ES256"}))
 			if err != nil || !tok.Valid {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			}

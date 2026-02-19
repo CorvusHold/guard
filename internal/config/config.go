@@ -30,9 +30,13 @@ type Config struct {
 	JWTSigningAlgorithm string // HS256 | ES256
 	JWTPrivateKeyPath   string // Path to EC private key PEM (for ES256)
 	JWTKeyID            string // Key ID for JWKS (auto-generated if empty)
-	AccessTokenTTL      time.Duration
-	RefreshTokenTTL     time.Duration
-	MagicLinkTTL        time.Duration
+	IssuerMode          string // path | subdomain
+	IssuerPathPrefix    string // default: /t
+	// IssuerSubdomainTemplate supports future domain-based issuers, e.g. "{tenant}.auth.example.com"
+	IssuerSubdomainTemplate string
+	AccessTokenTTL          time.Duration
+	RefreshTokenTTL         time.Duration
+	MagicLinkTTL            time.Duration
 
 	SMTPHost      string
 	SMTPPort      int
@@ -71,6 +75,9 @@ func Load() (Config, error) {
 	c.JWTSigningAlgorithm = getEnv("JWT_SIGNING_ALGORITHM", "HS256")
 	c.JWTPrivateKeyPath = getEnv("JWT_PRIVATE_KEY_PATH", "")
 	c.JWTKeyID = getEnv("JWT_KEY_ID", "")
+	c.IssuerMode = strings.ToLower(getEnv("ISSUER_MODE", "path"))
+	c.IssuerPathPrefix = getEnv("ISSUER_PATH_PREFIX", "/t")
+	c.IssuerSubdomainTemplate = getEnv("ISSUER_SUBDOMAIN_TEMPLATE", "")
 	c.AccessTokenTTL = getDuration("ACCESS_TOKEN_TTL", time.Minute*15)
 	c.RefreshTokenTTL = getDuration("REFRESH_TOKEN_TTL", time.Hour*24*30)
 	c.MagicLinkTTL = getDuration("MAGIC_LINK_TTL", 15*time.Minute)

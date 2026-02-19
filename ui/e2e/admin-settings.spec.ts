@@ -391,10 +391,10 @@ test.describe('Admin Settings', () => {
     // Update both fields
     await page
       .getByTestId('admin-sso-redirect-allowlist')
-      .fill('http://localhost:3001,https://app.packitoo.com')
+      .fill('http://localhost:3001,https://app.examplebis.com')
     await page
       .getByTestId('admin-cors-allowed-origins')
-      .fill('http://localhost:3001,https://app.packitoo.com,http://localhost:3000')
+      .fill('http://localhost:3001,https://app.examplebis.com,http://localhost:3000')
 
     // Save changes
     await page.getByTestId('admin-save-settings').click()
@@ -408,10 +408,10 @@ test.describe('Admin Settings', () => {
     // Verify the correct data was sent to the API
     expect(capturedBody).toBeTruthy()
     expect(capturedBody.sso_redirect_allowlist).toBe(
-      'http://localhost:3001,https://app.packitoo.com'
+      'http://localhost:3001,https://app.examplebis.com'
     )
     expect(capturedBody.app_cors_allowed_origins).toBe(
-      'http://localhost:3001,https://app.packitoo.com,http://localhost:3000'
+      'http://localhost:3001,https://app.examplebis.com,http://localhost:3000'
     )
   })
 

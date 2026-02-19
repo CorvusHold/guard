@@ -15,6 +15,17 @@ Use this as a reference for production-style BFF architecture where:
 - Token exchange happens server-side (`/oauth/callback`)
 - Application session is managed with an HTTP-only cookie
 
+## IAM vNext compatibility notes
+
+This sample is already aligned with the new Guard token model:
+
+- No shared JWT signing secret is required by the BFF.
+- OAuth/OIDC consumers should resolve tenant metadata via:
+  - `/.well-known/oauth-authorization-server?tenant_id=<tenant_id>`
+- Token verifiers in downstream APIs should use tenant JWKS:
+  - `/t/<tenant_id>/.well-known/jwks.json`
+- Validators should enforce `alg=ES256` and handle `kid` rotation.
+
 ## Prerequisites
 
 - Guard API running (default: `http://localhost:8080`)

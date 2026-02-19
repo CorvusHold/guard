@@ -10,17 +10,18 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
 // Typed errors for token validation.
 var (
-	ErrTokenExpired  = errors.New("guard: token expired")
-	ErrTokenInvalid  = errors.New("guard: token invalid")
-	ErrTokenMalform  = errors.New("guard: token malformed")
-	ErrJWKSFetch     = errors.New("guard: failed to fetch JWKS")
-	ErrKeyNotFound   = errors.New("guard: signing key not found in JWKS")
+	ErrTokenExpired   = errors.New("guard: token expired")
+	ErrTokenInvalid   = errors.New("guard: token invalid")
+	ErrTokenMalform   = errors.New("guard: token malformed")
+	ErrJWKSFetch      = errors.New("guard: failed to fetch JWKS")
+	ErrKeyNotFound    = errors.New("guard: signing key not found in JWKS")
 	ErrUnsupportedAlg = errors.New("guard: unsupported signing algorithm")
 )
 
@@ -37,18 +38,16 @@ type TokenClaims struct {
 	Expiry   int64    `json:"exp"`
 }
 
-// TokenValidator validates Guard-issued JWTs using JWKS or a shared secret.
+// TokenValidator validates Guard-issued JWTs using ES256 public keys from JWKS.
 type TokenValidator struct {
 	guardURL   string
+	tenantID   string
 	httpClient *http.Client
 	cacheTTL   time.Duration
 
 	mu        sync.RWMutex
 	keys      map[string]*ecdsa.PublicKey
 	fetchedAt time.Time
-
-	// For HS256 fallback
-	hmacSecret []byte
 }
 
 // TokenValidatorOption customizes TokenValidator construction.
@@ -64,9 +63,10 @@ func WithJWKSCacheTTL(d time.Duration) TokenValidatorOption {
 	return func(v *TokenValidator) { v.cacheTTL = d }
 }
 
-// WithHMACSecret configures a shared HMAC secret for HS256 validation fallback.
-func WithHMACSecret(secret string) TokenValidatorOption {
-	return func(v *TokenValidator) { v.hmacSecret = []byte(secret) }
+// WithValidatorTenantID configures tenant-scoped JWKS resolution (path-based issuer mode).
+// When set, JWKS are fetched from: {guardURL}/t/{tenantID}/.well-known/jwks.json
+func WithValidatorTenantID(tenantID string) TokenValidatorOption {
+	return func(v *TokenValidator) { v.tenantID = strings.TrimSpace(tenantID) }
 }
 
 // NewTokenValidator creates a validator that fetches and caches JWKS from the Guard server.
@@ -94,17 +94,10 @@ func (v *TokenValidator) Validate(ctx context.Context, tokenString string) (*Tok
 	alg, _ := header["alg"].(string)
 	kid, _ := header["kid"].(string)
 
-	switch alg {
-	case "ES256":
-		return v.validateES256(ctx, tokenString, kid)
-	case "HS256":
-		if len(v.hmacSecret) == 0 {
-			return nil, fmt.Errorf("%w: HS256 requires WithHMACSecret option", ErrUnsupportedAlg)
-		}
-		return v.validateHS256(tokenString)
-	default:
+	if alg != "ES256" {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedAlg, alg)
 	}
+	return v.validateES256(ctx, tokenString, kid)
 }
 
 // validateES256 validates an ES256-signed JWT using JWKS.
@@ -144,36 +137,6 @@ func (v *TokenValidator) validateES256(ctx context.Context, tokenString, kid str
 	return claims, nil
 }
 
-// validateHS256 validates an HS256-signed JWT using the shared secret.
-func (v *TokenValidator) validateHS256(tokenString string) (*TokenClaims, error) {
-	parts, err := splitJWT(tokenString)
-	if err != nil {
-		return nil, err
-	}
-
-	// Verify HMAC signature
-	message := parts[0] + "." + parts[1]
-	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid signature encoding", ErrTokenMalform)
-	}
-
-	if !hmacVerify(v.hmacSecret, []byte(message), sigBytes) {
-		return nil, ErrTokenInvalid
-	}
-
-	claims, err := decodePayload(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	if claims.Expiry > 0 && time.Now().Unix() > claims.Expiry {
-		return nil, ErrTokenExpired
-	}
-
-	return claims, nil
-}
-
 // getKey retrieves the public key for the given kid, fetching JWKS if needed.
 func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicKey, error) {
 	v.mu.RLock()
@@ -206,7 +169,10 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 
 // fetchJWKS fetches the JWKS from the Guard server.
 func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
-	url := v.guardURL + "/.well-known/jwks.json"
+	url := strings.TrimRight(v.guardURL, "/") + "/.well-known/jwks.json"
+	if v.tenantID != "" {
+		url = strings.TrimRight(v.guardURL, "/") + "/t/" + v.tenantID + "/.well-known/jwks.json"
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrJWKSFetch, err)

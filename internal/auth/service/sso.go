@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	"github.com/corvusHold/guard/internal/auth/keys"
 	ssodomain "github.com/corvusHold/guard/internal/auth/sso/domain"
 	ssosvc "github.com/corvusHold/guard/internal/auth/sso/service"
@@ -40,7 +41,11 @@ type SSO struct {
 
 func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service) *SSO {
 	rc := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, DB: cfg.RedisDB})
-	return &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop(), ssoSvc: nil}
+	s := &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop(), ssoSvc: nil}
+	if km, err := keys.NewManager("ES256", "", ""); err == nil {
+		s.keyMgr = km
+	}
+	return s
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
@@ -130,8 +135,12 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 		"exp":   time.Now().Add(5 * time.Minute).Unix(),
 		"iat":   time.Now().Unix(),
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	code, err := t.SignedString([]byte(signingKey))
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return "", errors.New("asymmetric key manager required")
+	}
+	t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
+	t.Header["kid"] = s.keyMgr.KeyID()
+	code, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
 	if err != nil {
 		return "", err
 	}
@@ -180,12 +189,14 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 					if tenID, err := uuid.Parse(tenStr); err == nil {
 						mode, _ := s.settings.GetString(ctx, sdomain.KeySSOProvider, &tenID, "")
 						if strings.EqualFold(mode, "dev") {
-							// Verify the code signature with the tenant's signing key before
+							// Verify the code signature with asymmetric keys before
 							// treating this as a trusted dev code.
-							signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenID, s.cfg.JWTSigningKey)
-							if signingKey != "" {
+							if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
 								if _, err := jwt.ParseWithClaims(codeVals[0], jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
-									return []byte(signingKey), nil
+									if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
+										return nil, errors.New("unexpected signing method")
+									}
+									return s.keyMgr.VerificationKey(""), nil
 								}); err == nil {
 									isDevCode = true
 								}
@@ -301,8 +312,14 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 
 	// Verify signature with tenant's signing key
 	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	}
 	_, err = jwt.ParseWithClaims(code, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
-		return []byte(signingKey), nil
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return s.keyMgr.VerificationKey(""), nil
 	})
 	if err != nil {
 		_ = s.pub.Publish(ctx, evdomain.Event{
@@ -342,7 +359,7 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 	// Issue tokens (mirror Service.issueTokens)
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(s.cfg, tenantID))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
 	// Resolve roles and name for JWT claims
@@ -366,21 +383,12 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 		"email": email,
 		"name":  userName,
 	}
-	// Use key manager for signing if available (ES256), otherwise fall back to HS256
-	var ssoSignMethod jwt.SigningMethod
-	var ssoSignKey interface{}
-	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-		ssoSignMethod = s.keyMgr.SigningMethod()
-		ssoSignKey = s.keyMgr.SigningKey(signingKey)
-	} else {
-		ssoSignMethod = jwt.SigningMethodHS256
-		ssoSignKey = []byte(signingKey)
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
 	}
-	at := jwt.NewWithClaims(ssoSignMethod, accClaims)
-	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-		at.Header["kid"] = s.keyMgr.KeyID()
-	}
-	access, err := at.SignedString(ssoSignKey)
+	at := jwt.NewWithClaims(s.keyMgr.SigningMethod(), accClaims)
+	at.Header["kid"] = s.keyMgr.KeyID()
+	access, err := at.SignedString(s.keyMgr.SigningKey(signingKey))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}

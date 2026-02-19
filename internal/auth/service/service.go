@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
@@ -508,13 +509,15 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	if err != nil {
 		return domain.AccessTokens{}, errors.New("invalid tenant in challenge")
 	}
-	// Verify signature and expiry with tenant signing key
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+	// Verify signature and expiry with asymmetric signing keys.
 	parsed, err := jwt.Parse(in.ChallengeToken, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(signingKey), nil
+		if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+			return nil, errors.New("asymmetric key manager required")
+		}
+		return s.keyMgr.VerificationKey(""), nil
 	})
 	if err != nil || !parsed.Valid {
 		return domain.AccessTokens{}, errors.New("invalid or expired challenge token")
@@ -557,7 +560,11 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 }
 
 func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *Service {
-	return &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger(), log: zerolog.Nop()}
+	s := &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger(), log: zerolog.Nop()}
+	if km, err := keys.NewManager("ES256", "", ""); err == nil {
+		s.keyMgr = km
+	}
+	return s
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
@@ -658,7 +665,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	_ = s.repo.ResetFailedAttempts(ctx, in.TenantID, in.Email)
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
-		// Build short-lived challenge token (5m) signed with tenant's signing key
+		// Build short-lived challenge token (5m) signed asymmetrically.
 		signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &ai.TenantID, s.cfg.JWTSigningKey)
 		claims := jwt.MapClaims{
 			"typ":   "mfa_challenge",
@@ -669,8 +676,12 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 			"exp":   time.Now().Add(5 * time.Minute).Unix(),
 			"iat":   time.Now().Unix(),
 		}
-		t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		ch, err := t.SignedString([]byte(signingKey))
+		if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+			return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+		}
+		t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
+		t.Header["kid"] = s.keyMgr.KeyID()
+		ch, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
 		if err != nil {
 			return domain.AccessTokens{}, err
 		}
@@ -815,7 +826,7 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
 	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(s.cfg, tenantID))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
 	// Resolve roles from normalized user_roles table (RBAC v2)
@@ -856,21 +867,12 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 		"name":  name,
 	}
 
-	// Use key manager for signing if available (ES256), otherwise fall back to HS256
-	var signingMethod jwt.SigningMethod
-	var signKey interface{}
-	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-		signingMethod = s.keyMgr.SigningMethod()
-		signKey = s.keyMgr.SigningKey(signingKey)
-	} else {
-		signingMethod = jwt.SigningMethodHS256
-		signKey = []byte(signingKey)
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
 	}
-	t := jwt.NewWithClaims(signingMethod, claims)
-	if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-		t.Header["kid"] = s.keyMgr.KeyID()
-	}
-	access, err := t.SignedString(signKey)
+	t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
+	t.Header["kid"] = s.keyMgr.KeyID()
+	access, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -978,24 +980,19 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	}
 
 	// Step 3: Load tenant-specific settings (issuer/audience/signing key may be overridden per tenant)
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, s.cfg.PublicBaseURL)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, authissuer.ResolveTenantIssuer(s.cfg, tid))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.Introspection{Active: false}, errors.New("asymmetric key manager required")
+	}
 
 	// Step 4: Verify signature with correct tenant-specific signing key.
-	// Support both ES256 (via key manager) and HS256 (via shared secret).
+	// Enforce ES256 verification via the key manager.
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-		switch t.Method.(type) {
-		case *jwt.SigningMethodECDSA:
-			if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-				return s.keyMgr.VerificationKey(""), nil
-			}
-			return nil, errors.New("no key manager configured for EC verification")
-		case *jwt.SigningMethodHMAC:
-			return []byte(signingKey), nil
-		default:
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
+		return s.keyMgr.VerificationKey(""), nil
 	})
 	if err != nil || !parsed.Valid {
 		return domain.Introspection{Active: false}, errors.New("invalid token")
@@ -1122,7 +1119,7 @@ func (s *Service) UpdateUserRoles(ctx context.Context, userID uuid.UUID, roles [
 
 // StartTOTPEnrollment generates and stores a TOTP secret (disabled), and returns the secret and otpauth URI.
 func (s *Service) StartTOTPEnrollment(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (string, string, error) {
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(s.cfg, tenantID))
 	// Determine account name (prefer email in this tenant)
 	acct := userID.String()
 	ids, err := s.repo.GetAuthIdentitiesByUser(ctx, userID)
@@ -1651,34 +1648,16 @@ func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) erro
 // ParseAccessToken parses an access token and returns the claims.
 // It resolves per-tenant signing keys the same way Introspect does.
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
-	// Pre-parse to extract tenant ID for per-tenant key resolution
-	unverified, _, preErr := new(jwt.Parser).ParseUnverified(tokenStr, jwt.MapClaims{})
-	var tenantSigningKey string
-	if preErr == nil {
-		if uc, ok := unverified.Claims.(jwt.MapClaims); ok {
-			if tenStr, ok := uc["ten"].(string); ok {
-				if tid, err := uuid.Parse(tenStr); err == nil {
-					tenantSigningKey, _ = s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tid, s.cfg.JWTSigningKey)
-				}
-			}
-		}
-	}
-	if tenantSigningKey == "" {
-		tenantSigningKey = s.cfg.JWTSigningKey
+	_ = ctx
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokenClaims{}, errors.New("asymmetric key manager required")
 	}
 
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		switch t.Method.(type) {
-		case *jwt.SigningMethodECDSA:
-			if s.keyMgr != nil && s.keyMgr.IsAsymmetric() {
-				return s.keyMgr.VerificationKey(""), nil
-			}
-			return nil, errors.New("no key manager configured for EC verification")
-		case *jwt.SigningMethodHMAC:
-			return []byte(tenantSigningKey), nil
-		default:
+		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
+		return s.keyMgr.VerificationKey(""), nil
 	})
 	if err != nil || !token.Valid {
 		return domain.AccessTokenClaims{}, errors.New("invalid token")

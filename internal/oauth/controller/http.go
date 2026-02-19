@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	authdomain "github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	"github.com/corvusHold/guard/internal/auth/keys"
 	authmw "github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/config"
@@ -715,7 +716,7 @@ func (h *Controller) tokenClientCredentials(c echo.Context, clientID, clientSecr
 	// Issue a machine-to-machine access token
 	accessTTL, _ := h.settings.GetDuration(c.Request().Context(), sdomain.KeyAccessTTL, &client.TenantID, h.cfg.AccessTokenTTL)
 	signingKey, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTSigning, &client.TenantID, h.cfg.JWTSigningKey)
-	issuer, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTIssuer, &client.TenantID, h.cfg.PublicBaseURL)
+	issuer, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTIssuer, &client.TenantID, authissuer.ResolveTenantIssuer(h.cfg, client.TenantID))
 
 	claims := jwt.MapClaims{
 		"sub":       client.ClientID,
@@ -798,7 +799,7 @@ func (h *Controller) tokenRefreshToken(c echo.Context, clientID, clientSecret st
 // issueIDToken creates an OIDC ID Token.
 func (h *Controller) issueIDToken(c echo.Context, userID, tenantID uuid.UUID, clientID, nonce string, scopes []string) (string, error) {
 	signingKey, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTSigning, &tenantID, h.cfg.JWTSigningKey)
-	issuer, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTIssuer, &tenantID, h.cfg.PublicBaseURL)
+	issuer, _ := h.settings.GetString(c.Request().Context(), sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(h.cfg, tenantID))
 
 	claims := jwt.MapClaims{
 		"iss":       issuer,
@@ -833,20 +834,12 @@ func (h *Controller) issueIDToken(c echo.Context, userID, tenantID uuid.UUID, cl
 
 // signJWTClaims signs JWT claims using the configured key manager or HMAC fallback.
 func (h *Controller) signJWTClaims(claims jwt.MapClaims, signingKey string) (string, error) {
-	var signingMethod jwt.SigningMethod
-	var signKey interface{}
-	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
-		signingMethod = h.keyMgr.SigningMethod()
-		signKey = h.keyMgr.SigningKey(signingKey)
-	} else {
-		signingMethod = jwt.SigningMethodHS256
-		signKey = []byte(signingKey)
+	if h.keyMgr == nil || !h.keyMgr.IsAsymmetric() {
+		return "", fmt.Errorf("asymmetric key manager required")
 	}
-	t := jwt.NewWithClaims(signingMethod, claims)
-	if h.keyMgr != nil && h.keyMgr.IsAsymmetric() {
-		t.Header["kid"] = h.keyMgr.KeyID()
-	}
-	return t.SignedString(signKey)
+	t := jwt.NewWithClaims(h.keyMgr.SigningMethod(), claims)
+	t.Header["kid"] = h.keyMgr.KeyID()
+	return t.SignedString(h.keyMgr.SigningKey(signingKey))
 }
 
 // --- Helpers ---

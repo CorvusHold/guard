@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
@@ -55,8 +56,13 @@ func TestService_Introspect_UsesTenantSpecificSigningKey(t *testing.T) {
 		sdomain.KeyJWTSigning + ":" + tenantID.String(): tenantKey,
 	}}
 
-	// Service that issues and introspects tokens using the tenant-specific signing key
+	// Service that issues and introspects tokens using an asymmetric key manager
 	s := &Service{repo: repo, cfg: cfg, settings: settingsWithTenantKey}
+	km, err := keys.NewManager("ES256", "", "")
+	if err != nil {
+		t.Fatalf("new key manager error: %v", err)
+	}
+	s.SetKeyManager(km)
 
 	toks, err := s.issueTokens(ctx, userID, tenantID, "", "", nil, "password", nil)
 	if err != nil {
@@ -77,7 +83,7 @@ func TestService_Introspect_UsesTenantSpecificSigningKey(t *testing.T) {
 		t.Fatalf("unexpected introspection context: got user %s tenant %s", out.UserID, out.TenantID)
 	}
 
-	// Service that only knows the global signing key (no tenant override)
+	// Service without an asymmetric key manager should fail introspection
 	settingsGlobalOnly := fakeSettings{strings: map[string]string{}}
 	s2 := &Service{repo: repo, cfg: cfg, settings: settingsGlobalOnly}
 
