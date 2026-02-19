@@ -74,6 +74,15 @@ curl -X POST https://guard.example.com/api/v1/auth/admin/oauth-clients \
   }'
 ```
 
+> **Response mode note:**
+>
+> `GET /oauth/authorize` supports two consent response modes:
+>
+> - **Browser/HTML mode** (`Accept: text/html`): returns a rendered consent page when consent is required.
+> - **API/JSON mode** (`Accept: application/json` or scripted HTTP): returns a JSON payload with `consent_required` and `consent_challenge`.
+>
+> In JSON mode, your app must complete consent by `POST /oauth/authorize/decision` (or rely on previously persisted consent).
+
 ### For a single-page app or mobile app (public client):
 
 ```bash
@@ -205,14 +214,20 @@ GET https://guard.example.com/oauth/authorize
 Guard will:
 1. Check if the user is logged in (via cookie or Bearer token)
 2. If not, redirect to the login page
-3. Show a consent screen (unless the user previously approved these scopes)
+3. If consent is required:
+   - render an HTML consent page (browser flow), or
+   - return a JSON consent challenge (API-driven flow)
 4. Redirect back to your `redirect_uri` with an authorization code
+
+> **Important integration guidance:** do not deep-link users directly to a copied `/oauth/authorize?...` URL from another app/session context. Start from your app's login entrypoint so `state`, `nonce`, `code_verifier`, and `redirect_uri` are generated and tracked by the same app session.
 
 ### 3d. Receive the callback
 
 ```
 https://myapp.example.com/callback?code=<authorization_code>&state=<state>
 ```
+
+Your callback host/port/path must exactly match one of the client's registered `redirect_uris` and must match the value used to build the authorize URL.
 
 **Always verify that `state` matches what you sent in step 3b.**
 
@@ -543,7 +558,7 @@ To programmatically revoke a user's consent (as an admin), use the consent grant
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/oauth/authorize` | GET | Authorization endpoint (user-facing) |
+| `/oauth/authorize` | GET | Authorization endpoint (returns HTML consent for browser requests, JSON consent challenge for API/script requests) |
 | `/oauth/authorize/decision` | POST | Consent decision (approve/deny) |
 | `/oauth/token` | POST | Token exchange (code, refresh, client_credentials) |
 | `/oauth/revoke` | POST | Token revocation (RFC 7009) |
@@ -575,6 +590,11 @@ To programmatically revoke a user's consent (as an admin), use the consent grant
 ### Consent screen keeps appearing
 - Ensure you request the same scopes each time
 - If you add new scopes, consent will be re-requested
+
+### `/oauth/authorize` returns JSON instead of redirecting to my app
+- This is expected in API/JSON mode when consent is required.
+- Either use browser HTML mode (`Accept: text/html`) or submit the returned `consent_challenge` to `POST /oauth/authorize/decision`.
+- Also verify your app uses its own login entrypoint and that `redirect_uri` exactly matches your registered callback.
 
 ### ID token verification fails
 - Fetch the JWKS from `/.well-known/jwks.json` (cache with TTL)

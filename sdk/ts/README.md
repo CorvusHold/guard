@@ -49,6 +49,11 @@ Notes:
 - `response_type` defaults to `code`.
 - `scope` accepts either a string (`"openid profile email"`) or a string array.
 - When `code_challenge` is set and `code_challenge_method` is omitted, the SDK defaults to `S256`.
+- Consent response mode depends on request context:
+  - browser flow (`Accept: text/html`): Guard serves an HTML consent page when needed
+  - API/script flow (`Accept: application/json`): Guard returns JSON with `consent_required` and `consent_challenge`
+- In API/script flow, submit consent via `POST /oauth/authorize/decision` before expecting redirect/callback.
+- Keep `redirect_uri` exactly aligned with your registered OAuth client callback (host/port/path).
 
 ## WorkOS Organization Portal Link
 

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -273,10 +274,11 @@ func (h *Controller) deleteClient(c echo.Context) error {
 // --- OAuth 2.0 Endpoints ---
 
 // @Summary      OAuth 2.0 Authorization
-// @Description  Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.
+// @Description  Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns HTML consent for browser requests (Accept: text/html), JSON consent challenge for API/script requests, or redirects if consent was previously granted.
 // @Tags         OAuth
 // @Accept       application/x-www-form-urlencoded
 // @Produce      json
+// @Produce      html
 // @Param        client_id             query  string  true   "Client ID"
 // @Param        redirect_uri          query  string  true   "Redirect URI"
 // @Param        response_type         query  string  true   "Response type (must be 'code')"
@@ -355,17 +357,32 @@ func (h *Controller) authorize(c echo.Context) error {
 		return c.Redirect(http.StatusFound, u.String())
 	}
 
-	scopeDetails := make([]map[string]string, 0, len(scopes))
+	scopeDetails := make([]consentScopeDetail, 0, len(scopes))
 	for _, s := range scopes {
 		desc, ok := domain.ScopeDescriptions[s]
 		if !ok {
 			desc = s
 		}
-		scopeDetails = append(scopeDetails, map[string]string{"scope": s, "description": desc})
+		scopeDetails = append(scopeDetails, consentScopeDetail{Scope: s, Description: desc})
 	}
 
 	// Generate CSRF consent challenge token
 	consentChallenge := h.generateConsentChallenge(userID, in.ClientID)
+
+	if prefersHTMLResponse(c) {
+		return c.HTML(http.StatusOK, buildConsentHTML(authorizeDecisionReq{
+			Approved:            true,
+			ConsentChallenge:    consentChallenge,
+			ClientID:            in.ClientID,
+			RedirectURI:         in.RedirectURI,
+			ResponseType:        in.ResponseType,
+			Scope:               in.Scope,
+			State:               in.State,
+			Nonce:               in.Nonce,
+			CodeChallenge:       in.CodeChallenge,
+			CodeChallengeMethod: in.CodeChallengeMethod,
+		}, client.Name, client.LogoURI, scopeDetails))
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"consent_required": true,
@@ -387,22 +404,28 @@ func (h *Controller) authorize(c echo.Context) error {
 }
 
 type authorizeDecisionReq struct {
-	Approved            bool   `json:"approved"`
-	ConsentChallenge    string `json:"consent_challenge" validate:"required"`
-	ClientID            string `json:"client_id" validate:"required"`
-	RedirectURI         string `json:"redirect_uri" validate:"required"`
-	ResponseType        string `json:"response_type" validate:"required"`
-	Scope               string `json:"scope"`
-	State               string `json:"state"`
-	Nonce               string `json:"nonce"`
-	CodeChallenge       string `json:"code_challenge"`
-	CodeChallengeMethod string `json:"code_challenge_method"`
+	Approved            bool   `json:"approved" form:"approved"`
+	ConsentChallenge    string `json:"consent_challenge" form:"consent_challenge" validate:"required"`
+	ClientID            string `json:"client_id" form:"client_id" validate:"required"`
+	RedirectURI         string `json:"redirect_uri" form:"redirect_uri" validate:"required"`
+	ResponseType        string `json:"response_type" form:"response_type" validate:"required"`
+	Scope               string `json:"scope" form:"scope"`
+	State               string `json:"state" form:"state"`
+	Nonce               string `json:"nonce" form:"nonce"`
+	CodeChallenge       string `json:"code_challenge" form:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method" form:"code_challenge_method"`
+}
+
+type consentScopeDetail struct {
+	Scope       string `json:"scope"`
+	Description string `json:"description"`
 }
 
 // @Summary      OAuth 2.0 Authorization Decision
 // @Description  Processes the user's consent decision (approve or deny) for an OAuth authorization request.
 // @Tags         OAuth
 // @Accept       json
+// @Accept       x-www-form-urlencoded
 // @Produce      json
 // @Param        body  body  authorizeDecisionReq  true  "Consent decision"
 // @Success      302  "Redirect with authorization code or error"
@@ -979,4 +1002,56 @@ func containsScope(scopes []string, scope string) bool {
 		}
 	}
 	return false
+}
+
+func prefersHTMLResponse(c echo.Context) bool {
+	accept := strings.ToLower(c.Request().Header.Get("Accept"))
+	return strings.Contains(accept, "text/html")
+}
+
+func buildConsentHTML(req authorizeDecisionReq, clientName, logoURI string, scopes []consentScopeDetail) string {
+	esc := html.EscapeString
+	b := strings.Builder{}
+	b.WriteString("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+	b.WriteString("<title>Authorize Application</title><style>body{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;background:#f6f8fb;margin:0;padding:24px;color:#111827}.card{max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px}.muted{color:#6b7280}.scopes{padding-left:20px}.actions{display:flex;gap:12px;margin-top:16px}.btn{border:1px solid #d1d5db;border-radius:8px;padding:10px 14px;background:#fff;cursor:pointer}.btn-primary{background:#111827;color:#fff;border-color:#111827}.logo{max-height:64px;max-width:64px;display:block;margin-bottom:8px}</style></head><body><div class=\"card\">")
+	if strings.TrimSpace(logoURI) != "" {
+		b.WriteString("<img class=\"logo\" alt=\"Client logo\" src=\"")
+		b.WriteString(esc(logoURI))
+		b.WriteString("\" />")
+	}
+	b.WriteString("<h1 style=\"margin:0 0 8px 0\">Authorize ")
+	b.WriteString(esc(clientName))
+	b.WriteString("</h1><p class=\"muted\">This application is requesting access to your account.</p>")
+	b.WriteString("<ul class=\"scopes\">")
+	for _, s := range scopes {
+		b.WriteString("<li><strong>")
+		b.WriteString(esc(s.Scope))
+		b.WriteString("</strong>: ")
+		b.WriteString(esc(s.Description))
+		b.WriteString("</li>")
+	}
+	b.WriteString("</ul>")
+	b.WriteString("<form method=\"post\" action=\"/oauth/authorize/decision\">")
+	writeHiddenInput(&b, "consent_challenge", req.ConsentChallenge)
+	writeHiddenInput(&b, "client_id", req.ClientID)
+	writeHiddenInput(&b, "redirect_uri", req.RedirectURI)
+	writeHiddenInput(&b, "response_type", req.ResponseType)
+	writeHiddenInput(&b, "scope", req.Scope)
+	writeHiddenInput(&b, "state", req.State)
+	writeHiddenInput(&b, "nonce", req.Nonce)
+	writeHiddenInput(&b, "code_challenge", req.CodeChallenge)
+	writeHiddenInput(&b, "code_challenge_method", req.CodeChallengeMethod)
+	b.WriteString("<div class=\"actions\"><button class=\"btn\" type=\"submit\" name=\"approved\" value=\"false\">Deny</button><button class=\"btn btn-primary\" type=\"submit\" name=\"approved\" value=\"true\">Authorize</button></div></form>")
+	b.WriteString("<p class=\"muted\" style=\"margin-top:14px\">You will be redirected to: <code>")
+	b.WriteString(esc(req.RedirectURI))
+	b.WriteString("</code></p></div></body></html>")
+	return b.String()
+}
+
+func writeHiddenInput(b *strings.Builder, name, value string) {
+	b.WriteString("<input type=\"hidden\" name=\"")
+	b.WriteString(html.EscapeString(name))
+	b.WriteString("\" value=\"")
+	b.WriteString(html.EscapeString(value))
+	b.WriteString("\" />")
 }

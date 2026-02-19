@@ -50,6 +50,11 @@ Required values:
 - `OAUTH_REDIRECT_URI`: must exactly match Guard client redirect URI (default: `http://localhost:3004/oauth/callback`)
 - `TENANT_ID`: tenant allowed to use this BFF app (bootstrap writes this automatically to `.env`)
 
+Callback alignment rules:
+- The callback host/port/path in `OAUTH_REDIRECT_URI` must match the Guard client `redirect_uris` entry exactly.
+- Start auth from this BFF (`/oauth/login`) so the same session owns `state` + `code_verifier`.
+- Avoid reusing a copied `/oauth/authorize?...` URL from another app/context (for example callback on `:8083` while this BFF runs on `:3004`).
+
 Security note:
 - `examples/oauth2-bff-go/backend/.env` contains sensitive values (including bootstrap credentials) and must never be committed.
 
@@ -93,12 +98,14 @@ This avoids stale BFF state and forces a fresh Guard login prompt.
 
 1. Click **Login via Guard**
 2. Browser redirects to Guard `/oauth/authorize`
-3. Guard returns to `GET /oauth/callback?code=...&state=...`
-4. Backend validates state and calls:
+3. If consent is required, Guard renders consent HTML in browser mode and then redirects.
+   - If you call `/oauth/authorize` by script/API clients, Guard may return JSON (`consent_required`, `consent_challenge`) instead.
+4. Guard returns to `GET /oauth/callback?code=...&state=...`
+5. Backend validates state and calls:
    - `ExchangeOAuth2Code(...)`
-5. Backend stores access/refresh token in session token store
-6. Frontend calls `GET /api/me` (backend calls Guard `/api/v1/auth/me`)
-7. If `/me` fails and refresh token exists, backend tries:
+6. Backend stores access/refresh token in session token store
+7. Frontend calls `GET /api/me` (backend calls Guard `/api/v1/auth/me`)
+8. If `/me` fails and refresh token exists, backend tries:
    - `OAuth2Refresh(...)`
    - retries `/api/v1/auth/me`
 

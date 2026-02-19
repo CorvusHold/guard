@@ -301,6 +301,15 @@ _ = tokens
 _ = refreshed
 ```
 
+OAuth consent behavior notes:
+
+- `GET /oauth/authorize` is the authorization endpoint and can respond in two ways when consent is required:
+  - browser flow (`Accept: text/html`): rendered consent page, then redirect after approval
+  - API/script flow (`Accept: application/json`): JSON payload with `consent_required` + `consent_challenge`
+- If you call `/oauth/authorize` from scripts/tools, you must complete consent with `POST /oauth/authorize/decision` before expecting callback redirect.
+- Keep `RedirectURI` aligned across your app config, OAuth client registration, and `BuildOAuth2AuthorizeURL` input (exact host/port/path match).
+- Start auth from your app backend entrypoint, not from a stale copied authorize URL, so `state` and `code_verifier` remain session-bound.
+
 See the complete front+backend reference implementation in:
 - `examples/oauth2-bff-go/`
 
