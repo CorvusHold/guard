@@ -1,0 +1,289 @@
+{
+  "scope": "backend-go",
+  "overall_coverage_percent": 50.56,
+  "excluded_file_patterns": [
+    ".gen.go",
+    "_gen.go",
+    "/internal/db/sqlc/",
+    "/sdk/go/api.gen.go",
+    "/sdk/go/generate.go"
+  ],
+  "packages": [
+    {
+      "package": "cmd/api",
+      "coverage_percent": 31.32,
+      "covered_statements": 109,
+      "total_statements": 348
+    },
+    {
+      "package": "cmd/bootstrap-token",
+      "coverage_percent": 26.67,
+      "covered_statements": 20,
+      "total_statements": 75
+    },
+    {
+      "package": "internal/applications",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 4
+    },
+    {
+      "package": "internal/applications/controller",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 53
+    },
+    {
+      "package": "internal/applications/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 45
+    },
+    {
+      "package": "internal/applications/service",
+      "coverage_percent": 80.0,
+      "covered_statements": 8,
+      "total_statements": 10
+    },
+    {
+      "package": "internal/auth",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 132
+    },
+    {
+      "package": "internal/auth/controller",
+      "coverage_percent": 80.76,
+      "covered_statements": 1440,
+      "total_statements": 1783
+    },
+    {
+      "package": "internal/auth/domain",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 2
+    },
+    {
+      "package": "internal/auth/issuer",
+      "coverage_percent": 81.08,
+      "covered_statements": 30,
+      "total_statements": 37
+    },
+    {
+      "package": "internal/auth/keys",
+      "coverage_percent": 87.65,
+      "covered_statements": 142,
+      "total_statements": 162
+    },
+    {
+      "package": "internal/auth/middleware",
+      "coverage_percent": 85.96,
+      "covered_statements": 98,
+      "total_statements": 114
+    },
+    {
+      "package": "internal/auth/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 558
+    },
+    {
+      "package": "internal/auth/service",
+      "coverage_percent": 80.83,
+      "covered_statements": 1358,
+      "total_statements": 1680
+    },
+    {
+      "package": "internal/auth/sso/controller",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 436
+    },
+    {
+      "package": "internal/auth/sso/domain",
+      "coverage_percent": 46.24,
+      "covered_statements": 43,
+      "total_statements": 93
+    },
+    {
+      "package": "internal/auth/sso/provider",
+      "coverage_percent": 66.91,
+      "covered_statements": 370,
+      "total_statements": 553
+    },
+    {
+      "package": "internal/auth/sso/service",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 534
+    },
+    {
+      "package": "internal/auth/sso/state",
+      "coverage_percent": 4.69,
+      "covered_statements": 3,
+      "total_statements": 64
+    },
+    {
+      "package": "internal/config",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 82
+    },
+    {
+      "package": "internal/email/service",
+      "coverage_percent": 97.56,
+      "covered_statements": 40,
+      "total_statements": 41
+    },
+    {
+      "package": "internal/email/templates",
+      "coverage_percent": 91.67,
+      "covered_statements": 22,
+      "total_statements": 24
+    },
+    {
+      "package": "internal/events/service",
+      "coverage_percent": 30.43,
+      "covered_statements": 7,
+      "total_statements": 23
+    },
+    {
+      "package": "internal/logger",
+      "coverage_percent": 100.0,
+      "covered_statements": 9,
+      "total_statements": 9
+    },
+    {
+      "package": "internal/metrics",
+      "coverage_percent": 43.94,
+      "covered_statements": 29,
+      "total_statements": 66
+    },
+    {
+      "package": "internal/oauth",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 10
+    },
+    {
+      "package": "internal/oauth/controller",
+      "coverage_percent": 13.32,
+      "covered_statements": 51,
+      "total_statements": 383
+    },
+    {
+      "package": "internal/oauth/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 120
+    },
+    {
+      "package": "internal/oauth/service",
+      "coverage_percent": 83.23,
+      "covered_statements": 139,
+      "total_statements": 167
+    },
+    {
+      "package": "internal/platform/ratelimit",
+      "coverage_percent": 83.59,
+      "covered_statements": 163,
+      "total_statements": 195
+    },
+    {
+      "package": "internal/platform/validation",
+      "coverage_percent": 100.0,
+      "covered_statements": 11,
+      "total_statements": 11
+    },
+    {
+      "package": "internal/scim/controller",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 155
+    },
+    {
+      "package": "internal/scim/service",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 228
+    },
+    {
+      "package": "internal/settings",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 28
+    },
+    {
+      "package": "internal/settings/controller",
+      "coverage_percent": 82.72,
+      "covered_statements": 201,
+      "total_statements": 243
+    },
+    {
+      "package": "internal/settings/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 14
+    },
+    {
+      "package": "internal/settings/service",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 34
+    },
+    {
+      "package": "internal/tenants",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 11
+    },
+    {
+      "package": "internal/tenants/controller",
+      "coverage_percent": 85.6,
+      "covered_statements": 107,
+      "total_statements": 125
+    },
+    {
+      "package": "internal/tenants/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 34
+    },
+    {
+      "package": "internal/tenants/service",
+      "coverage_percent": 87.14,
+      "covered_statements": 61,
+      "total_statements": 70
+    },
+    {
+      "package": "internal/version",
+      "coverage_percent": 100.0,
+      "covered_statements": 3,
+      "total_statements": 3
+    },
+    {
+      "package": "internal/webhooks",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 7
+    },
+    {
+      "package": "internal/webhooks/controller",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 80
+    },
+    {
+      "package": "internal/webhooks/repository",
+      "coverage_percent": 0.0,
+      "covered_statements": 0,
+      "total_statements": 57
+    },
+    {
+      "package": "internal/webhooks/service",
+      "coverage_percent": 83.33,
+      "covered_statements": 95,
+      "total_statements": 114
+    }
+  ]
+}

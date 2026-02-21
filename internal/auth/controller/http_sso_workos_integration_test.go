@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
@@ -667,9 +668,10 @@ func TestHTTP_SSO_WorkOS_StartAndCallback(t *testing.T) {
 	if exp < min || exp > max {
 		t.Fatalf("exp out of expected window: got %d not in [%d,%d]", exp, min, max)
 	}
-	// iss/aud should match PUBLIC_BASE_URL
-	if iss, _ := claims["iss"].(string); iss != cfg.PublicBaseURL {
-		t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["iss"])
+	// iss should match tenant-scoped issuer; aud should match PUBLIC_BASE_URL
+	expectedIssuer := authissuer.ResolveTenantIssuer(cfg, tenantID)
+	if iss, _ := claims["iss"].(string); iss != expectedIssuer {
+		t.Fatalf("iss mismatch: expected %s, got %v", expectedIssuer, claims["iss"])
 	}
 	if aud, _ := claims["aud"].(string); aud != cfg.PublicBaseURL {
 		t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["aud"])

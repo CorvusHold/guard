@@ -46,6 +46,25 @@ func setupIntegration(t *testing.T) (*Service, uuid.UUID) {
 	return svc, tenantID
 }
 
+func createIntegrationUser(t *testing.T, userID uuid.UUID) {
+	t.Helper()
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("skipping integration test: DATABASE_URL not set")
+	}
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Fatalf("db connect for user create: %v", err)
+	}
+	defer pool.Close()
+
+	if _, err := pool.Exec(ctx, "INSERT INTO users (id) VALUES ($1)", userID); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+}
+
 func TestIntegration_ClientCRUD(t *testing.T) {
 	svc, tenantID := setupIntegration(t)
 	ctx := context.Background()
@@ -128,6 +147,7 @@ func TestIntegration_AuthorizationCodeFlow(t *testing.T) {
 	})
 
 	userID := uuid.New()
+	createIntegrationUser(t, userID)
 
 	// Create authorization code
 	result, err := svc.CreateAuthorizationCode(ctx, domain.AuthorizeInput{
@@ -189,11 +209,14 @@ func TestIntegration_PKCEFlow(t *testing.T) {
 	h := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h[:])
 
+	userID := uuid.New()
+	createIntegrationUser(t, userID)
+
 	result, err := svc.CreateAuthorizationCode(ctx, domain.AuthorizeInput{
 		ClientID:            client.ClientID,
 		RedirectURI:         "https://spa.example.com/cb",
 		Scope:               "openid",
-		UserID:              uuid.New(),
+		UserID:              userID,
 		TenantID:            tenantID,
 		CodeChallenge:       challenge,
 		CodeChallengeMethod: "S256",
@@ -220,6 +243,7 @@ func TestIntegration_ConsentPersistence(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
+	createIntegrationUser(t, userID)
 	clientID := "test-consent-client-" + uuid.New().String()[:8]
 	scopes := []string{"openid", "profile"}
 

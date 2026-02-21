@@ -551,14 +551,13 @@ func TestSSOFlow_InvalidState(t *testing.T) {
 	initiateURL := fmt.Sprintf("/api/v1/auth/sso/t/%s/test-oidc/login", env.tenantID)
 	initReq := httptest.NewRequest(http.MethodGet, initiateURL, nil)
 	initRec := httptest.NewRecorder()
-	env.echo.ServeHTTP(initRec, initRec)
+	env.echo.ServeHTTP(initRec, initReq)
 
 	if initRec.Code != http.StatusFound {
 		t.Fatalf("expected 302 from initiation, got %d: %s", initRec.Code, initRec.Body.String())
 	}
 
 	authURL := initRec.Header().Get("Location")
-	parsedAuthURL, _ := url.Parse(authURL)
 
 	// Call mock IdP authorize to get the callback URL with state
 	mockAuthReq := httptest.NewRequest(http.MethodGet, authURL, nil)
@@ -696,8 +695,6 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 	}
 
 	authURL := rec.Header().Get("Location")
-	parsedURL, _ := url.Parse(authURL)
-	stateToken := parsedURL.Query().Get("state")
 
 	// Get authorization code from mock IdP
 	mockAuthReq := httptest.NewRequest(http.MethodGet, authURL, nil)
@@ -706,7 +703,6 @@ func TestSSOFlow_SignupDisabled(t *testing.T) {
 
 	callbackURL := mockAuthRec.Header().Get("Location")
 	parsedCallback, _ := url.Parse(callbackURL)
-	code := parsedCallback.Query().Get("code")
 
 	// Try callback using the actual callback URL from mock IdP
 	// This validates that the service uses the correct versioned format

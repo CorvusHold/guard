@@ -3,7 +3,12 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -180,6 +185,47 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ec key: %v", err)
+	}
+	der, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal ec key: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+	keyFile, err := os.CreateTemp("", "guard-introspect-jwt-*.pem")
+	if err != nil {
+		t.Fatalf("create temp key file: %v", err)
+	}
+	if _, err := keyFile.Write(pemBytes); err != nil {
+		t.Fatalf("write temp key file: %v", err)
+	}
+	if err := keyFile.Close(); err != nil {
+		t.Fatalf("close temp key file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(keyFile.Name()) })
+
+	oldAlg, hadAlg := os.LookupEnv("JWT_SIGNING_ALGORITHM")
+	oldPath, hadPath := os.LookupEnv("JWT_PRIVATE_KEY_PATH")
+	if err := os.Setenv("JWT_SIGNING_ALGORITHM", "ES256"); err != nil {
+		t.Fatalf("set JWT_SIGNING_ALGORITHM: %v", err)
+	}
+	if err := os.Setenv("JWT_PRIVATE_KEY_PATH", keyFile.Name()); err != nil {
+		t.Fatalf("set JWT_PRIVATE_KEY_PATH: %v", err)
+	}
+	t.Cleanup(func() {
+		if hadAlg {
+			_ = os.Setenv("JWT_SIGNING_ALGORITHM", oldAlg)
+		} else {
+			_ = os.Unsetenv("JWT_SIGNING_ALGORITHM")
+		}
+		if hadPath {
+			_ = os.Setenv("JWT_PRIVATE_KEY_PATH", oldPath)
+		} else {
+			_ = os.Unsetenv("JWT_PRIVATE_KEY_PATH")
+		}
+	})
 	cfg, _ := config.Load()
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
@@ -210,8 +256,8 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(15 * time.Minute).Unix(),
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString([]byte(cfg.JWTSigningKey))
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	signed, err := tok.SignedString(priv)
 	if err != nil {
 		t.Fatalf("sign settings jwt: %v", err)
 	}

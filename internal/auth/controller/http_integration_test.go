@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
@@ -581,8 +582,9 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 	if err := json.Unmarshal(spayload, &sclaims); err != nil {
 		t.Fatalf("unmarshal claims: %v", err)
 	}
-	if iss, _ := sclaims["iss"].(string); iss != cfg.PublicBaseURL {
-		t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, sclaims["iss"])
+	expectedIssuer := authissuer.ResolveTenantIssuer(cfg, tenantID)
+	if iss, _ := sclaims["iss"].(string); iss != expectedIssuer {
+		t.Fatalf("iss mismatch: expected %s, got %v", expectedIssuer, sclaims["iss"])
 	}
 	if aud, _ := sclaims["aud"].(string); aud != cfg.PublicBaseURL {
 		t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, sclaims["aud"])
@@ -624,8 +626,8 @@ func TestHTTP_Password_Signup_Login_Refresh_AuditAndClaims(t *testing.T) {
 	if err := json.Unmarshal(lpayload, &lclaims); err != nil {
 		t.Fatalf("unmarshal claims: %v", err)
 	}
-	if iss, _ := lclaims["iss"].(string); iss != cfg.PublicBaseURL {
-		t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, lclaims["iss"])
+	if iss, _ := lclaims["iss"].(string); iss != expectedIssuer {
+		t.Fatalf("iss mismatch: expected %s, got %v", expectedIssuer, lclaims["iss"])
 	}
 	if aud, _ := lclaims["aud"].(string); aud != cfg.PublicBaseURL {
 		t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, lclaims["aud"])

@@ -40,7 +40,10 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 		log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
 	}
 	ecPubKey = key
+	return newJWTWithPublicKey(ecPubKey)
+}
 
+func newJWTWithPublicKey(ecPubKey *ecdsa.PublicKey) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")

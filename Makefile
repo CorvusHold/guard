@@ -6,6 +6,7 @@ export RATE_LIMIT_RETRIES ?= 2
 .PHONY: compose-up compose-down compose-up-test compose-down-test dev \
         migrate-up migrate-down migrate-status migrate-up-test migrate-down-test \
         sqlc test test-e2e lint db-check redis-ping db-test-check redis-test-ping \
+        coverage-backend-audit coverage-sdk-go-audit coverage-sdk-ts-audit coverage-audit coverage-enforce \
         swagger sdk-gen sdk-check \
         obsv-up obsv-down seed-test k6-setup k6-all k6-smoke k6-login-stress k6-rate-limit-login k6-mfa-invalid \
         k6-portal-link-smoke k6-rate-limit-portal-link \
@@ -103,6 +104,23 @@ test-api-all: compose-up-test db-wait-test db-purge-test migrate-up-test-dc
 
 lint:
 	go vet ./...
+
+# ---- Coverage audit / enforcement ----
+
+coverage-backend-audit:
+	bash scripts/coverage-audit.sh
+
+coverage-sdk-go-audit:
+	bash scripts/coverage-audit.sh
+
+coverage-sdk-ts-audit:
+	bash scripts/coverage-audit.sh
+
+coverage-audit:
+	bash scripts/coverage-audit.sh
+
+coverage-enforce: coverage-audit
+	bash scripts/coverage-enforce.sh
 
 # ---- Conformance runner (TS SDK) ----
 

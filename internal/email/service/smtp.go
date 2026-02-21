@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var smtpSendMail = smtp.SendMail
+
 // Ensure SMTP implements domain.Sender
 var _ edomain.Sender = (*SMTP)(nil)
 
@@ -41,5 +43,5 @@ func (s *SMTP) Send(ctx context.Context, tenantID uuid.UUID, to, subject, body s
 	if username != "" {
 		auth = smtp.PlainAuth("", username, password, host)
 	}
-	return smtp.SendMail(addr, auth, from, []string{to}, msg)
+	return smtpSendMail(addr, auth, from, []string{to}, msg)
 }

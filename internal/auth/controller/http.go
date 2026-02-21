@@ -802,12 +802,12 @@ func (h *Controller) registerAuthRoutes(g *echo.Group) {
 		return ratelimit.Middleware(p)
 	}
 
-	rlSignup := mkMW(mkPolicy("auth:signup", sdomain.KeyRLSignupLimit, sdomain.KeyRLSignupWindow, 2, time.Minute))
-	rlLogin := mkMW(mkPolicy("auth:login", sdomain.KeyRLLoginLimit, sdomain.KeyRLLoginWindow, 2, time.Minute))
-	rlMagic := mkMW(mkPolicy("auth:magic", sdomain.KeyRLMagicLimit, sdomain.KeyRLMagicWindow, 5, time.Minute))
-	rlToken := mkMW(mkPolicy("auth:token", sdomain.KeyRLTokenLimit, sdomain.KeyRLTokenWindow, 10, time.Minute))
-	rlMFA := mkMW(mkPolicy("auth:mfa", sdomain.KeyRLMFALimit, sdomain.KeyRLMFAWindow, 10, time.Minute))
-	rlSSO := mkMW(mkPolicy("auth:sso", sdomain.KeyRLSsoLimit, sdomain.KeyRLSsoWindow, 10, time.Minute))
+	rlSignup := mkMW(mkPolicy("auth:signup", sdomain.KeyRLSignupLimit, sdomain.KeyRLSignupWindow, 6, time.Minute))
+	rlLogin := mkMW(mkPolicy("auth:login", sdomain.KeyRLLoginLimit, sdomain.KeyRLLoginWindow, 12, time.Minute))
+	rlMagic := mkMW(mkPolicy("auth:magic", sdomain.KeyRLMagicLimit, sdomain.KeyRLMagicWindow, 12, time.Minute))
+	rlToken := mkMW(mkPolicy("auth:token", sdomain.KeyRLTokenLimit, sdomain.KeyRLTokenWindow, 30, time.Minute))
+	rlMFA := mkMW(mkPolicy("auth:mfa", sdomain.KeyRLMFALimit, sdomain.KeyRLMFAWindow, 20, time.Minute))
+	rlSSO := mkMW(mkPolicy("auth:sso", sdomain.KeyRLSsoLimit, sdomain.KeyRLSsoWindow, 20, time.Minute))
 
 	// Password-based auth
 	g.POST("/password/signup", h.signup, rlSignup)

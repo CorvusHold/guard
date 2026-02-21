@@ -2,7 +2,12 @@ package controller
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,6 +28,60 @@ import (
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
 	trepo "github.com/corvusHold/guard/internal/tenants/repository"
 )
+
+func loadIntegrationJWTConfig(t *testing.T) config.Config {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ec key: %v", err)
+	}
+	der, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal ec private key: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+
+	f, err := os.CreateTemp("", "guard-settings-jwt-*.pem")
+	if err != nil {
+		t.Fatalf("create temp pem: %v", err)
+	}
+	if _, err := f.Write(pemBytes); err != nil {
+		t.Fatalf("write temp pem: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close temp pem: %v", err)
+	}
+	keyPath := f.Name()
+	t.Cleanup(func() { _ = os.Remove(keyPath) })
+
+	oldAlg, hadAlg := os.LookupEnv("JWT_SIGNING_ALGORITHM")
+	oldPath, hadPath := os.LookupEnv("JWT_PRIVATE_KEY_PATH")
+	if err := os.Setenv("JWT_SIGNING_ALGORITHM", "ES256"); err != nil {
+		t.Fatalf("set JWT_SIGNING_ALGORITHM: %v", err)
+	}
+	if err := os.Setenv("JWT_PRIVATE_KEY_PATH", keyPath); err != nil {
+		t.Fatalf("set JWT_PRIVATE_KEY_PATH: %v", err)
+	}
+	t.Cleanup(func() {
+		if hadAlg {
+			_ = os.Setenv("JWT_SIGNING_ALGORITHM", oldAlg)
+		} else {
+			_ = os.Unsetenv("JWT_SIGNING_ALGORITHM")
+		}
+		if hadPath {
+			_ = os.Setenv("JWT_PRIVATE_KEY_PATH", oldPath)
+		} else {
+			_ = os.Unsetenv("JWT_PRIVATE_KEY_PATH")
+		}
+	})
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	return cfg
+}
 
 // publisherFunc helps implement evdomain.Publisher in tests via a func.
 type publisherFunc func(ctx context.Context, e evdomain.Event) error
@@ -54,14 +113,14 @@ func TestSettings_GET_MasksSecrets(t *testing.T) {
 
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 
 	e := echo.New()
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -109,14 +168,14 @@ func TestSettings_GET_RateLimit_429(t *testing.T) {
 
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 
 	e := echo.New()
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	// first GET allowed
 	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantID.String()+"/settings", nil)
 	req1.Header.Set("Authorization", "Bearer "+tok)
@@ -139,16 +198,27 @@ func TestSettings_GET_RateLimit_429(t *testing.T) {
 	}
 }
 
-func makeJWT(t *testing.T, key string, sub uuid.UUID, ten uuid.UUID) string {
+func makeJWT(t *testing.T, cfg config.Config, sub uuid.UUID, ten uuid.UUID) string {
 	t.Helper()
+	if cfg.JWTPrivateKeyPath == "" {
+		t.Fatalf("JWT_PRIVATE_KEY_PATH must be set for ES256 test token signing")
+	}
+	keyBytes, err := os.ReadFile(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		t.Fatalf("read jwt private key: %v", err)
+	}
+	priv, err := jwt.ParseECPrivateKeyFromPEM(keyBytes)
+	if err != nil {
+		t.Fatalf("parse jwt private key: %v", err)
+	}
 	claims := jwt.MapClaims{
 		"sub": sub.String(),
 		"ten": ten.String(),
 		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(15 * time.Minute).Unix(),
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	s, err := tok.SignedString([]byte(key))
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	s, err := tok.SignedString(priv)
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
@@ -176,7 +246,7 @@ func TestSettings_GET_RequiresAuth_401(t *testing.T) {
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 
 	e := echo.New()
@@ -214,14 +284,14 @@ func TestSettings_TenantMismatch_403(t *testing.T) {
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 
 	e := echo.New()
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantA)
+	tok := makeJWT(t, cfg, userID, tenantA)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/"+tenantB.String()+"/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
@@ -251,7 +321,7 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 	// role fetcher returns non-admin/owner
 	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) {
@@ -262,7 +332,7 @@ func TestSettings_PUT_RBAC_Forbidden_403(t *testing.T) {
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	body := strings.NewReader(`{"sso_provider":"dev"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -294,7 +364,7 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 	// admin role
 	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) { return []string{"admin"}, nil })
@@ -303,7 +373,7 @@ func TestSettings_PUT_ValidationErrors_400(t *testing.T) {
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	cases := []struct{ name, payload, wantErr string }{
 		{"invalid_provider", `{"sso_provider":"foo"}`, "invalid sso_provider"},
 		{"invalid_ttl", `{"sso_state_ttl":"notdur"}`, "invalid sso_state_ttl"},
@@ -349,7 +419,7 @@ func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
 	sr := srepo.New(pool)
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) { return []string{"owner"}, nil })
 	var events []evdomain.Event
@@ -359,7 +429,7 @@ func TestSettings_PUT_Success_AuditRedaction(t *testing.T) {
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	payload := `{
 		"sso_provider":"workos",
 		"workos_client_id":"cid",
@@ -414,7 +484,7 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 
 	s := ssvc.New(sr)
 	c := New(sr, s)
-	cfg, _ := config.Load()
+	cfg := loadIntegrationJWTConfig(t)
 	c.WithJWT(amw.NewJWT(cfg))
 	c.WithRoleFetcher(func(ctx context.Context, userID, tenantID uuid.UUID) ([]string, error) { return []string{"admin"}, nil })
 
@@ -422,7 +492,7 @@ func TestSettings_PUT_RateLimit_429(t *testing.T) {
 	c.Register(e)
 
 	userID := uuid.New()
-	tok := makeJWT(t, cfg.JWTSigningKey, userID, tenantID)
+	tok := makeJWT(t, cfg, userID, tenantID)
 	payload := `{"sso_provider":"dev"}`
 	// first request allowed
 	req1 := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", strings.NewReader(payload))

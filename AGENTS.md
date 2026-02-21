@@ -74,6 +74,18 @@ See `docs/TEST_PROTOCOL.md` for the canonical testing procedure. Highlights:
 - UI lint/typecheck: `cd ui && pnpm run lint && pnpm run typecheck`
 - Go integration tests (dockerized): `make test-integration`
 
+## AI Test Strategy (Required)
+
+- `docs/AI_TEST_STRATEGY.md` is the source of truth for test taxonomy, deterministic rules, and CI artifact contracts.
+- Agents must follow naming and mapping conventions defined there when adding or refactoring tests.
+- Coverage policy for critical implementation work:
+  - Go backend package coverage floor: `>= 80%`
+  - SDK package coverage floor: `>= 80%`
+- Before adding tests, run coverage audit and prioritize modules below threshold using:
+  - `make coverage-audit`
+  - `make coverage-enforce`
+- Avoid test sprawl: add focused tests for uncovered branches and failure paths rather than broad duplicate happy-path tests.
+
 ## Backend Testing Conventions
 
 - Keep default `go test ./...` green and fast

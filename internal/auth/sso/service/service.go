@@ -132,8 +132,8 @@ func (s *SSOService) InitiateSSO(ctx context.Context, req InitiateSSORequest) (*
 		return nil, fmt.Errorf("failed to generate state token: %w", err)
 	}
 
-	// Build callback URL
-	callbackURL := fmt.Sprintf("%s/auth/sso/%s/callback", s.baseURL, config.Slug)
+	// Build callback URL (tenant-scoped v1 route)
+	callbackURL := fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/callback", s.baseURL, req.TenantID.String(), config.Slug)
 
 	// Start SSO flow
 	startOpts := domain.StartOptions{
@@ -356,8 +356,8 @@ func (s *SSOService) HandleCallback(ctx context.Context, req CallbackRequest) (*
 		return nil, callbackErr
 	}
 
-	// Build callback URL
-	callbackURL := fmt.Sprintf("%s/auth/sso/%s/callback", s.baseURL, config.Slug)
+	// Build callback URL (tenant-scoped v1 route)
+	callbackURL := fmt.Sprintf("%s/api/v1/auth/sso/t/%s/%s/callback", s.baseURL, req.TenantID.String(), config.Slug)
 
 	// Call provider callback handler
 	callbackReq := domain.CallbackRequest{

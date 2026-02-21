@@ -1,0 +1,25 @@
+{
+  "scope": "sdk-go",
+  "overall_coverage_percent": 82.22,
+  "excluded_file_patterns": [
+    ".gen.go",
+    "_gen.go",
+    "/internal/db/sqlc/",
+    "/sdk/go/api.gen.go",
+    "/sdk/go/generate.go"
+  ],
+  "packages": [
+    {
+      "package": "github.com/corvusHold/guard/sdk/go",
+      "coverage_percent": 81.65,
+      "covered_statements": 943,
+      "total_statements": 1155
+    },
+    {
+      "package": "sdk/go/middleware",
+      "coverage_percent": 88.57,
+      "covered_statements": 93,
+      "total_statements": 105
+    }
+  ]
+}
