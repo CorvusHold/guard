@@ -31,7 +31,7 @@ type meIntroRepoStub struct {
 
 func TestService_ParseAccessToken_Branches(t *testing.T) {
 	s := &Service{}
-	if _, err := s.ParseAccessToken(context.Background(), "x"); err == nil || err.Error() != "asymmetric key manager required" {
+	if _, err := s.ParseAccessToken("x"); err == nil || err.Error() != "asymmetric key manager required" {
 		t.Fatalf("expected key manager required error, got %v", err)
 	}
 
@@ -41,7 +41,7 @@ func TestService_ParseAccessToken_Branches(t *testing.T) {
 	}
 	s.keyMgr = km
 
-	if _, err := s.ParseAccessToken(context.Background(), "not-a-jwt"); err == nil || err.Error() != "invalid token" {
+	if _, err := s.ParseAccessToken("not-a-jwt"); err == nil || err.Error() != "invalid token" {
 		t.Fatalf("expected invalid token error, got %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestService_ParseAccessToken_Branches(t *testing.T) {
 		t.Fatalf("sign token: %v", err)
 	}
 
-	parsed, err := s.ParseAccessToken(context.Background(), signed)
+	parsed, err := s.ParseAccessToken(signed)
 	if err != nil {
 		t.Fatalf("ParseAccessToken unexpected err=%v", err)
 	}

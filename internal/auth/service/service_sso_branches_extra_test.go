@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
@@ -347,10 +348,10 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 	})
 
 	t.Run("httpDoWithRetry retries 5xx then succeeds and build error", func(t *testing.T) {
-		attempts := 0
+		var attempts int32
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attempts++
-			if attempts < 3 {
+			attempt := atomic.AddInt32(&attempts, 1)
+			if attempt < 3 {
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte("retry"))
 				return
@@ -367,8 +368,8 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 			t.Fatalf("httpDoWithRetry unexpected err=%v", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode != http.StatusOK || attempts != 3 {
-			t.Fatalf("expected success on third attempt, got status=%d attempts=%d", resp.StatusCode, attempts)
+		if gotAttempts := atomic.LoadInt32(&attempts); resp.StatusCode != http.StatusOK || gotAttempts != 3 {
+			t.Fatalf("expected success on third attempt, got status=%d attempts=%d", resp.StatusCode, gotAttempts)
 		}
 
 		if _, err := httpDoWithRetry(context.Background(), &http.Client{}, func() (*http.Request, error) {

@@ -76,6 +76,12 @@ func TestParseJWTHeader_AndDecodePayload(t *testing.T) {
 	if len(claims.Roles) != 2 || claims.Roles[0] != "admin" || claims.Roles[1] != "viewer" {
 		t.Fatalf("unexpected roles: %#v", claims.Roles)
 	}
+	if !claims.AudienceContains("audience") {
+		t.Fatalf("expected audience helper to match audience claim: %#v", claims.Audience)
+	}
+	if claims.PrimaryAudience() != "audience" || claims.AudienceString() != "audience" {
+		t.Fatalf("expected primary/audience string helpers to return first audience, got primary=%q audienceString=%q", claims.PrimaryAudience(), claims.AudienceString())
+	}
 }
 
 func TestParseJWTHeaderAndDecodePayload_InvalidInputs(t *testing.T) {
@@ -185,8 +191,14 @@ func TestTokenValidatorOptionsAndFetchJWKS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
+	priv2, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key2: %v", err)
+	}
 	x := base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.FillBytes(make([]byte, 32)))
 	y := base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.FillBytes(make([]byte, 32)))
+	x2 := base64.RawURLEncoding.EncodeToString(priv2.PublicKey.X.FillBytes(make([]byte, 32)))
+	y2 := base64.RawURLEncoding.EncodeToString(priv2.PublicKey.Y.FillBytes(make([]byte, 32)))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -195,6 +207,10 @@ func TestTokenValidatorOptionsAndFetchJWKS(t *testing.T) {
 				{"kty": "EC", "crv": "P-256", "x": x, "y": y, "kid": "kid-1"},
 				{"kty": "RSA", "kid": "ignore-me"},
 			}})
+		case "/empty/.well-known/jwks.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]any{{"kty": "RSA", "kid": "ignore-me"}}})
+		case "/good/.well-known/jwks.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]any{{"kty": "EC", "crv": "P-256", "x": x2, "y": y2, "kid": "kid-2"}}})
 		case "/bad-json":
 			_, _ = io.WriteString(w, "{")
 		default:
@@ -224,6 +240,25 @@ func TestTokenValidatorOptionsAndFetchJWKS(t *testing.T) {
 	v3 := NewTokenValidator(server.URL + "/bad-json")
 	if err := v3.fetchJWKS(context.Background()); err == nil {
 		t.Fatal("expected fetchJWKS error for invalid JSON")
+	}
+
+	v4 := NewTokenValidator(server.URL+"/good", WithValidatorHTTPClient(server.Client()))
+	if err := v4.fetchJWKS(context.Background()); err != nil {
+		t.Fatalf("expected successful jwks fetch, got %v", err)
+	}
+	if _, ok := v4.keys["kid-2"]; !ok {
+		t.Fatalf("expected kid-2 to be cached, got keys=%v", v4.keys)
+	}
+	prevFetchedAt := v4.fetchedAt
+	v4.guardURL = server.URL + "/empty"
+	if err := v4.fetchJWKS(context.Background()); err == nil {
+		t.Fatal("expected fetchJWKS error when jwks has zero valid EC keys")
+	}
+	if _, ok := v4.keys["kid-2"]; !ok {
+		t.Fatalf("expected stale cache to be preserved when jwks has zero valid keys; got keys=%v", v4.keys)
+	}
+	if !v4.fetchedAt.Equal(prevFetchedAt) {
+		t.Fatalf("expected fetchedAt to remain unchanged when no valid keys are returned: before=%s after=%s", prevFetchedAt, v4.fetchedAt)
 	}
 }
 
@@ -262,6 +297,20 @@ func TestTokenValidatorValidateBranches(t *testing.T) {
 	}
 	if claims.Subject != "u1" || claims.TenantID != "t1" || len(claims.Roles) != 2 {
 		t.Fatalf("unexpected claims: %+v", claims)
+	}
+
+	vAud := NewTokenValidator("https://guard.example.com", WithExpectedAudience("aud"))
+	vAud.keys["kid-ok"] = &priv.PublicKey
+	vAud.fetchedAt = time.Now()
+	if _, err := vAud.Validate(context.Background(), ok); err != nil {
+		t.Fatalf("expected valid audience, got %v", err)
+	}
+
+	vAudMiss := NewTokenValidator("https://guard.example.com", WithExpectedAudience("other-aud"))
+	vAudMiss.keys["kid-ok"] = &priv.PublicKey
+	vAudMiss.fetchedAt = time.Now()
+	if _, err := vAudMiss.Validate(context.Background(), ok); err == nil || !errors.Is(err, ErrInvalidAudience) {
+		t.Fatalf("expected ErrInvalidAudience, got %v", err)
 	}
 
 	vf := NewTokenValidator("https://guard.example.com", WithValidatorHTTPClient(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

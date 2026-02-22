@@ -51,6 +51,19 @@ func (staticSettingsService) GetInt(_ context.Context, _ string, _ *uuid.UUID, d
 func loadIntegrationES256Config(t *testing.T) config.Config {
 	t.Helper()
 
+	keyPath := writeTestECKeyPEM(t)
+
+	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
+	t.Setenv("JWT_PRIVATE_KEY_PATH", keyPath)
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	return cfg
+}
+
+func writeTestECKeyPEM(t *testing.T) string {
+	t.Helper()
+
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	der, err := x509.MarshalECPrivateKey(priv)
@@ -64,12 +77,7 @@ func loadIntegrationES256Config(t *testing.T) config.Config {
 	require.NoError(t, err)
 	require.NoError(t, keyFile.Close())
 
-	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
-	t.Setenv("JWT_PRIVATE_KEY_PATH", keyFile.Name())
-
-	cfg, err := config.Load()
-	require.NoError(t, err)
-	return cfg
+	return keyFile.Name()
 }
 
 func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
@@ -286,30 +294,9 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 
 	// Now construct a second auth service/controller that only uses the global signing key
 	staticSettings := staticSettingsService{}
-	priv2, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generate second ec key: %v", err)
-	}
-	der2, err := x509.MarshalECPrivateKey(priv2)
-	if err != nil {
-		t.Fatalf("marshal second ec key: %v", err)
-	}
-	pemBytes2 := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der2})
-	keyFile2, err := os.CreateTemp("", "guard-introspect-global-jwt-*.pem")
-	if err != nil {
-		t.Fatalf("create second temp key file: %v", err)
-	}
-	if _, err := keyFile2.Write(pemBytes2); err != nil {
-		t.Fatalf("write second temp key file: %v", err)
-	}
-	if err := keyFile2.Close(); err != nil {
-		t.Fatalf("close second temp key file: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Remove(keyFile2.Name()) })
-
 	cfgGlobalOnly := cfg
 	cfgGlobalOnly.JWTSigningAlgorithm = "ES256"
-	cfgGlobalOnly.JWTPrivateKeyPath = keyFile2.Name()
+	cfgGlobalOnly.JWTPrivateKeyPath = writeTestECKeyPEM(t)
 	cfgGlobalOnly.JWTSigningKey = ""
 	auth2 := svc.New(repo, cfgGlobalOnly, staticSettings)
 	magic2 := svc.NewMagic(repo, cfgGlobalOnly, staticSettings, &fakeEmail{})

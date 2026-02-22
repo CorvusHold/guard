@@ -126,7 +126,7 @@ Every new test file MUST include a metadata header block.
 {
   "UNIT": {"tier": "PR", "deps": "none"},
   "INTEGRATION": {"tier": "EXTENDED", "deps": "docker"},
-  "CONTRACT": {"tier": "PR", "deps": "none|docker"},
+  "CONTRACT": {"tier": "PR", "deps": "none"},
   "E2E": {"tier": "EXTENDED", "deps": "docker"},
   "PERFORMANCE_BASELINE": {"tier": "NIGHTLY", "deps": "docker"},
   "PERFORMANCE_REGRESSION": {"tier": "RELEASE", "deps": "docker"},
@@ -137,6 +137,8 @@ Every new test file MUST include a metadata header block.
   "COMPLIANCE_VALIDATION": {"tier": "RELEASE", "deps": "docker"}
 }
 ```
+
+Note: prior drafts used pipe notation (for example, `none|docker`) informally. Manifest generators and AI agents MUST emit exactly one schema-valid `deps` value per entry: `none`, `docker`, or `external-mock`.
 
 ### 2.2 Category contract table
 
@@ -324,10 +326,12 @@ Examples:
 
 ### 4.4 CI fail logic
 
-- Fail if coverage drops > 1.0% absolute in any R1 module.
-- Fail if module threshold violated.
-- Fail if new/changed file has no mapped test (except approved exemptions).
-- Fail if conformance or contract drift check fails.
+Fail the build if any of the following:
+
+- coverage drops > 1.0% absolute in any R1 module
+- module threshold is violated
+- new/changed file has no mapped test (except approved exemptions)
+- conformance or contract drift check fails
 
 ---
 
@@ -512,7 +516,10 @@ Must include deterministic templates for:
 
 ### 9.1 Stale test detection
 
-A test is stale if mapped source no longer exists OR test has no execution in 30 days.
+A test is stale if mapped source no longer exists, or if execution freshness is violated by tier:
+
+- PR, EXTENDED, NIGHTLY tiers: stale when no execution in the last 30 days.
+- RELEASE tier (`COMPLIANCE_VALIDATION`, `PERFORMANCE_REGRESSION`, and other release-gated tests): stale when not executed in the last release/tag cycle (or >90 days if release metadata is unavailable).
 
 ### 9.2 Redundant test detection
 
@@ -531,7 +538,16 @@ Flake index:
 flake_index = (failed_then_passed_runs / total_runs_last_14_days)
 ```
 
-Auto-quarantine threshold: `flake_index >= 0.05`.
+Response policy (aligned to KPI in §12):
+
+- Warn threshold: `flake_index >= 0.02` (CI emits warning + alert artifact, test remains runnable).
+- Auto-quarantine threshold: `flake_index >= 0.05` (CI blocks normal tier execution for the test and requires quarantine workflow).
+
+CI alerting logic:
+
+- `flake_index < 0.02`: pass (no flake alert)
+- `0.02 <= flake_index < 0.05`: warn (`flake-report.json` + CI warning annotation)
+- `flake_index >= 0.05`: quarantine (`flake-report.json` + CI failure requiring quarantine routing)
 
 ### 9.4 Legacy refactoring rules
 
@@ -604,12 +620,14 @@ Exit criteria:
 
 ## 11) Enforcement rules (machine-checkable)
 
-1. Reject PR if file naming regex invalid.
-2. Reject PR if changed source has no mapped tests.
-3. Reject PR if coverage threshold/risk gate violated.
-4. Reject PR if contract diff is breaking.
-5. Reject PR if required artifacts missing.
-6. Reject PR if deterministic reset steps absent for dockerized tiers.
+Reject PR if any of the following:
+
+1. file naming regex is invalid
+2. changed source has no mapped tests
+3. coverage threshold/risk gate is violated
+4. contract diff is breaking
+5. required artifacts are missing
+6. deterministic reset steps are absent for dockerized tiers
 
 ---
 
@@ -625,17 +643,24 @@ Exit criteria:
 | AI test acceptance rate | >= 70% | rolling 30d |
 | Perf regression false-positive rate | <= 5% | rolling 30d |
 
+Enforced KPI mapping:
+
+- `Flake index <= 2%` is actively enforced via §9.3 warning threshold (`flake_index >= 0.02`).
+- Auto-quarantine remains at `flake_index >= 0.05` to isolate severe instability while preserving signal at KPI breach.
+
 ---
 
 ## 13) Immediate implementation checklist (repo-specific)
 
-1. Add `tests/manifest/test-manifest.json` generator + validator.
-2. Add `make ci-pr`, `make ci-extended`, `make ci-nightly-local`, `make ci-release-dryrun`.
-3. Add coverage export jobs for Go/UI/SDK in JSON.
-4. Add security secret-scan workflow with SARIF output.
-5. Add k6 baseline registry and baseline update workflow.
-6. Add deterministic gate script verifying DB purge + Redis flush occurred before integration/perf runs.
-7. Add AI maintenance bot job emitting stale/redundant/flaky reports.
+Implement the following immediate actions:
+
+1. add `tests/manifest/test-manifest.json` generator + validator
+2. add `make ci-pr`, `make ci-extended`, `make ci-nightly-local`, `make ci-release-dryrun`
+3. add coverage export jobs for Go/UI/SDK in JSON
+4. add security secret-scan workflow with SARIF output
+5. add k6 baseline registry and baseline update workflow
+6. add deterministic gate script verifying DB purge + Redis flush occurred before integration/perf runs
+7. add AI maintenance bot job emitting stale/redundant/flaky reports
 
 ---
 

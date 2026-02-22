@@ -18,13 +18,14 @@ import (
 
 // Typed errors for token validation.
 var (
-	ErrTokenExpired   = errors.New("guard: token expired")
-	ErrTokenInvalid   = errors.New("guard: token invalid")
-	ErrTokenMalform   = errors.New("guard: token malformed")
-	ErrJWKSFetch      = errors.New("guard: failed to fetch JWKS")
-	ErrKeyNotFound    = errors.New("guard: signing key not found in JWKS")
-	ErrUnsupportedAlg = errors.New("guard: unsupported signing algorithm")
-	ErrInvalidIssuer  = errors.New("guard: invalid issuer")
+	ErrTokenExpired    = errors.New("guard: token expired")
+	ErrTokenInvalid    = errors.New("guard: token invalid")
+	ErrTokenMalform    = errors.New("guard: token malformed")
+	ErrJWKSFetch       = errors.New("guard: failed to fetch JWKS")
+	ErrKeyNotFound     = errors.New("guard: signing key not found in JWKS")
+	ErrUnsupportedAlg  = errors.New("guard: unsupported signing algorithm")
+	ErrInvalidIssuer   = errors.New("guard: invalid issuer")
+	ErrInvalidAudience = errors.New("guard: invalid audience")
 )
 
 // TokenClaims represents the validated claims from a Guard JWT.
@@ -40,6 +41,33 @@ type TokenClaims struct {
 	Expiry   int64    `json:"exp"`
 }
 
+// AudienceContains reports whether the token audience list contains aud.
+func (c *TokenClaims) AudienceContains(aud string) bool {
+	aud = strings.TrimSpace(aud)
+	if aud == "" {
+		return false
+	}
+	for _, candidate := range c.Audience {
+		if candidate == aud {
+			return true
+		}
+	}
+	return false
+}
+
+// PrimaryAudience returns the first audience value, or an empty string when unset.
+func (c *TokenClaims) PrimaryAudience() string {
+	if len(c.Audience) == 0 {
+		return ""
+	}
+	return c.Audience[0]
+}
+
+// AudienceString returns the first audience value for backwards-compatibility usage.
+func (c *TokenClaims) AudienceString() string {
+	return c.PrimaryAudience()
+}
+
 // Logger is a minimal logging interface for optional diagnostics.
 type Logger interface {
 	Printf(format string, v ...interface{})
@@ -51,15 +79,19 @@ func (noopLogger) Printf(string, ...interface{}) {}
 
 // TokenValidator validates Guard-issued JWTs using ES256 public keys from JWKS.
 type TokenValidator struct {
-	guardURL   string
-	tenantID   string
-	httpClient *http.Client
-	cacheTTL   time.Duration
-	logger     Logger
+	guardURL         string
+	tenantID         string
+	expectedAudience string
+	httpClient       *http.Client
+	cacheTTL         time.Duration
+	logger           Logger
 
-	mu        sync.RWMutex
-	keys      map[string]*ecdsa.PublicKey
-	fetchedAt time.Time
+	mu            sync.RWMutex
+	keys          map[string]*ecdsa.PublicKey
+	fetchedAt     time.Time
+	fetchInFlight bool
+	fetchDone     chan struct{}
+	lastFetchErr  error
 }
 
 // TokenValidatorOption customizes TokenValidator construction.
@@ -79,6 +111,12 @@ func WithJWKSCacheTTL(d time.Duration) TokenValidatorOption {
 // When set, JWKS are fetched from: {guardURL}/t/{tenantID}/.well-known/jwks.json
 func WithValidatorTenantID(tenantID string) TokenValidatorOption {
 	return func(v *TokenValidator) { v.tenantID = strings.TrimSpace(tenantID) }
+}
+
+// WithExpectedAudience enforces a required audience match during token validation.
+// When empty, audience validation is skipped.
+func WithExpectedAudience(audience string) TokenValidatorOption {
+	return func(v *TokenValidator) { v.expectedAudience = strings.TrimSpace(audience) }
 }
 
 // WithValidatorLogger sets a logger for non-fatal JWKS parsing diagnostics.
@@ -161,6 +199,9 @@ func (v *TokenValidator) validateES256(ctx context.Context, tokenString, kid str
 	if strings.TrimRight(claims.Issuer, "/") != v.expectedIssuer() {
 		return nil, ErrInvalidIssuer
 	}
+	if v.expectedAudience != "" && !claims.AudienceContains(v.expectedAudience) {
+		return nil, ErrInvalidAudience
+	}
 
 	return claims, nil
 }
@@ -184,8 +225,8 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 		return key, nil
 	}
 
-	// Fetch JWKS
-	if err := v.fetchJWKS(ctx); err != nil {
+	// Fetch JWKS (deduplicated across concurrent callers)
+	if err := v.fetchJWKSOnce(ctx); err != nil {
 		// If we have a cached key, use it even if stale
 		if ok {
 			return key, nil
@@ -201,6 +242,36 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 		return nil, fmt.Errorf("%w: kid=%s", ErrKeyNotFound, kid)
 	}
 	return key, nil
+}
+
+func (v *TokenValidator) fetchJWKSOnce(ctx context.Context) error {
+	v.mu.Lock()
+	if v.fetchInFlight {
+		done := v.fetchDone
+		v.mu.Unlock()
+		select {
+		case <-done:
+			v.mu.RLock()
+			err := v.lastFetchErr
+			v.mu.RUnlock()
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	v.fetchInFlight = true
+	v.fetchDone = make(chan struct{})
+	v.mu.Unlock()
+
+	err := v.fetchJWKS(ctx)
+
+	v.mu.Lock()
+	v.lastFetchErr = err
+	close(v.fetchDone)
+	v.fetchInFlight = false
+	v.mu.Unlock()
+
+	return err
 }
 
 // fetchJWKS fetches the JWKS from the Guard server.
@@ -241,6 +312,10 @@ func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
 			continue
 		}
 		newKeys[k.Kid] = pub
+	}
+	if len(newKeys) == 0 {
+		v.logger.Printf("guard token validator: jwks fetch produced zero valid EC keys; keeping previous cache")
+		return fmt.Errorf("%w: no valid keys in jwks response", ErrJWKSFetch)
 	}
 
 	v.mu.Lock()
@@ -302,18 +377,10 @@ func parseJWTHeader(token string) (map[string]interface{}, error) {
 }
 
 func splitJWT(token string) ([]string, error) {
-	// Split into header.payload.signature
-	var parts []string
-	start := 0
-	for i := 0; i < len(token); i++ {
-		if token[i] == '.' {
-			parts = append(parts, token[start:i])
-			start = i + 1
-		}
-	}
-	parts = append(parts, token[start:])
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("%w: expected 3 parts, got %d", ErrTokenMalform, len(parts))
+	parts := strings.SplitN(token, ".", 3)
+	partCount := strings.Count(token, ".") + 1
+	if len(parts) != 3 || partCount != 3 {
+		return nil, fmt.Errorf("%w: expected 3 parts, got %d", ErrTokenMalform, partCount)
 	}
 	return parts, nil
 }

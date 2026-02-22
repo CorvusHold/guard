@@ -7,8 +7,10 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -66,16 +68,26 @@ func TestService_NewAndSettersAndIsEmailEnabled(t *testing.T) {
 		t.Fatal("expected repo to be assigned")
 	}
 
-	pub := publisherFunc(func(context.Context, evdomain.Event) error { return nil })
+	published := false
+	pub := publisherFunc(func(context.Context, evdomain.Event) error {
+		published = true
+		return nil
+	})
 	s.SetPublisher(pub)
 	if s.pub == nil {
 		t.Fatal("expected publisher to be set")
 	}
+	if err := s.pub.Publish(context.Background(), evdomain.Event{}); err != nil {
+		t.Fatalf("expected publisher to be callable, got err=%v", err)
+	}
+	if !published {
+		t.Fatal("expected SetPublisher to replace publisher with sentinel")
+	}
 
-	logger := zerolog.Nop()
+	logger := zerolog.New(io.Discard).Level(zerolog.InfoLevel)
 	s.SetLogger(logger)
 	if s.log.GetLevel() != logger.GetLevel() {
-		t.Fatal("expected logger to be assigned")
+		t.Fatalf("expected logger level %s, got %s", logger.GetLevel(), s.log.GetLevel())
 	}
 
 	sender := emailSenderStub{}
@@ -84,12 +96,12 @@ func TestService_NewAndSettersAndIsEmailEnabled(t *testing.T) {
 		t.Fatal("expected email sender to be set")
 	}
 
-	km, err := keys.NewManager("HS256", "", "unit-test-signing-key")
+	km, err := keys.NewManager("ES256", "", "")
 	if err != nil {
 		t.Fatalf("new key manager: %v", err)
 	}
 	s.SetKeyManager(km)
-	if s.KeyManager() != km {
+	if s.KeyManager() != km || !s.KeyManager().IsAsymmetric() {
 		t.Fatal("expected key manager round-trip")
 	}
 
@@ -114,24 +126,49 @@ func TestValidatePassword_AllConstraintBranches(t *testing.T) {
 		RequireSpecial:   true,
 	}
 
-	violations := ValidatePassword("abc", policy)
-	if len(violations) != 4 {
-		t.Fatalf("expected exactly 4 violations, got %d: %v", len(violations), violations)
+	tests := []struct {
+		name     string
+		password string
+		policy   PasswordPolicy
+		want     []string
+	}{
+		{
+			name:     "short password reports expected violations",
+			password: "abc",
+			policy:   policy,
+			want: []string{
+				"password must be at least 8 characters",
+				"password must contain at least one uppercase letter",
+				"password must contain at least one digit",
+				"password must contain at least one special character",
+			},
+		},
+		{
+			name:     "max length violation",
+			password: "Aa1!Aa1!Aa1!Aa1!",
+			policy:   policy,
+			want:     []string{"password must be at most 12 characters"},
+		},
+		{
+			name:     "valid password",
+			password: "Abcdef1!",
+			policy:   policy,
+			want:     nil,
+		},
+		{
+			name:     "max length disabled",
+			password: "x",
+			policy:   PasswordPolicy{MinLength: 1, MaxLength: 0},
+			want:     nil,
+		},
 	}
 
-	violations = ValidatePassword("Aa1!Aa1!Aa1!Aa1!", policy)
-	if len(violations) != 1 {
-		t.Fatalf("expected max length violation, got %v", violations)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ValidatePassword(tc.password, tc.policy)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("unexpected violations for %q: got=%v want=%v", tc.password, got, tc.want)
+			}
+		})
 	}
-
-	violations = ValidatePassword("Abcdef1!", policy)
-	if len(violations) != 0 {
-		t.Fatalf("expected no violations for valid password, got %v", violations)
-	}
-
-	noMaxPolicy := PasswordPolicy{MinLength: 1, MaxLength: 0}
-	if got := ValidatePassword("x", noMaxPolicy); len(got) != 0 {
-		t.Fatalf("expected no violations when max length disabled, got %v", got)
-	}
-
 }

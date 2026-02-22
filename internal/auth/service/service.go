@@ -1678,9 +1678,7 @@ func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) erro
 
 // ParseAccessToken parses an access token and returns the claims.
 // It resolves per-tenant signing keys the same way Introspect does.
-func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
-	// ctx unused: key manager is resolved at construction/injection time.
-	_ = ctx
+func (s *Service) ParseAccessToken(tokenStr string) (domain.AccessTokenClaims, error) {
 	if err := s.requireAsymmetricKeyMgr(); err != nil {
 		return domain.AccessTokenClaims{}, err
 	}

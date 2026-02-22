@@ -1299,7 +1299,7 @@ func (h *Controller) signup(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "invalid admin role"})
 		}
 		// Parse user ID from the access token to assign the role
-		claims, parseErr := h.svc.ParseAccessToken(c.Request().Context(), tok.AccessToken)
+		claims, parseErr := h.svc.ParseAccessToken(tok.AccessToken)
 		if parseErr != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to parse token"})
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	amw "github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
@@ -46,12 +47,9 @@ func loadIntegrationJWTConfig(t *testing.T) config.Config {
 	require.NoError(t, err)
 	keyPath := f.Name()
 	t.Cleanup(func() { _ = os.Remove(keyPath) })
-	if _, err := f.Write(pemBytes); err != nil {
-		require.NoError(t, err)
-	}
-	if err := f.Close(); err != nil {
-		require.NoError(t, err)
-	}
+	_, err = f.Write(pemBytes)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
 	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
 	t.Setenv("JWT_PRIVATE_KEY_PATH", keyPath)
@@ -192,6 +190,7 @@ func makeJWT(t *testing.T, cfg config.Config, sub uuid.UUID, ten uuid.UUID) stri
 	claims := jwt.MapClaims{
 		"sub": sub.String(),
 		"ten": ten.String(),
+		"iss": authissuer.ResolveTenantIssuer(cfg, ten),
 		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(15 * time.Minute).Unix(),
 	}

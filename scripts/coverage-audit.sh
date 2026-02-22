@@ -6,6 +6,7 @@ REPORT_DIR="${ROOT_DIR}/reports/pr"
 mkdir -p "${REPORT_DIR}"
 
 SCOPE="${1:-all}"
+THRESHOLD="${2:-80}"
 RUN_BACKEND=false
 RUN_SDK_GO=false
 RUN_SDK_TS=false
@@ -73,7 +74,7 @@ with open(profile, 'r', encoding='utf-8') as f:
         stmts = float(m.group('stmts'))
         count = int(m.group('count'))
         # Exclude generated files from package coverage enforcement.
-        if any(p in file_path or file_path.endswith(p) for p in excluded_patterns):
+        if any(p in file_path for p in excluded_patterns):
             continue
 
         pkg = os.path.dirname(file_path)
@@ -191,9 +192,9 @@ PY
 fi
 
 if [[ "${SCOPE}" == "all" ]]; then
-python3 - "${BACKEND_JSON}" "${SDK_GO_JSON}" "${SDK_TS_JSON}" "${MERGED_JSON}" <<'PY'
+python3 - "${BACKEND_JSON}" "${SDK_GO_JSON}" "${SDK_TS_JSON}" "${MERGED_JSON}" "${THRESHOLD}" <<'PY'
 import json, sys
-backend, sdk_go, sdk_ts, output = sys.argv[1:]
+backend, sdk_go, sdk_ts, output, threshold = sys.argv[1:]
 with open(backend, 'r', encoding='utf-8') as f:
     b = json.load(f)
 with open(sdk_go, 'r', encoding='utf-8') as f:
@@ -210,7 +211,7 @@ for section in (b, g, t):
 
 summary = {
     'generated_by': 'scripts/coverage-audit.sh',
-    'threshold_percent': 80,
+    'threshold_percent': float(threshold),
     'scopes': {
         'backend-go': b.get('overall_coverage_percent', 0),
         'sdk-go': g.get('overall_coverage_percent', 0),

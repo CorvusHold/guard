@@ -76,7 +76,7 @@ func (s *authFlowControllerSvcStub) GetOrCreateAdminRole(context.Context, uuid.U
 	return s.adminRoleOut, nil
 }
 
-func (s *authFlowControllerSvcStub) ParseAccessToken(context.Context, string) (adomain.AccessTokenClaims, error) {
+func (s *authFlowControllerSvcStub) ParseAccessToken(string) (adomain.AccessTokenClaims, error) {
 	if s.parseClaimsErr != nil {
 		return adomain.AccessTokenClaims{}, s.parseClaimsErr
 	}

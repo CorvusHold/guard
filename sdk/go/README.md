@@ -39,15 +39,22 @@ If you are upgrading from older Guard integrations:
 `TokenClaims.Audience` is now `[]string` (was `string`).
 
 - Before: callers could compare `claims.Audience` directly to one string.
-- Now: callers must check membership in the audience list.
+- Now: use helper methods for compatibility and clarity:
+  - `claims.AudienceContains("...")` for membership checks
+  - `claims.PrimaryAudience()` (or `claims.AudienceString()`) for first-audience access
 
 ```go
-import "slices"
+// Before
+if claims.Audience == "https://guard.example.com" {
+    // ...
+}
 
-audience := "https://guard.example.com"
-if !slices.Contains(claims.Audience, audience) {
+// After
+if !claims.AudienceContains("https://guard.example.com") {
     return errors.New("unexpected audience")
 }
+primary := claims.PrimaryAudience() // or claims.AudienceString()
+_ = primary
 ```
 
 This is a breaking surface change; consumers pinned to older SDK behavior should
