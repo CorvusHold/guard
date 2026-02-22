@@ -75,7 +75,9 @@ func TestSMTP_Send_NoAuthWhenUsernameEmpty(t *testing.T) {
 	origSend := smtpSendMail
 	defer func() { smtpSendMail = origSend }()
 
+	called := false
 	smtpSendMail = func(addr string, auth smtp.Auth, _ string, _ []string, _ []byte) error {
+		called = true
 		if addr != "smtp.example.com:2526" {
 			t.Fatalf("expected addr smtp.example.com:2526, got %q", addr)
 		}
@@ -87,6 +89,9 @@ func TestSMTP_Send_NoAuthWhenUsernameEmpty(t *testing.T) {
 
 	if err := s.Send(context.Background(), uuid.New(), "to@example.com", "subject", "body"); err != nil {
 		t.Fatalf("SMTP Send returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected smtpSendMail to be called")
 	}
 }
 
@@ -113,7 +118,10 @@ func TestBrevo_Send_ConfigAndHTTPPaths(t *testing.T) {
 		if req.Header.Get("Content-Type") != "application/json" {
 			t.Fatalf("expected json content-type, got %q", req.Header.Get("Content-Type"))
 		}
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
 		var payload map[string]any
 		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Fatalf("invalid brevo payload json: %v", err)

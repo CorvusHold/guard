@@ -272,6 +272,11 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 		s := NewSSO(&ssoCallbackRepoStub{lookupErr: errors.New("not found")}, config.Config{PublicBaseURL: "https://app.example"}, fakeSettings{strings: map[string]string{
 			sdomain.KeySSOProvider + ":" + tenantID.String(): "dev",
 		}})
+		km, err := keys.NewManager("ES256", "", "")
+		if err != nil {
+			t.Fatalf("new key manager: %v", err)
+		}
+		s.SetKeyManager(km)
 
 		startURL, err := s.Start(context.Background(), domain.SSOStartInput{Provider: "google", TenantID: tenantID})
 		if err != nil {
@@ -449,6 +454,11 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 			sdomain.KeyWorkOSDefaultConnectionID + ":" + tenantID.String():   "conn_default",
 			sdomain.KeyWorkOSDefaultOrganizationID + ":" + tenantID.String(): "org_default",
 		}})
+		km, err := keys.NewManager("ES256", "", "")
+		if err != nil {
+			t.Fatalf("new key manager: %v", err)
+		}
+		s.SetKeyManager(km)
 		s.redis = redis.NewClient(&redis.Options{Addr: redisStub.addr(), Protocol: 2})
 
 		startURL, err := s.startWorkOS(context.Background(), domain.SSOStartInput{Provider: "workos", TenantID: tenantID, RedirectURL: "https://app.example/return"})

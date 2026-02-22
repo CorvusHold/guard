@@ -220,6 +220,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'sdk/ts/package-lock.json'
 
+      - name: Install SDK TS dependencies
+        working-directory: sdk/ts
+        run: npm ci
+
       - name: Run coverage audit
         run: |
           make coverage-audit

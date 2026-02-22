@@ -108,16 +108,16 @@ lint:
 # ---- Coverage audit / enforcement ----
 
 coverage-backend-audit:
-	bash scripts/coverage-audit.sh
+	bash scripts/coverage-audit.sh backend
 
 coverage-sdk-go-audit:
-	bash scripts/coverage-audit.sh
+	bash scripts/coverage-audit.sh go
 
 coverage-sdk-ts-audit:
-	bash scripts/coverage-audit.sh
+	bash scripts/coverage-audit.sh ts
 
 coverage-audit:
-	bash scripts/coverage-audit.sh
+	bash scripts/coverage-audit.sh all
 
 coverage-enforce: coverage-audit
 	bash scripts/coverage-enforce.sh

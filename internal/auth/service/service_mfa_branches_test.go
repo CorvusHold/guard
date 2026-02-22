@@ -133,9 +133,10 @@ func TestService_MFAEnrollmentAndBackupCodeBranches(t *testing.T) {
 		t.Fatal("expected insert backup code error")
 	}
 	repo.insertBackupErr = nil
+	repo.insertBackupCalledCnt = 0
 
 	codes, err := s.GenerateBackupCodes(context.Background(), userID, 2)
-	if err != nil || len(codes) != 2 || repo.insertBackupCalledCnt < 2 {
+	if err != nil || len(codes) != 2 || repo.insertBackupCalledCnt != 2 {
 		t.Fatalf("GenerateBackupCodes unexpected result codes=%v err=%v inserts=%d", codes, err, repo.insertBackupCalledCnt)
 	}
 	if codes[0] == codes[1] {

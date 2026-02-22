@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	"github.com/google/uuid"
@@ -55,7 +56,10 @@ func TestService_NewAndSettersAndIsEmailEnabled(t *testing.T) {
 		t.Fatal("expected email sender to be set")
 	}
 
-	km := s.KeyManager()
+	km, err := keys.NewManager("HS256", "", "unit-test-signing-key")
+	if err != nil {
+		t.Fatalf("new key manager: %v", err)
+	}
 	s.SetKeyManager(km)
 	if s.KeyManager() != km {
 		t.Fatal("expected key manager round-trip")
@@ -83,8 +87,8 @@ func TestValidatePassword_AllConstraintBranches(t *testing.T) {
 	}
 
 	violations := ValidatePassword("abc", policy)
-	if len(violations) < 4 {
-		t.Fatalf("expected multiple violations, got %v", violations)
+	if len(violations) != 4 {
+		t.Fatalf("expected exactly 4 violations, got %d: %v", len(violations), violations)
 	}
 
 	violations = ValidatePassword("Aa1!Aa1!Aa1!Aa1!", policy)

@@ -6,12 +6,13 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/corvusHold/guard/internal/config"
-	"github.com/google/uuid"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -23,16 +24,28 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	os.Stdout = w
 	done := make(chan string, 1)
+	var once sync.Once
+	var captured string
 	go func() {
 		var buf bytes.Buffer
 		_, _ = io.Copy(&buf, r)
+		_ = r.Close()
 		done <- buf.String()
 	}()
+	finish := func() string {
+		once.Do(func() {
+			_ = w.Close()
+			os.Stdout = orig
+			captured = <-done
+		})
+		return captured
+	}
+	t.Cleanup(func() {
+		_ = finish()
+	})
 
 	fn()
-	_ = w.Close()
-	os.Stdout = orig
-	return <-done
+	return finish()
 }
 
 func TestSanitizePrefix(t *testing.T) {

@@ -38,6 +38,7 @@ func TestNewRedisStore_AndAllowErrorPath(t *testing.T) {
 
 func TestNewSlidingWindowStore_AllowFailOpenOnRedisError(t *testing.T) {
 	rc := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0", DB: 0})
+	defer rc.Close()
 	store := NewSlidingWindowStore(rc)
 	if store == nil {
 		t.Fatal("expected non-nil sliding window store")

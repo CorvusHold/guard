@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/pquerna/otp/totp"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
@@ -50,7 +51,8 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	// capture events
 	events := make([]evdomain.Event, 0, 2)

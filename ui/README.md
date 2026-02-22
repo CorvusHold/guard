@@ -1,6 +1,6 @@
 ## Getting Started
 
-## IAM vNext Integration Notes
+### IAM vNext Integration Notes
 
 For frontend teams integrating against the new Guard IAM token model:
 

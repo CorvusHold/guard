@@ -251,6 +251,9 @@ func TestWorkerRetryAndBatchHelpers(t *testing.T) {
 			t.Fatal("expected next retry timestamp")
 		}
 		until := time.Until(*repo.statusCalls[0].nextRetry)
+		if until < 9*time.Minute {
+			t.Fatalf("expected retry backoff to be applied (>=9m), got %s", until)
+		}
 		if until > 11*time.Minute {
 			t.Fatalf("expected capped retry backoff around 10m, got %s", until)
 		}

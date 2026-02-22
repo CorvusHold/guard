@@ -5,6 +5,31 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPORT_DIR="${ROOT_DIR}/reports/pr"
 mkdir -p "${REPORT_DIR}"
 
+SCOPE="${1:-all}"
+RUN_BACKEND=false
+RUN_SDK_GO=false
+RUN_SDK_TS=false
+case "${SCOPE}" in
+  all)
+    RUN_BACKEND=true
+    RUN_SDK_GO=true
+    RUN_SDK_TS=true
+    ;;
+  backend)
+    RUN_BACKEND=true
+    ;;
+  go)
+    RUN_SDK_GO=true
+    ;;
+  ts)
+    RUN_SDK_TS=true
+    ;;
+  *)
+    echo "[coverage-audit] unsupported scope: ${SCOPE} (expected: all|backend|go|ts)" >&2
+    exit 1
+    ;;
+esac
+
 BACKEND_PROFILE="${REPORT_DIR}/backend.cover.out"
 SDK_GO_PROFILE="${REPORT_DIR}/sdk-go.cover.out"
 SDK_TS_SUMMARY="${REPORT_DIR}/sdk-ts.coverage-summary.json"
@@ -110,30 +135,37 @@ with open(output, 'w', encoding='utf-8') as f:
 PY
 }
 
-echo "[coverage-audit] Backend Go coverage..."
-(
-  cd "${ROOT_DIR}"
-  go test -covermode=atomic -coverprofile="${BACKEND_PROFILE}" ./internal/... ./cmd/...
-)
-audit_go_profile "${BACKEND_PROFILE}" "backend-go" "${BACKEND_JSON}"
+if [[ "${RUN_BACKEND}" == "true" ]]; then
+  echo "[coverage-audit] Backend Go coverage..."
+  (
+    cd "${ROOT_DIR}"
+    go test -covermode=atomic -coverprofile="${BACKEND_PROFILE}" ./internal/... ./cmd/...
+  )
+  audit_go_profile "${BACKEND_PROFILE}" "backend-go" "${BACKEND_JSON}"
+fi
 
-echo "[coverage-audit] SDK Go coverage..."
-(
-  cd "${ROOT_DIR}/sdk/go"
-  go test -covermode=atomic -coverprofile="${SDK_GO_PROFILE}" ./...
-)
-audit_go_profile "${SDK_GO_PROFILE}" "sdk-go" "${SDK_GO_JSON}"
+if [[ "${RUN_SDK_GO}" == "true" ]]; then
+  echo "[coverage-audit] SDK Go coverage..."
+  (
+    cd "${ROOT_DIR}/sdk/go"
+    go test -covermode=atomic -coverprofile="${SDK_GO_PROFILE}" ./...
+  )
+  audit_go_profile "${SDK_GO_PROFILE}" "sdk-go" "${SDK_GO_JSON}"
+fi
 
-echo "[coverage-audit] SDK TS coverage..."
-(
-  cd "${ROOT_DIR}/sdk/ts"
-  if [[ ! -d node_modules ]]; then
-    npm ci
-  fi
-  npx vitest run --coverage.enabled true --coverage.reporter=json-summary --coverage.reportsDirectory=coverage
-)
-cp "${ROOT_DIR}/sdk/ts/coverage/coverage-summary.json" "${SDK_TS_SUMMARY}"
+if [[ "${RUN_SDK_TS}" == "true" ]]; then
+  echo "[coverage-audit] SDK TS coverage..."
+  (
+    cd "${ROOT_DIR}/sdk/ts"
+    if [[ ! -d node_modules ]]; then
+      npm ci
+    fi
+    npx vitest run --coverage.enabled true --coverage.reporter=json-summary --coverage.reportsDirectory=coverage
+  )
+  cp "${ROOT_DIR}/sdk/ts/coverage/coverage-summary.json" "${SDK_TS_SUMMARY}"
+fi
 
+if [[ "${RUN_SDK_TS}" == "true" ]]; then
 python3 - "${SDK_TS_SUMMARY}" "${SDK_TS_JSON}" <<'PY'
 import json, os, sys
 summary_path, output = sys.argv[1], sys.argv[2]
@@ -187,7 +219,9 @@ with open(output, 'w', encoding='utf-8') as f:
         'packages': packages,
     }, f, indent=2)
 PY
+fi
 
+if [[ "${SCOPE}" == "all" ]]; then
 python3 - "${BACKEND_JSON}" "${SDK_GO_JSON}" "${SDK_TS_JSON}" "${MERGED_JSON}" <<'PY'
 import json, sys
 backend, sdk_go, sdk_ts, output = sys.argv[1:]
@@ -221,3 +255,4 @@ with open(output, 'w', encoding='utf-8') as f:
 PY
 
 echo "[coverage-audit] Wrote summary: ${MERGED_JSON}"
+fi

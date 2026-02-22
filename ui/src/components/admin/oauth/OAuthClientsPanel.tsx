@@ -45,6 +45,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   const [editScopes, setEditScopes] = useState('')
   const [editGrantTypes, setEditGrantTypes] = useState('')
   const [editLogo, setEditLogo] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
 
   // Create form state
   const [formName, setFormName] = useState('')
@@ -56,6 +57,18 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   useEffect(() => {
     loadClients()
   }, [tenantId])
+
+  const toSafeHTTPSURL = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    try {
+      const parsed = new URL(trimmed)
+      if (parsed.protocol !== 'https:') return null
+      return parsed.toString()
+    } catch {
+      return null
+    }
+  }
 
   const loadClients = async () => {
     setLoading(true)
@@ -77,6 +90,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
 
   const openEdit = (client: OAuthClientItem) => {
     setError(null)
+    setEditError(null)
     setEditing(client)
     setEditName(client.name ?? '')
     setEditRedirectURIs((client.redirect_uris ?? []).join('\n'))
@@ -88,6 +102,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   const resetEdit = () => {
     setEditing(null)
     setEditSaving(false)
+    setEditError(null)
     setEditName('')
     setEditRedirectURIs('')
     setEditScopes('')
@@ -98,11 +113,16 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   const handleEditSave = async () => {
     if (!editing) return
     if (!editName.trim() || !editRedirectURIs.trim()) {
-      setError('Name and at least one redirect URI are required')
+      setEditError('Name and at least one redirect URI are required')
+      return
+    }
+    const logoPreviewURL = toSafeHTTPSURL(editLogo)
+    if (editLogo.trim() && !logoPreviewURL) {
+      setEditError('Logo URL must be a valid HTTPS URL')
       return
     }
     setEditSaving(true)
-    setError(null)
+    setEditError(null)
     try {
       const client = getClient()
       const body = {
@@ -110,7 +130,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
         redirect_uris: editRedirectURIs.split('\n').map((u) => u.trim()).filter(Boolean),
         scopes: editScopes.split(/\s+/).filter(Boolean),
         grant_types: editGrantTypes.split(/\s+/).filter(Boolean),
-        logo_uri: editLogo.trim() || undefined,
+        logo_uri: logoPreviewURL ?? undefined,
       }
       const res = await client.updateOAuthClient(editing.id, body)
       if (!(res.meta.status >= 200 && res.meta.status < 300)) {
@@ -121,7 +141,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
       loadClients()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update client'
-      setError(message)
+      setEditError(message)
     } finally {
       setEditSaving(false)
     }
@@ -201,6 +221,8 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
     setFormScopes('openid profile email')
     setFormGrantTypes('authorization_code refresh_token')
   }
+
+  const safeEditLogoURL = toSafeHTTPSURL(editLogo)
 
   const copySecret = () => {
     if (newSecret) {
@@ -472,6 +494,11 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
         title={editing ? `Edit OAuth Client (${editing.client_id})` : 'Edit OAuth Client'}
       >
         <div className="space-y-3" data-testid="oauth-edit-modal">
+          {editError && (
+            <Alert variant="destructive" data-testid="oauth-edit-error">
+              <AlertDescription>{editError}</AlertDescription>
+            </Alert>
+          )}
           <Alert className="border-blue-200 bg-blue-50" data-testid="oauth-edit-warning">
             <AlertDescription className="text-xs text-blue-800">
               Updating a client will not regenerate the secret. Client type is read-only.
@@ -524,17 +551,19 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
               placeholder="https://example.com/logo.png"
               data-testid="oauth-edit-logo"
             />
-            {editLogo.trim() && (
+            {safeEditLogoURL && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Preview:</span>
-                <img src={editLogo} alt="logo preview" className="h-6 w-6 rounded border" />
+                <img src={safeEditLogoURL} alt="logo preview" className="h-6 w-6 rounded border" />
               </div>
+            )}
+            {editLogo.trim() && !safeEditLogoURL && (
+              <p className="text-xs text-destructive" data-testid="oauth-edit-logo-warning">
+                Logo preview only supports valid HTTPS URLs.
+              </p>
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" size="sm" onClick={resetEdit} data-testid="oauth-edit-cancel">
-              Cancel
-            </Button>
             <Button
               size="sm"
               onClick={handleEditSave}

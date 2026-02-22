@@ -66,7 +66,7 @@ func TestIncSSOInitiate_UsesProvidedLabels(t *testing.T) {
 	}
 }
 
-func TestIncSSOCallback_DefaultStatusFallback(t *testing.T) {
+func TestIncSSOCallback_DefaultLabelsFallback(t *testing.T) {
 	before := readCounterValue(t, ssoCallbackCounter.WithLabelValues("unknown", "unknown", "unknown"))
 	IncSSOCallback("", "", "")
 	after := readCounterValue(t, ssoCallbackCounter.WithLabelValues("unknown", "unknown", "unknown"))

@@ -270,7 +270,9 @@ grep "provider_slug.*google" /var/log/guard/app.log
 - [ ] **HTTPS enabled** - All endpoints use TLS
 - [ ] **DATABASE_URL configured with SSL** - `?sslmode=require`
 - [ ] **Redis password protected** - Set requirepass in redis.conf
-- [ ] **JWT_SIGNING_KEY** is strong and secret (32+ bytes)
+- [ ] **JWT signing configured for ES256** - `JWT_SIGNING_ALGORITHM=ES256`
+- [ ] **JWT_PRIVATE_KEY_PATH configured** - points to a valid ECDSA P-256 private key PEM file
+- [ ] **JWT private key file secured** - verify key format, strict filesystem permissions, and secret-management handling for `JWT_PRIVATE_KEY_PATH`
 - [ ] **Rate limiting enabled** - Configured in application
 - [ ] **Monitoring/alerting configured** - Prometheus + Alertmanager
 - [ ] **Backup strategy for PostgreSQL** - Daily backups configured

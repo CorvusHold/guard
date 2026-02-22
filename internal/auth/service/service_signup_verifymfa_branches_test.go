@@ -10,8 +10,8 @@ import (
 	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
-	"github.com/google/uuid"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -62,7 +62,9 @@ func (r *authFlowRepoStub) ConsumeMFABackupCode(ctx context.Context, userID uuid
 	return r.consumeBackupOut, nil
 }
 
-func (r *authFlowRepoStub) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error { return r.loginAtErr }
+func (r *authFlowRepoStub) UpdateUserLoginAt(ctx context.Context, userID uuid.UUID) error {
+	return r.loginAtErr
+}
 
 func makeChallengeToken(t *testing.T, km *keys.Manager, userID, tenantID uuid.UUID, sub, ten string) string {
 	t.Helper()
@@ -184,8 +186,8 @@ func TestService_VerifyMFA_Branches(t *testing.T) {
 
 	goodToken := makeChallengeToken(t, km, uid, tid, "", "")
 	sNoKM := &Service{repo: repo, settings: fakeSettings{}, pub: publisherFunc(func(context.Context, evdomain.Event) error { return nil })}
-	if _, err := sNoKM.VerifyMFA(context.Background(), domain.MFAVerifyInput{ChallengeToken: goodToken, Method: "totp", Code: "123456"}); err == nil || err.Error() != "invalid or expired challenge token" {
-		t.Fatalf("expected invalid/expired challenge error without key manager, got %v", err)
+	if _, err := sNoKM.VerifyMFA(context.Background(), domain.MFAVerifyInput{ChallengeToken: goodToken, Method: "totp", Code: "123456"}); err == nil || err.Error() != "asymmetric key manager required" {
+		t.Fatalf("expected key manager required error without key manager, got %v", err)
 	}
 
 	repo.mfaSecretOut = domain.MFASecret{UserID: uid, Secret: "JBSWY3DPEHPK3PXP", Enabled: false}

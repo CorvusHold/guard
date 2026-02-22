@@ -173,40 +173,42 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 	})
 
 	// Tenant-aware OIDC Discovery (path-based issuer model).
-	e.GET("/t/:tenant_id/.well-known/openid-configuration", func(c echo.Context) error {
-		tenantID, err := uuid.Parse(c.Param("tenant_id"))
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
-		}
+	if strings.EqualFold(strings.TrimSpace(r.cfg.IssuerMode), authissuer.ModePath) || strings.TrimSpace(r.cfg.IssuerMode) == "" {
+		e.GET("/t/:tenant_id/.well-known/openid-configuration", func(c echo.Context) error {
+			tenantID, err := uuid.Parse(c.Param("tenant_id"))
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+			}
 
-		issuerURL := authissuer.ResolveTenantIssuer(r.cfg, tenantID)
-		if issuerURL == "" {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "issuer resolution failed"})
-		}
-		baseURL := strings.TrimRight(r.cfg.PublicBaseURL, "/")
+			issuerURL := authissuer.ResolveTenantIssuer(r.cfg, tenantID)
+			if issuerURL == "" {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "issuer resolution failed"})
+			}
+			baseURL := strings.TrimRight(r.cfg.PublicBaseURL, "/")
 
-		algSupported := []string{"HS256"}
-		if km := r.authSvc.KeyManager(); km != nil && km.IsAsymmetric() {
-			algSupported = []string{"ES256", "HS256"}
-		}
+			algSupported := []string{"HS256"}
+			if km := r.authSvc.KeyManager(); km != nil && km.IsAsymmetric() {
+				algSupported = []string{"ES256", "HS256"}
+			}
 
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"issuer":                                issuerURL,
-			"authorization_endpoint":                baseURL + "/oauth/authorize",
-			"token_endpoint":                        baseURL + "/oauth/token",
-			"userinfo_endpoint":                     baseURL + "/api/v1/auth/me",
-			"jwks_uri":                              authissuer.ResolveJWKSURI(r.cfg, &tenantID),
-			"introspection_endpoint":                baseURL + "/api/v1/auth/introspect",
-			"revocation_endpoint":                   baseURL + "/oauth/revoke",
-			"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
-			"response_types_supported":              []string{"code"},
-			"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
-			"subject_types_supported":               []string{"public"},
-			"id_token_signing_alg_values_supported": algSupported,
-			"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-			"code_challenge_methods_supported":      []string{"S256"},
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"issuer":                                issuerURL,
+				"authorization_endpoint":                baseURL + "/oauth/authorize",
+				"token_endpoint":                        baseURL + "/oauth/token",
+				"userinfo_endpoint":                     baseURL + "/api/v1/auth/me",
+				"jwks_uri":                              authissuer.ResolveJWKSURI(r.cfg, &tenantID),
+				"introspection_endpoint":                baseURL + "/api/v1/auth/introspect",
+				"revocation_endpoint":                   baseURL + "/oauth/revoke",
+				"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
+				"response_types_supported":              []string{"code"},
+				"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
+				"subject_types_supported":               []string{"public"},
+				"id_token_signing_alg_values_supported": algSupported,
+				"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
+				"code_challenge_methods_supported":      []string{"S256"},
+			})
 		})
-	})
+	}
 
 	// JWKS endpoint for public key discovery
 	if km := r.authSvc.KeyManager(); km != nil && km.IsAsymmetric() {

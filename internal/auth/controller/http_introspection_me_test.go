@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package controller
 
 import (
@@ -19,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
 	amw "github.com/corvusHold/guard/internal/auth/middleware"
@@ -71,7 +75,8 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -226,7 +231,8 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 			_ = os.Unsetenv("JWT_PRIVATE_KEY_PATH")
 		}
 	})
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)

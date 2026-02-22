@@ -32,17 +32,16 @@ func ResolveTenantIssuer(cfg config.Config, tenantID uuid.UUID) string {
 
 	if mode == ModeSubdomain {
 		u, err := url.Parse(base)
-		if err == nil {
-			hostTpl := strings.TrimSpace(cfg.IssuerSubdomainTemplate)
-			if hostTpl != "" && strings.Contains(hostTpl, "{tenant}") {
-				host := strings.ReplaceAll(hostTpl, "{tenant}", tenantID.String())
-				u.Host = host
-				u.Path = ""
-				u.RawQuery = ""
-				u.Fragment = ""
-				return strings.TrimRight(u.String(), "/")
-			}
+		hostTpl := strings.TrimSpace(cfg.IssuerSubdomainTemplate)
+		if err != nil || hostTpl == "" || !strings.Contains(hostTpl, "{tenant}") {
+			return ""
 		}
+		host := strings.ReplaceAll(hostTpl, "{tenant}", tenantID.String())
+		u.Host = host
+		u.Path = ""
+		u.RawQuery = ""
+		u.Fragment = ""
+		return strings.TrimRight(u.String(), "/")
 	}
 
 	prefix := strings.TrimSpace(cfg.IssuerPathPrefix)

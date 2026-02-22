@@ -22,11 +22,11 @@ Scope: `Go backend + UI + SDK + conformance + k6 + security/compliance`
 
 ### 1.1 Naming conventions (machine-parsable)
 
-#### File naming (strict)
+#### File naming (strict with transition support)
 
 ```regex
-# Go unit tests
-^.+_unit_test\.go$
+# Go unit tests (preferred) + transitional legacy files
+^(?:.+_unit_test|.+)_test\.go$
 
 # Go integration tests (requires //go:build integration)
 ^.+_integration_test\.go$
@@ -53,12 +53,16 @@ Scope: `Go backend + UI + SDK + conformance + k6 + security/compliance`
 #### Test function naming
 
 ```regex
-# Go
-^Test[A-Z][A-Za-z0-9]+__(Given|When|Then)_[A-Za-z0-9_]+$
+# Go (preferred GWT style + accepted transitional forms)
+^(?:Test[A-Z][A-Za-z0-9]+__(Given|When|Then)_[A-Za-z0-9_]+|Test[A-Za-z0-9_]+)$
 
 # TS (Vitest/Playwright)
 ^[A-Z][A-Za-z0-9 ]+ :: (Given|When|Then) .+$
 ```
+
+Notes:
+- Preferred naming remains `_unit_test.go` and `Test...__(Given|When|Then)_...`.
+- During migration, legacy/transitional Go test files named `*_test.go` and standard `Test...` function names are accepted.
 
 ### 1.2 Directory structure rules (inferable)
 

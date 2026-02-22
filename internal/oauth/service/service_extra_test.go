@@ -247,4 +247,30 @@ func TestExchangeAuthorizationCode_ExpiredAndConsumedPaths(t *testing.T) {
 	}); err == nil {
 		t.Fatal("expected expired authorization code error")
 	}
+
+	result2, err := svc.CreateAuthorizationCode(context.Background(), domain.AuthorizeInput{
+		ClientID:    client.ClientID,
+		RedirectURI: "https://example.com/callback",
+		Scope:       "openid",
+		UserID:      userID,
+		TenantID:    tenantID,
+	})
+	if err != nil {
+		t.Fatalf("CreateAuthorizationCode consumed-case: %v", err)
+	}
+	codeHash2 := computeS256Challenge(result2.Code)
+	ac2 := repo.codes[codeHash2]
+	now2 := time.Now().Add(-time.Second)
+	ac2.ConsumedAt = &now2
+	repo.codes[codeHash2] = ac2
+
+	if _, _, err := svc.ExchangeAuthorizationCode(context.Background(), domain.TokenRequest{
+		GrantType:    "authorization_code",
+		Code:         result2.Code,
+		RedirectURI:  "https://example.com/callback",
+		ClientID:     client.ClientID,
+		ClientSecret: secret,
+	}); err == nil {
+		t.Fatal("expected consumed authorization code error")
+	}
 }

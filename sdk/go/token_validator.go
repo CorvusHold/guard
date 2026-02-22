@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,7 @@ var (
 	ErrJWKSFetch      = errors.New("guard: failed to fetch JWKS")
 	ErrKeyNotFound    = errors.New("guard: signing key not found in JWKS")
 	ErrUnsupportedAlg = errors.New("guard: unsupported signing algorithm")
+	ErrInvalidIssuer  = errors.New("guard: invalid issuer")
 )
 
 // TokenClaims represents the validated claims from a Guard JWT.
@@ -134,7 +137,19 @@ func (v *TokenValidator) validateES256(ctx context.Context, tokenString, kid str
 		return nil, ErrTokenExpired
 	}
 
+	if claims.Issuer != v.expectedIssuer() {
+		return nil, ErrInvalidIssuer
+	}
+
 	return claims, nil
+}
+
+func (v *TokenValidator) expectedIssuer() string {
+	base := strings.TrimRight(v.guardURL, "/")
+	if v.tenantID == "" {
+		return base
+	}
+	return base + "/t/" + url.PathEscape(v.tenantID)
 }
 
 // getKey retrieves the public key for the given kid, fetching JWKS if needed.
@@ -169,11 +184,11 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 
 // fetchJWKS fetches the JWKS from the Guard server.
 func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
-	url := strings.TrimRight(v.guardURL, "/") + "/.well-known/jwks.json"
+	jwksURL := strings.TrimRight(v.guardURL, "/") + "/.well-known/jwks.json"
 	if v.tenantID != "" {
-		url = strings.TrimRight(v.guardURL, "/") + "/t/" + v.tenantID + "/.well-known/jwks.json"
+		jwksURL = strings.TrimRight(v.guardURL, "/") + "/t/" + url.PathEscape(v.tenantID) + "/.well-known/jwks.json"
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrJWKSFetch, err)
 	}
@@ -196,10 +211,12 @@ func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
 	newKeys := make(map[string]*ecdsa.PublicKey)
 	for _, k := range jwks.Keys {
 		if k.Kty != "EC" || k.Crv != "P-256" {
+			log.Printf("guard token validator: skipping jwks key kid=%q reason=unsupported key type/curve kty=%q crv=%q", k.Kid, k.Kty, k.Crv)
 			continue
 		}
 		pub, err := parseECPublicKey(k)
 		if err != nil {
+			log.Printf("guard token validator: skipping jwks key kid=%q reason=parse error: %v", k.Kid, err)
 			continue
 		}
 		newKeys[k.Kid] = pub
@@ -267,12 +284,10 @@ func splitJWT(token string) ([]string, error) {
 	// Split into header.payload.signature
 	var parts []string
 	start := 0
-	count := 0
 	for i := 0; i < len(token); i++ {
 		if token[i] == '.' {
 			parts = append(parts, token[start:i])
 			start = i + 1
-			count++
 		}
 	}
 	parts = append(parts, token[start:])
@@ -312,6 +327,13 @@ func decodePayload(payload string) (*TokenClaims, error) {
 	}
 	if v, ok := raw["aud"].(string); ok {
 		claims.Audience = v
+	} else if arr, ok := raw["aud"].([]interface{}); ok {
+		for _, a := range arr {
+			if s, ok := a.(string); ok {
+				claims.Audience = s
+				break
+			}
+		}
 	}
 	if v, ok := raw["iat"].(float64); ok {
 		claims.IssuedAt = int64(v)

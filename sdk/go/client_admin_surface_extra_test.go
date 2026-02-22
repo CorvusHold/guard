@@ -83,6 +83,8 @@ func TestFGAAndSSOAndTenantSurfaceMethods(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/auth/admin/fga/groups":
 			_ = json.NewEncoder(w).Encode(map[string]any{"groups": []map[string]any{{"id": "g1"}}})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/auth/admin/fga/groups/g1/members":
+			_ = json.NewEncoder(w).Encode(map[string]any{"members": []map[string]any{}})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/auth/admin/fga/groups/g1/members":
 			w.WriteHeader(http.StatusCreated)
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/auth/admin/fga/groups/g1/members":

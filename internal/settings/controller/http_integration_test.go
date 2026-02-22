@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 
 	amw "github.com/corvusHold/guard/internal/auth/middleware"
 	"github.com/corvusHold/guard/internal/config"
@@ -77,9 +78,7 @@ func loadIntegrationJWTConfig(t *testing.T) config.Config {
 	})
 
 	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
+	require.NoError(t, err)
 	return cfg
 }
 

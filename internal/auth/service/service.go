@@ -488,6 +488,9 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	if in.ChallengeToken == "" || in.Method == "" || in.Code == "" {
 		return domain.AccessTokens{}, errors.New("challenge_token, method and code are required")
 	}
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	}
 	// First decode without verification to extract tenant/user
 	tok, _ := jwt.ParseWithClaims(in.ChallengeToken, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte(""), nil
@@ -513,9 +516,6 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	parsed, err := jwt.Parse(in.ChallengeToken, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, errors.New("unexpected signing method")
-		}
-		if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-			return nil, errors.New("asymmetric key manager required")
 		}
 		return s.keyMgr.VerificationKey(""), nil
 	})
@@ -561,9 +561,14 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 
 func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *Service {
 	s := &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger(), log: zerolog.Nop()}
-	if km, err := keys.NewManager("ES256", "", ""); err == nil {
-		s.keyMgr = km
+	if strings.EqualFold(strings.TrimSpace(cfg.JWTSigningAlgorithm), "ES256") && strings.TrimSpace(cfg.JWTPrivateKeyPath) == "" {
+		panic("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
 	}
+	km, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize key manager: %v", err))
+	}
+	s.keyMgr = km
 	return s
 }
 
@@ -666,7 +671,6 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
 		// Build short-lived challenge token (5m) signed asymmetrically.
-		signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &ai.TenantID, s.cfg.JWTSigningKey)
 		claims := jwt.MapClaims{
 			"typ":   "mfa_challenge",
 			"sub":   ai.UserID.String(),
@@ -681,7 +685,7 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 		}
 		t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
 		t.Header["kid"] = s.keyMgr.KeyID()
-		ch, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
+		ch, err := t.SignedString(s.keyMgr.SigningKey(""))
 		if err != nil {
 			return domain.AccessTokens{}, err
 		}
@@ -825,7 +829,6 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 	// Resolve settings with tenant override and env defaults
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
 	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(s.cfg, tenantID))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
@@ -872,7 +875,7 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 	}
 	t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
 	t.Header["kid"] = s.keyMgr.KeyID()
-	access, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
+	access, err := t.SignedString(s.keyMgr.SigningKey(""))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}
@@ -1648,6 +1651,7 @@ func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) erro
 // ParseAccessToken parses an access token and returns the claims.
 // It resolves per-tenant signing keys the same way Introspect does.
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
+	// ctx unused: key manager is resolved at construction/injection time.
 	_ = ctx
 	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
 		return domain.AccessTokenClaims{}, errors.New("asymmetric key manager required")

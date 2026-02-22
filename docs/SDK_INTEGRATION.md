@@ -52,7 +52,7 @@ Guard implements [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth
     "urn:guard:params:oauth:grant-type:sso"
   ],
   "scopes_supported": ["openid", "profile", "email", "offline_access"],
-  "token_endpoint_auth_methods_supported": ["private_key_jwt", "client_secret_basic", "client_secret_post", "none"],
+  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
   "code_challenge_methods_supported": ["S256"],
 
   // Guard-specific extensions
