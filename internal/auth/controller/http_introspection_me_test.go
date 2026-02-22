@@ -18,18 +18,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
 	domain "github.com/corvusHold/guard/internal/auth/domain"
-	amw "github.com/corvusHold/guard/internal/auth/middleware"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
-	settingsctrl "github.com/corvusHold/guard/internal/settings/controller"
 	srepo "github.com/corvusHold/guard/internal/settings/repository"
 	ssvc "github.com/corvusHold/guard/internal/settings/service"
 	trepo "github.com/corvusHold/guard/internal/tenants/repository"
@@ -49,6 +46,30 @@ func (staticSettingsService) GetDuration(_ context.Context, _ string, _ *uuid.UU
 
 func (staticSettingsService) GetInt(_ context.Context, _ string, _ *uuid.UUID, def int) (int, error) {
 	return def, nil
+}
+
+func loadIntegrationES256Config(t *testing.T) config.Config {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalECPrivateKey(priv)
+	require.NoError(t, err)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+
+	keyFile, err := os.CreateTemp("", "guard-introspect-jwt-*.pem")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(keyFile.Name()) })
+	_, err = keyFile.Write(pemBytes)
+	require.NoError(t, err)
+	require.NoError(t, keyFile.Close())
+
+	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
+	t.Setenv("JWT_PRIVATE_KEY_PATH", keyFile.Name())
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	return cfg
 }
 
 func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
@@ -75,8 +96,7 @@ func TestHTTP_Introspect_Me_Revoke(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, err := config.Load()
-	require.NoError(t, err)
+	cfg := loadIntegrationES256Config(t)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -190,49 +210,7 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generate ec key: %v", err)
-	}
-	der, err := x509.MarshalECPrivateKey(priv)
-	if err != nil {
-		t.Fatalf("marshal ec key: %v", err)
-	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
-	keyFile, err := os.CreateTemp("", "guard-introspect-jwt-*.pem")
-	if err != nil {
-		t.Fatalf("create temp key file: %v", err)
-	}
-	if _, err := keyFile.Write(pemBytes); err != nil {
-		t.Fatalf("write temp key file: %v", err)
-	}
-	if err := keyFile.Close(); err != nil {
-		t.Fatalf("close temp key file: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Remove(keyFile.Name()) })
-
-	oldAlg, hadAlg := os.LookupEnv("JWT_SIGNING_ALGORITHM")
-	oldPath, hadPath := os.LookupEnv("JWT_PRIVATE_KEY_PATH")
-	if err := os.Setenv("JWT_SIGNING_ALGORITHM", "ES256"); err != nil {
-		t.Fatalf("set JWT_SIGNING_ALGORITHM: %v", err)
-	}
-	if err := os.Setenv("JWT_PRIVATE_KEY_PATH", keyFile.Name()); err != nil {
-		t.Fatalf("set JWT_PRIVATE_KEY_PATH: %v", err)
-	}
-	t.Cleanup(func() {
-		if hadAlg {
-			_ = os.Setenv("JWT_SIGNING_ALGORITHM", oldAlg)
-		} else {
-			_ = os.Unsetenv("JWT_SIGNING_ALGORITHM")
-		}
-		if hadPath {
-			_ = os.Setenv("JWT_PRIVATE_KEY_PATH", oldPath)
-		} else {
-			_ = os.Unsetenv("JWT_PRIVATE_KEY_PATH")
-		}
-	})
-	cfg, err := config.Load()
-	require.NoError(t, err)
+	cfg := loadIntegrationES256Config(t)
 	auth := svc.New(repo, cfg, settings)
 	magic := svc.NewMagic(repo, cfg, settings, &fakeEmail{})
 	sso := svc.NewSSO(repo, cfg, settings)
@@ -242,46 +220,10 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 	c := New(auth, magic, sso)
 	c.Register(e)
 
-	// Wire settings controller so we can set tenant-specific signing key via HTTP API
-	sc := settingsctrl.New(sr, settings)
-	sc.WithJWT(amw.NewJWT(cfg))
-	adminUserID := uuid.New()
-	sc.WithRoleFetcher(func(ctx context.Context, userID, tID uuid.UUID) ([]string, error) {
-		if userID == adminUserID && tID == tenantID {
-			return []string{"admin"}, nil
-		}
-		return nil, nil
-	})
-	sc.Register(e)
-
-	// Set tenant-specific JWT signing key (different from default) via settings HTTP API
-	tenantSigningKey := "tenant-specific-secret-key-for-testing-123456"
-	claims := jwt.MapClaims{
-		"sub": adminUserID.String(),
-		"ten": tenantID.String(),
-		"iat": time.Now().Unix(),
-		"exp": time.Now().Add(15 * time.Minute).Unix(),
-	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	signed, err := tok.SignedString(priv)
-	if err != nil {
-		t.Fatalf("sign settings jwt: %v", err)
-	}
-	setBody := map[string]string{"jwt_signing_key": tenantSigningKey}
-	setPayload, _ := json.Marshal(setBody)
-	setReq := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/"+tenantID.String()+"/settings", bytes.NewReader(setPayload))
-	setReq.Header.Set("Authorization", "Bearer "+signed)
-	setReq.Header.Set("Content-Type", "application/json")
-	setRec := httptest.NewRecorder()
-	e.ServeHTTP(setRec, setReq)
-	if setRec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 from settings PUT, got %d: %s", setRec.Code, setRec.Body.String())
-	}
-
 	email := "user.tenant.key.itest@example.com"
 	password := "Password!123"
 
-	// Signup with tenant that has custom signing key using the first server
+	// Signup and issue tokens from the first server
 	sBody := map[string]string{
 		"tenant_id": tenantID.String(),
 		"email":     email,

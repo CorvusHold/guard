@@ -50,6 +50,9 @@ func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize key manager: %v", err))
 	}
+	if !km.IsAsymmetric() {
+		panic("asymmetric key manager required")
+	}
 	s.keyMgr = km
 	return s
 }

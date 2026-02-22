@@ -187,9 +187,18 @@ Generation rules (required because `id` and `path` are required and `additionalP
 
 Default timeout policy (bounded execution, aligned to policy rule 3 "No unbounded retries"):
 
+- Manifest generators MUST emit `timeout_sec` for every test entry.
 - `UNIT`: 60s
 - `INTEGRATION`: 300s
+- `CONTRACT`: 60s
 - `E2E`: 600s
+- `PERFORMANCE_BASELINE`: 600s
+- `PERFORMANCE_REGRESSION`: 600s
+- `SECURITY_STATIC`: 120s
+- `SECURITY_DYNAMIC`: 600s
+- `CHAOS`: 600s
+- `MIGRATION`: 300s
+- `COMPLIANCE_VALIDATION`: 900s
 
 CI MUST reject entries without `timeout_sec` and MUST reject values outside `1..3600`.
 

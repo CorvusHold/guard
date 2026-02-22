@@ -2,6 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,9 +35,30 @@ type emailSenderStub struct{}
 
 func (emailSenderStub) Send(context.Context, uuid.UUID, string, string, string) error { return nil }
 
+func writeTestECPrivateKey(t *testing.T) string {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ec key: %v", err)
+	}
+	der, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal ec key: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+
+	keyPath := filepath.Join(t.TempDir(), "jwt-es256-private.pem")
+	if err := os.WriteFile(keyPath, pemBytes, 0o600); err != nil {
+		t.Fatalf("write key file: %v", err)
+	}
+	return keyPath
+}
+
 func TestService_NewAndSettersAndIsEmailEnabled(t *testing.T) {
 	repo := &fakeRepo{}
-	s := New(repo, config.Config{}, settingsStub{value: "true"})
+	cfg := config.Config{JWTSigningAlgorithm: "ES256", JWTPrivateKeyPath: writeTestECPrivateKey(t)}
+	s := New(repo, cfg, settingsStub{value: "true"})
 	if s == nil {
 		t.Fatal("expected New to return service")
 	}

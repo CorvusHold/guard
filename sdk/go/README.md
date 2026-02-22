@@ -34,6 +34,30 @@ If you are upgrading from older Guard integrations:
   - JWKS: `https://guard.example.com/t/{tenant_id}/.well-known/jwks.json`
 - Validate `kid` and refresh JWKS when a new key appears.
 
+### Breaking API change: `TokenClaims.Audience`
+
+`TokenClaims.Audience` is now `[]string` (was `string`).
+
+- Before: callers could compare `claims.Audience` directly to one string.
+- Now: callers must check membership in the audience list.
+
+```go
+import "slices"
+
+audience := "https://guard.example.com"
+if !slices.Contains(claims.Audience, audience) {
+    return errors.New("unexpected audience")
+}
+```
+
+This is a breaking surface change; consumers pinned to older SDK behavior should
+migrate comparisons accordingly and adopt a major-version upgrade policy.
+
+### Changelog (breaking)
+
+- **BREAKING**: `TokenClaims.Audience` widened from `string` to `[]string` to
+  support JWT `aud` claims emitted as either a scalar or an array.
+
 ### Token validation helper (Go SDK)
 
 ```go

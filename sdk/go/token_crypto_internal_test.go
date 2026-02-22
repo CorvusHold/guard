@@ -253,7 +253,7 @@ func TestTokenValidatorValidateBranches(t *testing.T) {
 
 	ok := makeES256Token(t, priv, "kid-ok", map[string]any{
 		"sub": "u1", "ten": "t1", "email": "u@example.com", "name": "User",
-		"iss": "issuer", "aud": "aud", "iat": float64(time.Now().Unix()), "exp": float64(time.Now().Add(time.Hour).Unix()),
+		"iss": "https://guard.example.com/", "aud": "aud", "iat": float64(time.Now().Unix()), "exp": float64(time.Now().Add(time.Hour).Unix()),
 		"roles": []string{"admin", "viewer"},
 	})
 	claims, err := v.Validate(context.Background(), ok)

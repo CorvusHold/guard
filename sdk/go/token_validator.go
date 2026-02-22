@@ -158,7 +158,7 @@ func (v *TokenValidator) validateES256(ctx context.Context, tokenString, kid str
 		return nil, ErrTokenExpired
 	}
 
-	if claims.Issuer != v.expectedIssuer() {
+	if strings.TrimRight(claims.Issuer, "/") != v.expectedIssuer() {
 		return nil, ErrInvalidIssuer
 	}
 

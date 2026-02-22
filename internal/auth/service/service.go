@@ -680,14 +680,8 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	_ = s.repo.ResetFailedAttempts(ctx, in.TenantID, in.Email)
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
-		issuer, err := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &ai.TenantID, authissuer.ResolveTenantIssuer(s.cfg, ai.TenantID))
-		if err != nil {
-			return domain.AccessTokens{}, err
-		}
-		audience, err := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &ai.TenantID, s.cfg.PublicBaseURL)
-		if err != nil {
-			return domain.AccessTokens{}, err
-		}
+		issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &ai.TenantID, authissuer.ResolveTenantIssuer(s.cfg, ai.TenantID))
+		audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &ai.TenantID, s.cfg.PublicBaseURL)
 		// Build short-lived challenge token (5m) signed asymmetrically.
 		claims := jwt.MapClaims{
 			"typ":   "mfa_challenge",
@@ -1029,7 +1023,21 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 
 	subStr, _ := claims["sub"].(string)
 	issStr, _ := claims["iss"].(string)
-	audStr, _ := claims["aud"].(string)
+	audStr := ""
+	switch v := claims["aud"].(type) {
+	case string:
+		audStr = v
+	case []string:
+		if len(v) > 0 {
+			audStr = v[0]
+		}
+	case []interface{}:
+		if len(v) > 0 {
+			if first, ok := v[0].(string); ok {
+				audStr = first
+			}
+		}
+	}
 	var expInt int64
 	switch v := claims["exp"].(type) {
 	case float64:

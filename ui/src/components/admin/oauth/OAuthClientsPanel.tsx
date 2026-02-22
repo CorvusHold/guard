@@ -26,6 +26,18 @@ interface OAuthClientsPanelProps {
   tenantId: string
 }
 
+const toSafeHTTPSURL = (value: string): string | null => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) {
   const { show: showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -57,18 +69,6 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   useEffect(() => {
     loadClients()
   }, [tenantId])
-
-  const toSafeHTTPSURL = (value: string): string | null => {
-    const trimmed = value.trim()
-    if (!trimmed) return null
-    try {
-      const parsed = new URL(trimmed)
-      if (parsed.protocol !== 'https:') return null
-      return parsed.toString()
-    } catch {
-      return null
-    }
-  }
 
   const loadClients = async () => {
     setLoading(true)
@@ -162,7 +162,6 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
         redirect_uris: formRedirectURIs.split('\n').map((u) => u.trim()).filter(Boolean),
         scopes: formScopes.split(/\s+/).filter(Boolean),
         grant_types: formGrantTypes.split(/\s+/).filter(Boolean),
-        logo_uri: undefined,
       }
       const res = await client.createOAuthClient(body)
       if (!(res.meta.status >= 200 && res.meta.status < 300)) {
@@ -491,7 +490,7 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
       <Modal
         open={!!editing}
         onClose={resetEdit}
-        title={editing ? `Edit OAuth Client (${editing.client_id})` : 'Edit OAuth Client'}
+        title={`Edit OAuth Client (${editing!.client_id})`}
       >
         <div className="space-y-3" data-testid="oauth-edit-modal">
           {editError && (
@@ -554,7 +553,12 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
             {safeEditLogoURL && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Preview:</span>
-                <img src={safeEditLogoURL} alt="logo preview" className="h-6 w-6 rounded border" />
+                <img
+                  src={safeEditLogoURL}
+                  alt="logo preview"
+                  className="h-6 w-6 rounded border"
+                  data-testid="oauth-client-logo-preview"
+                />
               </div>
             )}
             {editLogo.trim() && !safeEditLogoURL && (

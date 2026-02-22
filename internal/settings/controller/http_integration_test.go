@@ -37,27 +37,21 @@ func loadIntegrationJWTConfig(t *testing.T) config.Config {
 	t.Helper()
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generate ec key: %v", err)
-	}
+	require.NoError(t, err)
 	der, err := x509.MarshalECPrivateKey(priv)
-	if err != nil {
-		t.Fatalf("marshal ec private key: %v", err)
-	}
+	require.NoError(t, err)
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
 
 	f, err := os.CreateTemp("", "guard-settings-jwt-*.pem")
-	if err != nil {
-		t.Fatalf("create temp pem: %v", err)
-	}
-	if _, err := f.Write(pemBytes); err != nil {
-		t.Fatalf("write temp pem: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close temp pem: %v", err)
-	}
+	require.NoError(t, err)
 	keyPath := f.Name()
 	t.Cleanup(func() { _ = os.Remove(keyPath) })
+	if _, err := f.Write(pemBytes); err != nil {
+		require.NoError(t, err)
+	}
+	if err := f.Close(); err != nil {
+		require.NoError(t, err)
+	}
 
 	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
 	t.Setenv("JWT_PRIVATE_KEY_PATH", keyPath)

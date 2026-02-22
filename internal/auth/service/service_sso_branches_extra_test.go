@@ -37,6 +37,15 @@ type ssoErrSettings struct {
 	getStringErrKey string
 }
 
+func ssoTestConfig(t *testing.T, publicBaseURL string) config.Config {
+	t.Helper()
+	return config.Config{
+		PublicBaseURL:       publicBaseURL,
+		JWTSigningAlgorithm: "ES256",
+		JWTPrivateKeyPath:   writeTestECPrivateKey(t),
+	}
+}
+
 type redisRESPStub struct {
 	ln   net.Listener
 	mu   sync.Mutex
@@ -221,7 +230,7 @@ func (r *ssoCallbackRepoStub) GetAuthIdentityByEmailTenant(context.Context, uuid
 func TestSSO_NewSettersAndStartBranches_Extra(t *testing.T) {
 	repo := &fakeRepo{}
 	tenantID := uuid.New()
-	cfg := config.Config{PublicBaseURL: "https://app.example"}
+	cfg := ssoTestConfig(t, "https://app.example")
 
 	s := NewSSO(repo, cfg, fakeSettings{})
 	if s == nil || s.repo != repo {
@@ -269,7 +278,7 @@ func TestSSO_NewSettersAndStartBranches_Extra(t *testing.T) {
 func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 	t.Run("Callback dev-code missing-state bypass success", func(t *testing.T) {
 		tenantID := uuid.New()
-		s := NewSSO(&ssoCallbackRepoStub{lookupErr: errors.New("not found")}, config.Config{PublicBaseURL: "https://app.example"}, fakeSettings{strings: map[string]string{
+		s := NewSSO(&ssoCallbackRepoStub{lookupErr: errors.New("not found")}, ssoTestConfig(t, "https://app.example"), fakeSettings{strings: map[string]string{
 			sdomain.KeySSOProvider + ":" + tenantID.String(): "dev",
 		}})
 		km, err := keys.NewManager("ES256", "", "")
@@ -301,7 +310,9 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 	})
 
 	t.Run("Callback and callbackWorkOS missing/invalid state branches", func(t *testing.T) {
-		s := NewSSO(&fakeRepo{}, config.Config{PublicBaseURL: "https://app.example", RedisAddr: "127.0.0.1:0"}, fakeSettings{})
+		cfg := ssoTestConfig(t, "https://app.example")
+		cfg.RedisAddr = "127.0.0.1:0"
+		s := NewSSO(&fakeRepo{}, cfg, fakeSettings{})
 		if _, err := s.Callback(context.Background(), domain.SSOCallbackInput{Provider: "google", Query: map[string][]string{}}); err == nil || err.Error() != "missing state" {
 			t.Fatalf("expected missing state error, got %v", err)
 		}
@@ -319,7 +330,7 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 
 	t.Run("OrganizationPortalLinkGenerator early branches", func(t *testing.T) {
 		tenantID := uuid.New()
-		s := NewSSO(&fakeRepo{}, config.Config{PublicBaseURL: "https://app.example"}, fakeSettings{})
+		s := NewSSO(&fakeRepo{}, ssoTestConfig(t, "https://app.example"), fakeSettings{})
 
 		if _, err := s.OrganizationPortalLinkGenerator(context.Background(), domain.SSOOrganizationPortalLinkGeneratorInput{Provider: "", TenantID: tenantID, CreatedBy: uuid.New()}); err == nil || err.Error() != "provider slug required" {
 			t.Fatalf("expected provider slug required error, got %v", err)
@@ -369,7 +380,9 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 
 	t.Run("startWorkOS and OrganizationPortalLinkGeneratorWorkOS early branches", func(t *testing.T) {
 		tenantID := uuid.New()
-		s := NewSSO(&fakeRepo{}, config.Config{PublicBaseURL: "https://app.example", RedisAddr: "127.0.0.1:0"}, fakeSettings{strings: map[string]string{}})
+		cfg := ssoTestConfig(t, "https://app.example")
+		cfg.RedisAddr = "127.0.0.1:0"
+		s := NewSSO(&fakeRepo{}, cfg, fakeSettings{strings: map[string]string{}})
 
 		if _, err := s.startWorkOS(context.Background(), domain.SSOStartInput{Provider: "workos", TenantID: tenantID}); err == nil || err.Error() != "workos client_id missing" {
 			t.Fatalf("expected missing client_id error, got %v", err)
@@ -444,7 +457,7 @@ func TestSSO_CallbackAndPortalAndRetry_ExtraBranches(t *testing.T) {
 		}))
 		defer api.Close()
 
-		s := NewSSO(repo, config.Config{PublicBaseURL: "https://app.example"}, fakeSettings{strings: map[string]string{
+		s := NewSSO(repo, ssoTestConfig(t, "https://app.example"), fakeSettings{strings: map[string]string{
 			sdomain.KeyWorkOSClientID + ":" + tenantID.String():              "client-1",
 			sdomain.KeyWorkOSClientSecret + ":" + tenantID.String():          "secret-1",
 			sdomain.KeyWorkOSAPIKey + ":" + tenantID.String():                "sk_test",

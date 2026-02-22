@@ -131,9 +131,7 @@ if [[ "${RUN_SDK_TS}" == "true" ]]; then
   echo "[coverage-audit] SDK TS coverage..."
   (
     cd "${ROOT_DIR}/sdk/ts"
-    if [[ ! -d node_modules ]]; then
-      npm ci
-    fi
+    npm ci
     npx vitest run --coverage.enabled=true --coverage.reporter=json-summary --coverage.reportsDirectory=coverage
   )
   cp "${ROOT_DIR}/sdk/ts/coverage/coverage-summary.json" "${SDK_TS_SUMMARY}"

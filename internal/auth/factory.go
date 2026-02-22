@@ -171,7 +171,7 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 
 		algSupported := []string{"HS256"}
 		if km := r.authSvc.KeyManager(); km != nil && km.IsAsymmetric() {
-			algSupported = []string{"ES256", "HS256"}
+			algSupported = []string{"ES256"}
 		}
 
 		return c.JSON(http.StatusOK, oidcDiscoveryDoc(baseURL, baseURL+"/.well-known/jwks.json", baseURL, algSupported))
@@ -194,7 +194,7 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 
 			algSupported := []string{"HS256"}
 			if km := r.authSvc.KeyManager(); km != nil && km.IsAsymmetric() {
-				algSupported = []string{"ES256", "HS256"}
+				algSupported = []string{"ES256"}
 			}
 
 			return c.JSON(http.StatusOK, oidcDiscoveryDoc(issuerURL, authissuer.ResolveJWKSURI(r.cfg, &tenantID), baseURL, algSupported))

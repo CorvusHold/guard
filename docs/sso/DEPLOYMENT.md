@@ -364,6 +364,20 @@ spec:
           secretName: guard-jwt-key
 ```
 
+Create the mounted JWT key secret so `/etc/guard/keys/jwt-es256-private.pem` exists in the pod:
+
+```bash
+# Source file on your workstation/CI runner
+#   ./secrets/jwt-es256-private.pem
+
+kubectl create secret generic guard-jwt-key \
+  --from-file=jwt-es256-private.pem=./secrets/jwt-es256-private.pem
+```
+
+The `--from-file` mapping above is required: it ensures the secret data key is
+named `jwt-es256-private.pem`, which Kubernetes mounts as:
+`/etc/guard/keys/jwt-es256-private.pem`.
+
 ## Backup & Recovery
 
 ### Database Backup
