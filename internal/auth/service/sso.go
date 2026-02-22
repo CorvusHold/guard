@@ -78,7 +78,6 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 	}
 	// DEV adapter flow
 	baseURL, _ := s.settings.GetString(ctx, sdomain.KeyPublicBaseURL, &in.TenantID, s.cfg.PublicBaseURL)
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &in.TenantID, s.cfg.JWTSigningKey)
 
 	// Enforce redirect allowlist if configured
 	if in.RedirectURL != "" {
@@ -146,7 +145,7 @@ func (s *SSO) Start(ctx context.Context, in domain.SSOStartInput) (string, error
 	}
 	t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
 	t.Header["kid"] = s.keyMgr.KeyID()
-	code, err := t.SignedString(s.keyMgr.SigningKey(signingKey))
+	code, err := t.SignedString(s.keyMgr.SigningKey(""))
 	if err != nil {
 		return "", err
 	}
@@ -316,8 +315,7 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 		return domain.AccessTokens{}, errors.New("invalid tenant in code")
 	}
 
-	// Verify signature with tenant's signing key
-	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
+	// Verify signature with tenant's configured key material via key manager.
 	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
 		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
 	}
@@ -394,7 +392,7 @@ func (s *SSO) Callback(ctx context.Context, in domain.SSOCallbackInput) (toks do
 	}
 	at := jwt.NewWithClaims(s.keyMgr.SigningMethod(), accClaims)
 	at.Header["kid"] = s.keyMgr.KeyID()
-	access, err := at.SignedString(s.keyMgr.SigningKey(signingKey))
+	access, err := at.SignedString(s.keyMgr.SigningKey(""))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}

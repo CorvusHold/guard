@@ -38,26 +38,6 @@ SDK_GO_JSON="${REPORT_DIR}/coverage-sdk-go.json"
 SDK_TS_JSON="${REPORT_DIR}/coverage-sdk-ts.json"
 MERGED_JSON="${REPORT_DIR}/coverage-summary.json"
 
-normalize_pkg() {
-  python3 - "$1" <<'PY'
-import os, sys
-pkg = sys.argv[1].replace('\\', '/')
-for marker in ('/internal/', '/cmd/', '/sdk/go/', '/sdk/ts/src/'):
-    if marker in pkg:
-        pkg = pkg.split(marker, 1)[1]
-        if marker == '/internal/':
-            pkg = 'internal/' + pkg
-        elif marker == '/cmd/':
-            pkg = 'cmd/' + pkg
-        elif marker == '/sdk/go/':
-            pkg = 'sdk/go/' + pkg
-        elif marker == '/sdk/ts/src/':
-            pkg = 'sdk/ts/src/' + pkg
-        break
-print(pkg)
-PY
-}
-
 audit_go_profile() {
   local profile="$1"
   local scope="$2"
@@ -93,13 +73,7 @@ with open(profile, 'r', encoding='utf-8') as f:
         stmts = float(m.group('stmts'))
         count = int(m.group('count'))
         # Exclude generated files from package coverage enforcement.
-        if (
-            file_path.endswith('.gen.go')
-            or file_path.endswith('_gen.go')
-            or '/internal/db/sqlc/' in file_path
-            or '/sdk/go/api.gen.go' in file_path
-            or '/sdk/go/generate.go' in file_path
-        ):
+        if any(p in file_path or file_path.endswith(p) for p in excluded_patterns):
             continue
 
         pkg = os.path.dirname(file_path)
@@ -160,13 +134,10 @@ if [[ "${RUN_SDK_TS}" == "true" ]]; then
     if [[ ! -d node_modules ]]; then
       npm ci
     fi
-    npx vitest run --coverage.enabled true --coverage.reporter=json-summary --coverage.reportsDirectory=coverage
+    npx vitest run --coverage.enabled=true --coverage.reporter=json-summary --coverage.reportsDirectory=coverage
   )
   cp "${ROOT_DIR}/sdk/ts/coverage/coverage-summary.json" "${SDK_TS_SUMMARY}"
-fi
-
-if [[ "${RUN_SDK_TS}" == "true" ]]; then
-python3 - "${SDK_TS_SUMMARY}" "${SDK_TS_JSON}" <<'PY'
+  python3 - "${SDK_TS_SUMMARY}" "${SDK_TS_JSON}" <<'PY'
 import json, os, sys
 summary_path, output = sys.argv[1], sys.argv[2]
 with open(summary_path, 'r', encoding='utf-8') as f:

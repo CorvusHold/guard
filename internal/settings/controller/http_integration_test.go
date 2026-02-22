@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package controller
 
 import (
@@ -56,26 +59,8 @@ func loadIntegrationJWTConfig(t *testing.T) config.Config {
 	keyPath := f.Name()
 	t.Cleanup(func() { _ = os.Remove(keyPath) })
 
-	oldAlg, hadAlg := os.LookupEnv("JWT_SIGNING_ALGORITHM")
-	oldPath, hadPath := os.LookupEnv("JWT_PRIVATE_KEY_PATH")
-	if err := os.Setenv("JWT_SIGNING_ALGORITHM", "ES256"); err != nil {
-		t.Fatalf("set JWT_SIGNING_ALGORITHM: %v", err)
-	}
-	if err := os.Setenv("JWT_PRIVATE_KEY_PATH", keyPath); err != nil {
-		t.Fatalf("set JWT_PRIVATE_KEY_PATH: %v", err)
-	}
-	t.Cleanup(func() {
-		if hadAlg {
-			_ = os.Setenv("JWT_SIGNING_ALGORITHM", oldAlg)
-		} else {
-			_ = os.Unsetenv("JWT_SIGNING_ALGORITHM")
-		}
-		if hadPath {
-			_ = os.Setenv("JWT_PRIVATE_KEY_PATH", oldPath)
-		} else {
-			_ = os.Unsetenv("JWT_PRIVATE_KEY_PATH")
-		}
-	})
+	t.Setenv("JWT_SIGNING_ALGORITHM", "ES256")
+	t.Setenv("JWT_PRIVATE_KEY_PATH", keyPath)
 
 	cfg, err := config.Load()
 	require.NoError(t, err)

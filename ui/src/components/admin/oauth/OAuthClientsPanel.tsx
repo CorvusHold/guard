@@ -565,6 +565,14 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetEdit}
+              data-testid="oauth-edit-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
               size="sm"
               onClick={handleEditSave}
               disabled={editSaving || !editName.trim() || !editRedirectURIs.trim()}

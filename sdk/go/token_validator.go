@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -36,10 +35,19 @@ type TokenClaims struct {
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
 	Issuer   string   `json:"iss"`
-	Audience string   `json:"aud"`
+	Audience []string `json:"aud"`
 	IssuedAt int64    `json:"iat"`
 	Expiry   int64    `json:"exp"`
 }
+
+// Logger is a minimal logging interface for optional diagnostics.
+type Logger interface {
+	Printf(format string, v ...interface{})
+}
+
+type noopLogger struct{}
+
+func (noopLogger) Printf(string, ...interface{}) {}
 
 // TokenValidator validates Guard-issued JWTs using ES256 public keys from JWKS.
 type TokenValidator struct {
@@ -47,6 +55,7 @@ type TokenValidator struct {
 	tenantID   string
 	httpClient *http.Client
 	cacheTTL   time.Duration
+	logger     Logger
 
 	mu        sync.RWMutex
 	keys      map[string]*ecdsa.PublicKey
@@ -72,6 +81,17 @@ func WithValidatorTenantID(tenantID string) TokenValidatorOption {
 	return func(v *TokenValidator) { v.tenantID = strings.TrimSpace(tenantID) }
 }
 
+// WithValidatorLogger sets a logger for non-fatal JWKS parsing diagnostics.
+func WithValidatorLogger(l Logger) TokenValidatorOption {
+	return func(v *TokenValidator) {
+		if l == nil {
+			v.logger = noopLogger{}
+			return
+		}
+		v.logger = l
+	}
+}
+
 // NewTokenValidator creates a validator that fetches and caches JWKS from the Guard server.
 func NewTokenValidator(guardURL string, opts ...TokenValidatorOption) *TokenValidator {
 	v := &TokenValidator{
@@ -79,6 +99,7 @@ func NewTokenValidator(guardURL string, opts ...TokenValidatorOption) *TokenVali
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		cacheTTL:   time.Hour,
 		keys:       make(map[string]*ecdsa.PublicKey),
+		logger:     noopLogger{},
 	}
 	for _, o := range opts {
 		o(v)
@@ -211,12 +232,12 @@ func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
 	newKeys := make(map[string]*ecdsa.PublicKey)
 	for _, k := range jwks.Keys {
 		if k.Kty != "EC" || k.Crv != "P-256" {
-			log.Printf("guard token validator: skipping jwks key kid=%q reason=unsupported key type/curve kty=%q crv=%q", k.Kid, k.Kty, k.Crv)
+			v.logger.Printf("guard token validator: skipping jwks key kid=%q reason=unsupported key type/curve kty=%q crv=%q", k.Kid, k.Kty, k.Crv)
 			continue
 		}
 		pub, err := parseECPublicKey(k)
 		if err != nil {
-			log.Printf("guard token validator: skipping jwks key kid=%q reason=parse error: %v", k.Kid, err)
+			v.logger.Printf("guard token validator: skipping jwks key kid=%q reason=parse error: %v", k.Kid, err)
 			continue
 		}
 		newKeys[k.Kid] = pub
@@ -326,12 +347,11 @@ func decodePayload(payload string) (*TokenClaims, error) {
 		claims.Issuer = v
 	}
 	if v, ok := raw["aud"].(string); ok {
-		claims.Audience = v
+		claims.Audience = []string{v}
 	} else if arr, ok := raw["aud"].([]interface{}); ok {
 		for _, a := range arr {
 			if s, ok := a.(string); ok {
-				claims.Audience = s
-				break
+				claims.Audience = append(claims.Audience, s)
 			}
 		}
 	}

@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package controller
 
 import (
@@ -101,8 +104,8 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 	var startResp struct{ Secret string }
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
-	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
-	ab, _ := json.Marshal(map[string]string{"code": code})
+	activateCode, _ := totp.GenerateCode(startResp.Secret, time.Now())
+	ab, _ := json.Marshal(map[string]string{"code": activateCode})
 	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
@@ -129,12 +132,13 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 	var ch mfaChallengeResp
 	_ = json.NewDecoder(bytes.NewReader(lrec.Body.Bytes())).Decode(&ch)
+	verifyCode, _ := totp.GenerateCode(startResp.Secret, time.Now())
 
 	// verify -> 200 and audit event
 	vb, _ := json.Marshal(map[string]string{
 		"challenge_token": ch.ChallengeToken,
 		"method":          "totp",
-		"code":            code,
+		"code":            verifyCode,
 	})
 	vreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	vreq.Header.Set("Content-Type", "application/json")

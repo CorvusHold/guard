@@ -300,6 +300,8 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 COPY --from=builder /app/guard .
 COPY --from=builder /app/migrations ./migrations
+# For local/dev image builds only, you may copy a private key into the image:
+# COPY ./secrets/jwt-es256-private.pem /etc/guard/keys/jwt-es256-private.pem
 EXPOSE 8080
 CMD ["./guard"]
 ```
@@ -308,7 +310,11 @@ CMD ["./guard"]
 # Build image
 docker build -t guard:latest .
 
-# Run with docker-compose
+# Run with docker-compose (recommended: mount key as a secret/volume at runtime)
+# Example:
+#   -e JWT_SIGNING_ALGORITHM=ES256 \
+#   -e JWT_PRIVATE_KEY_PATH=/etc/guard/keys/jwt-es256-private.pem \
+#   -v ./secrets/jwt-es256-private.pem:/etc/guard/keys/jwt-es256-private.pem:ro
 docker-compose up -d
 ```
 
@@ -344,6 +350,18 @@ spec:
           value: redis:6379
         - name: PUBLIC_BASE_URL
           value: https://auth.example.com
+        - name: JWT_SIGNING_ALGORITHM
+          value: ES256
+        - name: JWT_PRIVATE_KEY_PATH
+          value: /etc/guard/keys/jwt-es256-private.pem
+        volumeMounts:
+        - name: guard-jwt-key
+          mountPath: /etc/guard/keys
+          readOnly: true
+      volumes:
+      - name: guard-jwt-key
+        secret:
+          secretName: guard-jwt-key
 ```
 
 ## Backup & Recovery

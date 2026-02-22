@@ -488,8 +488,8 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	if in.ChallengeToken == "" || in.Method == "" || in.Code == "" {
 		return domain.AccessTokens{}, errors.New("challenge_token, method and code are required")
 	}
-	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	if err := s.requireAsymmetricKeyMgr(); err != nil {
+		return domain.AccessTokens{}, err
 	}
 	// First decode without verification to extract tenant/user
 	tok, _ := jwt.ParseWithClaims(in.ChallengeToken, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -568,8 +568,18 @@ func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *S
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize key manager: %v", err))
 	}
+	if !km.IsAsymmetric() {
+		panic("asymmetric key manager required: set JWT_SIGNING_ALGORITHM=ES256 and provide private key via JWT_PRIVATE_KEY_PATH or JWT_SIGNING_KEY")
+	}
 	s.keyMgr = km
 	return s
+}
+
+func (s *Service) requireAsymmetricKeyMgr() error {
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return errors.New("asymmetric key manager required")
+	}
+	return nil
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
@@ -670,6 +680,14 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 	_ = s.repo.ResetFailedAttempts(ctx, in.TenantID, in.Email)
 	// If MFA is enabled for this user, return an MFA challenge instead of issuing tokens now.
 	if ms, err := s.repo.GetMFASecret(ctx, ai.UserID); err == nil && ms.Enabled {
+		issuer, err := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &ai.TenantID, authissuer.ResolveTenantIssuer(s.cfg, ai.TenantID))
+		if err != nil {
+			return domain.AccessTokens{}, err
+		}
+		audience, err := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &ai.TenantID, s.cfg.PublicBaseURL)
+		if err != nil {
+			return domain.AccessTokens{}, err
+		}
 		// Build short-lived challenge token (5m) signed asymmetrically.
 		claims := jwt.MapClaims{
 			"typ":   "mfa_challenge",
@@ -679,9 +697,11 @@ func (s *Service) Login(ctx context.Context, in domain.LoginInput) (domain.Acces
 			"amr":   []string{"totp", "backup_code"},
 			"exp":   time.Now().Add(5 * time.Minute).Unix(),
 			"iat":   time.Now().Unix(),
+			"iss":   issuer,
+			"aud":   audience,
 		}
-		if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-			return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+		if err := s.requireAsymmetricKeyMgr(); err != nil {
+			return domain.AccessTokens{}, err
 		}
 		t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
 		t.Header["kid"] = s.keyMgr.KeyID()
@@ -870,8 +890,8 @@ func (s *Service) issueTokensWithFamily(ctx context.Context, userID, tenantID uu
 		"name":  name,
 	}
 
-	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	if err := s.requireAsymmetricKeyMgr(); err != nil {
+		return domain.AccessTokens{}, err
 	}
 	t := jwt.NewWithClaims(s.keyMgr.SigningMethod(), claims)
 	t.Header["kid"] = s.keyMgr.KeyID()
@@ -985,8 +1005,8 @@ func (s *Service) Introspect(ctx context.Context, token string) (domain.Introspe
 	// Step 3: Load tenant-specific settings (issuer/audience/signing key may be overridden per tenant)
 	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tid, authissuer.ResolveTenantIssuer(s.cfg, tid))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tid, s.cfg.PublicBaseURL)
-	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-		return domain.Introspection{Active: false}, errors.New("asymmetric key manager required")
+	if err := s.requireAsymmetricKeyMgr(); err != nil {
+		return domain.Introspection{Active: false}, err
 	}
 
 	// Step 4: Verify signature with correct tenant-specific signing key.
@@ -1653,8 +1673,8 @@ func (s *Service) SeedDefaultRoles(ctx context.Context, tenantID uuid.UUID) erro
 func (s *Service) ParseAccessToken(ctx context.Context, tokenStr string) (domain.AccessTokenClaims, error) {
 	// ctx unused: key manager is resolved at construction/injection time.
 	_ = ctx
-	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
-		return domain.AccessTokenClaims{}, errors.New("asymmetric key manager required")
+	if err := s.requireAsymmetricKeyMgr(); err != nil {
+		return domain.AccessTokenClaims{}, err
 	}
 
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {

@@ -26,7 +26,7 @@ Scope: `Go backend + UI + SDK + conformance + k6 + security/compliance`
 
 ```regex
 # Go unit tests (preferred) + transitional legacy files
-^(?:.+_unit_test|.+)_test\.go$
+^(?:.+_unit_test|.+_test)\.go$
 
 # Go integration tests (requires //go:build integration)
 ^.+_integration_test\.go$
@@ -78,13 +78,17 @@ Every new test file MUST include a metadata header block.
 
 ```go
 // TEST_META:
+// id: internal.auth.service.service_unit_test
+// path: internal/auth/service/service_unit_test.go
 // type: UNIT
 // tier: PR
 // deps: none
 // owner: auth
 // deterministic: true
 // risk: R2
-// maps_to: internal/auth/service/service.go
+// timeout_sec: 60
+// maps_to:
+//   - internal/auth/service/service.go
 ```
 
 #### TS header template
@@ -92,13 +96,16 @@ Every new test file MUST include a metadata header block.
 ```ts
 /**
  * TEST_META:
+ * id=ui.components.auth.simple-progressive-login-form.component.test
+ * path=ui/src/components/auth/SimpleProgressiveLoginForm.component.test.tsx
  * type=E2E
  * tier=EXTENDED
  * deps=docker
  * owner=ui-auth
  * deterministic=true
  * risk=R3
- * maps_to=ui/src/components/auth/SimpleProgressiveLoginForm.tsx
+ * timeout_sec=600
+ * maps_to=["ui/src/components/auth/SimpleProgressiveLoginForm.tsx"]
  */
 ```
 
@@ -154,7 +161,7 @@ Every new test file MUST include a metadata header block.
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "TestManifestEntry",
   "type": "object",
-  "required": ["id", "path", "type", "tier", "deps", "owner", "risk", "maps_to"],
+  "required": ["id", "path", "type", "tier", "deps", "owner", "risk", "maps_to", "timeout_sec"],
   "properties": {
     "id": {"type": "string", "pattern": "^[a-z0-9_.-]+$"},
     "path": {"type": "string"},
@@ -171,11 +178,26 @@ Every new test file MUST include a metadata header block.
 }
 ```
 
+Generation rules (required because `id` and `path` are required and `additionalProperties: false` is enabled):
+
+- `path`: MUST be the repository-relative test file path.
+- `id`: MUST be derived from `path` by replacing `/` with `.`, removing the file extension, and keeping only `a-z`, `0-9`, `_`, `-`, and `.`.
+  - Example: `internal/auth/service/service_unit_test.go` -> `internal.auth.service.service_unit_test`.
+- If headers omit `id`/`path`, manifest generators MUST auto-populate both fields before schema validation.
+
+Default timeout policy (bounded execution, aligned to policy rule 3 "No unbounded retries"):
+
+- `UNIT`: 60s
+- `INTEGRATION`: 300s
+- `E2E`: 600s
+
+CI MUST reject entries without `timeout_sec` and MUST reject values outside `1..3600`.
+
 ---
 
 ## 3) AI-Optimized Directory Structure
 
-## 3.1 Top-level target layout
+### 3.1 Top-level target layout
 
 ```text
 /tests
@@ -240,7 +262,7 @@ Examples:
 
 ### 3.5 Performance mapping rules
 
-- Every critical endpoint (`/password/login`, `/mfa/verify`, `/oauth/token`, `/readyz`) MUST have:
+- Every critical endpoint (`/api/v1/auth/password/login`, `/api/v1/auth/mfa/verify`, `/oauth/token`, `/readyz`) MUST have:
   - baseline scenario
   - regression scenario
   - threshold profile
@@ -302,7 +324,7 @@ Examples:
 
 ## 5) CI/CD Strategy Optimized for Agents
 
-## 5.1 Stage model
+### 5.1 Stage model
 
 ### Stage A — Fast PR
 - Inputs: source diff + manifests
@@ -525,7 +547,7 @@ Auto-quarantine threshold: `flake_index >= 0.05`.
 
 ## 10) Migration Plan for Current Repository
 
-## 10.1 Current fragmentation and risks
+### 10.1 Current fragmentation and risks
 
 1. Test taxonomy is implicit, not path-enforced.
 2. Coverage gates are not uniformly blocking.
@@ -533,7 +555,7 @@ Auto-quarantine threshold: `flake_index >= 0.05`.
 4. k6 thresholds exist but governed baseline lifecycle is missing.
 5. Security workflows exist but fail semantics vary by tool/job.
 
-## 10.2 Phased rollout
+### 10.2 Phased rollout
 
 ### 30-day stabilization
 

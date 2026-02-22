@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package ratelimit
 
 import (
@@ -20,8 +23,8 @@ func newEchoCtx() echo.Context {
 
 func TestNewRedisStore_AndAllowErrorPath(t *testing.T) {
 	store := NewRedisStore(config.Config{RedisAddr: "127.0.0.1:0", RedisDB: 0})
-	if store == nil {
-		t.Fatal("expected non-nil redis store")
+	if _, ok := store.(*redisStore); !ok {
+		t.Fatal("expected *redisStore")
 	}
 
 	allowed, retryAfter, err := store.Allow(newEchoCtx(), "tenant:key", 1, time.Second)
@@ -37,11 +40,20 @@ func TestNewRedisStore_AndAllowErrorPath(t *testing.T) {
 }
 
 func TestNewSlidingWindowStore_AllowFailOpenOnRedisError(t *testing.T) {
-	rc := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0", DB: 0})
+	rc := redis.NewClient(&redis.Options{
+		Addr:            "127.0.0.1:0",
+		DB:              0,
+		DialTimeout:     100 * time.Millisecond,
+		ReadTimeout:     100 * time.Millisecond,
+		WriteTimeout:    100 * time.Millisecond,
+		MaxRetries:      0,
+		MinRetryBackoff: 1 * time.Millisecond,
+		MaxRetryBackoff: 5 * time.Millisecond,
+	})
 	defer rc.Close()
 	store := NewSlidingWindowStore(rc)
-	if store == nil {
-		t.Fatal("expected non-nil sliding window store")
+	if _, ok := store.(*SlidingWindowStore); !ok {
+		t.Fatal("expected *SlidingWindowStore")
 	}
 
 	allowed, retryAfter, err := store.Allow(newEchoCtx(), "tenant:key", 1, time.Second)

@@ -344,8 +344,31 @@ func TestHTTP_Introspect_TenantSpecificSigningKey(t *testing.T) {
 
 	// Now construct a second auth service/controller that only uses the global signing key
 	staticSettings := staticSettingsService{}
+	priv2, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate second ec key: %v", err)
+	}
+	der2, err := x509.MarshalECPrivateKey(priv2)
+	if err != nil {
+		t.Fatalf("marshal second ec key: %v", err)
+	}
+	pemBytes2 := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der2})
+	keyFile2, err := os.CreateTemp("", "guard-introspect-global-jwt-*.pem")
+	if err != nil {
+		t.Fatalf("create second temp key file: %v", err)
+	}
+	if _, err := keyFile2.Write(pemBytes2); err != nil {
+		t.Fatalf("write second temp key file: %v", err)
+	}
+	if err := keyFile2.Close(); err != nil {
+		t.Fatalf("close second temp key file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(keyFile2.Name()) })
+
 	cfgGlobalOnly := cfg
-	cfgGlobalOnly.JWTSigningKey = "global-signing-key-only-instance"
+	cfgGlobalOnly.JWTSigningAlgorithm = "ES256"
+	cfgGlobalOnly.JWTPrivateKeyPath = keyFile2.Name()
+	cfgGlobalOnly.JWTSigningKey = ""
 	auth2 := svc.New(repo, cfgGlobalOnly, staticSettings)
 	magic2 := svc.NewMagic(repo, cfgGlobalOnly, staticSettings, &fakeEmail{})
 	sso2 := svc.NewSSO(repo, cfgGlobalOnly, staticSettings)

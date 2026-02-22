@@ -39,6 +39,26 @@ type Registrar struct {
 	cfg      config.Config
 }
 
+func oidcDiscoveryDoc(issuer, jwksURI, baseURL string, algSupported []string) map[string]interface{} {
+	base := strings.TrimRight(baseURL, "/")
+	return map[string]interface{}{
+		"issuer":                                issuer,
+		"authorization_endpoint":                base + "/oauth/authorize",
+		"token_endpoint":                        base + "/oauth/token",
+		"userinfo_endpoint":                     base + "/api/v1/auth/me",
+		"jwks_uri":                              jwksURI,
+		"introspection_endpoint":                base + "/api/v1/auth/introspect",
+		"revocation_endpoint":                   base + "/oauth/revoke",
+		"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
+		"response_types_supported":              []string{"code"},
+		"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
+		"subject_types_supported":               []string{"public"},
+		"id_token_signing_alg_values_supported": algSupported,
+		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
+		"code_challenge_methods_supported":      []string{"S256"},
+	}
+}
+
 func NewRegistrar(pg *pgxpool.Pool, cfg config.Config) (*Registrar, error) {
 	r := repo.New(pg)
 	// settings service (DB-backed, with tenant overrides)
@@ -154,26 +174,12 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 			algSupported = []string{"ES256", "HS256"}
 		}
 
-		return c.JSON(200, map[string]interface{}{
-			"issuer":                                baseURL,
-			"authorization_endpoint":                baseURL + "/oauth/authorize",
-			"token_endpoint":                        baseURL + "/oauth/token",
-			"userinfo_endpoint":                     baseURL + "/api/v1/auth/me",
-			"jwks_uri":                              baseURL + "/.well-known/jwks.json",
-			"introspection_endpoint":                baseURL + "/api/v1/auth/introspect",
-			"revocation_endpoint":                   baseURL + "/oauth/revoke",
-			"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
-			"response_types_supported":              []string{"code"},
-			"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
-			"subject_types_supported":               []string{"public"},
-			"id_token_signing_alg_values_supported": algSupported,
-			"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-			"code_challenge_methods_supported":      []string{"S256"},
-		})
+		return c.JSON(http.StatusOK, oidcDiscoveryDoc(baseURL, baseURL+"/.well-known/jwks.json", baseURL, algSupported))
 	})
 
 	// Tenant-aware OIDC Discovery (path-based issuer model).
-	if strings.EqualFold(strings.TrimSpace(r.cfg.IssuerMode), authissuer.ModePath) || strings.TrimSpace(r.cfg.IssuerMode) == "" {
+	pathIssuerMode := strings.EqualFold(strings.TrimSpace(r.cfg.IssuerMode), authissuer.ModePath) || strings.TrimSpace(r.cfg.IssuerMode) == ""
+	if pathIssuerMode {
 		e.GET("/t/:tenant_id/.well-known/openid-configuration", func(c echo.Context) error {
 			tenantID, err := uuid.Parse(c.Param("tenant_id"))
 			if err != nil {
@@ -191,22 +197,7 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 				algSupported = []string{"ES256", "HS256"}
 			}
 
-			return c.JSON(http.StatusOK, map[string]interface{}{
-				"issuer":                                issuerURL,
-				"authorization_endpoint":                baseURL + "/oauth/authorize",
-				"token_endpoint":                        baseURL + "/oauth/token",
-				"userinfo_endpoint":                     baseURL + "/api/v1/auth/me",
-				"jwks_uri":                              authissuer.ResolveJWKSURI(r.cfg, &tenantID),
-				"introspection_endpoint":                baseURL + "/api/v1/auth/introspect",
-				"revocation_endpoint":                   baseURL + "/oauth/revoke",
-				"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
-				"response_types_supported":              []string{"code"},
-				"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
-				"subject_types_supported":               []string{"public"},
-				"id_token_signing_alg_values_supported": algSupported,
-				"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-				"code_challenge_methods_supported":      []string{"S256"},
-			})
+			return c.JSON(http.StatusOK, oidcDiscoveryDoc(issuerURL, authissuer.ResolveJWKSURI(r.cfg, &tenantID), baseURL, algSupported))
 		})
 	}
 
@@ -220,28 +211,32 @@ func (r *Registrar) RegisterWellKnown(e *echo.Echo) {
 			c.Response().Header().Set("Cache-Control", "public, max-age=3600")
 			return c.JSONBlob(200, data)
 		})
-		e.GET("/t/:tenant_id/.well-known/jwks.json", func(c echo.Context) error {
-			if _, err := uuid.Parse(c.Param("tenant_id")); err != nil {
-				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
-			}
-			data, err := km.JWKSBytes()
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to serialize JWKS"})
-			}
-			c.Response().Header().Set("Cache-Control", "public, max-age=3600")
-			return c.JSONBlob(http.StatusOK, data)
-		})
+		if pathIssuerMode {
+			e.GET("/t/:tenant_id/.well-known/jwks.json", func(c echo.Context) error {
+				if _, err := uuid.Parse(c.Param("tenant_id")); err != nil {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+				}
+				data, err := km.JWKSBytes()
+				if err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to serialize JWKS"})
+				}
+				c.Response().Header().Set("Cache-Control", "public, max-age=3600")
+				return c.JSONBlob(http.StatusOK, data)
+			})
+		}
 	} else {
 		// Return empty JWKS when using HS256
 		e.GET("/.well-known/jwks.json", func(c echo.Context) error {
 			return c.JSON(200, map[string]interface{}{"keys": []interface{}{}})
 		})
-		e.GET("/t/:tenant_id/.well-known/jwks.json", func(c echo.Context) error {
-			if _, err := uuid.Parse(c.Param("tenant_id")); err != nil {
-				return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
-			}
-			return c.JSON(http.StatusOK, map[string]interface{}{"keys": []interface{}{}})
-		})
+		if pathIssuerMode {
+			e.GET("/t/:tenant_id/.well-known/jwks.json", func(c echo.Context) error {
+				if _, err := uuid.Parse(c.Param("tenant_id")); err != nil {
+					return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid tenant_id"})
+				}
+				return c.JSON(http.StatusOK, map[string]interface{}{"keys": []interface{}{}})
+			})
+		}
 	}
 }
 
