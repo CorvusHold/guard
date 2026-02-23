@@ -7388,7 +7388,7 @@ export interface paths {
         };
         /**
          * OAuth 2.0 Authorization
-         * @description Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.
+         * @description Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns HTML consent for browser requests (Accept: text/html), JSON consent challenge for API/script requests, or redirects if consent was previously granted.
          */
         get: {
             parameters: {
@@ -7425,6 +7425,9 @@ export interface paths {
                         "application/json": {
                             [key: string]: unknown;
                         };
+                        "text/html": {
+                            [key: string]: unknown;
+                        };
                     };
                 };
                 /** @description Redirect with authorization code */
@@ -7441,6 +7444,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            [key: string]: string;
+                        };
+                        "text/html": {
                             [key: string]: string;
                         };
                     };
@@ -7479,6 +7485,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["controller.authorizeDecisionReq"];
+                    "application/x-www-form-urlencoded": components["schemas"]["controller.authorizeDecisionReq"];
                 };
             };
             responses: {

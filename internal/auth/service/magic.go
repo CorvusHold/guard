@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
@@ -34,11 +33,16 @@ type Magic struct {
 	keyMgr   *keys.Manager
 }
 
+// NewMagic creates a new magic link service with ES256 JWT signing.
+// Magic link tokens are now signed with ES256 for enhanced security.
 func NewMagic(repo domain.Repository, cfg config.Config, settings sdomain.Service, email edomain.Sender) *Magic {
 	m := &Magic{repo: repo, cfg: cfg, settings: settings, email: email, pub: evsvc.NewLogger()}
-	if strings.EqualFold(strings.TrimSpace(cfg.JWTSigningAlgorithm), "ES256") && strings.TrimSpace(cfg.JWTPrivateKeyPath) == "" {
-		panic("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
+
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		panic(err.Error())
 	}
+
 	km, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize key manager: %v", err))

@@ -24,22 +24,24 @@ const (
 	ctxTenantIDKey = "auth_tenant_id"
 )
 
-// NewJWT returns an Echo middleware that validates access JWTs and
+// NewJWT returns an Echo middleware that validates ES256-signed access JWTs and
 // stores user and tenant IDs in the context.
+//
+// Guard now exclusively uses ES256 (asymmetric cryptography) for JWT signing to enhance
+// security and enable proper key rotation via JWKS. External applications should verify
+// Guard JWTs using the tenant-scoped JWKS endpoint, not shared HMAC secrets.
 func NewJWT(cfg config.Config) echo.MiddlewareFunc {
-	// Pre-load EC public key if ES256 is configured. We allow either a private or public key PEM.
-	var ecPubKey *ecdsa.PublicKey
-	if cfg.JWTSigningAlgorithm != "ES256" {
-		log.Fatal().Msg("JWT_SIGNING_ALGORITHM must be ES256")
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		log.Fatal().Msg(err.Error())
 	}
-	if cfg.JWTPrivateKeyPath == "" {
-		log.Fatal().Msg("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
-	}
-	key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
+
+	// Load EC public key for JWT verification using centralized loader
+	_, ecPubKey, err := config.LoadECKeys(cfg.JWTPrivateKeyPath)
 	if err != nil {
-		log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
+		log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC keys for ES256 JWT verification")
 	}
-	ecPubKey = key
+
 	return newJWTWithPublicKey(ecPubKey)
 }
 

@@ -40,12 +40,18 @@ type SSO struct {
 	keyMgr   *keys.Manager
 }
 
+// NewSSO creates a new SSO service with ES256 JWT signing.
+// SSO tokens (OAuth/OIDC) are now signed with ES256 for enhanced security
+// and proper JWKS-based verification by external applications.
 func NewSSO(repo domain.Repository, cfg config.Config, settings sdomain.Service) *SSO {
 	rc := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, DB: cfg.RedisDB})
 	s := &SSO{repo: repo, cfg: cfg, settings: settings, redis: rc, pub: evsvc.NewLogger(), log: zerolog.Nop(), ssoSvc: nil}
-	if strings.EqualFold(strings.TrimSpace(cfg.JWTSigningAlgorithm), "ES256") && strings.TrimSpace(cfg.JWTPrivateKeyPath) == "" {
-		panic("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
+
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		panic(err.Error())
 	}
+
 	km, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize key manager: %v", err))

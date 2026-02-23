@@ -14,14 +14,336 @@
 # Required
 DATABASE_URL=postgres://user:pass@localhost:5432/guard
 REDIS_ADDR=localhost:6379
+JWT_SIGNING_ALGORITHM=ES256
+JWT_PRIVATE_KEY_PATH=/etc/guard/keys/jwt-es256-private.pem
 
 # Optional - Override defaults
 PUBLIC_BASE_URL=https://auth.example.com
-JWT_SIGNING_ALGORITHM=ES256
-JWT_PRIVATE_KEY_PATH=/etc/guard/keys/jwt-es256-private.pem
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=7d
 LOG_LEVEL=info
+```
+
+**Important:** Guard now exclusively uses ES256 (asymmetric cryptography) for JWT signing. The `JWT_SIGNING_ALGORITHM` and `JWT_PRIVATE_KEY_PATH` variables are **required** for all deployments.
+
+## JWT ES256 Key Generation and Deployment
+
+Guard requires an ES256 (ECDSA P-256) private key for JWT signing. This section provides scripts and procedures for generating, deploying, and rotating these keys securely.
+
+### Generate ES256 Key Pair
+
+**Option 1: Using OpenSSL (recommended)**
+
+```bash
+# Generate EC private key using P-256 curve
+openssl ecparam -genkey -name prime256v1 -noout -out jwt-es256-private.pem
+
+# Set secure permissions (private key should be readable only by Guard process)
+chmod 600 jwt-es256-private.pem
+
+# Verify the key was generated correctly
+openssl ec -in jwt-es256-private.pem -text -noout
+
+# Extract public key (optional, for verification or external distribution)
+openssl ec -in jwt-es256-private.pem -pubout -out jwt-es256-public.pem
+```
+
+**Option 2: Using Go crypto**
+
+If OpenSSL is not available, use this Go script:
+
+```go
+// generate-ec-key.go
+package main
+
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
+	"log"
+	"os"
+)
+
+func main() {
+	// Generate P-256 EC private key
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		log.Fatalf("failed to generate EC key: %v", err)
+	}
+
+	// Marshal private key to DER format
+	derBytes, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		log.Fatalf("failed to marshal EC key: %v", err)
+	}
+
+	// Write private key PEM file
+	privateFile, err := os.OpenFile("jwt-es256-private.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		log.Fatalf("failed to create private key file: %v", err)
+	}
+	defer privateFile.Close()
+
+	if err := pem.Encode(privateFile, &pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: derBytes,
+	}); err != nil {
+		log.Fatalf("failed to write private key PEM: %v", err)
+	}
+
+	log.Println("✓ Generated jwt-es256-private.pem")
+}
+```
+
+Run with:
+```bash
+go run generate-ec-key.go
+chmod 600 jwt-es256-private.pem
+```
+
+### Key Deployment Patterns
+
+#### Local Development
+
+```bash
+# Store key in project root (gitignored)
+openssl ecparam -genkey -name prime256v1 -noout -out jwt-es256-private.pem
+chmod 600 jwt-es256-private.pem
+
+# Set environment variable
+export JWT_PRIVATE_KEY_PATH=./jwt-es256-private.pem
+export JWT_SIGNING_ALGORITHM=ES256
+```
+
+#### Docker Deployment
+
+Mount the key as a Docker secret or volume:
+
+```dockerfile
+# Dockerfile
+FROM golang:1.24-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN go build -o guard ./cmd/api
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=builder /app/guard .
+
+# Key will be mounted at runtime
+VOLUME ["/etc/guard/keys"]
+
+CMD ["./guard"]
+```
+
+```bash
+# Docker run with volume mount
+docker run -d \
+  -p 8080:8080 \
+  -v /secure/path/jwt-es256-private.pem:/etc/guard/keys/jwt-es256-private.pem:ro \
+  -e JWT_SIGNING_ALGORITHM=ES256 \
+  -e JWT_PRIVATE_KEY_PATH=/etc/guard/keys/jwt-es256-private.pem \
+  -e DATABASE_URL=postgres://... \
+  guard:latest
+```
+
+**Using Docker Secrets (Docker Swarm/Compose):**
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  guard:
+    image: guard:latest
+    secrets:
+      - jwt_private_key
+    environment:
+      JWT_SIGNING_ALGORITHM: ES256
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key
+      DATABASE_URL: postgres://...
+
+secrets:
+  jwt_private_key:
+    file: ./jwt-es256-private.pem
+```
+
+#### Kubernetes Deployment
+
+```yaml
+# Create secret from key file
+kubectl create secret generic guard-jwt-key \
+  --from-file=jwt-es256-private.pem=./jwt-es256-private.pem \
+  --namespace=guard
+
+# Reference in deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guard
+  namespace: guard
+spec:
+  template:
+    spec:
+      containers:
+      - name: guard
+        image: guard:latest
+        env:
+        - name: JWT_SIGNING_ALGORITHM
+          value: "ES256"
+        - name: JWT_PRIVATE_KEY_PATH
+          value: "/etc/guard/keys/jwt-es256-private.pem"
+        volumeMounts:
+        - name: jwt-key
+          mountPath: /etc/guard/keys
+          readOnly: true
+      volumes:
+      - name: jwt-key
+        secret:
+          secretName: guard-jwt-key
+          defaultMode: 0400  # Read-only for owner
+```
+
+#### Cloud Provider Secret Managers
+
+**AWS Secrets Manager:**
+
+```bash
+# Store key in AWS Secrets Manager
+aws secretsmanager create-secret \
+  --name guard/jwt-private-key \
+  --secret-string file://jwt-es256-private.pem \
+  --region us-east-1
+
+# Retrieve in startup script or init container
+aws secretsmanager get-secret-value \
+  --secret-id guard/jwt-private-key \
+  --query SecretString \
+  --output text > /etc/guard/keys/jwt-es256-private.pem
+chmod 600 /etc/guard/keys/jwt-es256-private.pem
+```
+
+**GCP Secret Manager:**
+
+```bash
+# Store key
+gcloud secrets create guard-jwt-private-key \
+  --data-file=jwt-es256-private.pem \
+  --replication-policy=automatic
+
+# Retrieve
+gcloud secrets versions access latest \
+  --secret=guard-jwt-private-key > /etc/guard/keys/jwt-es256-private.pem
+chmod 600 /etc/guard/keys/jwt-es256-private.pem
+```
+
+**Azure Key Vault:**
+
+```bash
+# Store key
+az keyvault secret set \
+  --vault-name guard-vault \
+  --name jwt-private-key \
+  --file jwt-es256-private.pem
+
+# Retrieve
+az keyvault secret show \
+  --vault-name guard-vault \
+  --name jwt-private-key \
+  --query value -o tsv > /etc/guard/keys/jwt-es256-private.pem
+chmod 600 /etc/guard/keys/jwt-es256-private.pem
+```
+
+### Key Rotation Procedure
+
+Guard supports zero-downtime key rotation using the `signing_keys` table:
+
+```bash
+# Step 1: Generate new key
+openssl ecparam -genkey -name prime256v1 -noout -out jwt-es256-private-new.pem
+chmod 600 jwt-es256-private-new.pem
+
+# Step 2: Insert new key into database (while keeping old key active)
+# This is typically done via Guard admin API or direct DB insert
+
+# Step 3: Wait for JWKS cache TTL (default: 1 hour) across all consuming services
+
+# Step 4: Update JWT_PRIVATE_KEY_PATH to point to new key
+
+# Step 5: Restart Guard instances (rolling restart for zero downtime)
+
+# Step 6: Mark old key as retired in database (keeps it for verification but not signing)
+
+# Step 7: After refresh token TTL expires (default: 30 days), delete old key
+```
+
+See [docs/IAM_VNEXT_MIGRATION.md](../IAM_VNEXT_MIGRATION.md) for detailed rotation procedures.
+
+### Security Best Practices
+
+1. **Never commit private keys to version control**
+   - Add `*.pem` to `.gitignore`
+   - Use `.env.example` with placeholder paths
+
+2. **Restrict file permissions**
+   ```bash
+   chmod 600 jwt-es256-private.pem  # Owner read/write only
+   chown guard:guard jwt-es256-private.pem  # Owned by Guard process user
+   ```
+
+3. **Use separate keys per environment**
+   - Development: Local file, rotated infrequently
+   - Staging: Cloud secret manager, rotated quarterly
+   - Production: Hardware Security Module (HSM) or cloud KMS, rotated monthly
+
+4. **Monitor key access**
+   - Enable audit logging for secret access
+   - Alert on unexpected key reads
+   - Track key age and rotation schedule
+
+5. **Backup and recovery**
+   - Store encrypted backups of keys
+   - Document recovery procedures
+   - Test recovery process quarterly
+
+### Troubleshooting
+
+**Error: "JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256"**
+
+```bash
+# Verify environment variable is set
+echo $JWT_PRIVATE_KEY_PATH
+
+# Verify file exists and is readable
+ls -la $JWT_PRIVATE_KEY_PATH
+cat $JWT_PRIVATE_KEY_PATH | head -n 1  # Should show: -----BEGIN EC PRIVATE KEY-----
+```
+
+**Error: "failed to load EC private key"**
+
+```bash
+# Verify key format
+openssl ec -in $JWT_PRIVATE_KEY_PATH -text -noout
+
+# Expected output should include:
+# - "Private-Key: (256 bit)"
+# - "ASN1 OID: prime256v1"
+# - "NIST CURVE: P-256"
+
+# If format is wrong, regenerate the key
+```
+
+**Error: "permission denied reading key file"**
+
+```bash
+# Check file permissions
+ls -la $JWT_PRIVATE_KEY_PATH
+
+# Fix permissions
+chmod 600 $JWT_PRIVATE_KEY_PATH
+chown $(whoami):$(whoami) $JWT_PRIVATE_KEY_PATH
 ```
 
 ## Database Migration

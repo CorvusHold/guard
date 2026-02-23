@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
@@ -191,4 +194,81 @@ func splitCSV(s string) []string {
 
 func (c Config) String() string {
 	return fmt.Sprintf("env=%s addr=%s db=%s redis=%s/%d", c.AppEnv, c.AppAddr, c.DatabaseURL, c.RedisAddr, c.RedisDB)
+}
+
+// ValidateJWTConfig validates that JWT configuration is properly set for ES256 signing.
+// This centralized validation ensures consistent error handling across the application.
+//
+// Guard now exclusively uses ES256 (asymmetric cryptography) for JWT signing to enhance
+// security and enable proper key rotation via JWKS. This function enforces the requirement
+// that ES256 algorithm is configured with a valid private key path.
+//
+// Returns an error if:
+//   - JWT_SIGNING_ALGORITHM is not "ES256"
+//   - JWT_PRIVATE_KEY_PATH is empty when ES256 is configured
+//
+// Example usage:
+//
+//	if err := cfg.ValidateJWTConfig(); err != nil {
+//	    log.Fatal().Err(err).Msg("invalid JWT configuration")
+//	}
+func (c Config) ValidateJWTConfig() error {
+	alg := strings.TrimSpace(c.JWTSigningAlgorithm)
+
+	// ES256 is now the only supported algorithm for production security
+	if !strings.EqualFold(alg, "ES256") {
+		return fmt.Errorf(
+			"JWT_SIGNING_ALGORITHM must be ES256 (got: %q). "+
+				"Guard no longer supports HS256/HMAC shared secrets. "+
+				"See docs/IAM_VNEXT_MIGRATION.md for migration guide",
+			c.JWTSigningAlgorithm,
+		)
+	}
+
+	// ES256 requires an EC private key file
+	if strings.TrimSpace(c.JWTPrivateKeyPath) == "" {
+		return fmt.Errorf(
+			"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256. "+
+				"Generate a key with: openssl ecparam -genkey -name prime256v1 -noout -out jwt-es256-private.pem",
+		)
+	}
+
+	return nil
+}
+
+// LoadECKeys loads an ES256 EC private/public key pair from a PEM file.
+// This is used for JWT signing (private key) and verification (public key).
+//
+// The PEM file should contain an EC PRIVATE KEY block with the P-256 curve.
+// Both the private and public keys are returned for signing and verification operations.
+//
+// Returns:
+//   - privateKey: *ecdsa.PrivateKey for signing JWTs
+//   - publicKey: *ecdsa.PublicKey for verifying JWTs
+//   - error: if the file cannot be read or parsed
+//
+// Example usage:
+//
+//	privateKey, publicKey, err := config.LoadECKeys(cfg.JWTPrivateKeyPath)
+//	if err != nil {
+//	    return fmt.Errorf("failed to load EC keys: %w", err)
+//	}
+func LoadECKeys(pemPath string) (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
+	keyData, err := os.ReadFile(pemPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read EC private key file %q: %w", pemPath, err)
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, nil, fmt.Errorf("no PEM block found in EC private key file %q", pemPath)
+	}
+
+	privateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse EC private key from %q: %w", pemPath, err)
+	}
+
+	publicKey := &privateKey.PublicKey
+	return privateKey, publicKey, nil
 }

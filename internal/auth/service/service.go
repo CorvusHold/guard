@@ -559,11 +559,17 @@ func (s *Service) VerifyMFA(ctx context.Context, in domain.MFAVerifyInput) (toks
 	return toks, nil
 }
 
+// New creates a new auth service with ES256 JWT signing.
+// Guard now exclusively uses ES256 (asymmetric cryptography) for enhanced security
+// and proper key rotation support via JWKS.
 func New(repo domain.Repository, cfg config.Config, settings sdomain.Service) *Service {
 	s := &Service{repo: repo, cfg: cfg, settings: settings, pub: evsvc.NewLogger(), log: zerolog.Nop()}
-	if strings.EqualFold(strings.TrimSpace(cfg.JWTSigningAlgorithm), "ES256") && strings.TrimSpace(cfg.JWTPrivateKeyPath) == "" {
-		panic("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
+
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		panic(err.Error())
 	}
+
 	km, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize key manager: %v", err))

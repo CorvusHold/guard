@@ -2,9 +2,15 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -48,6 +54,28 @@ func captureStdout(t *testing.T, fn func()) string {
 	return finish()
 }
 
+// writeTestECPrivateKey generates an ES256 EC private key for testing and returns the file path.
+// This helper ensures tests use proper asymmetric cryptography matching production behavior.
+func writeTestECPrivateKey(t *testing.T) string {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ec key: %v", err)
+	}
+	der, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal ec key: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
+
+	keyPath := filepath.Join(t.TempDir(), "jwt-es256-private.pem")
+	if err := os.WriteFile(keyPath, pemBytes, 0o600); err != nil {
+		t.Fatalf("write key file: %v", err)
+	}
+	return keyPath
+}
+
 func TestSanitizePrefix(t *testing.T) {
 	if got := sanitizePrefix("  "); got != "bootstrap" {
 		t.Fatalf("expected bootstrap fallback, got %q", got)
@@ -74,8 +102,18 @@ func TestRandomPassword_LengthAndDifferentValues(t *testing.T) {
 	}
 }
 
+// TestMintToken_ContainsExpectedClaims verifies that mintToken generates ES256-signed
+// JWTs with the correct claims structure for bootstrap access tokens.
 func TestMintToken_ContainsExpectedClaims(t *testing.T) {
-	cfg := config.Config{PublicBaseURL: "https://guard.example.com", JWTSigningKey: "secret-key"}
+	// Generate test EC key for ES256 signing
+	keyPath := writeTestECPrivateKey(t)
+
+	cfg := config.Config{
+		PublicBaseURL:       "https://guard.example.com",
+		JWTSigningAlgorithm: "ES256",
+		JWTPrivateKeyPath:   keyPath,
+	}
+
 	userID := uuid.New()
 	tenantID := uuid.New()
 	expiresAt := time.Now().Add(10 * time.Minute)
@@ -85,12 +123,24 @@ func TestMintToken_ContainsExpectedClaims(t *testing.T) {
 		t.Fatalf("mintToken returned error: %v", err)
 	}
 
+	// Load the EC public key for verification (ES256 uses asymmetric keys)
+	_, publicKey, err := config.LoadECKeys(keyPath)
+	if err != nil {
+		t.Fatalf("failed to load EC public key: %v", err)
+	}
+
+	// Parse and verify the ES256-signed token
 	parsed, err := jwt.Parse(tok, func(token *jwt.Token) (interface{}, error) {
-		return []byte(cfg.JWTSigningKey), nil
+		// Verify the algorithm is ES256 as expected
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			t.Fatalf("unexpected signing method: %v", token.Method)
+		}
+		return publicKey, nil
 	})
 	if err != nil {
 		t.Fatalf("failed to parse token: %v", err)
 	}
+
 	claims, ok := parsed.Claims.(jwt.MapClaims)
 	if !ok {
 		t.Fatalf("expected map claims, got %T", parsed.Claims)
@@ -103,6 +153,9 @@ func TestMintToken_ContainsExpectedClaims(t *testing.T) {
 	}
 	if claims["iss"] != cfg.PublicBaseURL {
 		t.Fatalf("unexpected iss claim: %v", claims["iss"])
+	}
+	if claims["aud"] != cfg.PublicBaseURL {
+		t.Fatalf("unexpected aud claim: %v", claims["aud"])
 	}
 }
 

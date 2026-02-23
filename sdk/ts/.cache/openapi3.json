@@ -7365,7 +7365,7 @@
     },
     "/oauth/authorize": {
       "get": {
-        "description": "Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.",
+        "description": "Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns HTML consent for browser requests (Accept: text/html), JSON consent challenge for API/script requests, or redirects if consent was previously granted.",
         "tags": [
           "OAuth"
         ],
@@ -7448,6 +7448,12 @@
                   "type": "object",
                   "additionalProperties": true
                 }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
               }
             }
           },
@@ -7458,6 +7464,14 @@
             "description": "Bad Request",
             "content": {
               "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "text/html": {
                 "schema": {
                   "type": "object",
                   "additionalProperties": {
@@ -7480,6 +7494,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/controller.authorizeDecisionReq"
+              }
+            },
+            "application/x-www-form-urlencoded": {
               "schema": {
                 "$ref": "#/components/schemas/controller.authorizeDecisionReq"
               }
