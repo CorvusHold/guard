@@ -209,7 +209,7 @@ type Service interface {
 	// The returned AccessTokenClaims includes UserID, TenantID, Email, and Roles populated
 	// directly from the JWT claims (not from a database lookup). Email and Roles are read
 	// from the "email" and "roles" claim keys respectively.
-	ParseAccessToken(ctx context.Context, token string) (AccessTokenClaims, error)
+	ParseAccessToken(token string) (AccessTokenClaims, error)
 
 	// --- Invitations ---
 	// InviteUser creates an invitation for a user to join a tenant.

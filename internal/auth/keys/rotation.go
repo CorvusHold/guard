@@ -13,8 +13,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+type keyStore interface {
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+}
 
 // SigningKeyRecord represents a row in the signing_keys table.
 type SigningKeyRecord struct {
@@ -31,7 +37,7 @@ type SigningKeyRecord struct {
 // RotatingManager manages multiple signing keys for rotation.
 // It signs with the newest active key and can verify with any active key.
 type RotatingManager struct {
-	pg           *pgxpool.Pool
+	pg           keyStore
 	mu           sync.RWMutex
 	managers     map[string]*Manager  // kid -> Manager
 	keyCreatedAt map[string]time.Time // kid -> created_at (for deterministic newest-key selection)
@@ -40,7 +46,7 @@ type RotatingManager struct {
 }
 
 // NewRotatingManager creates a RotatingManager backed by the signing_keys table.
-func NewRotatingManager(pg *pgxpool.Pool, fallback *Manager) *RotatingManager {
+func NewRotatingManager(pg keyStore, fallback *Manager) *RotatingManager {
 	rm := &RotatingManager{
 		pg:           pg,
 		managers:     make(map[string]*Manager),

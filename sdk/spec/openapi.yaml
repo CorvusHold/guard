@@ -5879,8 +5879,10 @@ paths:
     get:
       consumes:
       - application/x-www-form-urlencoded
-      description: Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1).
-        Returns consent screen data or redirects if consent was previously granted.
+      description: 'Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1).
+        Returns HTML consent for browser requests (Accept: text/html), JSON consent
+        challenge for API/script requests, or redirects if consent was previously
+        granted.'
       parameters:
       - description: Client ID
         in: query
@@ -5919,6 +5921,7 @@ paths:
         type: string
       produces:
       - application/json
+      - text/html
       responses:
         "200":
           description: Consent screen data
@@ -5940,6 +5943,7 @@ paths:
     post:
       consumes:
       - application/json
+      - application/x-www-form-urlencoded
       description: Processes the user's consent decision (approve or deny) for an
         OAuth authorization request.
       parameters:

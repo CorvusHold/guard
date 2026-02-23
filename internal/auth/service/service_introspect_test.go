@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
-	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/google/uuid"
 )
 
@@ -34,29 +34,29 @@ func (f fakeSettings) GetInt(_ context.Context, _ string, _ *uuid.UUID, def int)
 	return def, nil
 }
 
-func TestService_Introspect_UsesTenantSpecificSigningKey(t *testing.T) {
+func TestService_Introspect_ES256RoundTripWithInjectedKeyManager(t *testing.T) {
 	ctx := context.Background()
 	tenantID := uuid.New()
 	userID := uuid.New()
 
-	globalKey := "global-signing-key-123456"
-	tenantKey := "tenant-signing-key-abcdef123456"
-
 	repo := &fakeRepo{}
 
 	cfg := config.Config{
-		JWTSigningKey:   globalKey,
+		JWTSigningKey:   "ignored-with-es256-key-manager",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
 		PublicBaseURL:   "http://example.test",
 	}
 
-	settingsWithTenantKey := fakeSettings{strings: map[string]string{
-		sdomain.KeyJWTSigning + ":" + tenantID.String(): tenantKey,
-	}}
+	settings := fakeSettings{strings: map[string]string{}}
 
-	// Service that issues and introspects tokens using the tenant-specific signing key
-	s := &Service{repo: repo, cfg: cfg, settings: settingsWithTenantKey}
+	// Service that issues and introspects tokens using an asymmetric key manager
+	s := &Service{repo: repo, cfg: cfg, settings: settings}
+	km, err := keys.NewManager("ES256", "", "")
+	if err != nil {
+		t.Fatalf("new key manager error: %v", err)
+	}
+	s.SetKeyManager(km)
 
 	toks, err := s.issueTokens(ctx, userID, tenantID, "", "", nil, "password", nil)
 	if err != nil {
@@ -77,7 +77,7 @@ func TestService_Introspect_UsesTenantSpecificSigningKey(t *testing.T) {
 		t.Fatalf("unexpected introspection context: got user %s tenant %s", out.UserID, out.TenantID)
 	}
 
-	// Service that only knows the global signing key (no tenant override)
+	// Service without an asymmetric key manager should fail introspection
 	settingsGlobalOnly := fakeSettings{strings: map[string]string{}}
 	s2 := &Service{repo: repo, cfg: cfg, settings: settingsGlobalOnly}
 

@@ -197,6 +197,56 @@ jobs:
             sdk/ts/test-results
             sdk/ts/coverage
 
+  coverage-enforce:
+    name: Coverage Audit & Enforce (Backend + SDK)
+    needs: changes
+    if: needs.changes.outputs.go_backend == 'true' || needs.changes.outputs.sdk == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.x'
+          cache: 'npm'
+          cache-dependency-path: 'sdk/ts/package-lock.json'
+
+      - name: Install SDK TS dependencies
+        working-directory: sdk/ts
+        run: npm ci
+
+      - name: Run coverage audit
+        run: |
+          make coverage-audit
+
+      - name: Enforce coverage thresholds
+        run: |
+          make coverage-enforce
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-artifacts
+          if-no-files-found: ignore
+          path: |
+            reports/pr/coverage-summary.json
+            reports/pr/coverage-backend.json
+            reports/pr/coverage-sdk-go.json
+            reports/pr/coverage-sdk-ts.json
+            reports/pr/backend.cover.out
+            reports/pr/sdk-go.cover.out
+            reports/pr/sdk-ts.coverage-summary.json
+
   e2e:
     name: E2E / Integration
     needs: changes

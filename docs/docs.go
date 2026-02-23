@@ -6268,12 +6268,13 @@ const docTemplate = `{
         },
         "/oauth/authorize": {
             "get": {
-                "description": "Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns consent screen data or redirects if consent was previously granted.",
+                "description": "Initiates the OAuth 2.0 authorization code flow (RFC 6749 §4.1.1). Returns HTML consent for browser requests (Accept: text/html), JSON consent challenge for API/script requests, or redirects if consent was previously granted.",
                 "consumes": [
                     "application/x-www-form-urlencoded"
                 ],
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/html"
                 ],
                 "tags": [
                     "OAuth"
@@ -6359,7 +6360,8 @@ const docTemplate = `{
             "post": {
                 "description": "Processes the user's consent decision (approve or deny) for an OAuth authorization request.",
                 "consumes": [
-                    "application/json"
+                    "application/json",
+                    "application/x-www-form-urlencoded"
                 ],
                 "produces": [
                     "application/json"

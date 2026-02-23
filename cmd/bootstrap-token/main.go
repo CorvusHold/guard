@@ -132,7 +132,24 @@ func provisionPrincipal(ctx context.Context, pool *pgxpool.Pool, prefix, email, 
 	}, nil
 }
 
+// mintToken creates a bootstrap access token signed with ES256.
+// Guard now exclusively uses ES256 (asymmetric cryptography) for JWT signing
+// to enhance security and enable proper key rotation via JWKS.
 func mintToken(cfg config.Config, userID, tenantID uuid.UUID, expiresAt time.Time) (string, error) {
+	// ES256 requires loading the EC private key from the configured path
+	if cfg.JWTSigningAlgorithm != "ES256" {
+		return "", fmt.Errorf("JWT_SIGNING_ALGORITHM must be ES256, got: %s", cfg.JWTSigningAlgorithm)
+	}
+	if cfg.JWTPrivateKeyPath == "" {
+		return "", fmt.Errorf("JWT_PRIVATE_KEY_PATH is required for ES256 signing")
+	}
+
+	// Load the EC private key for signing
+	privateKey, _, err := config.LoadECKeys(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to load EC private key: %w", err)
+	}
+
 	claims := jwt.MapClaims{
 		"sub": userID.String(),
 		"ten": tenantID.String(),
@@ -141,8 +158,8 @@ func mintToken(cfg config.Config, userID, tenantID uuid.UUID, expiresAt time.Tim
 		"iss": cfg.PublicBaseURL,
 		"aud": cfg.PublicBaseURL,
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return tok.SignedString([]byte(cfg.JWTSigningKey))
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return tok.SignedString(privateKey)
 }
 
 func randomPassword(length int) (string, error) {

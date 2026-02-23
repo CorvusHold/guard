@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
 	sdomain "github.com/corvusHold/guard/internal/settings/domain"
 	"github.com/golang-jwt/jwt/v5"
@@ -333,7 +334,7 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 	signingKey, _ := s.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, s.cfg.JWTSigningKey)
 	accessTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, s.cfg.AccessTokenTTL)
 	refreshTTL, _ := s.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, s.cfg.RefreshTokenTTL)
-	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, s.cfg.PublicBaseURL)
+	issuer, _ := s.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(s.cfg, tenantID))
 	audience, _ := s.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, s.cfg.PublicBaseURL)
 
 	accClaims := jwt.MapClaims{
@@ -344,8 +345,12 @@ func (s *SSO) callbackWorkOS(ctx context.Context, in domain.SSOCallbackInput) (d
 		"iss": issuer,
 		"aud": audience,
 	}
-	at := jwt.NewWithClaims(jwt.SigningMethodHS256, accClaims)
-	access, err := at.SignedString([]byte(signingKey))
+	if s.keyMgr == nil || !s.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	}
+	at := jwt.NewWithClaims(s.keyMgr.SigningMethod(), accClaims)
+	at.Header["kid"] = s.keyMgr.KeyID()
+	access, err := at.SignedString(s.keyMgr.SigningKey(signingKey))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}

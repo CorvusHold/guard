@@ -24,22 +24,28 @@ const (
 	ctxTenantIDKey = "auth_tenant_id"
 )
 
-// NewJWT returns an Echo middleware that validates access JWTs and
+// NewJWT returns an Echo middleware that validates ES256-signed access JWTs and
 // stores user and tenant IDs in the context.
+//
+// Guard now exclusively uses ES256 (asymmetric cryptography) for JWT signing to enhance
+// security and enable proper key rotation via JWKS. External applications should verify
+// Guard JWTs using the tenant-scoped JWKS endpoint, not shared HMAC secrets.
 func NewJWT(cfg config.Config) echo.MiddlewareFunc {
-	// Pre-load EC public key if ES256 is configured. We allow either a private or public key PEM.
-	var ecPubKey *ecdsa.PublicKey
-	if cfg.JWTSigningAlgorithm == "ES256" {
-		if cfg.JWTPrivateKeyPath == "" {
-			log.Fatal().Msg("JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=ES256")
-		}
-		key, err := loadECPublicKey(cfg.JWTPrivateKeyPath)
-		if err != nil {
-			log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC private/public key for ES256 JWT verification")
-		}
-		ecPubKey = key
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		log.Fatal().Msg(err.Error())
 	}
 
+	// Load EC public key for JWT verification using centralized loader
+	_, ecPubKey, err := config.LoadECKeys(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", cfg.JWTPrivateKeyPath).Msg("failed to load EC keys for ES256 JWT verification")
+	}
+
+	return newJWTWithPublicKey(ecPubKey)
+}
+
+func newJWTWithPublicKey(ecPubKey *ecdsa.PublicKey) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
@@ -57,18 +63,14 @@ func NewJWT(cfg config.Config) echo.MiddlewareFunc {
 			tokStr := strings.TrimPrefix(auth, "Bearer ")
 
 			tok, err := jwt.Parse(tokStr, func(token *jwt.Token) (any, error) {
-				switch token.Method.(type) {
-				case *jwt.SigningMethodECDSA:
-					if ecPubKey != nil {
-						return ecPubKey, nil
-					}
-					return nil, fmt.Errorf("no EC public key configured for ES256 verification")
-				case *jwt.SigningMethodHMAC:
-					return []byte(cfg.JWTSigningKey), nil
-				default:
+				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{cfg.JWTSigningAlgorithm}))
+				if ecPubKey == nil {
+					return nil, fmt.Errorf("no EC public key configured for ES256 verification")
+				}
+				return ecPubKey, nil
+			}, jwt.WithLeeway(30*time.Second), jwt.WithIssuedAt(), jwt.WithValidMethods([]string{"ES256"}))
 			if err != nil || !tok.Valid {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			}

@@ -10,18 +10,22 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
 
 // Typed errors for token validation.
 var (
-	ErrTokenExpired  = errors.New("guard: token expired")
-	ErrTokenInvalid  = errors.New("guard: token invalid")
-	ErrTokenMalform  = errors.New("guard: token malformed")
-	ErrJWKSFetch     = errors.New("guard: failed to fetch JWKS")
-	ErrKeyNotFound   = errors.New("guard: signing key not found in JWKS")
-	ErrUnsupportedAlg = errors.New("guard: unsupported signing algorithm")
+	ErrTokenExpired    = errors.New("guard: token expired")
+	ErrTokenInvalid    = errors.New("guard: token invalid")
+	ErrTokenMalform    = errors.New("guard: token malformed")
+	ErrJWKSFetch       = errors.New("guard: failed to fetch JWKS")
+	ErrKeyNotFound     = errors.New("guard: signing key not found in JWKS")
+	ErrUnsupportedAlg  = errors.New("guard: unsupported signing algorithm")
+	ErrInvalidIssuer   = errors.New("guard: invalid issuer")
+	ErrInvalidAudience = errors.New("guard: invalid audience")
 )
 
 // TokenClaims represents the validated claims from a Guard JWT.
@@ -32,23 +36,62 @@ type TokenClaims struct {
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
 	Issuer   string   `json:"iss"`
-	Audience string   `json:"aud"`
+	Audience []string `json:"aud"`
 	IssuedAt int64    `json:"iat"`
 	Expiry   int64    `json:"exp"`
 }
 
-// TokenValidator validates Guard-issued JWTs using JWKS or a shared secret.
+// AudienceContains reports whether the token audience list contains aud.
+func (c *TokenClaims) AudienceContains(aud string) bool {
+	aud = strings.TrimSpace(aud)
+	if aud == "" {
+		return false
+	}
+	for _, candidate := range c.Audience {
+		if candidate == aud {
+			return true
+		}
+	}
+	return false
+}
+
+// PrimaryAudience returns the first audience value, or an empty string when unset.
+func (c *TokenClaims) PrimaryAudience() string {
+	if len(c.Audience) == 0 {
+		return ""
+	}
+	return c.Audience[0]
+}
+
+// AudienceString returns the first audience value for backwards-compatibility usage.
+func (c *TokenClaims) AudienceString() string {
+	return c.PrimaryAudience()
+}
+
+// Logger is a minimal logging interface for optional diagnostics.
+type Logger interface {
+	Printf(format string, v ...interface{})
+}
+
+type noopLogger struct{}
+
+func (noopLogger) Printf(string, ...interface{}) {}
+
+// TokenValidator validates Guard-issued JWTs using ES256 public keys from JWKS.
 type TokenValidator struct {
-	guardURL   string
-	httpClient *http.Client
-	cacheTTL   time.Duration
+	guardURL         string
+	tenantID         string
+	expectedAudience string
+	httpClient       *http.Client
+	cacheTTL         time.Duration
+	logger           Logger
 
-	mu        sync.RWMutex
-	keys      map[string]*ecdsa.PublicKey
-	fetchedAt time.Time
-
-	// For HS256 fallback
-	hmacSecret []byte
+	mu            sync.RWMutex
+	keys          map[string]*ecdsa.PublicKey
+	fetchedAt     time.Time
+	fetchInFlight bool
+	fetchDone     chan struct{}
+	lastFetchErr  error
 }
 
 // TokenValidatorOption customizes TokenValidator construction.
@@ -64,9 +107,27 @@ func WithJWKSCacheTTL(d time.Duration) TokenValidatorOption {
 	return func(v *TokenValidator) { v.cacheTTL = d }
 }
 
-// WithHMACSecret configures a shared HMAC secret for HS256 validation fallback.
-func WithHMACSecret(secret string) TokenValidatorOption {
-	return func(v *TokenValidator) { v.hmacSecret = []byte(secret) }
+// WithValidatorTenantID configures tenant-scoped JWKS resolution (path-based issuer mode).
+// When set, JWKS are fetched from: {guardURL}/t/{tenantID}/.well-known/jwks.json
+func WithValidatorTenantID(tenantID string) TokenValidatorOption {
+	return func(v *TokenValidator) { v.tenantID = strings.TrimSpace(tenantID) }
+}
+
+// WithExpectedAudience enforces a required audience match during token validation.
+// When empty, audience validation is skipped.
+func WithExpectedAudience(audience string) TokenValidatorOption {
+	return func(v *TokenValidator) { v.expectedAudience = strings.TrimSpace(audience) }
+}
+
+// WithValidatorLogger sets a logger for non-fatal JWKS parsing diagnostics.
+func WithValidatorLogger(l Logger) TokenValidatorOption {
+	return func(v *TokenValidator) {
+		if l == nil {
+			v.logger = noopLogger{}
+			return
+		}
+		v.logger = l
+	}
 }
 
 // NewTokenValidator creates a validator that fetches and caches JWKS from the Guard server.
@@ -76,6 +137,7 @@ func NewTokenValidator(guardURL string, opts ...TokenValidatorOption) *TokenVali
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		cacheTTL:   time.Hour,
 		keys:       make(map[string]*ecdsa.PublicKey),
+		logger:     noopLogger{},
 	}
 	for _, o := range opts {
 		o(v)
@@ -94,17 +156,10 @@ func (v *TokenValidator) Validate(ctx context.Context, tokenString string) (*Tok
 	alg, _ := header["alg"].(string)
 	kid, _ := header["kid"].(string)
 
-	switch alg {
-	case "ES256":
-		return v.validateES256(ctx, tokenString, kid)
-	case "HS256":
-		if len(v.hmacSecret) == 0 {
-			return nil, fmt.Errorf("%w: HS256 requires WithHMACSecret option", ErrUnsupportedAlg)
-		}
-		return v.validateHS256(tokenString)
-	default:
+	if alg != "ES256" {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedAlg, alg)
 	}
+	return v.validateES256(ctx, tokenString, kid)
 }
 
 // validateES256 validates an ES256-signed JWT using JWKS.
@@ -141,37 +196,22 @@ func (v *TokenValidator) validateES256(ctx context.Context, tokenString, kid str
 		return nil, ErrTokenExpired
 	}
 
+	if strings.TrimRight(claims.Issuer, "/") != v.expectedIssuer() {
+		return nil, ErrInvalidIssuer
+	}
+	if v.expectedAudience != "" && !claims.AudienceContains(v.expectedAudience) {
+		return nil, ErrInvalidAudience
+	}
+
 	return claims, nil
 }
 
-// validateHS256 validates an HS256-signed JWT using the shared secret.
-func (v *TokenValidator) validateHS256(tokenString string) (*TokenClaims, error) {
-	parts, err := splitJWT(tokenString)
-	if err != nil {
-		return nil, err
+func (v *TokenValidator) expectedIssuer() string {
+	base := strings.TrimRight(v.guardURL, "/")
+	if v.tenantID == "" {
+		return base
 	}
-
-	// Verify HMAC signature
-	message := parts[0] + "." + parts[1]
-	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid signature encoding", ErrTokenMalform)
-	}
-
-	if !hmacVerify(v.hmacSecret, []byte(message), sigBytes) {
-		return nil, ErrTokenInvalid
-	}
-
-	claims, err := decodePayload(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	if claims.Expiry > 0 && time.Now().Unix() > claims.Expiry {
-		return nil, ErrTokenExpired
-	}
-
-	return claims, nil
+	return base + "/t/" + url.PathEscape(v.tenantID)
 }
 
 // getKey retrieves the public key for the given kid, fetching JWKS if needed.
@@ -185,8 +225,8 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 		return key, nil
 	}
 
-	// Fetch JWKS
-	if err := v.fetchJWKS(ctx); err != nil {
+	// Fetch JWKS (deduplicated across concurrent callers)
+	if err := v.fetchJWKSOnce(ctx); err != nil {
 		// If we have a cached key, use it even if stale
 		if ok {
 			return key, nil
@@ -204,10 +244,43 @@ func (v *TokenValidator) getKey(ctx context.Context, kid string) (*ecdsa.PublicK
 	return key, nil
 }
 
+func (v *TokenValidator) fetchJWKSOnce(ctx context.Context) error {
+	v.mu.Lock()
+	if v.fetchInFlight {
+		done := v.fetchDone
+		v.mu.Unlock()
+		select {
+		case <-done:
+			v.mu.RLock()
+			err := v.lastFetchErr
+			v.mu.RUnlock()
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	v.fetchInFlight = true
+	v.fetchDone = make(chan struct{})
+	v.mu.Unlock()
+
+	err := v.fetchJWKS(ctx)
+
+	v.mu.Lock()
+	v.lastFetchErr = err
+	close(v.fetchDone)
+	v.fetchInFlight = false
+	v.mu.Unlock()
+
+	return err
+}
+
 // fetchJWKS fetches the JWKS from the Guard server.
 func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
-	url := v.guardURL + "/.well-known/jwks.json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	jwksURL := strings.TrimRight(v.guardURL, "/") + "/.well-known/jwks.json"
+	if v.tenantID != "" {
+		jwksURL = strings.TrimRight(v.guardURL, "/") + "/t/" + url.PathEscape(v.tenantID) + "/.well-known/jwks.json"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrJWKSFetch, err)
 	}
@@ -230,13 +303,19 @@ func (v *TokenValidator) fetchJWKS(ctx context.Context) error {
 	newKeys := make(map[string]*ecdsa.PublicKey)
 	for _, k := range jwks.Keys {
 		if k.Kty != "EC" || k.Crv != "P-256" {
+			v.logger.Printf("guard token validator: skipping jwks key kid=%q reason=unsupported key type/curve kty=%q crv=%q", k.Kid, k.Kty, k.Crv)
 			continue
 		}
 		pub, err := parseECPublicKey(k)
 		if err != nil {
+			v.logger.Printf("guard token validator: skipping jwks key kid=%q reason=parse error: %v", k.Kid, err)
 			continue
 		}
 		newKeys[k.Kid] = pub
+	}
+	if len(newKeys) == 0 {
+		v.logger.Printf("guard token validator: jwks fetch produced zero valid EC keys; keeping previous cache")
+		return fmt.Errorf("%w: no valid keys in jwks response", ErrJWKSFetch)
 	}
 
 	v.mu.Lock()
@@ -298,20 +377,10 @@ func parseJWTHeader(token string) (map[string]interface{}, error) {
 }
 
 func splitJWT(token string) ([]string, error) {
-	// Split into header.payload.signature
-	var parts []string
-	start := 0
-	count := 0
-	for i := 0; i < len(token); i++ {
-		if token[i] == '.' {
-			parts = append(parts, token[start:i])
-			start = i + 1
-			count++
-		}
-	}
-	parts = append(parts, token[start:])
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("%w: expected 3 parts, got %d", ErrTokenMalform, len(parts))
+	parts := strings.SplitN(token, ".", 3)
+	partCount := strings.Count(token, ".") + 1
+	if len(parts) != 3 || partCount != 3 {
+		return nil, fmt.Errorf("%w: expected 3 parts, got %d", ErrTokenMalform, partCount)
 	}
 	return parts, nil
 }
@@ -345,7 +414,13 @@ func decodePayload(payload string) (*TokenClaims, error) {
 		claims.Issuer = v
 	}
 	if v, ok := raw["aud"].(string); ok {
-		claims.Audience = v
+		claims.Audience = []string{v}
+	} else if arr, ok := raw["aud"].([]interface{}); ok {
+		for _, a := range arr {
+			if s, ok := a.(string); ok {
+				claims.Audience = append(claims.Audience, s)
+			}
+		}
 	}
 	if v, ok := raw["iat"].(float64); ok {
 		claims.IssuedAt = int64(v)

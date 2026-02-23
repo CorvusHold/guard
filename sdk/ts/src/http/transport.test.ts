@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HttpClient } from './transport';
-import { isRateLimitError } from '../errors';
+import { isApiError, isRateLimitError } from '../errors';
 
 function mockResponse({
   status = 200,
@@ -71,5 +71,62 @@ describe('HttpClient', () => {
       expect(err.nextRetryAt).toBeInstanceOf(Date);
       return true;
     });
+  });
+
+  it('throws ApiError for non-429 errors with text fallback message', async () => {
+    const fetchMock = async () =>
+      mockResponse({
+        status: 500,
+        headers: { 'content-type': 'text/plain', 'x-request-id': 'rid-500' },
+        textBody: 'internal error',
+      });
+
+    const http = new HttpClient({ baseUrl: 'https://api.example.com', fetchImpl: fetchMock });
+    await expect(http.request('/boom', { method: 'GET' })).rejects.toSatisfy((err: unknown) => {
+      if (!isApiError(err)) return false;
+      expect(err.status).toBe(500);
+      expect(err.requestId).toBe('rid-500');
+      expect(err.message).toBe('HTTP 500');
+      expect(err.raw).toBe('internal error');
+      return true;
+    });
+  });
+
+  it('requestRaw supports absolute URL and preserves explicit credentials', async () => {
+    const calls: any[] = [];
+    const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input: String(input), init });
+      return mockResponse({ status: 302, headers: { location: 'https://redirect.example.com' } });
+    };
+
+    const http = new HttpClient({
+      baseUrl: 'https://api.example.com',
+      fetchImpl: fetchMock,
+      credentials: 'include',
+      defaultHeaders: { 'x-default': 'ok' },
+    });
+    const res = await http.requestRaw('https://other.example.com/start', {
+      method: 'GET',
+      credentials: 'omit',
+    });
+
+    expect(res.status).toBe(302);
+    expect(calls[0].input).toBe('https://other.example.com/start');
+    expect(calls[0].init.credentials).toBe('omit');
+    const hdrs = new Headers(calls[0].init.headers);
+    expect(hdrs.get('x-default')).toBe('ok');
+    expect(hdrs.get('x-guard-client')).toBe('ts-sdk');
+  });
+
+  it('constructor fails when no fetch implementation is available', () => {
+    const oldFetch = (globalThis as any).fetch;
+    delete (globalThis as any).fetch;
+    try {
+      expect(() => new HttpClient({ baseUrl: 'https://api.example.com' })).toThrow(
+        'No fetch implementation provided and global fetch is unavailable',
+      );
+    } finally {
+      (globalThis as any).fetch = oldFetch;
+    }
   });
 });

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Modal } from '@/components/ui/modal'
 import {
   Loader2,
   Plus,
@@ -25,6 +26,18 @@ interface OAuthClientsPanelProps {
   tenantId: string
 }
 
+const toSafeHTTPSURL = (value: string): string | null => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) {
   const { show: showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -35,6 +48,16 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
   const [newSecret, setNewSecret] = useState<string | null>(null)
   const [copiedSecret, setCopiedSecret] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  // Edit modal state
+  const [editing, setEditing] = useState<OAuthClientItem | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editRedirectURIs, setEditRedirectURIs] = useState('')
+  const [editScopes, setEditScopes] = useState('')
+  const [editGrantTypes, setEditGrantTypes] = useState('')
+  const [editLogo, setEditLogo] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
 
   // Create form state
   const [formName, setFormName] = useState('')
@@ -62,6 +85,65 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
       setError(message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openEdit = (client: OAuthClientItem) => {
+    setError(null)
+    setEditError(null)
+    setEditing(client)
+    setEditName(client.name ?? '')
+    setEditRedirectURIs((client.redirect_uris ?? []).join('\n'))
+    setEditScopes((client.scopes ?? []).join(' '))
+    setEditGrantTypes((client.grant_types ?? []).join(' '))
+    setEditLogo(client.logo_uri ?? '')
+  }
+
+  const resetEdit = () => {
+    setEditing(null)
+    setEditSaving(false)
+    setEditError(null)
+    setEditName('')
+    setEditRedirectURIs('')
+    setEditScopes('')
+    setEditGrantTypes('')
+    setEditLogo('')
+  }
+
+  const handleEditSave = async () => {
+    if (!editing) return
+    if (!editName.trim() || !editRedirectURIs.trim()) {
+      setEditError('Name and at least one redirect URI are required')
+      return
+    }
+    const logoPreviewURL = toSafeHTTPSURL(editLogo)
+    if (editLogo.trim() && !logoPreviewURL) {
+      setEditError('Logo URL must be a valid HTTPS URL')
+      return
+    }
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      const client = getClient()
+      const body = {
+        name: editName.trim(),
+        redirect_uris: editRedirectURIs.split('\n').map((u) => u.trim()).filter(Boolean),
+        scopes: editScopes.split(/\s+/).filter(Boolean),
+        grant_types: editGrantTypes.split(/\s+/).filter(Boolean),
+        logo_uri: logoPreviewURL ?? undefined,
+      }
+      const res = await client.updateOAuthClient(editing.id, body)
+      if (!(res.meta.status >= 200 && res.meta.status < 300)) {
+        throw new Error('Failed to update client')
+      }
+      showToast({ description: 'OAuth client updated', variant: 'success' })
+      resetEdit()
+      loadClients()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update client'
+      setEditError(message)
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -138,6 +220,8 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
     setFormScopes('openid profile email')
     setFormGrantTypes('authorization_code refresh_token')
   }
+
+  const safeEditLogoURL = toSafeHTTPSURL(editLogo)
 
   const copySecret = () => {
     if (newSecret) {
@@ -331,6 +415,14 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => openEdit(c)}
+                    data-testid={`oauth-edit-${c.id}`}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleToggleActive(c)}
                     data-testid={`oauth-toggle-${c.id}`}
                   >
@@ -383,11 +475,119 @@ export default function OAuthClientsPanel({ tenantId }: OAuthClientsPanelProps) 
                   <span className="font-medium">Redirect URIs:</span>{' '}
                   {c.redirect_uris?.length || 0}
                 </div>
+                {c.logo_uri && (
+                  <div className="col-span-2 flex items-center gap-2">
+                    <span className="font-medium">Logo:</span>
+                    <code className="bg-muted px-1 rounded break-all text-[11px]">{c.logo_uri}</code>
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <Modal
+        open={!!editing}
+        onClose={resetEdit}
+        title={`Edit OAuth Client (${editing!.client_id})`}
+      >
+        <div className="space-y-3" data-testid="oauth-edit-modal">
+          {editError && (
+            <Alert variant="destructive" data-testid="oauth-edit-error">
+              <AlertDescription>{editError}</AlertDescription>
+            </Alert>
+          )}
+          <Alert className="border-blue-200 bg-blue-50" data-testid="oauth-edit-warning">
+            <AlertDescription className="text-xs text-blue-800">
+              Updating a client will not regenerate the secret. Client type is read-only.
+            </AlertDescription>
+          </Alert>
+          <div className="space-y-1">
+            <Label className="text-xs">Name</Label>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              data-testid="oauth-edit-name"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Client Type</Label>
+            <Input value={editing?.client_type ?? ''} readOnly data-testid="oauth-edit-type" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Redirect URIs (one per line)</Label>
+            <textarea
+              className="w-full rounded-md border px-3 py-2 text-sm min-h-[80px]"
+              value={editRedirectURIs}
+              onChange={(e) => setEditRedirectURIs(e.target.value)}
+              data-testid="oauth-edit-redirects"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Scopes (space-separated)</Label>
+              <Input
+                value={editScopes}
+                onChange={(e) => setEditScopes(e.target.value)}
+                data-testid="oauth-edit-scopes"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Grant Types (space-separated)</Label>
+              <Input
+                value={editGrantTypes}
+                onChange={(e) => setEditGrantTypes(e.target.value)}
+                data-testid="oauth-edit-grants"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Logo URL (optional)</Label>
+            <Input
+              value={editLogo}
+              onChange={(e) => setEditLogo(e.target.value)}
+              placeholder="https://example.com/logo.png"
+              data-testid="oauth-edit-logo"
+            />
+            {safeEditLogoURL && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>Preview:</span>
+                <img
+                  src={safeEditLogoURL}
+                  alt="logo preview"
+                  className="h-6 w-6 rounded border"
+                  data-testid="oauth-client-logo-preview"
+                />
+              </div>
+            )}
+            {editLogo.trim() && !safeEditLogoURL && (
+              <p className="text-xs text-destructive" data-testid="oauth-edit-logo-warning">
+                Logo preview only supports valid HTTPS URLs.
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetEdit}
+              data-testid="oauth-edit-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleEditSave}
+              disabled={editSaving || !editName.trim() || !editRedirectURIs.trim()}
+              data-testid="oauth-edit-save"
+            >
+              {editSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Save changes
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

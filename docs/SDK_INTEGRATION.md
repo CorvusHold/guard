@@ -2,6 +2,10 @@
 
 This guide shows how to integrate Corvus Guard SDKs with newly onboarded tenants across different platforms and frameworks.
 
+> Migration note (JWT key isolation release):
+> - Validate Guard JWTs using ES256 + JWKS (no shared HMAC secret verification).
+> - For multi-tenant integrations, use tenant-aware issuer/JWKS endpoints.
+
 ## Table of Contents
 
 - [OAuth2 Discovery & Auto-Configuration](#oauth2-discovery--auto-configuration)
@@ -21,19 +25,23 @@ Guard implements [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth
 
 **Endpoint**: `GET /.well-known/oauth-authorization-server`
 
+**Tenant-scoped endpoint (recommended):**
+
+`GET /.well-known/oauth-authorization-server?tenant_id=<tenant_uuid>`
+
 **No authentication required** - this is a public endpoint.
 
 ### Response Example
 
 ```json
 {
-  "issuer": "https://api.example.com",
+  "issuer": "https://api.example.com/t/8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34",
   "authorization_endpoint": "https://api.example.com/oauth/authorize",
   "token_endpoint": "https://api.example.com/oauth/token",
   "introspection_endpoint": "https://api.example.com/api/v1/auth/introspect",
   "revocation_endpoint": "https://api.example.com/oauth/revoke",
   "userinfo_endpoint": "https://api.example.com/api/v1/auth/me",
-  "jwks_uri": "https://api.example.com/.well-known/jwks.json",
+  "jwks_uri": "https://api.example.com/t/8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34/.well-known/jwks.json",
   "response_types_supported": ["code", "token"],
   "grant_types_supported": [
     "authorization_code",

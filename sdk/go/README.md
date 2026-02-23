@@ -23,6 +23,66 @@ A comprehensive Go client for Corvus Guard with full feature parity with the Typ
 - ✅ **MFA Support**: TOTP and backup codes
 - ✅ **OAuth2 BFF**: Server-side Authorization Code + PKCE exchange and refresh helpers
 
+## Migration Notes (JWT key isolation release)
+
+If you are upgrading from older Guard integrations:
+
+- Guard access/ID tokens are now expected as **ES256** only for runtime validation.
+- Do **not** use shared HMAC secrets between your app and Guard for JWT verification.
+- Prefer tenant-scoped issuer/JWKS:
+  - Issuer: `https://guard.example.com/t/{tenant_id}`
+  - JWKS: `https://guard.example.com/t/{tenant_id}/.well-known/jwks.json`
+- Validate `kid` and refresh JWKS when a new key appears.
+
+### Breaking API change: `TokenClaims.Audience`
+
+`TokenClaims.Audience` is now `[]string` (was `string`).
+
+- Before: callers could compare `claims.Audience` directly to one string.
+- Now: use helper methods for compatibility and clarity:
+  - `claims.AudienceContains("...")` for membership checks
+  - `claims.PrimaryAudience()` (or `claims.AudienceString()`) for first-audience access
+
+```go
+// Before
+if claims.Audience == "https://guard.example.com" {
+    // ...
+}
+
+// After
+if !claims.AudienceContains("https://guard.example.com") {
+    return errors.New("unexpected audience")
+}
+primary := claims.PrimaryAudience() // or claims.AudienceString()
+_ = primary
+```
+
+This is a breaking surface change; consumers pinned to older SDK behavior should
+migrate comparisons accordingly and adopt a major-version upgrade policy.
+
+### Changelog (breaking)
+
+- **BREAKING**: `TokenClaims.Audience` widened from `string` to `[]string` to
+  support JWT `aud` claims emitted as either a scalar or an array.
+
+### Token validation helper (Go SDK)
+
+```go
+validator := guard.NewTokenValidator(
+    "https://guard.example.com",
+    guard.WithValidatorTenantID("8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34"),
+)
+
+claims, err := validator.Validate(ctx, accessToken)
+if err != nil {
+    // invalid/expired token
+}
+
+_ = claims // use sub, ten, iss, aud, roles, etc.
+```
+
+Use `WithValidatorTenantID` for tenant-path issuer mode so verification key resolution remains isolated per tenant.
+
 ## Installation
 
 ```bash
@@ -300,6 +360,15 @@ refreshed, err := client.OAuth2Refresh(ctx, guard.OAuth2RefreshRequest{ClientID:
 _ = tokens
 _ = refreshed
 ```
+
+OAuth consent behavior notes:
+
+- `GET /oauth/authorize` is the authorization endpoint and can respond in two ways when consent is required:
+  - browser flow (`Accept: text/html`): rendered consent page, then redirect after approval
+  - API/script flow (`Accept: application/json`): JSON payload with `consent_required` + `consent_challenge`
+- If you call `/oauth/authorize` from scripts/tools, you must complete consent with `POST /oauth/authorize/decision` before expecting callback redirect.
+- Keep `RedirectURI` aligned across your app config, OAuth client registration, and `BuildOAuth2AuthorizeURL` input (exact host/port/path match).
+- Start auth from your app backend entrypoint, not from a stale copied authorize URL, so `state` and `code_verifier` remain session-bound.
 
 See the complete front+backend reference implementation in:
 - `examples/oauth2-bff-go/`

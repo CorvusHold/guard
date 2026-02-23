@@ -23,7 +23,7 @@ The Admin Settings UI allows tenant administrators to configure critical securit
 
 **Examples**:
 ```bash
-http://localhost:3001,https://app.packitoo.com
+http://localhost:3001,https://app.examplebis.com
 http://localhost:3001/api/guard,https://app.example.com/callback
 ```
 
@@ -45,7 +45,7 @@ http://localhost:3001/api/guard,https://app.example.com/callback
 
 **Examples**:
 ```bash
-https://app.packitoo.com,http://localhost:3000,http://localhost:3001
+https://app.examplebis.com,http://localhost:3000,http://localhost:3001
 https://app.example.com,https://staging.example.com
 ```
 
@@ -76,8 +76,8 @@ https://app.example.com,https://staging.example.com
 **Solution**:
 1. Load tenant settings
 2. Add production URLs to both fields:
-   - SSO Redirect Allowlist: `https://app.packitoo.com,http://localhost:3001`
-   - CORS Allowed Origins: `https://app.packitoo.com,http://localhost:3001`
+   - SSO Redirect Allowlist: `https://app.examplebis.com,http://localhost:3001`
+   - CORS Allowed Origins: `https://app.examplebis.com,http://localhost:3001`
 3. Save settings
 
 ### Scenario 3: Multiple Environments
@@ -109,13 +109,13 @@ http://localhost:3001,https://staging.example.com,https://app.example.com
 
 ### GET Settings
 ```bash
-curl -X GET "https://auth.packitoo.com/api/v1/tenants/{tenant_id}/settings" \
+curl -X GET "https://auth.examplebis.com/api/v1/tenants/{tenant_id}/settings" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Update Settings
 ```bash
-curl -X PUT "https://auth.packitoo.com/api/v1/tenants/{tenant_id}/settings" \
+curl -X PUT "https://auth.examplebis.com/api/v1/tenants/{tenant_id}/settings" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,7 +141,7 @@ curl -X PUT "https://auth.packitoo.com/api/v1/tenants/{tenant_id}/settings" \
 
 **Symptom**:
 ```
-Access to fetch at 'https://auth.packitoo.com' from origin 'http://localhost:3001' 
+Access to fetch at 'https://auth.examplebis.com' from origin 'http://localhost:3001' 
 has been blocked by CORS policy
 ```
 

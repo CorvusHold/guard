@@ -6,10 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
+	"github.com/corvusHold/guard/internal/auth/keys"
 	"github.com/corvusHold/guard/internal/config"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
 	evdomain "github.com/corvusHold/guard/internal/events/domain"
@@ -27,14 +30,32 @@ type Magic struct {
 	settings sdomain.Service
 	email    edomain.Sender
 	pub      evdomain.Publisher
+	keyMgr   *keys.Manager
 }
 
+// NewMagic creates a new magic link service with ES256 JWT signing.
+// Magic link tokens are now signed with ES256 for enhanced security.
 func NewMagic(repo domain.Repository, cfg config.Config, settings sdomain.Service, email edomain.Sender) *Magic {
-	return &Magic{repo: repo, cfg: cfg, settings: settings, email: email, pub: evsvc.NewLogger()}
+	m := &Magic{repo: repo, cfg: cfg, settings: settings, email: email, pub: evsvc.NewLogger()}
+
+	// Validate JWT configuration using centralized validation logic
+	if err := cfg.ValidateJWTConfig(); err != nil {
+		panic(err.Error())
+	}
+
+	km, err := keys.NewManager(cfg.JWTSigningAlgorithm, cfg.JWTPrivateKeyPath, cfg.JWTSigningKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize key manager: %v", err))
+	}
+	m.keyMgr = km
+	return m
 }
 
 // SetPublisher allows tests or callers to override the event publisher.
 func (m *Magic) SetPublisher(p evdomain.Publisher) { m.pub = p }
+
+// SetKeyManager allows injection of a key manager for asymmetric JWT signing.
+func (m *Magic) SetKeyManager(km *keys.Manager) { m.keyMgr = km }
 
 func (m *Magic) Send(ctx context.Context, in domain.MagicSendInput) error {
 	if in.Email == "" {
@@ -159,7 +180,7 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 	accessTTL, _ := m.settings.GetDuration(ctx, sdomain.KeyAccessTTL, &tenantID, m.cfg.AccessTokenTTL)
 	refreshTTL, _ := m.settings.GetDuration(ctx, sdomain.KeyRefreshTTL, &tenantID, m.cfg.RefreshTokenTTL)
 	signingKey, _ := m.settings.GetString(ctx, sdomain.KeyJWTSigning, &tenantID, m.cfg.JWTSigningKey)
-	issuer, _ := m.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, m.cfg.PublicBaseURL)
+	issuer, _ := m.settings.GetString(ctx, sdomain.KeyJWTIssuer, &tenantID, authissuer.ResolveTenantIssuer(m.cfg, tenantID))
 	audience, _ := m.settings.GetString(ctx, sdomain.KeyJWTAudience, &tenantID, m.cfg.PublicBaseURL)
 
 	claims := jwt.MapClaims{
@@ -170,8 +191,12 @@ func (m *Magic) Verify(ctx context.Context, in domain.MagicVerifyInput) (toks do
 		"iss": issuer,
 		"aud": audience,
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	access, err := t.SignedString([]byte(signingKey))
+	if m.keyMgr == nil || !m.keyMgr.IsAsymmetric() {
+		return domain.AccessTokens{}, errors.New("asymmetric key manager required")
+	}
+	t := jwt.NewWithClaims(m.keyMgr.SigningMethod(), claims)
+	t.Header["kid"] = m.keyMgr.KeyID()
+	access, err := t.SignedString(m.keyMgr.SigningKey(signingKey))
 	if err != nil {
 		return domain.AccessTokens{}, err
 	}

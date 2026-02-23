@@ -1,0 +1,66 @@
+{
+  "scope": "sdk-ts",
+  "overall_coverage_percent": 41.47,
+  "packages": [
+    {
+      "package": "sdk/ts/src/_other",
+      "coverage_percent": 0.0,
+      "covered_lines": 0,
+      "total_lines": 343
+    },
+    {
+      "package": "sdk/ts/src/client",
+      "coverage_percent": 40.08,
+      "covered_lines": 283,
+      "total_lines": 706
+    },
+    {
+      "package": "sdk/ts/src/errors",
+      "coverage_percent": 100.0,
+      "covered_lines": 26,
+      "total_lines": 26
+    },
+    {
+      "package": "sdk/ts/src/http",
+      "coverage_percent": 90.27,
+      "covered_lines": 102,
+      "total_lines": 113
+    },
+    {
+      "package": "sdk/ts/src/index",
+      "coverage_percent": 100.0,
+      "covered_lines": 11,
+      "total_lines": 11
+    },
+    {
+      "package": "sdk/ts/src/rateLimit",
+      "coverage_percent": 100.0,
+      "covered_lines": 36,
+      "total_lines": 36
+    },
+    {
+      "package": "sdk/ts/src/storage",
+      "coverage_percent": 97.56,
+      "covered_lines": 80,
+      "total_lines": 82
+    },
+    {
+      "package": "sdk/ts/src/tokens",
+      "coverage_percent": 100.0,
+      "covered_lines": 7,
+      "total_lines": 7
+    },
+    {
+      "package": "sdk/ts/src/totp",
+      "coverage_percent": 100.0,
+      "covered_lines": 7,
+      "total_lines": 7
+    },
+    {
+      "package": "sdk/ts/src/types",
+      "coverage_percent": 0.0,
+      "covered_lines": 0,
+      "total_lines": 0
+    }
+  ]
+}

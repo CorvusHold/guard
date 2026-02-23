@@ -75,7 +75,7 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 		t.Fatalf("signup expected 201, got %d: %s", srec.Code, srec.Body.String())
 	}
 
-	// 2) login three times quickly -> third should be 429 (limit=2/min)
+	// 2) login 13 times quickly -> 13th should be 429 (default limit=12/min)
 	lBody := map[string]string{
 		"tenant_id": tenantID.String(),
 		"email":     email,
@@ -83,31 +83,23 @@ func TestHTTP_RateLimit_Login_PerTenantOrIP(t *testing.T) {
 	}
 	lb, _ := json.Marshal(lBody)
 
-	// first
-	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
-	r1.Header.Set("Content-Type", "application/json")
-	w1 := httptest.NewRecorder()
-	e.ServeHTTP(w1, r1)
-	if w1.Code != http.StatusOK && w1.Code != http.StatusAccepted { // allow MFA case too
-		t.Fatalf("login#1 expected 200/202, got %d: %s", w1.Code, w1.Body.String())
+	for i := 1; i <= 12; i++ {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		if w.Code != http.StatusOK && w.Code != http.StatusAccepted { // allow MFA case too
+			t.Fatalf("login#%d expected 200/202, got %d: %s", i, w.Code, w.Body.String())
+		}
 	}
 
-	// second
-	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
-	r2.Header.Set("Content-Type", "application/json")
-	w2 := httptest.NewRecorder()
-	e.ServeHTTP(w2, r2)
-	if w2.Code != http.StatusOK && w2.Code != http.StatusAccepted {
-		t.Fatalf("login#2 expected 200/202, got %d: %s", w2.Code, w2.Body.String())
-	}
-
-	// third -> expect 429
-	r3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
-	r3.Header.Set("Content-Type", "application/json")
-	w3 := httptest.NewRecorder()
-	e.ServeHTTP(w3, r3)
-	if w3.Code != http.StatusTooManyRequests {
-		t.Fatalf("login#3 expected 429, got %d: %s", w3.Code, w3.Body.String())
+	// 13th -> expect 429
+	r13 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/login?tenant_id="+tenantID.String(), bytes.NewReader(lb))
+	r13.Header.Set("Content-Type", "application/json")
+	w13 := httptest.NewRecorder()
+	e.ServeHTTP(w13, r13)
+	if w13.Code != http.StatusTooManyRequests {
+		t.Fatalf("login#13 expected 429, got %d: %s", w13.Code, w13.Body.String())
 	}
 }
 

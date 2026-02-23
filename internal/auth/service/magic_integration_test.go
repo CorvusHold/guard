@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/corvusHold/guard/internal/auth/domain"
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	"github.com/corvusHold/guard/internal/config"
 	edomain "github.com/corvusHold/guard/internal/email/domain"
@@ -110,8 +111,9 @@ func TestMagic_Flow_Integration(t *testing.T) {
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		t.Fatalf("unmarshal claims: %v", err)
 	}
-	if iss, _ := claims["iss"].(string); iss != cfg.PublicBaseURL {
-		t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["iss"])
+	expectedIssuer := authissuer.ResolveTenantIssuer(cfg, tenantID)
+	if iss, _ := claims["iss"].(string); iss != expectedIssuer {
+		t.Fatalf("iss mismatch: expected %s, got %v", expectedIssuer, claims["iss"])
 	}
 	if aud, _ := claims["aud"].(string); aud != cfg.PublicBaseURL {
 		t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["aud"])

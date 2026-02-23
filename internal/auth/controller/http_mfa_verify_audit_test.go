@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package controller
 
 import (
@@ -12,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	authissuer "github.com/corvusHold/guard/internal/auth/issuer"
 	authrepo "github.com/corvusHold/guard/internal/auth/repository"
 	svc "github.com/corvusHold/guard/internal/auth/service"
 	"github.com/corvusHold/guard/internal/config"
@@ -23,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/pquerna/otp/totp"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
@@ -49,7 +54,8 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	repo := authrepo.New(pool)
 	sr := srepo.New(pool)
 	settings := ssvc.New(sr)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	require.NoError(t, err)
 	auth := svc.New(repo, cfg, settings)
 	// capture events
 	events := make([]evdomain.Event, 0, 2)
@@ -98,8 +104,8 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 	var startResp struct{ Secret string }
 	_ = json.NewDecoder(bytes.NewReader(recStart.Body.Bytes())).Decode(&startResp)
-	code, _ := totp.GenerateCode(startResp.Secret, time.Now())
-	ab, _ := json.Marshal(map[string]string{"code": code})
+	activateCode, _ := totp.GenerateCode(startResp.Secret, time.Now())
+	ab, _ := json.Marshal(map[string]string{"code": activateCode})
 	reqAct := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/totp/activate", bytes.NewReader(ab))
 	reqAct.Header.Set("Authorization", "Bearer "+stoks.AccessToken)
 	reqAct.Header.Set("Content-Type", "application/json")
@@ -126,12 +132,13 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	}
 	var ch mfaChallengeResp
 	_ = json.NewDecoder(bytes.NewReader(lrec.Body.Bytes())).Decode(&ch)
+	verifyCode, _ := totp.GenerateCode(startResp.Secret, time.Now())
 
 	// verify -> 200 and audit event
 	vb, _ := json.Marshal(map[string]string{
 		"challenge_token": ch.ChallengeToken,
 		"method":          "totp",
-		"code":            code,
+		"code":            verifyCode,
 	})
 	vreq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(vb))
 	vreq.Header.Set("Content-Type", "application/json")
@@ -160,8 +167,9 @@ func TestHTTP_MFA_Verify_PublishesAuditEvent(t *testing.T) {
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		t.Fatalf("unmarshal claims: %v", err)
 	}
-	if iss, _ := claims["iss"].(string); iss != cfg.PublicBaseURL {
-		t.Fatalf("iss mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["iss"])
+	expectedIssuer := authissuer.ResolveTenantIssuer(cfg, tenantID)
+	if iss, _ := claims["iss"].(string); iss != expectedIssuer {
+		t.Fatalf("iss mismatch: expected %s, got %v", expectedIssuer, claims["iss"])
 	}
 	if aud, _ := claims["aud"].(string); aud != cfg.PublicBaseURL {
 		t.Fatalf("aud mismatch: expected %s, got %v", cfg.PublicBaseURL, claims["aud"])

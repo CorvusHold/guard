@@ -55,6 +55,34 @@ Guard implements the following OAuth 2.0 / OIDC standards:
 
 ---
 
+## Version migration notes (JWT key isolation release)
+
+If you are upgrading an existing OAuth/OIDC integration, apply these changes before rollout:
+
+1. **ES256 only**
+   - Guard-issued JWTs are ES256-signed.
+   - Remove HS256/shared-secret verification from external apps.
+   - Verify tokens from Guard JWKS only.
+
+2. **Tenant-aware issuer and JWKS**
+   - Preferred tenant issuer (path mode):
+     - `https://guard.example.com/t/{tenant_id}`
+   - Tenant JWKS:
+     - `https://guard.example.com/t/{tenant_id}/.well-known/jwks.json`
+   - OAuth metadata also supports tenant query:
+     - `GET /.well-known/oauth-authorization-server?tenant_id={tenant_id}`
+
+3. **Client authentication hardening**
+   - New confidential enterprise clients should use `private_key_jwt`.
+   - Keep `client_secret_basic` only for migration windows where explicitly needed.
+
+4. **Validation expectations in consumer apps**
+   - Enforce `alg=ES256`.
+   - Validate `kid` and refresh JWKS when unknown `kid` appears.
+   - Validate `iss` and `aud` against tenant/client configuration.
+
+---
+
 ## Step 1: Register an OAuth Client
 
 Use the Guard Admin API to register your application as an OAuth client.
@@ -73,6 +101,15 @@ curl -X POST https://guard.example.com/api/v1/auth/admin/oauth-clients \
     "grant_types": ["authorization_code", "refresh_token"]
   }'
 ```
+
+> **Response mode note:**
+>
+> `GET /oauth/authorize` supports two consent response modes:
+>
+> - **Browser/HTML mode** (`Accept: text/html`): returns a rendered consent page when consent is required.
+> - **API/JSON mode** (`Accept: application/json` or scripted HTTP): returns a JSON payload with `consent_required` and `consent_challenge`.
+>
+> In JSON mode, your app must complete consent by `POST /oauth/authorize/decision` (or rely on previously persisted consent).
 
 ### For a single-page app or mobile app (public client):
 
@@ -119,37 +156,41 @@ Guard publishes standard discovery documents so your app can auto-configure itse
 
 ```
 GET https://guard.example.com/.well-known/oauth-authorization-server
+# Tenant-scoped metadata (recommended for multi-tenant consumers):
+GET https://guard.example.com/.well-known/oauth-authorization-server?tenant_id=<tenant_uuid>
 ```
 
 ### OpenID Connect Discovery
 
 ```
 GET https://guard.example.com/.well-known/openid-configuration
+GET https://guard.example.com/t/<tenant_uuid>/.well-known/openid-configuration
 ```
 
 ### JWKS (for verifying ID token signatures)
 
 ```
 GET https://guard.example.com/.well-known/jwks.json
+GET https://guard.example.com/t/<tenant_uuid>/.well-known/jwks.json
 ```
 
 ### Example discovery response:
 
 ```json
 {
-  "issuer": "https://guard.example.com",
+  "issuer": "https://guard.example.com/t/8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34",
   "authorization_endpoint": "https://guard.example.com/oauth/authorize",
   "token_endpoint": "https://guard.example.com/oauth/token",
   "revocation_endpoint": "https://guard.example.com/oauth/revoke",
   "userinfo_endpoint": "https://guard.example.com/api/v1/auth/me",
-  "jwks_uri": "https://guard.example.com/.well-known/jwks.json",
+  "jwks_uri": "https://guard.example.com/t/8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34/.well-known/jwks.json",
   "introspection_endpoint": "https://guard.example.com/api/v1/auth/introspect",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
   "scopes_supported": ["openid", "profile", "email", "offline_access"],
-  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+  "token_endpoint_auth_methods_supported": ["private_key_jwt", "client_secret_basic", "client_secret_post", "none"],
   "code_challenge_methods_supported": ["S256"],
-  "id_token_signing_alg_values_supported": ["ES256", "HS256"],
+  "id_token_signing_alg_values_supported": ["ES256"],
   "subject_types_supported": ["public"]
 }
 ```
@@ -205,14 +246,20 @@ GET https://guard.example.com/oauth/authorize
 Guard will:
 1. Check if the user is logged in (via cookie or Bearer token)
 2. If not, redirect to the login page
-3. Show a consent screen (unless the user previously approved these scopes)
+3. If consent is required:
+   - render an HTML consent page (browser flow), or
+   - return a JSON consent challenge (API-driven flow)
 4. Redirect back to your `redirect_uri` with an authorization code
+
+> **Important integration guidance:** do not deep-link users directly to a copied `/oauth/authorize?...` URL from another app/session context. Start from your app's login entrypoint so `state`, `nonce`, `code_verifier`, and `redirect_uri` are generated and tracked by the same app session.
 
 ### 3d. Receive the callback
 
 ```
 https://myapp.example.com/callback?code=<authorization_code>&state=<state>
 ```
+
+Your callback host/port/path must exactly match one of the client's registered `redirect_uris` and must match the value used to build the authorize URL.
 
 **Always verify that `state` matches what you sent in step 3b.**
 
@@ -277,12 +324,12 @@ The ID token is a signed JWT. Verify it using the JWKS endpoint:
 ```javascript
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-const JWKS = createRemoteJWKSet(
-  new URL('https://guard.example.com/.well-known/jwks.json')
-);
+const tenantId = '8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34';
+const issuer = `https://guard.example.com/t/${tenantId}`;
+const JWKS = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
 
 const { payload } = await jwtVerify(idToken, JWKS, {
-  issuer: 'https://guard.example.com',
+  issuer,
   audience: 'grd_abc123', // your client_id
 });
 
@@ -393,11 +440,11 @@ Guard is a compliant OIDC provider. To use Guard with any OIDC-compatible librar
 
 | Setting | Value |
 |---------|-------|
-| Issuer / Discovery URL | `https://guard.example.com` |
+| Issuer / Discovery URL | `https://guard.example.com/t/{tenant_id}` |
 | Authorization Endpoint | `https://guard.example.com/oauth/authorize` |
 | Token Endpoint | `https://guard.example.com/oauth/token` |
 | UserInfo Endpoint | `https://guard.example.com/api/v1/auth/me` |
-| JWKS URI | `https://guard.example.com/.well-known/jwks.json` |
+| JWKS URI | `https://guard.example.com/t/{tenant_id}/.well-known/jwks.json` |
 | Revocation Endpoint | `https://guard.example.com/oauth/revoke` |
 
 ### Next-Auth / Auth.js example:
@@ -412,7 +459,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       id: "guard",
       name: "Corvus Guard",
       type: "oidc",
-      issuer: "https://guard.example.com",
+      issuer: `https://guard.example.com/t/${process.env.GUARD_TENANT_ID}`,
       clientId: process.env.GUARD_CLIENT_ID,
       clientSecret: process.env.GUARD_CLIENT_SECRET,
       authorization: { params: { scope: "openid profile email" } },
@@ -426,7 +473,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 ```typescript
 import { Issuer } from 'openid-client';
 
-const guardIssuer = await Issuer.discover('https://guard.example.com');
+const tenantId = '8f4d9e3e-8f89-4fe7-9fd3-2fcb26b8ad34';
+const guardIssuer = await Issuer.discover(`https://guard.example.com/t/${tenantId}`);
 
 const client = new guardIssuer.Client({
   client_id: 'grd_abc123',
@@ -543,7 +591,7 @@ To programmatically revoke a user's consent (as an admin), use the consent grant
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/oauth/authorize` | GET | Authorization endpoint (user-facing) |
+| `/oauth/authorize` | GET | Authorization endpoint (returns HTML consent for browser requests, JSON consent challenge for API/script requests) |
 | `/oauth/authorize/decision` | POST | Consent decision (approve/deny) |
 | `/oauth/token` | POST | Token exchange (code, refresh, client_credentials) |
 | `/oauth/revoke` | POST | Token revocation (RFC 7009) |
@@ -556,7 +604,9 @@ To programmatically revoke a user's consent (as an admin), use the consent grant
 | `/api/v1/auth/admin/oauth-clients/:id` | DELETE | Delete client |
 | `/.well-known/oauth-authorization-server` | GET | OAuth 2.0 metadata (RFC 8414) |
 | `/.well-known/openid-configuration` | GET | OIDC discovery |
-| `/.well-known/jwks.json` | GET | JSON Web Key Set |
+| `/.well-known/jwks.json` | GET | Global JSON Web Key Set |
+| `/t/:tenant_id/.well-known/openid-configuration` | GET | Tenant OIDC discovery |
+| `/t/:tenant_id/.well-known/jwks.json` | GET | Tenant JSON Web Key Set |
 
 ---
 
@@ -576,8 +626,14 @@ To programmatically revoke a user's consent (as an admin), use the consent grant
 - Ensure you request the same scopes each time
 - If you add new scopes, consent will be re-requested
 
+### `/oauth/authorize` returns JSON instead of redirecting to my app
+- This is expected in API/JSON mode when consent is required.
+- Either use browser HTML mode (`Accept: text/html`) or submit the returned `consent_challenge` to `POST /oauth/authorize/decision`.
+- Also verify your app uses its own login entrypoint and that `redirect_uri` exactly matches your registered callback.
+
 ### ID token verification fails
-- Fetch the JWKS from `/.well-known/jwks.json` (cache with TTL)
-- Verify `iss` matches your Guard URL
+- Fetch JWKS from tenant endpoint `/t/{tenant_id}/.well-known/jwks.json` (cache with TTL)
+- Verify `iss` matches tenant issuer `https://guard.example.com/t/{tenant_id}`
 - Verify `aud` matches your `client_id`
 - Check that the token hasn't expired (`exp`)
+- Ensure your verifier only accepts `alg=ES256`
