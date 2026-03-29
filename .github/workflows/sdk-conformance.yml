@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cache npm (sdk/ts)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ./.npm-cache
           key: npm-cache-${{ runner.os }}-${{ hashFiles('sdk/ts/package-lock.json') }}
